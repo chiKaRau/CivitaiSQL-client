@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from "react";
 
+//also remove bookmark
+//prob option?
+
 //Components
 import { Toast } from 'react-bootstrap';
 import Col from 'react-bootstrap/Col';
@@ -15,11 +18,11 @@ import { AppState } from '../store/configureStore';
 import { fetchDatabaseModelInfoByModelID } from "../api/civitaiSQL_API"
 
 //Interface
-interface ModelInfoPanelProps {
-    toggleModelInfoPanelOpen: () => void;
+interface DatabaseModelInfoPanelProps {
+    toggleDatabaseModelInfoPanelOpen: () => void;
 }
 
-const ModelInfoPanel: React.FC<ModelInfoPanelProps> = (props) => {
+const ModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) => {
 
     const civitaiModel = useSelector((state: AppState) => state.civitaiModel);
     const dispatch = useDispatch();
@@ -49,7 +52,7 @@ const ModelInfoPanel: React.FC<ModelInfoPanelProps> = (props) => {
     return (
         <div className="panel-container">
             {/* ... other JSX elements ... */}
-            <button className="panel-close-button" onClick={props.toggleModelInfoPanelOpen}>
+            <button className="panel-close-button" onClick={props.toggleDatabaseModelInfoPanelOpen}>
                 <BiUndo />
             </button>
 

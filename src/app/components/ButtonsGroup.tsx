@@ -41,7 +41,7 @@ const ButtonsGroup: React.FC = () => {
                 buttonIcon: <BsInfoCircleFill />,
                 disable: false,
             }}
-                handleFunctionCall={() => dispatch(togglePanel("ModelInfoPanel"))} />
+                handleFunctionCall={() => dispatch(togglePanel("DatabaseModelInfoPanel"))} />
 
             {/**Database's RelatedModelsPanel Button */}
             <ButtonWrap buttonConfig={{
@@ -51,7 +51,7 @@ const ButtonsGroup: React.FC = () => {
                 buttonIcon: <PiMagnifyingGlassBold />,
                 disable: false,
             }}
-                handleFunctionCall={() => dispatch(togglePanel("RelatedModelsPanel"))} />
+                handleFunctionCall={() => dispatch(togglePanel("DatabaseRelatedModelsPanel"))} />
 
             {/**Bookmark Button */}
             <ButtonWrap buttonConfig={{

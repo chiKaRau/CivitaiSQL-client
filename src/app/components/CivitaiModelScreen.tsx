@@ -10,8 +10,8 @@ import '../../css/styles.css'; // Import the CSS file
 
 //components
 import ButtonsGroup from "./ButtonsGroup"
-import ModelInfoPanel from './ModelInfoPanel';
-import RelatedModelsPanel from './RelatedModelsPanel';
+import ModelInfoPanel from './DatabaseModelInfoPanel';
+import RelatedModelsPanel from './DatabaseRelatedModelsPanel';
 
 //Model Page
 const CivitaiModelScreen: React.FC = () => {
@@ -42,13 +42,13 @@ const CivitaiModelScreen: React.FC = () => {
             <div>
 
                 {/**Database's Model Infomation Panel*/}
-                {panels["ModelInfoPanel"] && <ModelInfoPanel toggleModelInfoPanelOpen={() => {
-                    dispatch(togglePanel("ModelInfoPanel"));
+                {panels["DatabaseModelInfoPanel"] && <ModelInfoPanel toggleDatabaseModelInfoPanelOpen={() => {
+                    dispatch(togglePanel("DatabaseModelInfoPanel"));
                 }} />}
 
                 {/**Database's Related Models Panel*/}
-                {panels["RelatedModelsPanel"] && <RelatedModelsPanel toggleRelatedModelsPanelOpen={() => {
-                    dispatch(togglePanel("RelatedModelsPanel"));
+                {panels["DatabaseRelatedModelsPanel"] && <RelatedModelsPanel toggleDatabaseRelatedModelsPanelOpen={() => {
+                    dispatch(togglePanel("DatabaseRelatedModelsPanel"));
                 }} />}
             </div>
         </>

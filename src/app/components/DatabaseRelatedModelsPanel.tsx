@@ -20,11 +20,11 @@ import { fetchDatabaseRelatedModelsByName } from "../api/civitaiSQL_API"
 import { retrievePossibleCombination } from "../utils/stringUtils"
 
 //Interface
-interface RelatedModelsPanel {
-    toggleRelatedModelsPanelOpen: () => void;
+interface DatabaseRelatedModelsPanel {
+    toggleDatabaseRelatedModelsPanelOpen: () => void;
 }
 
-const RelatedModelsPanel: React.FC<RelatedModelsPanel> = (props) => {
+const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanel> = (props) => {
     const isInitialMount = useRef(true);
 
     const civitaiModel = useSelector((state: AppState) => state.civitaiModel);
@@ -77,7 +77,7 @@ const RelatedModelsPanel: React.FC<RelatedModelsPanel> = (props) => {
     return (
         <div className="panel-container">
             {/* ... other JSX elements ... */}
-            <button className="panel-close-button" onClick={props.toggleRelatedModelsPanelOpen}>
+            <button className="panel-close-button" onClick={props.toggleDatabaseRelatedModelsPanelOpen}>
                 <BiUndo />
             </button>
 
@@ -161,5 +161,5 @@ const RelatedModelsPanel: React.FC<RelatedModelsPanel> = (props) => {
     );
 };
 
-export default RelatedModelsPanel;
+export default DatabaseRelatedModelsPanel;
 
