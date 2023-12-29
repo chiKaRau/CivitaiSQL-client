@@ -2,8 +2,8 @@ import React, { useEffect, useState } from "react";
 
 //Store
 import { useSelector, useDispatch } from 'react-redux';
-import { AppState } from '../store/configureStore';
-import { togglePanel } from '../actions/panelActions';
+import { AppState } from '../../store/configureStore';
+import { togglePanel } from '../../actions/panelActions';
 
 //Icons Components
 import { BsCheck, BsArrowRepeat, BsStarFill, BsStar, BsFillCloudArrowUpFill, BsInfoCircleFill, BsFillCartCheckFill, BsCloudDownloadFill } from 'react-icons/bs';
@@ -18,7 +18,7 @@ import { SlDocs } from "react-icons/sl"
 import { TbCloudX } from "react-icons/tb"
 
 //utils
-import { bookmarkThisModel, unBookmarkThisModel } from "../utils/bookmarkUtils"
+import { bookmarkThisModel, unBookmarkThisModel } from "../../utils/bookmarkUtils"
 
 //Components
 import ButtonWrap from "./ButtonWrap";

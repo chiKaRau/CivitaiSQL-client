@@ -2,16 +2,16 @@ import React, { useEffect, useState } from 'react';
 
 //Store
 import { useSelector, useDispatch } from 'react-redux';
-import { AppState } from '../store/configureStore';
-import { togglePanel } from '../actions/panelActions';
+import { AppState } from '../../store/configureStore';
+import { togglePanel } from '../../actions/panelActions';
 
 //css
-import '../../css/styles.css'; // Import the CSS file
+import '../../../css/styles.css'; // Import the CSS file
 
 //components
-import ButtonsGroup from "./ButtonsGroup"
-import ModelInfoPanel from './DatabaseModelInfoPanel';
-import RelatedModelsPanel from './DatabaseRelatedModelsPanel';
+import ButtonsGroup from "../buttons/ButtonsGroup"
+import DatabaseModelInfoPanel from '../database_panels/DatabaseModelInfoPanel';
+import DatabaseRelatedModelsPanel from '../database_panels/DatabaseRelatedModelsPanel';
 
 //Model Page
 const CivitaiModelScreen: React.FC = () => {
@@ -42,12 +42,12 @@ const CivitaiModelScreen: React.FC = () => {
             <div>
 
                 {/**Database's Model Infomation Panel*/}
-                {panels["DatabaseModelInfoPanel"] && <ModelInfoPanel toggleDatabaseModelInfoPanelOpen={() => {
+                {panels["DatabaseModelInfoPanel"] && <DatabaseModelInfoPanel toggleDatabaseModelInfoPanelOpen={() => {
                     dispatch(togglePanel("DatabaseModelInfoPanel"));
                 }} />}
 
                 {/**Database's Related Models Panel*/}
-                {panels["DatabaseRelatedModelsPanel"] && <RelatedModelsPanel toggleDatabaseRelatedModelsPanelOpen={() => {
+                {panels["DatabaseRelatedModelsPanel"] && <DatabaseRelatedModelsPanel toggleDatabaseRelatedModelsPanelOpen={() => {
                     dispatch(togglePanel("DatabaseRelatedModelsPanel"));
                 }} />}
             </div>

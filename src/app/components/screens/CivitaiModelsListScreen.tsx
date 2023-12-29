@@ -1,6 +1,6 @@
 import React from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { AppState } from '../store/configureStore';
+import { AppState } from '../../store/configureStore';
 
 // ModelList page
 // Page which lists a bunch of models

@@ -1,10 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
-//Screens
-import CivitaiModelScreen from "./app/components/CivitaiModelScreen";
-import CivitaiModelsListScreen from "./app/components/CivitaiModelsListScreen";
-
 //Stores
 import { Provider, useDispatch, useSelector } from 'react-redux';
 import store from './app/store/configureStore';
@@ -12,16 +8,20 @@ import { AppState } from './app/store/configureStore';
 import { updateCivitaiUrl, updateCivitaiModelID, updateCivitaiVersionID, updateCivitaiModelObject } from "./app/actions/civitaiModelActions"
 import { setGlobalIsLoading } from "./app/actions/loadingActions"
 
-//Components
+//library Components
 import ErrorAlert from "./app/components/ErrorAlert";
 import 'bootstrap/dist/css/bootstrap.min.css';
 import Spinner from 'react-bootstrap/Spinner';
+
+//component
+import CivitaiModelScreen from "./app/components/screens/CivitaiModelScreen";
+import CivitaiModelsListScreen from "./app/components/screens/CivitaiModelsListScreen";
 
 //utils
 import { setupBookmark } from "./app/utils/bookmarkUtils"
 
 //Apis
-import { fetchCivitaiModelInfoFromCivitaiByModelID } from "./app/api/civitaiSQL_API"
+import { fetchCivitaiModelInfoFromCivitaiByModelID } from "./app/api/civitaiSQL_api"
 
 //README
 //2 Sources: Civitai (web api) and Database (local database)

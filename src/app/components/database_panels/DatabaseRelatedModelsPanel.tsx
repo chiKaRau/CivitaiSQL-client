@@ -11,13 +11,13 @@ import Spinner from 'react-bootstrap/Spinner';
 
 //Store
 import { useSelector, useDispatch } from 'react-redux';
-import { AppState } from '../store/configureStore';
+import { AppState } from '../../store/configureStore';
 
 //api
-import { fetchDatabaseRelatedModelsByName } from "../api/civitaiSQL_API"
+import { fetchDatabaseRelatedModelsByName } from "../../api/civitaiSQL_api"
 
 //util
-import { retrievePossibleCombination } from "../utils/stringUtils"
+import { retrievePossibleCombination } from "../../utils/stringUtils"
 
 //Interface
 interface DatabaseRelatedModelsPanel {

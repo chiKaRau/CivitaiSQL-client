@@ -12,17 +12,17 @@ import Spinner from 'react-bootstrap/Spinner';
 
 //Store
 import { useSelector, useDispatch } from 'react-redux';
-import { AppState } from '../store/configureStore';
+import { AppState } from '../../store/configureStore';
 
 //api
-import { fetchDatabaseModelInfoByModelID } from "../api/civitaiSQL_API"
+import { fetchDatabaseModelInfoByModelID } from "../../api/civitaiSQL_api"
 
 //Interface
 interface DatabaseModelInfoPanelProps {
     toggleDatabaseModelInfoPanelOpen: () => void;
 }
 
-const ModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) => {
+const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) => {
 
     const civitaiModel = useSelector((state: AppState) => state.civitaiModel);
     const dispatch = useDispatch();
@@ -115,5 +115,5 @@ const ModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) => {
     );
 };
 
-export default ModelInfoPanel;
+export default DatabaseModelInfoPanel;
 

@@ -1,6 +1,5 @@
 import axios from "axios"
 import config from "../config/config.json"
-import { useDispatch } from 'react-redux';
 import { setError, clearError } from '../actions/errorsActions';
 
 //dispatch cannot be used inside the functional components or custoom hook, async function is not allowed.
