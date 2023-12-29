@@ -1,0 +1,157 @@
+/* styles.css */
+
+/* Screen styles */
+.container {
+    padding: 5px;
+    min-height: 450px;
+    min-width: 400px;
+}
+
+.container-content-center {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Button styles */
+.button {
+    margin: 1px;
+}
+
+.button-state-loading {
+    position: relative;
+    transition: opacity 0.5s ease;
+    opacity: 0.5;
+    /* Include other styles from props.b_style if needed */
+}
+
+.button-state-default {
+    position: relative;
+    transition: opacity 0.5s ease;
+    opacity: 0.5;
+    opacity: var(--b-opacity, 1);
+    /* Include other styles from props.b_style if needed */
+}
+
+.button-state-complete {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    color: black;
+    transform: translate(-50%, -50%);
+    opacity: 0.5;
+}
+
+/* Panel Styles */
+.panel-container {
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 9999;
+    display: flex;
+    justify-content: flex-end;
+    align-items: flex-start;
+}
+
+.panel-container-content {
+    background: #f1f1f1;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+    padding: 10px;
+    margin: 10px;
+    height: 500px;
+    min-width: 95%;
+    min-height: 95%;
+    overflow-y: auto;
+    max-height: 100vh;
+}
+
+.panel-close-button {
+    position: absolute;
+    top: 10px;
+    right: 30px;
+    padding: 5px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 20px;
+    color: black;
+}
+
+.panel-header-text {
+    display: flex;
+    justify-content: center;
+    padding: 1px;
+}
+
+.panel-empty-state-message {
+    display: flex;
+    justify-content: center;
+    padding: 5px;
+}
+
+/* Toast container */
+.panel-toast-container {
+    padding: 5px;
+    margin: 3px;
+}
+
+/* Toast header */
+.panel-toast-header {
+    overflow-wrap: break-word;
+}
+
+.panel-image-carousel-container {
+    display: flex;
+    justify-content: center;
+    padding: 1px;
+    min-height: 300px;
+    align-items: center;
+}
+
+/* Image styles */
+.panel-image-carousel-container img {
+    width: auto;
+    height: auto;
+    max-height: 300px;
+    max-width: 250px;
+    object-fit: contain;
+}
+
+.carousel-image-failure-placeholder {
+    width: 200px;
+    height: 250px;
+    object-fit: cover;
+}
+
+/*Panel Tag Button*/
+.panel-tag-button {
+    margin: 3px;
+    padding: 5px;
+    font-size: 12px;
+    cursor: pointer;
+    border-color: transparent;
+    border-radius: 10px;
+    /* Rounded corners */
+}
+
+.panel-tag-default {
+    background-color: rgb(44, 47, 49);
+    color: rgb(232, 230, 227);
+}
+
+.panel-tag-selected {
+    background-color: rgb(232, 230, 227);
+    color: rgb(44, 47, 49);
+}
+
+/*Center Spinner*/
+.centered-spinner-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 50vh;
+}
