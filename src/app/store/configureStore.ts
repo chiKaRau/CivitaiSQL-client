@@ -1,11 +1,11 @@
 // ReduxStore/store/index.ts
 import { createStore, combineReducers } from 'redux';
 import { configureStore } from '@reduxjs/toolkit';
-import civitaiModelReducer, { CivitaiModelState } from '../reducers/civitaiModelReducer';
-import errorsReducer, { ErrorsState } from '../reducers/errorsReducer';
-import loadingReducer, { LoadingState } from '../reducers/loadingReducer';
-import panelReducer, { PanelState } from '../reducers/panelReducer';
-import databaseReducer, { DatabaseState } from '../reducers/databaseReducer';
+import civitaiModelReducer, { CivitaiModelState } from './reducers/civitaiModelReducer';
+import errorsReducer, { ErrorsState } from './reducers/errorsReducer';
+import loadingReducer, { LoadingState } from './reducers/loadingReducer';
+import panelReducer, { PanelState } from './reducers/panelReducer';
+import databaseModelReducer, { DatabaseModelState } from './reducers/databaseModelReducer';
 
 
 // Define the root state type
@@ -14,7 +14,7 @@ interface RootState {
     errors: ErrorsState;
     loading: LoadingState;
     panel: PanelState;
-    database: DatabaseState;
+    databaseModel: DatabaseModelState;
     // Add other slices as needed
 }
 
@@ -24,7 +24,7 @@ const rootReducer = combineReducers({
     errors: errorsReducer,
     loading: loadingReducer,
     panel: panelReducer,
-    database: databaseReducer
+    databaseModel: databaseModelReducer
     // Add other slices as needed
 });
 

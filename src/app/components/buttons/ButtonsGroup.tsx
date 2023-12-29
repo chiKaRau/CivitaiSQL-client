@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 //Store
 import { useSelector, useDispatch } from 'react-redux';
 import { AppState } from '../../store/configureStore';
-import { togglePanel } from '../../actions/panelActions';
+import { togglePanel } from '../../store/actions/panelActions';
 
 //Icons Components
 import { BsCheck, BsArrowRepeat, BsStarFill, BsStar, BsFillCloudArrowUpFill, BsInfoCircleFill, BsFillCartCheckFill, BsCloudDownloadFill } from 'react-icons/bs';

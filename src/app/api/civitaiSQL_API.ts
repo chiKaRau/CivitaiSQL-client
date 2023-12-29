@@ -1,6 +1,6 @@
 import axios from "axios"
 import config from "../config/config.json"
-import { setError, clearError } from '../actions/errorsActions';
+import { setError, clearError } from '../store/actions/errorsActions';
 
 //dispatch cannot be used inside the functional components or custoom hook, async function is not allowed.
 export const fetchCivitaiModelInfoFromCivitaiByModelID = async (modelID: string, dispatch: any) => {

@@ -5,8 +5,9 @@ import { createRoot } from "react-dom/client";
 import { Provider, useDispatch, useSelector } from 'react-redux';
 import store from './app/store/configureStore';
 import { AppState } from './app/store/configureStore';
-import { updateCivitaiUrl, updateCivitaiModelID, updateCivitaiVersionID, updateCivitaiModelObject } from "./app/actions/civitaiModelActions"
-import { setGlobalIsLoading } from "./app/actions/loadingActions"
+import { updateCivitaiUrl, updateCivitaiModelID, updateCivitaiVersionID, updateCivitaiModelObject } from "./app/store/actions/civitaiModelActions"
+import { UpdateDatabaseModelObject, UpdateIsInDatabase } from "./app/store/actions/databaseModelAction"
+import { setGlobalIsLoading } from "./app/store/actions/loadingActions"
 
 //library Components
 import ErrorAlert from "./app/components/ErrorAlert";
@@ -21,7 +22,7 @@ import CivitaiModelsListScreen from "./app/components/screens/CivitaiModelsListS
 import { setupBookmark } from "./app/utils/bookmarkUtils"
 
 //Apis
-import { fetchCivitaiModelInfoFromCivitaiByModelID } from "./app/api/civitaiSQL_api"
+import { fetchCivitaiModelInfoFromCivitaiByModelID, fetchDatabaseModelInfoByModelID } from "./app/api/civitaiSQL_api"
 
 //README
 //2 Sources: Civitai (web api) and Database (local database)
@@ -39,7 +40,7 @@ const Popup = () => {
     //Turn on GlobalIsLoading
     dispatch(setGlobalIsLoading(true))
 
-    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+    chrome.tabs.query({ active: true, currentWindow: true }, async function (tabs) {
       const activeURL = tabs[0]?.url;
 
       if (activeURL) {
@@ -54,15 +55,31 @@ const Popup = () => {
           dispatch(updateCivitaiModelID(modelId));
 
           //SETUP the Rest
-          setupCivitaiModelInfo(modelId, activeURL);
+          await setupCivitaiModelInfo(modelId, activeURL);
+
+          //SETUP the DatabaseModelInfo
+          await setupDatabaseModelInfo(modelId, dispatch);
+
+          //Turn off GlobalIsLoading
+          dispatch(setGlobalIsLoading(false))
+
         }
       }
     });
   }, []);
 
-  const setupCivitaiModelInfo = async (modelId: string, activeURL: string) => {
+  const setupDatabaseModelInfo = async (modelID: string, dispatch: any) => {
+    //Fetch Database ModelInfo
+    const data = await fetchDatabaseModelInfoByModelID(modelID, dispatch);
+    if (data) {
+      dispatch(UpdateDatabaseModelObject(data));
+      dispatch(UpdateIsInDatabase(true))
+    }
+  }
+
+  const setupCivitaiModelInfo = async (modelID: string, activeURL: string) => {
     //Fetch Civitai ModelInfo
-    const data = await fetchCivitaiModelInfoFromCivitaiByModelID(modelId, dispatch);
+    const data = await fetchCivitaiModelInfoFromCivitaiByModelID(modelID, dispatch);
 
     if (data) {
       dispatch(updateCivitaiModelObject(data))
@@ -80,13 +97,7 @@ const Popup = () => {
       //Setup Bookmark
       setupBookmark(data?.type, activeURL, dispatch)
     }
-
-    //Turn off GlobalIsLoading
-    dispatch(setGlobalIsLoading(false))
   };
-
-
-
 
   return (
     <>

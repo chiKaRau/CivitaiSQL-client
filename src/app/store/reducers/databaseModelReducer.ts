@@ -1,17 +1,17 @@
 // reducers/counterReducer.ts
-import { DatabaseActionTypes, UPDATE_ISINDATABASE, UPDATE_DATABASE_MODEL_OBJECT } from '../constants/DatabaseActionTypes copy';
+import { DatabaseModelActionTypes, UPDATE_ISINDATABASE, UPDATE_DATABASE_MODEL_OBJECT } from '../constants/DatabaseModelActionTypes';
 
-interface DatabaseState {
+interface DatabaseModelState {
     isInDatabase: boolean;
     databaseModelObject: object;
 }
 
-const initialState: DatabaseState = {
+const initialState: DatabaseModelState = {
     isInDatabase: false,
     databaseModelObject: {},
 };
 
-const databaseReducer = (state = initialState, action: DatabaseActionTypes): DatabaseState => {
+const databaseModelReducer = (state = initialState, action: DatabaseModelActionTypes): DatabaseModelState => {
     switch (action.type) {
         case 'UPDATE_ISINDATABASE':
             return { ...state, isInDatabase: action.payload };
@@ -22,5 +22,5 @@ const databaseReducer = (state = initialState, action: DatabaseActionTypes): Dat
     }
 };
 
-export default databaseReducer;
-export type { DatabaseState }
+export default databaseModelReducer;
+export type { DatabaseModelState }

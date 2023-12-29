@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 //Store
 import { useSelector, useDispatch } from 'react-redux';
 import { AppState } from '../store/configureStore';
-import { clearError } from '../actions/errorsActions';
+import { clearError } from '../store/actions/errorsActions';
 
 //Componenets
 import { Alert } from 'react-bootstrap';

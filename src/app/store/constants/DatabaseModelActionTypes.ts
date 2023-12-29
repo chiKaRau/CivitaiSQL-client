@@ -13,4 +13,4 @@ export interface UpdateDatabaseModelObject {
     payload: object;
 }
 
-export type DatabaseActionTypes = UpdateIsInDatabase | UpdateDatabaseModelObject;
+export type DatabaseModelActionTypes = UpdateIsInDatabase | UpdateDatabaseModelObject;

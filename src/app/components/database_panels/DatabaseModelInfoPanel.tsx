@@ -24,9 +24,10 @@ interface DatabaseModelInfoPanelProps {
 
 const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) => {
 
-    const civitaiModel = useSelector((state: AppState) => state.civitaiModel);
-    const dispatch = useDispatch();
-
+    const databaseModel = useSelector((state: AppState) => state.databaseModel);
+    const databaseData: Record<string, any> | undefined = databaseModel.databaseModelObject;
+    const databaseModelsList = databaseData;
+    
     const [modelsList, setModelsList] = useState<{ name: string; url: string; id: number; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
     const [visibleToasts, setVisibleToasts] = useState<boolean[]>([])
     const [isLoading, setIsLoading] = useState(false)
@@ -37,7 +38,14 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) =>
 
     const handleCallingAPI = async () => {
         setIsLoading(true)
-        const data = await fetchDatabaseModelInfoByModelID(civitaiModel.civitaiModelID, dispatch);
+
+        const data: { name: string; url: string; id: number; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[] = databaseModelsList.map((record: any) => ({
+            name: record.name,
+            url: record.url,
+            id: record.id,
+            imageUrls: record.imageUrls,
+        }));
+
         setModelsList(data)
         setVisibleToasts(data?.map(() => true))
         setIsLoading(false)
@@ -108,7 +116,7 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) =>
                         })}
                     </>
                 }
-                
+
             </div>
         </div>
 
