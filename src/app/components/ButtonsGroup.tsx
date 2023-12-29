@@ -26,7 +26,7 @@ import ButtonWrap from "./ButtonWrap";
 const ButtonsGroup: React.FC = () => {
     const civitaiModel = useSelector((state: AppState) => state.civitaiModel);
     const { isBookmarked, bookmarkID } = civitaiModel
-    const data: Record<string, any> | undefined = civitaiModel.modelObject;
+    const data: Record<string, any> | undefined = civitaiModel.civitaiModelObject;
     const modelType = data?.type;
 
     const dispatch = useDispatch();

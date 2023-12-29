@@ -34,9 +34,9 @@ const ModelInfoPanel: React.FC<ModelInfoPanelProps> = (props) => {
 
     const handleCallingAPI = async () => {
         setIsLoading(true)
-        const data = await fetchDatabaseModelInfoByModelID(civitaiModel.modelID, dispatch);
+        const data = await fetchDatabaseModelInfoByModelID(civitaiModel.civitaiModelID, dispatch);
         setModelsList(data)
-        setVisibleToasts(data.map(() => true))
+        setVisibleToasts(data?.map(() => true))
         setIsLoading(false)
     }
 

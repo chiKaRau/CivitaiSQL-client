@@ -21,8 +21,8 @@ const CivitaiModelScreen: React.FC = () => {
     const panels = useSelector((state: AppState) => state.panel.panels);
     const dispatch = useDispatch();
 
-    const { url, modelID, versionID, bookmarkID, isBookmarked } = civitaiModel;
-    const data: Record<string, any> | undefined = civitaiModel.modelObject;
+    const { civitaiUrl, civitaiModelID, civitaiVersionID, bookmarkID, isBookmarked } = civitaiModel;
+    const data: Record<string, any> | undefined = civitaiModel.civitaiModelObject;
     const modelName = data?.name;
 
     return (
@@ -31,9 +31,9 @@ const CivitaiModelScreen: React.FC = () => {
 
             <div>
                 <p> CivitaiModelScreen </p>
-                <p> Url: {url}</p>
-                <p> ModelID: {modelID}</p>
-                <p> VersionID: {versionID}</p>
+                <p> Url: {civitaiUrl}</p>
+                <p> ModelID: {civitaiModelID}</p>
+                <p> VersionID: {civitaiVersionID}</p>
                 <p> Name: {modelName}</p>
                 <p> bookmarkID: {bookmarkID}</p>
                 <p> isBookmarked: {isBookmarked ? "true" : "false"}</p>

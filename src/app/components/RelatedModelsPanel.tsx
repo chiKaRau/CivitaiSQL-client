@@ -36,7 +36,7 @@ const RelatedModelsPanel: React.FC<RelatedModelsPanel> = (props) => {
     const [selectedTag, setSelectedTag] = useState("")
     const [isLoading, setIsLoading] = useState(false)
 
-    const data: Record<string, any> | undefined = civitaiModel.modelObject;
+    const data: Record<string, any> | undefined = civitaiModel.civitaiModelObject;
     const modelName = data?.name;
     const modelTags = data?.tags;
 
@@ -64,7 +64,7 @@ const RelatedModelsPanel: React.FC<RelatedModelsPanel> = (props) => {
         setIsLoading(true)
         const data = await fetchDatabaseRelatedModelsByName(selectedTag, dispatch);
         setModelsList(data)
-        setVisibleToasts(data.map(() => true))
+        setVisibleToasts(data?.map(() => true))
         setIsLoading(false)
     }
 

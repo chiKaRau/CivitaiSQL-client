@@ -9,7 +9,7 @@ import CivitaiModelsListScreen from "./app/components/CivitaiModelsListScreen";
 import { Provider, useDispatch, useSelector } from 'react-redux';
 import store from './app/store/configureStore';
 import { AppState } from './app/store/configureStore';
-import { updateUrl, updateModelID, updateVersionID, updateModelObject } from "./app/actions/civitaiModelActions"
+import { updateCivitaiUrl, updateCivitaiModelID, updateCivitaiVersionID, updateCivitaiModelObject } from "./app/actions/civitaiModelActions"
 import { setGlobalIsLoading } from "./app/actions/loadingActions"
 
 //Components
@@ -50,8 +50,8 @@ const Popup = () => {
           const modelId = activeURL.match(/\/models\/(\d+)/)?.[1] || '';
 
           //SETUP Url and modelID
-          dispatch(updateUrl(activeURL));
-          dispatch(updateModelID(modelId));
+          dispatch(updateCivitaiUrl(activeURL));
+          dispatch(updateCivitaiModelID(modelId));
 
           //SETUP the Rest
           setupCivitaiModelInfo(modelId, activeURL);
@@ -65,7 +65,7 @@ const Popup = () => {
     const data = await fetchCivitaiModelInfoFromCivitaiByModelID(modelId, dispatch);
 
     if (data) {
-      dispatch(updateModelObject(data))
+      dispatch(updateCivitaiModelObject(data))
 
       //Verify if concurrent url has versionId, 
       //if it does, use it, otherwise, use the first versionId the the modelVersionId
@@ -75,7 +75,7 @@ const Popup = () => {
         versionNumber = data?.modelVersions[0]?.id;
       }
       //Setup VersionID
-      dispatch(updateVersionID(versionNumber));
+      dispatch(updateCivitaiVersionID(versionNumber));
 
       //Setup Bookmark
       setupBookmark(data?.type, activeURL, dispatch)
@@ -84,7 +84,7 @@ const Popup = () => {
     //Turn off GlobalIsLoading
     dispatch(setGlobalIsLoading(false))
   };
-  
+
 
 
 

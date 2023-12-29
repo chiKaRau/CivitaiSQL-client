@@ -1,26 +1,31 @@
 // Define action types
-export const UPDATE_URL = 'UPDATE_URL';
-export const UPDATE_MODELID = 'UPDATE_MODELID';
-export const UPDATE_VERSIONID = 'UPDATE_VERSIONID';
+export const UPDATE_CIVITAI_URL = 'UPDATE_CIVITAI_URL';
+export const UPDATE_CIVITAI_MODELID = 'UPDATE_CIVITAI_MODELID';
+export const UPDATE_CIVITAI_VERSIONID = 'UPDATE_CIVITAI_VERSIONID';
+export const UPDATE_CIVITAI_MODEL_OBJECT = 'UPDATE_CIVITAI_MODEL_OBJECT';
 export const UPDATE_SELECTED_CATEGORY = 'UPDATE_SELECTED_CATEGORY';
 export const UPDATE_CATEGORY_LIST = 'UPDATE_CATEGORY_LIST';
-export const UPDATE_MODEL_OBJECT = 'UPDATE_MODEL_OBJECT';
 export const UPDATE_BOOKMARKID = 'UPDATE_BOOKMARKID';
 export const SET_ISBOOKMARKED = 'SET_ISBOOKMARKED';
 
-export interface UpdateUrlAction {
-    type: typeof UPDATE_URL;
+export interface UpdateCivtaiUrlAction {
+    type: typeof UPDATE_CIVITAI_URL;
     payload: string;
 }
 
-export interface UpdateModeIDAction {
-    type: typeof UPDATE_MODELID;
+export interface UpdateCivitaiModeIDAction {
+    type: typeof UPDATE_CIVITAI_MODELID;
     payload: string;
 }
 
-export interface UpdateVersionIDAction {
-    type: typeof UPDATE_VERSIONID;
+export interface UpdateCivitaiVersionIDAction {
+    type: typeof UPDATE_CIVITAI_VERSIONID;
     payload: string;
+}
+
+export interface UpdateCivitaiModelObject {
+    type: typeof UPDATE_CIVITAI_MODEL_OBJECT;
+    payload: object;
 }
 
 export interface UpdateSelectedCategoryAction {
@@ -33,10 +38,6 @@ export interface UpdateCategoryListAction {
     payload: string[];
 }
 
-export interface UpdateModelObject {
-    type: typeof UPDATE_MODEL_OBJECT;
-    payload: object;
-}
 
 export interface UpdateBookmarkID {
     type: typeof UPDATE_BOOKMARKID;
@@ -48,6 +49,6 @@ export interface SetIsBookmarked {
     payload: boolean;
 };
 
-export type CivitaiModelActionTypes = UpdateUrlAction | UpdateModeIDAction | UpdateVersionIDAction |
-    UpdateSelectedCategoryAction | UpdateCategoryListAction | UpdateModelObject |
+export type CivitaiModelActionTypes = UpdateCivtaiUrlAction | UpdateCivitaiModeIDAction | UpdateCivitaiVersionIDAction |
+    UpdateSelectedCategoryAction | UpdateCategoryListAction | UpdateCivitaiModelObject |
     UpdateBookmarkID | SetIsBookmarked;

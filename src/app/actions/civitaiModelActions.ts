@@ -1,23 +1,28 @@
 // actions/userActions.js
 import {
-    UPDATE_URL, UPDATE_MODELID, UPDATE_VERSIONID,
-    UPDATE_SELECTED_CATEGORY, UPDATE_CATEGORY_LIST, UPDATE_MODEL_OBJECT,
+    UPDATE_CIVITAI_URL, UPDATE_CIVITAI_MODELID, UPDATE_CIVITAI_VERSIONID,
+    UPDATE_SELECTED_CATEGORY, UPDATE_CATEGORY_LIST, UPDATE_CIVITAI_MODEL_OBJECT,
     UPDATE_BOOKMARKID, SET_ISBOOKMARKED
 } from '../constants/CivitaiModelActionTypes';
 
-export const updateUrl = (newUrl: string) => ({
-    type: UPDATE_URL,
-    payload: newUrl,
+export const updateCivitaiUrl = (newCivitaiUrl: string) => ({
+    type: UPDATE_CIVITAI_URL,
+    payload: newCivitaiUrl,
 });
 
-export const updateModelID = (newModelID: string) => ({
-    type: UPDATE_MODELID,
-    payload: newModelID,
+export const updateCivitaiModelID = (newCivitaiModelID: string) => ({
+    type: UPDATE_CIVITAI_MODELID,
+    payload: newCivitaiModelID,
 });
 
-export const updateVersionID = (newVersionID: string) => ({
-    type: UPDATE_VERSIONID,
-    payload: newVersionID,
+export const updateCivitaiVersionID = (newCivitaiVersionID: string) => ({
+    type: UPDATE_CIVITAI_VERSIONID,
+    payload: newCivitaiVersionID,
+});
+
+export const updateCivitaiModelObject = (newCivitaiModelObject: object) => ({
+    type: UPDATE_CIVITAI_MODEL_OBJECT,
+    payload: newCivitaiModelObject,
 });
 
 export const updateSelectedCategory = (newSelectedCategory: string) => ({
@@ -30,10 +35,6 @@ export const updateCategoryList = (newCategoryList: string[]) => ({
     payload: newCategoryList,
 });
 
-export const updateModelObject = (newModelObject: object) => ({
-    type: UPDATE_MODEL_OBJECT,
-    payload: newModelObject,
-});
 
 export const updateBookmarkID = (newBookmarkID: string) => ({
     type: UPDATE_BOOKMARKID,
