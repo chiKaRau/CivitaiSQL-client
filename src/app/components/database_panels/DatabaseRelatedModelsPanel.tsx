@@ -48,7 +48,7 @@ const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanel> = (props)
         if (isInitialMount.current) {
             isInitialMount.current = false;
         } else {
-            handleCallingAPI();
+            handleUpdateModelsList();
         }
     }, [selectedTag])
 
@@ -60,7 +60,7 @@ const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanel> = (props)
         }
     }
 
-    const handleCallingAPI = async () => {
+    const handleUpdateModelsList = async () => {
         setIsLoading(true)
         const data = await fetchDatabaseRelatedModelsByName(selectedTag, dispatch);
         setModelsList(data)
@@ -94,7 +94,7 @@ const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanel> = (props)
                         value={selectedTag}
                         onChange={(e) => setSelectedTag(e.target.value)}
                     />
-                    <Button variant="outline-secondary" disabled={isLoading} onClick={() => handleCallingAPI()}>
+                    <Button variant="outline-secondary" disabled={isLoading} onClick={() => handleUpdateModelsList()}>
                         {isLoading ? <BsArrowRepeat className="spinner" /> : <BsCheck />}
                     </Button>
                 </InputGroup>
@@ -109,7 +109,7 @@ const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanel> = (props)
                 ))}
 
                 {isLoading ?
-                    <div className="centered-spinner-container">
+                    <div className="centered-container">
                         <Spinner />
                     </div>
                     :

@@ -6,8 +6,6 @@ interface CivitaiModelState {
     civitaiModelID: string;
     civitaiVersionID: string;
     civitaiModelObject: object;
-    selectedCategory: string;
-    categoryList: String[];
 }
 
 const initialState: CivitaiModelState = {
@@ -15,8 +13,6 @@ const initialState: CivitaiModelState = {
     civitaiModelID: "",
     civitaiVersionID: "",
     civitaiModelObject: {},
-    selectedCategory: "",
-    categoryList: [],
 };
 
 const civitaiModelReducer = (state = initialState, action: CivitaiModelActionTypes): CivitaiModelState => {
@@ -29,11 +25,6 @@ const civitaiModelReducer = (state = initialState, action: CivitaiModelActionTyp
             return { ...state, civitaiVersionID: action.payload };
         case 'UPDATE_CIVITAI_MODEL_OBJECT':
             return { ...state, civitaiModelObject: action.payload };
-        case 'UPDATE_SELECTED_CATEGORY':
-            return { ...state, selectedCategory: action.payload };
-        case 'UPDATE_CATEGORY_LIST':
-            return { ...state, categoryList: action.payload };
-
         default:
             return state;
     }

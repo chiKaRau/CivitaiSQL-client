@@ -51,7 +51,7 @@ export const fetchDatabaseModelInfoByModelID = async (modelID: string, dispatch:
     }
 }
 
-export const fetchDatabaseRelatedModelsByName= async (name: string, dispatch: any) => {
+export const fetchDatabaseRelatedModelsByName = async (name: string, dispatch: any) => {
     try {
         // Clear any previous errors
         dispatch(clearError());
@@ -61,6 +61,93 @@ export const fetchDatabaseRelatedModelsByName= async (name: string, dispatch: an
         if (response.status >= 200 && response.status < 300) {
             if (responseData.success) {
                 return responseData.payload.modelsList;
+            }
+        } else {
+            // Handle the case when success is false
+            console.error("Civitai Info retrieval failed. Message:", responseData.message);
+            // Optionally, you can throw an error or return a specific value
+            throw new Error("Civitai Info retrieval failed");
+        }
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Civitai Info retrieval:", error.message);
+        // Optionally, you can throw an error or return a specific value
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}
+
+export const addRecordToDatabase = async (selectedCategory: string, url: string, dispatch: any) => {
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+        const response = await axios.post(`${config.domain}/api/create-record-to-all-tables`,
+            { category: selectedCategory, url: url });
+
+        const responseData = response.data;
+
+        if (!(response.status >= 200 && response.status < 300)) {
+            // Handle the case when success is false
+            console.error("Civitai Info retrieval failed. Message:", responseData.message);
+            // Optionally, you can throw an error or return a specific value
+            throw new Error("Civitai Info retrieval failed");
+        }
+
+        if (!responseData.success) {
+            // Handle the case when success is false
+            console.error("Civitai Info retrieval failed. Message:", responseData.message);
+            // Optionally, you can throw an error or return a specific value
+            throw new Error("Civitai Info retrieval failed");
+        }
+
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Civitai Info retrieval:", error.message);
+        // Optionally, you can throw an error or return a specific value
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}
+
+export const removeRecordFromDatabaseByID = async (id: number, dispatch: any) => {
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+        const response = await axios.post(`${config.domain}/api/delete-record-to-all-tables`,
+            { id: id });
+
+        const responseData = response.data;
+
+        if (!(response.status >= 200 && response.status < 300)) {
+            // Handle the case when success is false
+            console.error("Civitai Info retrieval failed. Message:", responseData.message);
+            // Optionally, you can throw an error or return a specific value
+            throw new Error("Civitai Info retrieval failed");
+        }
+
+        if (!responseData.success) {
+            // Handle the case when success is false
+            console.error("Civitai Info retrieval failed. Message:", responseData.message);
+            // Optionally, you can throw an error or return a specific value
+            throw new Error("Civitai Info retrieval failed");
+        }
+
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Civitai Info retrieval:", error.message);
+        // Optionally, you can throw an error or return a specific value
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}
+
+export const getCategoriesList = async (dispatch: any) => {
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+        const response = await axios.get(`${config.domain}/api/get-categories-list`);
+        const responseData = response.data;
+
+        if (response.status >= 200 && response.status < 300) {
+            if (responseData.success) {
+                return responseData.payload.categoriesList;
             }
         } else {
             // Handle the case when success is false

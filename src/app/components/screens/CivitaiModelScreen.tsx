@@ -10,6 +10,7 @@ import '../../../css/styles.css'; // Import the CSS file
 
 //components
 import ButtonsGroup from "../buttons/ButtonsGroup"
+import CategoriesListSelector from '../CategoriesListSelector';
 import DatabaseModelInfoPanel from '../database_panels/DatabaseModelInfoPanel';
 import DatabaseRelatedModelsPanel from '../database_panels/DatabaseRelatedModelsPanel';
 
@@ -60,6 +61,8 @@ const CivitaiModelScreen: React.FC = () => {
                     ))}
                 </div>
             )}
+
+            <CategoriesListSelector />
 
             <div>
                 {/**Database's Model Infomation Panel*/}

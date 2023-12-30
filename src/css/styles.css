@@ -155,3 +155,35 @@
     align-items: center;
     height: 50vh;
 }
+
+/* Category Selector style */
+.selector-container {
+    padding: 3px;
+}
+
+/* Form style */
+.selector-form-container {
+    display: flex;
+    align-items: center;
+}
+
+/* Form Group style */
+.selector-form-group {
+    margin-bottom: 0;
+    margin-right: 2px;
+}
+
+/* Form Label style */
+.selector-form-label {
+    margin-right: 2px;
+}
+
+/* Form Select style */
+.selector-form-select {
+    min-width: 150px;
+}
+
+.btn-lg {
+    width: 90%;
+    margin: 1px;
+}

@@ -1,7 +1,7 @@
 // actions/userActions.js
 import {
     UPDATE_CIVITAI_URL, UPDATE_CIVITAI_MODELID, UPDATE_CIVITAI_VERSIONID,
-    UPDATE_SELECTED_CATEGORY, UPDATE_CATEGORY_LIST, UPDATE_CIVITAI_MODEL_OBJECT,
+    UPDATE_CIVITAI_MODEL_OBJECT,
 } from '../constants/CivitaiModelActionTypes';
 
 export const updateCivitaiUrl = (newCivitaiUrl: string) => ({
@@ -22,14 +22,4 @@ export const updateCivitaiVersionID = (newCivitaiVersionID: string) => ({
 export const updateCivitaiModelObject = (newCivitaiModelObject: object) => ({
     type: UPDATE_CIVITAI_MODEL_OBJECT,
     payload: newCivitaiModelObject,
-});
-
-export const updateSelectedCategory = (newSelectedCategory: string) => ({
-    type: UPDATE_SELECTED_CATEGORY,
-    payload: newSelectedCategory,
-});
-
-export const updateCategoryList = (newCategoryList: string[]) => ({
-    type: UPDATE_CATEGORY_LIST,
-    payload: newCategoryList,
 });

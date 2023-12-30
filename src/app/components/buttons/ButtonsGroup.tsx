@@ -15,6 +15,8 @@ import { MdAccessAlarms } from "react-icons/md"
 import { PiCellSignalFullLight, PiCellSignalSlash } from "react-icons/pi"
 import { SiTask } from "react-icons/si";
 
+//TODO
+//Download button would involve downloadMethod
 
 //utils
 import { bookmarkThisModel, unBookmarkThisModel } from "../../utils/chromeUtils"

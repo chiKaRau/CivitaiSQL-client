@@ -1,4 +1,7 @@
-import { updateBookmarkID, setIsBookmarked } from "../store/actions/chromeActions"
+import {
+    updateBookmarkID, setIsBookmarked,
+    updateSelectedCategory, updateDownloadFilePath, updateDownloadMethod
+} from "../store/actions/chromeActions"
 
 export const setupBookmark = (modelType: string, activeURL: string, dispatch: any) => {
     chrome.bookmarks.getChildren(findBookmarkfolderbyModelType(modelType), (results) => {
@@ -39,6 +42,19 @@ export const unBookmarkThisModel = (bookmarkId: string, dispatch: any) => {
     });
 }
 
+export const removeBookmarkByUrl = (url: string, dispatch: any) => {
+    chrome.bookmarks.search({ url }, function (bookmarks) {
+        if (bookmarks.length > 0) {
+            const bookmarkId = bookmarks[0].id;
+            chrome.bookmarks.remove(bookmarkId, function () {
+                // Update your state or perform any other actions after removing the bookmark
+                dispatch(updateBookmarkID(""));
+                dispatch(setIsBookmarked(false));
+            });
+        }
+    });
+};
+
 export const findBookmarkfolderbyModelType = (modelType: string) => {
     if (modelType.includes("lora")) {
         return "5";
@@ -51,6 +67,41 @@ export const findBookmarkfolderbyModelType = (modelType: string) => {
     }
 }
 
-export const initializeDatafromChromeStorage = () => {
+export const initializeDatafromChromeStorage = (dispatch: any) => {
+    // Retrieve the last selected sheet option from Chrome storage
+    chrome.storage.sync.get(['selectedCategory'], (result) => {
+        if (result.selectedCategory) {
+            console.log("get the ", result.selectedCategory)
+            dispatch(updateSelectedCategory(result.selectedCategory))
+        }
+    });
+
+    // Retrieve the last downloadFilePath value from Chrome storage
+    chrome.storage.sync.get(['downloadFilePath'], (result) => {
+        if (result.downloadFilePath) {
+            console.log("get the ", result.downloadFilePath)
+            dispatch(updateDownloadFilePath(result.downloadFilePath))
+        }
+    });
+
+    // Retrieve the last selected sheet option from Chrome storage
+    chrome.storage.sync.get(['downloadMethod'], (result) => {
+        if (result.downloadMethod) {
+            console.log("get the ", result.downloadMethod)
+            dispatch(updateDownloadMethod(result.downloadMethod))
+        }
+    });
+
+}
+
+export const updateSelectedCategoryIntoChromeStorage = (selectedCategory: string) => {
+    chrome.storage.sync.set({ selectedCategory });
+
+    chrome.storage.sync.get(null, (result) => {
+        for (const key in result) {
+            const value = result[key];
+            console.log(`Key: ${key}, Value:`, value);
+        }
+    });
 
 }

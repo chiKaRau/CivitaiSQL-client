@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 //Components
 import { Toast } from 'react-bootstrap';
 import Col from 'react-bootstrap/Col';
@@ -13,9 +13,16 @@ import { Button, OverlayTrigger, Tooltip } from 'react-bootstrap';
 //Store
 import { useSelector, useDispatch } from 'react-redux';
 import { AppState } from '../../store/configureStore';
+import { setIsBookmarked } from "../../store/actions/chromeActions"
 
 //api
-import { fetchDatabaseModelInfoByModelID } from "../../api/civitaiSQL_api"
+import {
+    addRecordToDatabase, removeRecordFromDatabaseByID,
+    fetchDatabaseModelInfoByModelID
+} from "../../api/civitaiSQL_api"
+
+//utils
+import { removeBookmarkByUrl, bookmarkThisModel, unBookmarkThisModel } from "../../utils/chromeUtils"
 
 //Interface
 interface DatabaseModelInfoPanelProps {
@@ -23,30 +30,33 @@ interface DatabaseModelInfoPanelProps {
 }
 
 const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) => {
+    const isInitialMount = useRef(true);
+
+    const dispatch = useDispatch();
+
+    const civitaiModel = useSelector((state: AppState) => state.civitaiModel);
+    const civitaiData: Record<string, any> | undefined = civitaiModel.civitaiModelObject;
+    const { civitaiUrl } = civitaiModel
 
     const databaseModel = useSelector((state: AppState) => state.databaseModel);
     const databaseData: Record<string, any> | undefined = databaseModel.databaseModelObject;
     const databaseModelsList = databaseData;
     const { isInDatabase } = databaseModel
 
+    const chrome = useSelector((state: AppState) => state.chrome);
+    const { selectedCategory, bookmarkID } = chrome;
+
     const [modelsList, setModelsList] = useState<{ name: string; url: string; id: number; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
     const [visibleToasts, setVisibleToasts] = useState<boolean[]>([])
     const [isLoading, setIsLoading] = useState(false)
 
     useEffect(() => {
-        handleCallingAPI();
+        handleUpdateModelsList();
     }, [])
 
-    const handleCallingAPI = async () => {
+    const handleUpdateModelsList = async () => {
         setIsLoading(true)
-
-        const data: { name: string; url: string; id: number; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[] = databaseModelsList.map((record: any) => ({
-            name: record.name,
-            url: record.url,
-            id: record.id,
-            imageUrls: record.imageUrls,
-        }));
-
+        const data = await fetchDatabaseModelInfoByModelID(civitaiModel.civitaiModelID, dispatch);
         setModelsList(data)
         setVisibleToasts(data?.map(() => true))
         setIsLoading(false)
@@ -58,8 +68,28 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) =>
         setVisibleToasts(newVisibleToasts);
     };
 
-    const handleAddDatatoDatabase = () => {
+    const handleAddModeltoDatabase = () => {
+        if (civitaiUrl !== "" && selectedCategory !== "" &&
+            civitaiUrl !== undefined && selectedCategory !== undefined &&
+            civitaiUrl !== null && selectedCategory !== null) {
+            addRecordToDatabase(selectedCategory, civitaiUrl, dispatch);
+            bookmarkThisModel(civitaiData?.type, dispatch)
+            props.toggleDatabaseModelInfoPanelOpen()
+        }
+    }
 
+    const handleRemoveModelFromDatabase = (id: number) => {
+        if (id !== null && id !== undefined) {
+            removeRecordFromDatabaseByID(id, dispatch)
+            props.toggleDatabaseModelInfoPanelOpen()
+        }
+    }
+
+    const handleRemoveModelBookmarkByUrl = (url: string) => {
+        removeBookmarkByUrl(url, dispatch);
+        if (url === civitaiUrl) {
+            dispatch(setIsBookmarked(true))
+        }
     }
 
     return (
@@ -75,70 +105,76 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) =>
                     <h6>Database's ModelInfo Panel</h6>
                 </div>
 
-                {!isInDatabase ?
+                <Button
+                    variant={"primary"}
+                    onClick={handleAddModeltoDatabase}
+                    disabled={isLoading}
+                    className="btn btn-primary btn-lg w-100"
+                >
+                    <SlDocs />
+                    {isLoading && <span className="button-state-complete">✓</span>}
+                </Button>
+
+                {isLoading ?
                     <div className="centered-container">
-                        <OverlayTrigger placement={"bottom"}
-                            overlay={<Tooltip id="tooltip">{"Added this model"}</Tooltip>}>
-                            <div>
-                                <Button
-                                    variant={"success"}
-                                    onClick={handleAddDatatoDatabase}
-                                    disabled={isInDatabase}
-                                    className={`button buttonWrap ${isLoading ? "button-state-loading" : "button-state-default"}`}
-                                >
-                                    <SlDocs />
-                                    {isLoading && <span className="button-state-complete">✓</span>}
-                                </Button>
-                            </div>
-                        </OverlayTrigger>
+                        <Spinner />
                     </div>
                     :
-                    (isLoading ?
-                        <div className="centered-container">
-                            <Spinner />
-                        </div>
-                        :
-                        <>
-                            {modelsList?.map((model, index) => {
-                                if (!visibleToasts[index]) return null;
+                    <>
+                        {modelsList?.map((model, index) => {
+                            if (!visibleToasts[index]) return null;
 
-                                return (
-                                    <div key={index} className="panel-toast-container">
-                                        <Toast onClose={() => handleClose(index)}>
-                                            <Toast.Header>
-                                                <Col xs={10} className="panel-toast-header">
-                                                    <b><span>#{model?.id}</span> : <span>{model?.name}</span></b>
-                                                </Col>
-                                            </Toast.Header>
-                                            <Toast.Body>
-                                                {/* Image Carousel */}
-                                                <div className="panel-image-carousel-container">
-                                                    {model?.imageUrls[0]?.url
-                                                        &&
-                                                        <Carousel fade>
-                                                            {model?.imageUrls?.map((image) => {
-                                                                return (
-                                                                    <Carousel.Item >
-                                                                        <img
-                                                                            src={image.url || "https://placehold.co/200x250"}
-                                                                            alt={model.name}
-                                                                        />
-                                                                    </Carousel.Item>
-                                                                )
-                                                            })}
-                                                        </Carousel>}
-                                                </div>
+                            return (
+                                <div key={index} className="panel-toast-container">
+                                    <Toast onClose={() => handleClose(index)}>
+                                        <Toast.Header>
+                                            <Col xs={10} className="panel-toast-header">
+                                                <b><span>#{model?.id}</span> : <span>{model?.name}</span></b>
+                                            </Col>
+                                        </Toast.Header>
+                                        <Toast.Body>
+                                            {/* Image Carousel */}
+                                            <div className="panel-image-carousel-container">
+                                                {model?.imageUrls[0]?.url
+                                                    &&
+                                                    <Carousel fade>
+                                                        {model?.imageUrls?.map((image) => {
+                                                            return (
+                                                                <Carousel.Item >
+                                                                    <img
+                                                                        src={image.url || "https://placehold.co/200x250"}
+                                                                        alt={model.name}
+                                                                    />
+                                                                </Carousel.Item>
+                                                            )
+                                                        })}
+                                                    </Carousel>}
+                                            </div>
 
-                                                {/* Url */}
-                                                <a href={model?.url}> {model?.url} </a>
+                                            {/* Url */}
+                                            <a href={model?.url}> {model?.url} </a>
 
-                                            </Toast.Body>
-                                        </Toast>
-                                    </div>
-                                );
-                            })}
-                        </>
-                    )
+
+                                            {/**Remove button */}
+                                            <Button
+                                                variant={"danger"}
+                                                disabled={isLoading}
+                                                onClick={() => {
+                                                    handleRemoveModelBookmarkByUrl(model?.url);
+                                                    handleRemoveModelFromDatabase(model?.id);
+                                                }}
+                                                className="btn btn-danger btn-lg w-100"
+                                            >
+                                                <TbCloudX />
+                                                {isLoading && <span className="button-state-complete">✓</span>}
+                                            </Button>
+
+                                        </Toast.Body>
+                                    </Toast>
+                                </div>
+                            );
+                        })}
+                    </>
                 }
 
             </div >
