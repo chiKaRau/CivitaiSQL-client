@@ -71,7 +71,6 @@ export const initializeDatafromChromeStorage = (dispatch: any) => {
     // Retrieve the last selected sheet option from Chrome storage
     chrome.storage.sync.get(['selectedCategory'], (result) => {
         if (result.selectedCategory) {
-            console.log("get the ", result.selectedCategory)
             dispatch(updateSelectedCategory(result.selectedCategory))
         }
     });
@@ -79,7 +78,6 @@ export const initializeDatafromChromeStorage = (dispatch: any) => {
     // Retrieve the last downloadFilePath value from Chrome storage
     chrome.storage.sync.get(['downloadFilePath'], (result) => {
         if (result.downloadFilePath) {
-            console.log("get the ", result.downloadFilePath)
             dispatch(updateDownloadFilePath(result.downloadFilePath))
         }
     });
@@ -87,7 +85,6 @@ export const initializeDatafromChromeStorage = (dispatch: any) => {
     // Retrieve the last selected sheet option from Chrome storage
     chrome.storage.sync.get(['downloadMethod'], (result) => {
         if (result.downloadMethod) {
-            console.log("get the ", result.downloadMethod)
             dispatch(updateDownloadMethod(result.downloadMethod))
         }
     });
@@ -96,12 +93,20 @@ export const initializeDatafromChromeStorage = (dispatch: any) => {
 
 export const updateSelectedCategoryIntoChromeStorage = (selectedCategory: string) => {
     chrome.storage.sync.set({ selectedCategory });
+}
 
-    chrome.storage.sync.get(null, (result) => {
-        for (const key in result) {
-            const value = result[key];
-            console.log(`Key: ${key}, Value:`, value);
+export const updateDownloadFilePathIntoChromeStorage = (downloadFilePath: string) => {
+    chrome.storage.sync.set({ downloadFilePath });
+}
+
+export const updateDownloadMethodIntoChromeStorage = (downloadMethod: string) => {
+    chrome.storage.sync.set({ downloadMethod });
+}
+
+export const callChromeBrowserDownload = (data: any) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+        if (tabs[0]?.url) {
+            chrome.tabs.sendMessage(tabs[0].id as number, { action: "browser-download", data: data });
         }
     });
-
 }

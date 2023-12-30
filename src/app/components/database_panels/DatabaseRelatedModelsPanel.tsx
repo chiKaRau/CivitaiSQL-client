@@ -40,11 +40,13 @@ const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanel> = (props)
     const modelName = data?.name;
     const modelTags = data?.tags;
 
+    //Find Possible tags from civitai name and tags
     useEffect(() => {
         setPossibleCombinationTags(retrievePossibleCombination(modelName, modelTags))
     }, [])
 
     useEffect(() => {
+        //Prevent trigger handleUpdateModelsList on mount
         if (isInitialMount.current) {
             isInitialMount.current = false;
         } else {
@@ -131,9 +133,9 @@ const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanel> = (props)
                                                 {model?.imageUrls[0]?.url
                                                     &&
                                                     <Carousel fade>
-                                                        {model?.imageUrls?.map((image) => {
+                                                        {model?.imageUrls?.map((image, index) => {
                                                             return (
-                                                                <Carousel.Item >
+                                                                <Carousel.Item key={index}>
                                                                     <img
                                                                         src={image.url || "https://placehold.co/200x250"}
                                                                         alt={model.name}

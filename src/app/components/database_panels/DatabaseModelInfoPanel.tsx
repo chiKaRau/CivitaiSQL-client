@@ -50,6 +50,7 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) =>
     const [visibleToasts, setVisibleToasts] = useState<boolean[]>([])
     const [isLoading, setIsLoading] = useState(false)
 
+    //Retrivie Modellist when pane is open
     useEffect(() => {
         handleUpdateModelsList();
     }, [])

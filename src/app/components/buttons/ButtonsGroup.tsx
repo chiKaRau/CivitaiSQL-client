@@ -6,23 +6,24 @@ import { AppState } from '../../store/configureStore';
 import { togglePanel } from '../../store/actions/panelActions';
 
 //Icons Components
-import { BsCheck, BsArrowRepeat, BsStarFill, BsStar, BsFillCloudArrowUpFill, BsInfoCircleFill, BsFillCartCheckFill, BsCloudDownloadFill } from 'react-icons/bs';
-import { FcDownload } from "react-icons/fc";
+import { BsCheck, BsArrowRepeat, BsStarFill, BsStar, BsFillCloudArrowUpFill, BsInfoCircleFill, BsFillCartCheckFill } from 'react-icons/bs';
 import { AiFillFolderOpen } from "react-icons/ai"
 import { GrCopy, GrPowerShutdown } from 'react-icons/gr';
 import { PiMagnifyingGlassBold } from "react-icons/pi"
 import { MdAccessAlarms } from "react-icons/md"
 import { PiCellSignalFullLight, PiCellSignalSlash } from "react-icons/pi"
 import { SiTask } from "react-icons/si";
+import { SlDocs } from "react-icons/sl"
 
-//TODO
-//Download button would involve downloadMethod
+//api
+import { openDownloadDirectory } from "../../api/civitaiSQL_api"
 
 //utils
 import { bookmarkThisModel, unBookmarkThisModel } from "../../utils/chromeUtils"
 
 //Components
 import ButtonWrap from "./ButtonWrap";
+import DownloadFileButton from "./DownloadFileButton";
 
 const ButtonsGroup: React.FC = () => {
     const civitaiModel = useSelector((state: AppState) => state.civitaiModel);
@@ -55,6 +56,26 @@ const ButtonsGroup: React.FC = () => {
             }}
                 handleFunctionCall={() => dispatch(togglePanel("DatabaseRelatedModelsPanel"))} />
 
+            {/**Database's LatestAddedModelsPanel Button */}
+            <ButtonWrap buttonConfig={{
+                placement: "bottom",
+                tooltip: "Latest Added Models",
+                variant: "success",
+                buttonIcon: <SlDocs />,
+                disable: false,
+            }}
+                handleFunctionCall={() => dispatch(togglePanel("DatabaseLastestAddedModelsPanel"))} />
+
+            {/**Database's UpdateModelPanel Button */}
+            <ButtonWrap buttonConfig={{
+                placement: "bottom",
+                tooltip: "Update this Model",
+                variant: "success",
+                buttonIcon: <GrCopy />,
+                disable: false,
+            }}
+                handleFunctionCall={() => dispatch(togglePanel("DatabaseUpdateModelPanel"))} />
+
             {/**Bookmark Button */}
             <ButtonWrap buttonConfig={{
                 placement: "bottom",
@@ -67,6 +88,19 @@ const ButtonsGroup: React.FC = () => {
                     () => unBookmarkThisModel(bookmarkID, dispatch)
                     :
                     () => bookmarkThisModel(data?.type, dispatch)} />
+
+            {/**Open Download Button */}
+            <ButtonWrap buttonConfig={{
+                placement: "bottom",
+                tooltip: "Open Download Directory",
+                variant: "primary",
+                buttonIcon: <AiFillFolderOpen />,
+                disable: false,
+            }}
+                handleFunctionCall={() => openDownloadDirectory(dispatch)} />
+
+            {/**Download Button */}
+            <DownloadFileButton />
 
 
         </div>

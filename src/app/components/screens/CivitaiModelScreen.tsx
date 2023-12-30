@@ -13,6 +13,8 @@ import ButtonsGroup from "../buttons/ButtonsGroup"
 import CategoriesListSelector from '../CategoriesListSelector';
 import DatabaseModelInfoPanel from '../database_panels/DatabaseModelInfoPanel';
 import DatabaseRelatedModelsPanel from '../database_panels/DatabaseRelatedModelsPanel';
+import DatabaseLastestAddedModelsPanel from '../database_panels/DatabaseLastestAddedModelsPanel';
+import DatabaseUpdateModelPanel from '../database_panels/DatabaseUpdateModelPanel';
 
 //Model Page
 const CivitaiModelScreen: React.FC = () => {
@@ -37,6 +39,7 @@ const CivitaiModelScreen: React.FC = () => {
 
     return (
         <>
+            {/**Header Buttons */}
             <ButtonsGroup />
 
             <div>
@@ -62,8 +65,10 @@ const CivitaiModelScreen: React.FC = () => {
                 </div>
             )}
 
+            {/**Categories List Selector */}
             <CategoriesListSelector />
 
+            {/**Database Panels */}
             <div>
                 {/**Database's Model Infomation Panel*/}
                 {panels["DatabaseModelInfoPanel"] && <DatabaseModelInfoPanel toggleDatabaseModelInfoPanelOpen={() => {
@@ -74,6 +79,17 @@ const CivitaiModelScreen: React.FC = () => {
                 {panels["DatabaseRelatedModelsPanel"] && <DatabaseRelatedModelsPanel toggleDatabaseRelatedModelsPanelOpen={() => {
                     dispatch(togglePanel("DatabaseRelatedModelsPanel"));
                 }} />}
+
+                {/**Database's Latest Added Models Panel*/}
+                {panels["DatabaseLastestAddedModelsPanel"] && <DatabaseLastestAddedModelsPanel toggleDatabaseLastestAddedModelsPanelOpen={() => {
+                    dispatch(togglePanel("DatabaseLastestAddedModelsPanel"));
+                }} />}
+
+                {/**Database's Latest Added Models Panel*/}
+                {panels["DatabaseUpdateModelPanel"] && <DatabaseUpdateModelPanel toggleDatabaseUpdateModelPanelOpen={() => {
+                    dispatch(togglePanel("DatabaseUpdateModelPanel"));
+                }} />}
+
             </div>
         </>
     );

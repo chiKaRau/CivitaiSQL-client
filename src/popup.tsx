@@ -93,7 +93,7 @@ const Popup = () => {
         versionNumber = data?.modelVersions[0]?.id;
       }
       //Setup VersionID
-      dispatch(updateCivitaiVersionID(versionNumber));
+      dispatch(updateCivitaiVersionID(versionNumber.toString()));
 
       //Setup Bookmark
       setupBookmark(data?.type, activeURL, dispatch)

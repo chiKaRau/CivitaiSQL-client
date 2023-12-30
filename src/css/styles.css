@@ -187,3 +187,44 @@
     width: 90%;
     margin: 1px;
 }
+
+/* Styles for the collapsed content */
+
+.collapse-panel-container {
+    border: 1px solid #ccc;
+    background-color: #f8f8f8;
+    padding: 10px;
+    margin: 10px;
+    border-radius: 10px;
+    /* Rounded corners */
+}
+
+#collapse-panel {
+    padding: 5px;
+}
+
+/* Styles for the toggle section */
+.toggle-section {
+    margin-bottom: 10px;
+    cursor: pointer;
+    font-size: 15px;
+}
+
+.radio-container {
+    margin: 10px 8px 0px 8px;
+}
+
+.radio-label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.radio-input {
+    margin-right: 5px;
+    transform: scale(1.2);
+}
+
+.radio-label:hover {
+    background-color: #f0f0f0;
+}
