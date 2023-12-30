@@ -1,4 +1,4 @@
-import { updateBookmarkID, setIsBookmarked } from "../store/actions/civitaiModelActions"
+import { updateBookmarkID, setIsBookmarked } from "../store/actions/chromeActions"
 
 export const setupBookmark = (modelType: string, activeURL: string, dispatch: any) => {
     chrome.bookmarks.getChildren(findBookmarkfolderbyModelType(modelType), (results) => {
@@ -49,4 +49,8 @@ export const findBookmarkfolderbyModelType = (modelType: string) => {
     } else {
         return "5"
     }
+}
+
+export const initializeDatafromChromeStorage = () => {
+
 }

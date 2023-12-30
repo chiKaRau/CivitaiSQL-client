@@ -18,7 +18,7 @@ const CivitaiModelScreen: React.FC = () => {
     //Redux Store will check which Reducer has the "state.[key]" then return appropriate value from the state
     //Any Changes and Updates in Reducer would trigger rerender
     const civitaiModel = useSelector((state: AppState) => state.civitaiModel);
-    const { civitaiUrl, civitaiModelID, civitaiVersionID, bookmarkID, isBookmarked } = civitaiModel;
+    const { civitaiUrl, civitaiModelID, civitaiVersionID } = civitaiModel;
     const civitaiData: Record<string, any> | undefined = civitaiModel.civitaiModelObject;
     const modelName = civitaiData?.name;
 
@@ -26,6 +26,9 @@ const CivitaiModelScreen: React.FC = () => {
     const { isInDatabase } = databaseModel
     const databaseData: Record<string, any> | undefined = databaseModel.databaseModelObject;
     const databaseModelsList = databaseData;
+
+    const chrome = useSelector((state: AppState) => state.chrome);
+    const { bookmarkID, isBookmarked } = chrome;
 
     const panels = useSelector((state: AppState) => state.panel.panels);
     const dispatch = useDispatch();

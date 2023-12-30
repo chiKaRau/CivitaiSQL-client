@@ -1,6 +1,6 @@
 import React from 'react';
 
-const CivitaiModelsListScreen: React.FC = () => {
+const CategoriesListSelector: React.FC = () => {
 
     return (
         <div>
@@ -9,5 +9,5 @@ const CivitaiModelsListScreen: React.FC = () => {
     );
 };
 
-export default CivitaiModelsListScreen;
+export default CategoriesListSelector;
 

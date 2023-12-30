@@ -14,20 +14,20 @@ import { PiMagnifyingGlassBold } from "react-icons/pi"
 import { MdAccessAlarms } from "react-icons/md"
 import { PiCellSignalFullLight, PiCellSignalSlash } from "react-icons/pi"
 import { SiTask } from "react-icons/si";
-import { SlDocs } from "react-icons/sl"
-import { TbCloudX } from "react-icons/tb"
+
 
 //utils
-import { bookmarkThisModel, unBookmarkThisModel } from "../../utils/bookmarkUtils"
+import { bookmarkThisModel, unBookmarkThisModel } from "../../utils/chromeUtils"
 
 //Components
 import ButtonWrap from "./ButtonWrap";
 
 const ButtonsGroup: React.FC = () => {
     const civitaiModel = useSelector((state: AppState) => state.civitaiModel);
-    const { isBookmarked, bookmarkID } = civitaiModel
     const data: Record<string, any> | undefined = civitaiModel.civitaiModelObject;
-    const modelType = data?.type;
+
+    const chrome = useSelector((state: AppState) => state.chrome);
+    const { isBookmarked, bookmarkID } = chrome
 
     const dispatch = useDispatch();
 

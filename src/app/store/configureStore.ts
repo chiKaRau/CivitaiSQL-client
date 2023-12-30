@@ -6,6 +6,7 @@ import errorsReducer, { ErrorsState } from './reducers/errorsReducer';
 import loadingReducer, { LoadingState } from './reducers/loadingReducer';
 import panelReducer, { PanelState } from './reducers/panelReducer';
 import databaseModelReducer, { DatabaseModelState } from './reducers/databaseModelReducer';
+import chromeReducer, { ChromeState } from './reducers/chromeReducer';
 
 
 // Define the root state type
@@ -15,6 +16,7 @@ interface RootState {
     loading: LoadingState;
     panel: PanelState;
     databaseModel: DatabaseModelState;
+    Chrome: ChromeState;
     // Add other slices as needed
 }
 
@@ -24,7 +26,8 @@ const rootReducer = combineReducers({
     errors: errorsReducer,
     loading: loadingReducer,
     panel: panelReducer,
-    databaseModel: databaseModelReducer
+    databaseModel: databaseModelReducer,
+    chrome: chromeReducer
     // Add other slices as needed
 });
 

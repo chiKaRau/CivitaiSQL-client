@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from "react";
-
-//also remove bookmark
-//prob option?
-
 //Components
 import { Toast } from 'react-bootstrap';
 import Col from 'react-bootstrap/Col';
 import { BiUndo } from "react-icons/bi"
 import { Carousel } from 'react-bootstrap';
 import Spinner from 'react-bootstrap/Spinner';
+import { SlDocs } from "react-icons/sl"
+import { TbCloudX } from "react-icons/tb"
+import { Button, OverlayTrigger, Tooltip } from 'react-bootstrap';
+
 
 //Store
 import { useSelector, useDispatch } from 'react-redux';
@@ -27,7 +27,8 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) =>
     const databaseModel = useSelector((state: AppState) => state.databaseModel);
     const databaseData: Record<string, any> | undefined = databaseModel.databaseModelObject;
     const databaseModelsList = databaseData;
-    
+    const { isInDatabase } = databaseModel
+
     const [modelsList, setModelsList] = useState<{ name: string; url: string; id: number; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
     const [visibleToasts, setVisibleToasts] = useState<boolean[]>([])
     const [isLoading, setIsLoading] = useState(false)
@@ -57,6 +58,10 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) =>
         setVisibleToasts(newVisibleToasts);
     };
 
+    const handleAddDatatoDatabase = () => {
+
+    }
+
     return (
         <div className="panel-container">
             {/* ... other JSX elements ... */}
@@ -70,55 +75,74 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) =>
                     <h6>Database's ModelInfo Panel</h6>
                 </div>
 
-                {isLoading ?
-                    <div className="centered-spinner-container">
-                        <Spinner />
+                {!isInDatabase ?
+                    <div className="centered-container">
+                        <OverlayTrigger placement={"bottom"}
+                            overlay={<Tooltip id="tooltip">{"Added this model"}</Tooltip>}>
+                            <div>
+                                <Button
+                                    variant={"success"}
+                                    onClick={handleAddDatatoDatabase}
+                                    disabled={isInDatabase}
+                                    className={`button buttonWrap ${isLoading ? "button-state-loading" : "button-state-default"}`}
+                                >
+                                    <SlDocs />
+                                    {isLoading && <span className="button-state-complete">✓</span>}
+                                </Button>
+                            </div>
+                        </OverlayTrigger>
                     </div>
                     :
-                    <>
-                        {modelsList?.map((model, index) => {
-                            if (!visibleToasts[index]) return null;
+                    (isLoading ?
+                        <div className="centered-container">
+                            <Spinner />
+                        </div>
+                        :
+                        <>
+                            {modelsList?.map((model, index) => {
+                                if (!visibleToasts[index]) return null;
 
-                            return (
-                                <div key={index} className="panel-toast-container">
-                                    <Toast onClose={() => handleClose(index)}>
-                                        <Toast.Header>
-                                            <Col xs={10} className="panel-toast-header">
-                                                <b><span>#{model?.id}</span> : <span>{model?.name}</span></b>
-                                            </Col>
-                                        </Toast.Header>
-                                        <Toast.Body>
-                                            {/* Image Carousel */}
-                                            <div className="panel-image-carousel-container">
-                                                {model?.imageUrls[0]?.url
-                                                    &&
-                                                    <Carousel fade>
-                                                        {model?.imageUrls?.map((image) => {
-                                                            return (
-                                                                <Carousel.Item >
-                                                                    <img
-                                                                        src={image.url || "https://placehold.co/200x250"}
-                                                                        alt={model.name}
-                                                                    />
-                                                                </Carousel.Item>
-                                                            )
-                                                        })}
-                                                    </Carousel>}
-                                            </div>
+                                return (
+                                    <div key={index} className="panel-toast-container">
+                                        <Toast onClose={() => handleClose(index)}>
+                                            <Toast.Header>
+                                                <Col xs={10} className="panel-toast-header">
+                                                    <b><span>#{model?.id}</span> : <span>{model?.name}</span></b>
+                                                </Col>
+                                            </Toast.Header>
+                                            <Toast.Body>
+                                                {/* Image Carousel */}
+                                                <div className="panel-image-carousel-container">
+                                                    {model?.imageUrls[0]?.url
+                                                        &&
+                                                        <Carousel fade>
+                                                            {model?.imageUrls?.map((image) => {
+                                                                return (
+                                                                    <Carousel.Item >
+                                                                        <img
+                                                                            src={image.url || "https://placehold.co/200x250"}
+                                                                            alt={model.name}
+                                                                        />
+                                                                    </Carousel.Item>
+                                                                )
+                                                            })}
+                                                        </Carousel>}
+                                                </div>
 
-                                            {/* Url */}
-                                            <a href={model?.url}> {model?.url} </a>
+                                                {/* Url */}
+                                                <a href={model?.url}> {model?.url} </a>
 
-                                        </Toast.Body>
-                                    </Toast>
-                                </div>
-                            );
-                        })}
-                    </>
+                                            </Toast.Body>
+                                        </Toast>
+                                    </div>
+                                );
+                            })}
+                        </>
+                    )
                 }
 
-            </div>
-        </div>
+            </div >
+        </div >
 
     );
 };

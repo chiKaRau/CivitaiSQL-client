@@ -1,5 +1,5 @@
 // reducers/counterReducer.ts
-import { CivitaiModelActionTypes, UPDATE_BOOKMARKID, UPDATE_CIVITAI_URL } from '../constants/CivitaiModelActionTypes';
+import { CivitaiModelActionTypes } from '../constants/CivitaiModelActionTypes';
 
 interface CivitaiModelState {
     civitaiUrl: string;
@@ -8,8 +8,6 @@ interface CivitaiModelState {
     civitaiModelObject: object;
     selectedCategory: string;
     categoryList: String[];
-    bookmarkID: string;
-    isBookmarked: boolean;
 }
 
 const initialState: CivitaiModelState = {
@@ -19,8 +17,6 @@ const initialState: CivitaiModelState = {
     civitaiModelObject: {},
     selectedCategory: "",
     categoryList: [],
-    bookmarkID: "",
-    isBookmarked: false
 };
 
 const civitaiModelReducer = (state = initialState, action: CivitaiModelActionTypes): CivitaiModelState => {
@@ -37,10 +33,6 @@ const civitaiModelReducer = (state = initialState, action: CivitaiModelActionTyp
             return { ...state, selectedCategory: action.payload };
         case 'UPDATE_CATEGORY_LIST':
             return { ...state, categoryList: action.payload };
-        case 'UPDATE_BOOKMARKID':
-            return { ...state, bookmarkID: action.payload };
-        case 'SET_ISBOOKMARKED':
-            return { ...state, isBookmarked: action.payload };
 
         default:
             return state;

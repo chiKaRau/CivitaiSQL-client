@@ -2,7 +2,6 @@
 import {
     UPDATE_CIVITAI_URL, UPDATE_CIVITAI_MODELID, UPDATE_CIVITAI_VERSIONID,
     UPDATE_SELECTED_CATEGORY, UPDATE_CATEGORY_LIST, UPDATE_CIVITAI_MODEL_OBJECT,
-    UPDATE_BOOKMARKID, SET_ISBOOKMARKED
 } from '../constants/CivitaiModelActionTypes';
 
 export const updateCivitaiUrl = (newCivitaiUrl: string) => ({
@@ -33,15 +32,4 @@ export const updateSelectedCategory = (newSelectedCategory: string) => ({
 export const updateCategoryList = (newCategoryList: string[]) => ({
     type: UPDATE_CATEGORY_LIST,
     payload: newCategoryList,
-});
-
-
-export const updateBookmarkID = (newBookmarkID: string) => ({
-    type: UPDATE_BOOKMARKID,
-    payload: newBookmarkID,
-});
-
-export const setIsBookmarked = (newIsBookmarked: boolean) => ({
-    type: SET_ISBOOKMARKED,
-    payload: newIsBookmarked
 });

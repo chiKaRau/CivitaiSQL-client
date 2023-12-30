@@ -19,7 +19,7 @@ import CivitaiModelScreen from "./app/components/screens/CivitaiModelScreen";
 import CivitaiModelsListScreen from "./app/components/screens/CivitaiModelsListScreen";
 
 //utils
-import { setupBookmark } from "./app/utils/bookmarkUtils"
+import { setupBookmark } from "./app/utils/chromeUtils"
 
 //Apis
 import { fetchCivitaiModelInfoFromCivitaiByModelID, fetchDatabaseModelInfoByModelID } from "./app/api/civitaiSQL_api"
@@ -50,11 +50,7 @@ const Popup = () => {
         } else {
           const modelId = activeURL.match(/\/models\/(\d+)/)?.[1] || '';
 
-          //SETUP Url and modelID
-          dispatch(updateCivitaiUrl(activeURL));
-          dispatch(updateCivitaiModelID(modelId));
-
-          //SETUP the Rest
+          //SETUP the CivitaiModelInfo
           await setupCivitaiModelInfo(modelId, activeURL);
 
           //SETUP the DatabaseModelInfo
@@ -78,6 +74,11 @@ const Popup = () => {
   }
 
   const setupCivitaiModelInfo = async (modelID: string, activeURL: string) => {
+
+    //SETUP Url and modelID
+    dispatch(updateCivitaiUrl(activeURL));
+    dispatch(updateCivitaiModelID(modelID));
+
     //Fetch Civitai ModelInfo
     const data = await fetchCivitaiModelInfoFromCivitaiByModelID(modelID, dispatch);
 

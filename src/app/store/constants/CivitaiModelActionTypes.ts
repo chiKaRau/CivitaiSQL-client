@@ -5,8 +5,6 @@ export const UPDATE_CIVITAI_VERSIONID = 'UPDATE_CIVITAI_VERSIONID';
 export const UPDATE_CIVITAI_MODEL_OBJECT = 'UPDATE_CIVITAI_MODEL_OBJECT';
 export const UPDATE_SELECTED_CATEGORY = 'UPDATE_SELECTED_CATEGORY';
 export const UPDATE_CATEGORY_LIST = 'UPDATE_CATEGORY_LIST';
-export const UPDATE_BOOKMARKID = 'UPDATE_BOOKMARKID';
-export const SET_ISBOOKMARKED = 'SET_ISBOOKMARKED';
 
 export interface UpdateCivtaiUrlAction {
     type: typeof UPDATE_CIVITAI_URL;
@@ -39,16 +37,6 @@ export interface UpdateCategoryListAction {
 }
 
 
-export interface UpdateBookmarkID {
-    type: typeof UPDATE_BOOKMARKID;
-    payload: string;
-}
-
-export interface SetIsBookmarked {
-    type: typeof SET_ISBOOKMARKED;
-    payload: boolean;
-};
 
 export type CivitaiModelActionTypes = UpdateCivtaiUrlAction | UpdateCivitaiModeIDAction | UpdateCivitaiVersionIDAction |
-    UpdateSelectedCategoryAction | UpdateCategoryListAction | UpdateCivitaiModelObject |
-    UpdateBookmarkID | SetIsBookmarked;
+    UpdateSelectedCategoryAction | UpdateCategoryListAction | UpdateCivitaiModelObject;
