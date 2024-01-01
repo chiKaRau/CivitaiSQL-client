@@ -6,7 +6,9 @@ import { AppState } from '../store/configureStore';
 import { updateCategoriesList, updateSelectedCategory } from "../store/actions/chromeActions"
 
 //api
-import { getCategoriesList } from "../api/civitaiSQL_api"
+import { fetchGetCategoriesList } from "../api/civitaiSQL_api"
+
+//utils
 import { initializeDatafromChromeStorage, updateSelectedCategoryIntoChromeStorage } from "../utils/chromeUtils"
 
 //components
@@ -22,6 +24,12 @@ const CategoriesListSelector: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false)
 
     useEffect(() => {
+        initializeDatafromChromeStorage(dispatch);
+        setupCategoriesInfo()
+    }, [])
+
+    //Update Chrome Storage
+    useEffect(() => {
         //Preventing First time update
         if (isInitialMount.current) {
             isInitialMount.current = false;
@@ -30,14 +38,9 @@ const CategoriesListSelector: React.FC = () => {
         }
     }, [selectedCategory]);
 
-    useEffect(() => {
-        initializeDatafromChromeStorage(dispatch);
-        setupCategoriesInfo()
-    }, [])
-
     const setupCategoriesInfo = async () => {
         setIsLoading(true)
-        const data = await getCategoriesList(dispatch);
+        const data = await fetchGetCategoriesList(dispatch);
         dispatch(updateCategoriesList(data));
         setIsLoading(false)
     }

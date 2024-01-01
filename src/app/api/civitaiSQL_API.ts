@@ -102,7 +102,7 @@ export const fetchDatabaseLastestAddedModelsPanel = async (dispatch: any) => {
 }
 
 
-export const addRecordToDatabase = async (selectedCategory: string, url: string, dispatch: any) => {
+export const fetchAddRecordToDatabase = async (selectedCategory: string, url: string, dispatch: any) => {
     try {
         // Clear any previous errors
         dispatch(clearError());
@@ -133,7 +133,7 @@ export const addRecordToDatabase = async (selectedCategory: string, url: string,
     }
 }
 
-export const removeRecordFromDatabaseByID = async (id: number, dispatch: any) => {
+export const fetchRemoveRecordFromDatabaseByID = async (id: number, dispatch: any) => {
     try {
         // Clear any previous errors
         dispatch(clearError());
@@ -164,7 +164,7 @@ export const removeRecordFromDatabaseByID = async (id: number, dispatch: any) =>
     }
 }
 
-export const updateRecordAtDatabase = async (id: number, url: string, selectedCategory: string, dispatch: any) => {
+export const fetchUpdateRecordAtDatabase = async (id: number, url: string, selectedCategory: string, dispatch: any) => {
     try {
         // Clear any previous errors
         dispatch(clearError());
@@ -196,7 +196,7 @@ export const updateRecordAtDatabase = async (id: number, url: string, selectedCa
 }
 
 
-export const getCategoriesList = async (dispatch: any) => {
+export const fetchGetCategoriesList = async (dispatch: any) => {
     try {
         // Clear any previous errors
         dispatch(clearError());
@@ -221,7 +221,26 @@ export const getCategoriesList = async (dispatch: any) => {
     }
 }
 
-export const openDownloadDirectory = async (dispatch: any) => {
+export const fetchGetFoldersList = async (dispatch: any) => {
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+        const response = await axios.get(`${config.domain}/api/get_folders_list`);
+        if (response.status >= 200 && response.status < 300) {
+                return response.data.payload.foldersList;
+        } else {
+            throw new Error("Civitai Info retrieval failed");
+        }
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Civitai Info retrieval:", error.message);
+        // Optionally, you can throw an error or return a specific value
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}
+
+
+export const fetchOpenDownloadDirectory = async (dispatch: any) => {
     try {
         // Clear any previous errors
         dispatch(clearError());
@@ -238,7 +257,7 @@ export const openDownloadDirectory = async (dispatch: any) => {
     }
 }
 
-export const downloadFilesByServer = async (url: string, name: string,
+export const fetchDownloadFilesByServer = async (url: string, name: string,
     modelID: string, versionID: string, downloadFilePath: string,
     filesList: { name: string; downloadUrl: string }[], dispatch: any) => {
 
@@ -265,7 +284,7 @@ export const downloadFilesByServer = async (url: string, name: string,
     }
 }
 
-export const downloadFilesByBrowser = async (url: string, downloadFilePath: string, dispatch: any) => {
+export const fetchDownloadFilesByBrowser = async (url: string, downloadFilePath: string, dispatch: any) => {
 
     try {
         // Clear any previous errors

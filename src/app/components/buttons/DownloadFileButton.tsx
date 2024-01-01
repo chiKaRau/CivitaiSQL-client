@@ -4,6 +4,7 @@ import React, { useState, useRef, CSSProperties, useEffect } from "react";
 import { useSelector, useDispatch } from 'react-redux';
 import { AppState } from '../../store/configureStore';
 import { updateDownloadMethod } from "../../store/actions/chromeActions"
+import { setError, clearError } from '../../store/actions/errorsActions';
 
 //Components
 import { Button, OverlayTrigger, Tooltip, Dropdown, ButtonGroup } from 'react-bootstrap';
@@ -12,7 +13,7 @@ import { FcDownload } from "react-icons/fc";
 
 //api
 import {
-    downloadFilesByServer, downloadFilesByBrowser
+    fetchDownloadFilesByServer, fetchDownloadFilesByBrowser
 } from "../../api/civitaiSQL_api"
 
 //utils
@@ -43,18 +44,37 @@ const DownloadFileButton: React.FC = (props: any) => {
     }, [downloadMethod])
 
     // Function to handle the API call and update the button state
-    const handleButtonClick = async () => {
+    const handleDownloadFile = async () => {
         setIsLoading(true);
+        dispatch(clearError());
+
+        let civitaiFileName = retrieveCivitaiFileName(civitaiData, civitaiVersionID);
+        let filesList = retrieveCivitaiFilesList(civitaiData, civitaiVersionID)
+
+        //Check for null or empty
+        if (
+            civitaiUrl === null || civitaiUrl === "" ||
+            civitaiFileName === null || civitaiFileName === "" ||
+            civitaiModelID === null || civitaiModelID === "" ||
+            civitaiVersionID === null || civitaiVersionID === "" ||
+            downloadFilePath === null || downloadFilePath === "" ||
+            filesList === null || !filesList.length
+        ) {
+            dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
+            setIsLoading(false)
+            return;
+        }
+
         if (downloadMethod === "server") {
             //If download Method is server, the server will download the file into server's folder
-            await downloadFilesByServer(civitaiUrl, retrieveCivitaiFileName(civitaiData, civitaiVersionID), civitaiModelID,
-                civitaiVersionID, downloadFilePath, retrieveCivitaiFilesList(civitaiData, civitaiVersionID), dispatch);
+            await fetchDownloadFilesByServer(civitaiUrl, civitaiFileName, civitaiModelID,
+                civitaiVersionID, downloadFilePath, filesList, dispatch);
         } else {
             //if download Method is browser, the chrome browser will download the file into server's folder
-            await downloadFilesByBrowser(civitaiUrl, downloadFilePath, dispatch);
+            await fetchDownloadFilesByBrowser(civitaiUrl, downloadFilePath, dispatch);
             callChromeBrowserDownload({
                 name: retrieveCivitaiFileName(civitaiData, civitaiVersionID), modelID: civitaiModelID,
-                versionID: civitaiVersionID, downloadFilePath: downloadFilePath, filesList: retrieveCivitaiFilesList(civitaiData, civitaiVersionID)
+                versionID: civitaiVersionID, downloadFilePath: downloadFilePath, filesList: filesList
             })
         }
         setIsLoading(false);
@@ -66,7 +86,7 @@ const DownloadFileButton: React.FC = (props: any) => {
             <Dropdown as={ButtonGroup}>
                 <Button variant="success"
                     disabled={isLoading}
-                    onClick={handleButtonClick} >
+                    onClick={handleDownloadFile} >
                     {downloadMethod === "server" ? <BsCloudDownloadFill /> : <FcDownload />}
                 </Button>
                 <Dropdown.Toggle split variant="success" id="dropdown-split-basic" />

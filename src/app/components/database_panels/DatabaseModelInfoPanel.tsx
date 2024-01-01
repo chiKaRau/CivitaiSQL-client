@@ -9,15 +9,15 @@ import { SlDocs } from "react-icons/sl"
 import { TbCloudX } from "react-icons/tb"
 import { Button, OverlayTrigger, Tooltip } from 'react-bootstrap';
 
-
 //Store
 import { useSelector, useDispatch } from 'react-redux';
 import { AppState } from '../../store/configureStore';
 import { setIsBookmarked } from "../../store/actions/chromeActions"
+import { setError, clearError } from '../../store/actions/errorsActions';
 
 //api
 import {
-    addRecordToDatabase, removeRecordFromDatabaseByID,
+    fetchAddRecordToDatabase, fetchRemoveRecordFromDatabaseByID,
     fetchDatabaseModelInfoByModelID
 } from "../../api/civitaiSQL_api"
 
@@ -57,7 +57,18 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) =>
 
     const handleUpdateModelsList = async () => {
         setIsLoading(true)
-        const data = await fetchDatabaseModelInfoByModelID(civitaiModel.civitaiModelID, dispatch);
+        dispatch(clearError());
+
+        let modelID = civitaiModel.civitaiModelID;
+        //Check for null or empty
+        if (
+            modelID === null || modelID === "") {
+            dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
+            setIsLoading(false)
+            return;
+        }
+
+        const data = await fetchDatabaseModelInfoByModelID(modelID, dispatch);
         setModelsList(data)
         setVisibleToasts(data?.map(() => true))
         setIsLoading(false)
@@ -70,20 +81,38 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) =>
     };
 
     const handleAddModeltoDatabase = () => {
-        if (civitaiUrl !== "" && selectedCategory !== "" &&
-            civitaiUrl !== undefined && selectedCategory !== undefined &&
-            civitaiUrl !== null && selectedCategory !== null) {
-            addRecordToDatabase(selectedCategory, civitaiUrl, dispatch);
-            bookmarkThisModel(civitaiData?.type, dispatch)
-            props.toggleDatabaseModelInfoPanelOpen()
+        setIsLoading(true)
+        dispatch(clearError());
+
+        //Check for null or empty
+        if (civitaiUrl === "" || selectedCategory === "" ||
+            civitaiUrl === undefined || selectedCategory === undefined ||
+            civitaiUrl === null || selectedCategory === null) {
+            dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
+            setIsLoading(false)
+            return;
         }
+
+        fetchAddRecordToDatabase(selectedCategory, civitaiUrl, dispatch);
+        bookmarkThisModel(civitaiData?.type, dispatch)
+        props.toggleDatabaseModelInfoPanelOpen()
+        setIsLoading(false)
     }
 
     const handleRemoveModelFromDatabase = (id: number) => {
-        if (id !== null && id !== undefined) {
-            removeRecordFromDatabaseByID(id, dispatch)
-            props.toggleDatabaseModelInfoPanelOpen()
+        setIsLoading(true)
+        dispatch(clearError());
+
+        //Check for null or empty
+        if (id === null || id === undefined) {
+            dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
+            setIsLoading(false)
+            return;
         }
+
+        fetchRemoveRecordFromDatabaseByID(id, dispatch)
+        props.toggleDatabaseModelInfoPanelOpen()
+        setIsLoading(false)
     }
 
     const handleRemoveModelBookmarkByUrl = (url: string) => {

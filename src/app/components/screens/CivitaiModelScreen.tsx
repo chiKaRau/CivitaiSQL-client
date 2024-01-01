@@ -15,6 +15,7 @@ import DatabaseModelInfoPanel from '../database_panels/DatabaseModelInfoPanel';
 import DatabaseRelatedModelsPanel from '../database_panels/DatabaseRelatedModelsPanel';
 import DatabaseLastestAddedModelsPanel from '../database_panels/DatabaseLastestAddedModelsPanel';
 import DatabaseUpdateModelPanel from '../database_panels/DatabaseUpdateModelPanel';
+import DownloadFilePathOptionPanel from '../DownloadFilePathOptionPanel';
 
 //Model Page
 const CivitaiModelScreen: React.FC = () => {
@@ -64,6 +65,9 @@ const CivitaiModelScreen: React.FC = () => {
                     ))}
                 </div>
             )}
+
+            {/**Folder Lists Option */}
+            <DownloadFilePathOptionPanel />
 
             {/**Categories List Selector */}
             <CategoriesListSelector />

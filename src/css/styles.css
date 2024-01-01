@@ -228,3 +228,33 @@
 .radio-label:hover {
     background-color: #f0f0f0;
 }
+
+/*Folder Lists Option Panel*/
+/* Button container */
+.autocomplete-container {
+    display: flex;
+    justify-content: center;
+}
+
+.autocomplete-container-row {
+    display: flex;
+    flex-direction: row;
+}
+
+/* Button styles */
+.autocomplete-container > div {
+    padding: 1px;
+}
+
+/* Tooltip Button */
+.autocomplete-container .tooltip-button {
+    margin-right: 0.5rem;
+}
+
+/* Spinner and Icon inside Buttons */
+.autocomplete-container button {
+    padding: 6px;
+    /* Adjust as needed */
+    margin: 0;
+    height: 40px; /* Adjust the height as needed */
+}

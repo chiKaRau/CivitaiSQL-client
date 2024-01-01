@@ -16,7 +16,7 @@ import { SiTask } from "react-icons/si";
 import { SlDocs } from "react-icons/sl"
 
 //api
-import { openDownloadDirectory } from "../../api/civitaiSQL_api"
+import { fetchOpenDownloadDirectory } from "../../api/civitaiSQL_api"
 
 //utils
 import { bookmarkThisModel, unBookmarkThisModel } from "../../utils/chromeUtils"
@@ -97,7 +97,7 @@ const ButtonsGroup: React.FC = () => {
                 buttonIcon: <AiFillFolderOpen />,
                 disable: false,
             }}
-                handleFunctionCall={() => openDownloadDirectory(dispatch)} />
+                handleFunctionCall={() => fetchOpenDownloadDirectory(dispatch)} />
 
             {/**Download Button */}
             <DownloadFileButton />

@@ -8,17 +8,17 @@ import Spinner from 'react-bootstrap/Spinner';
 import { BsFillFileEarmarkArrowUpFill } from 'react-icons/bs';
 import { Button } from 'react-bootstrap';
 
-
 //Store
 import { useSelector, useDispatch } from 'react-redux';
 import { AppState } from '../../store/configureStore';
 import { updateDownloadFilePath } from "../../store/actions/chromeActions"
+import { setError, clearError } from '../../store/actions/errorsActions';
 
 //api
 import {
-    updateRecordAtDatabase,
+    fetchUpdateRecordAtDatabase,
     fetchDatabaseModelInfoByModelID,
-    downloadFilesByServer, downloadFilesByBrowser
+    fetchDownloadFilesByServer, fetchDownloadFilesByBrowser
 } from "../../api/civitaiSQL_api"
 
 //utils
@@ -60,7 +60,18 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
 
     const handleUpdateModelsList = async () => {
         setIsLoading(true)
-        const data = await fetchDatabaseModelInfoByModelID(civitaiModel.civitaiModelID, dispatch);
+        dispatch(clearError());
+
+        let modelID = civitaiModel.civitaiModelID;
+        //Check for null or empty
+        if (
+            modelID === null || modelID === "") {
+            dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
+            setIsLoading(false)
+            return;
+        }
+
+        const data = await fetchDatabaseModelInfoByModelID(modelID, dispatch);
         setModelsList(data)
         setVisibleToasts(data?.map(() => true))
         setIsLoading(false)
@@ -82,21 +93,56 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
     }, [hasUpdateCompleted])
 
     const handleDownload = async () => {
+
+        setIsLoading(true);
+        dispatch(clearError());
+
+        let civitaiFileName = retrieveCivitaiFileName(civitaiData, civitaiVersionID);
+        let filesList = retrieveCivitaiFilesList(civitaiData, civitaiVersionID)
+
+        //Check for null or empty
+        if (
+            civitaiUrl === null || civitaiUrl === "" ||
+            civitaiFileName === null || civitaiFileName === "" ||
+            civitaiModelID === null || civitaiModelID === "" ||
+            civitaiVersionID === null || civitaiVersionID === "" ||
+            downloadFilePath === null || downloadFilePath === "" ||
+            filesList === null || !filesList.length
+        ) {
+            dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
+            setIsLoading(false)
+            return;
+        }
+
         if (downloadMethod === "server") {
             //If download Method is server, the server will download the file into server's folder
-            await downloadFilesByServer(civitaiUrl, retrieveCivitaiFileName(civitaiData, civitaiVersionID), civitaiModelID,
-                civitaiVersionID, downloadFilePath, retrieveCivitaiFilesList(civitaiData, civitaiVersionID), dispatch);
+            await fetchDownloadFilesByServer(civitaiUrl, civitaiFileName, civitaiModelID,
+                civitaiVersionID, downloadFilePath, filesList, dispatch);
         } else {
             //if download Method is browser, the chrome browser will download the file into server's folder
-            await downloadFilesByBrowser(civitaiUrl, downloadFilePath, dispatch);
+            await fetchDownloadFilesByBrowser(civitaiUrl, downloadFilePath, dispatch);
             callChromeBrowserDownload({
-                name: retrieveCivitaiFileName(civitaiData, civitaiVersionID), modelID: civitaiModelID,
-                versionID: civitaiVersionID, downloadFilePath: downloadFilePath, filesList: retrieveCivitaiFilesList(civitaiData, civitaiVersionID)
+                name: civitaiFileName, modelID: civitaiModelID,
+                versionID: civitaiVersionID, downloadFilePath: downloadFilePath, filesList: filesList
             })
         }
+
+        setIsLoading(false)
     }
 
     const handleUpdateModel = async (id: number) => {
+        setIsLoading(true)
+        dispatch(clearError());
+
+        //Check for null or empty
+        if (civitaiUrl === "" || selectedCategory === "" ||
+            civitaiUrl === undefined || selectedCategory === undefined || id === undefined ||
+            civitaiUrl === null || selectedCategory === null || id === null) {
+            dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
+            setIsLoading(false)
+            return;
+        }
+
         switch (updateOption) {
             case "Database_and_UpdateFolder":
                 dispatch(updateDownloadFilePath("/@scan@/Update/"))
@@ -112,12 +158,9 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                 break;
         }
 
-        if (civitaiUrl !== "" && selectedCategory !== "" &&
-            civitaiUrl !== undefined && selectedCategory !== undefined && id !== undefined &&
-            civitaiUrl !== null && selectedCategory !== null && id !== null) {
-            updateRecordAtDatabase(id, civitaiUrl, selectedCategory, dispatch);
-            setHasUpdateCompleted(true)
-        }
+        fetchUpdateRecordAtDatabase(id, civitaiUrl, selectedCategory, dispatch);
+        setHasUpdateCompleted(true)
+        setIsLoading(false)
     }
 
     return (

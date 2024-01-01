@@ -12,6 +12,8 @@ import Spinner from 'react-bootstrap/Spinner';
 //Store
 import { useSelector, useDispatch } from 'react-redux';
 import { AppState } from '../../store/configureStore';
+import { setError, clearError } from '../../store/actions/errorsActions';
+
 
 //api
 import { fetchDatabaseRelatedModelsByName } from "../../api/civitaiSQL_api"
@@ -64,6 +66,15 @@ const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanel> = (props)
 
     const handleUpdateModelsList = async () => {
         setIsLoading(true)
+        dispatch(clearError());
+
+        //Check for null or empty
+        if (selectedTag === "" || selectedTag === undefined || selectedTag === null) {
+            dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
+            setIsLoading(false)
+            return;
+        }
+
         const data = await fetchDatabaseRelatedModelsByName(selectedTag, dispatch);
         setModelsList(data)
         setVisibleToasts(data?.map(() => true))
