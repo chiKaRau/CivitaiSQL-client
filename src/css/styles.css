@@ -15,6 +15,11 @@
 }
 
 /* Button styles */
+.buttonGroup {
+    display: flex;
+    justify-content: center;
+}
+
 .button {
     margin: 1px;
 }
@@ -158,7 +163,9 @@
 
 /* Category Selector style */
 .selector-container {
+    display: flex;
     padding: 3px;
+    align-items: center;
 }
 
 /* Form style */
@@ -169,13 +176,18 @@
 
 /* Form Group style */
 .selector-form-group {
+    display: flex;
+    /* Add display flex */
+    align-items: center;
+    /* Add align-items */
     margin-bottom: 0;
     margin-right: 2px;
 }
 
 /* Form Label style */
 .selector-form-label {
-    margin-right: 2px;
+    margin-right: 5px;
+    /* Adjust the margin as needed */
 }
 
 /* Form Select style */
@@ -242,7 +254,7 @@
 }
 
 /* Button styles */
-.autocomplete-container > div {
+.autocomplete-container>div {
     padding: 1px;
 }
 
@@ -256,5 +268,68 @@
     padding: 6px;
     /* Adjust as needed */
     margin: 0;
-    height: 40px; /* Adjust the height as needed */
+    height: 40px;
+    /* Adjust the height as needed */
+}
+
+/* Styles */
+.infoContainer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    padding: 10px;
+    border: 1px solid #ccc;
+    margin: 10px;
+}
+
+.modelSection,
+.databaseSection {
+    flex: 1;
+    margin: 5px;
+    padding: 10px;
+    border: 1px solid #eee;
+}
+
+.modelDetails {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: #888;
+}
+
+.buttonContainer {
+    display: flex;
+    align-items: center;
+}
+
+.inputContainer {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.inputLabel {
+    margin-right: 10px;
+}
+
+/* Increase the width of the input field */
+.inputField {
+    width: 100%;
+}
+
+/* Create a div for modelID and VersionID */
+.modelVersionContainer {
+    display: flex;
+    font-size: 10px;
+}
+
+/* Add space between mID and vID */
+.modelDetails p+p {
+    margin-left: 5px;
+}
+
+/* Small text for ID in the database section */
+.databaseIdText {
+    font-size: 10px;
 }

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { AppState } from '../../store/configureStore';
 import { togglePanel } from '../../store/actions/panelActions';
+import { Button } from 'react-bootstrap';
 
 //css
 import '../../../css/styles.css'; // Import the CSS file
@@ -15,7 +16,10 @@ import DatabaseModelInfoPanel from '../database_panels/DatabaseModelInfoPanel';
 import DatabaseRelatedModelsPanel from '../database_panels/DatabaseRelatedModelsPanel';
 import DatabaseLastestAddedModelsPanel from '../database_panels/DatabaseLastestAddedModelsPanel';
 import DatabaseUpdateModelPanel from '../database_panels/DatabaseUpdateModelPanel';
+import DatabaseCustomModelPanel from '../database_panels/DatabaseCustomModelPanel';
 import DownloadFilePathOptionPanel from '../DownloadFilePathOptionPanel';
+import BundleButton from '../buttons/BundleButton';
+import ModelInfoPanel from '../ModelInfoPanel';
 
 //Model Page
 const CivitaiModelScreen: React.FC = () => {
@@ -37,64 +41,67 @@ const CivitaiModelScreen: React.FC = () => {
     const panels = useSelector((state: AppState) => state.panel.panels);
     const dispatch = useDispatch();
 
+    const [showDatabaseSection, setShowDatabaseSection] = useState(false);
+
+    const toggleDatabaseSection = () => {
+        setShowDatabaseSection(!showDatabaseSection);
+    };
 
     return (
         <>
             {/**Header Buttons */}
             <ButtonsGroup />
 
-            <div>
-                <p> CivitaiModelSection </p>
-                <p> Url: {civitaiUrl}</p>
-                <p> ModelID: {civitaiModelID}</p>
-                <p> VersionID: {civitaiVersionID}</p>
-                <p> Name: {modelName}</p>
-                <p> bookmarkID: {bookmarkID}</p>
-                <p> isBookmarked: {isBookmarked ? "true" : "false"}</p>
-            </div>
-
-            {isInDatabase && (
-                <div>
-                    <p>DatabaseModelSection</p>
-                    <p>Total Models: {databaseModelsList?.length}</p>
-                    {databaseModelsList?.map((element: any, index: any) => (
-                        <div key={index}>
-                            <p>id: {element.id}</p>
-                            <p>name: {element.name}</p>
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {/**Folder Lists Option */}
-            <DownloadFilePathOptionPanel />
+            {/**Bundle Button */}
+            <BundleButton />
 
             {/**Categories List Selector */}
-            <CategoriesListSelector />
+            < CategoriesListSelector />
+
+            {/**Folder Lists Option */}
+            < DownloadFilePathOptionPanel />
+
+            {/**Model Info Panel */}
+            <ModelInfoPanel />
 
             {/**Database Panels */}
             <div>
                 {/**Database's Model Infomation Panel*/}
-                {panels["DatabaseModelInfoPanel"] && <DatabaseModelInfoPanel toggleDatabaseModelInfoPanelOpen={() => {
-                    dispatch(togglePanel("DatabaseModelInfoPanel"));
-                }} />}
+                {
+                    panels["DatabaseModelInfoPanel"] && <DatabaseModelInfoPanel toggleDatabaseModelInfoPanelOpen={() => {
+                        dispatch(togglePanel("DatabaseModelInfoPanel"));
+                    }} />
+                }
 
                 {/**Database's Related Models Panel*/}
-                {panels["DatabaseRelatedModelsPanel"] && <DatabaseRelatedModelsPanel toggleDatabaseRelatedModelsPanelOpen={() => {
-                    dispatch(togglePanel("DatabaseRelatedModelsPanel"));
-                }} />}
+                {
+                    panels["DatabaseRelatedModelsPanel"] && <DatabaseRelatedModelsPanel toggleDatabaseRelatedModelsPanelOpen={() => {
+                        dispatch(togglePanel("DatabaseRelatedModelsPanel"));
+                    }} />
+                }
 
                 {/**Database's Latest Added Models Panel*/}
-                {panels["DatabaseLastestAddedModelsPanel"] && <DatabaseLastestAddedModelsPanel toggleDatabaseLastestAddedModelsPanelOpen={() => {
-                    dispatch(togglePanel("DatabaseLastestAddedModelsPanel"));
-                }} />}
+                {
+                    panels["DatabaseLastestAddedModelsPanel"] && <DatabaseLastestAddedModelsPanel toggleDatabaseLastestAddedModelsPanelOpen={() => {
+                        dispatch(togglePanel("DatabaseLastestAddedModelsPanel"));
+                    }} />
+                }
 
                 {/**Database's Latest Added Models Panel*/}
-                {panels["DatabaseUpdateModelPanel"] && <DatabaseUpdateModelPanel toggleDatabaseUpdateModelPanelOpen={() => {
-                    dispatch(togglePanel("DatabaseUpdateModelPanel"));
-                }} />}
+                {
+                    panels["DatabaseUpdateModelPanel"] && <DatabaseUpdateModelPanel toggleDatabaseUpdateModelPanelOpen={() => {
+                        dispatch(togglePanel("DatabaseUpdateModelPanel"));
+                    }} />
+                }
 
-            </div>
+                {/**Database's Custom Model Panel*/}
+                {
+                    panels["DatabaseCustomModelPanel"] && <DatabaseCustomModelPanel toggleDatabaseCustomModelPanelOpen={() => {
+                        dispatch(togglePanel("DatabaseCustomModelPanel"));
+                    }} />
+                }
+
+            </div >
         </>
     );
 };

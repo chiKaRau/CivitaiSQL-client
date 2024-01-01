@@ -10,9 +10,9 @@ import { BsCheck, BsArrowRepeat, BsStarFill, BsStar, BsFillCloudArrowUpFill, BsI
 import { AiFillFolderOpen } from "react-icons/ai"
 import { GrCopy, GrPowerShutdown } from 'react-icons/gr';
 import { PiMagnifyingGlassBold } from "react-icons/pi"
+import { RiFileAddFill } from "react-icons/ri";
 import { MdAccessAlarms } from "react-icons/md"
 import { PiCellSignalFullLight, PiCellSignalSlash } from "react-icons/pi"
-import { SiTask } from "react-icons/si";
 import { SlDocs } from "react-icons/sl"
 
 //api
@@ -35,7 +35,7 @@ const ButtonsGroup: React.FC = () => {
     const dispatch = useDispatch();
 
     return (
-        <div>
+        <div className="buttonGroup">
             {/**Database's ModelInfoPanel Button */}
             <ButtonWrap buttonConfig={{
                 placement: "bottom",
@@ -76,6 +76,30 @@ const ButtonsGroup: React.FC = () => {
             }}
                 handleFunctionCall={() => dispatch(togglePanel("DatabaseUpdateModelPanel"))} />
 
+            {/**Database's CustomModelPanel Button */}
+            <ButtonWrap buttonConfig={{
+                placement: "bottom",
+                tooltip: "Add a custom model",
+                variant: "success",
+                buttonIcon: <RiFileAddFill />,
+                disable: false,
+            }}
+                handleFunctionCall={() => dispatch(togglePanel("DatabaseCustomModelPanel"))} />
+
+
+            {/**Download Button */}
+            <DownloadFileButton />
+
+            {/**Open Download Button */}
+            <ButtonWrap buttonConfig={{
+                placement: "bottom",
+                tooltip: "Open Download Directory",
+                variant: "primary",
+                buttonIcon: <AiFillFolderOpen />,
+                disable: false,
+            }}
+                handleFunctionCall={() => fetchOpenDownloadDirectory(dispatch)} />
+
             {/**Bookmark Button */}
             <ButtonWrap buttonConfig={{
                 placement: "bottom",
@@ -88,20 +112,6 @@ const ButtonsGroup: React.FC = () => {
                     () => unBookmarkThisModel(bookmarkID, dispatch)
                     :
                     () => bookmarkThisModel(data?.type, dispatch)} />
-
-            {/**Open Download Button */}
-            <ButtonWrap buttonConfig={{
-                placement: "bottom",
-                tooltip: "Open Download Directory",
-                variant: "primary",
-                buttonIcon: <AiFillFolderOpen />,
-                disable: false,
-            }}
-                handleFunctionCall={() => fetchOpenDownloadDirectory(dispatch)} />
-
-            {/**Download Button */}
-            <DownloadFileButton />
-
 
         </div>
     );

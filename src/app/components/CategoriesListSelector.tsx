@@ -13,6 +13,7 @@ import { initializeDatafromChromeStorage, updateSelectedCategoryIntoChromeStorag
 
 //components
 import { Form } from 'react-bootstrap';
+import { BiCategory } from "react-icons/bi";
 
 const CategoriesListSelector: React.FC = () => {
     const isInitialMount = useRef(true);
@@ -93,7 +94,7 @@ const CategoriesListSelector: React.FC = () => {
         <div className="selector-container">
             <Form className="selector-form-container">
                 <Form.Group controlId="selectSheet" className="selector-form-group ">
-                    <Form.Label className="selector-form-label">Select Sheet:</Form.Label>
+                    <Form.Label className="selector-form-label"><BiCategory /> </Form.Label>
                     <Form.Select
                         className="selector-form-select"
                         value={selectedCategory}

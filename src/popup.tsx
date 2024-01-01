@@ -37,11 +37,9 @@ import {
 //TODO
 //Custom Panel
 //Cart Icon
-//Error if not connect to either civitai and database at start
-//UI for name and url?
-//model exist in database?
-//error hanlding
 //nsfw
+//fix added record but doesn't reflect to modeInfopanel
+//prob use setState for modellist, then fetch...
 
 
 const Popup = () => {
