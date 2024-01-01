@@ -50,7 +50,7 @@ const ButtonsGroup: React.FC = () => {
             <ButtonWrap buttonConfig={{
                 placement: "bottom",
                 tooltip: "Related Models",
-                variant: "success",
+                variant: "secondary",
                 buttonIcon: <PiMagnifyingGlassBold />,
                 disable: false,
             }}
@@ -60,7 +60,7 @@ const ButtonsGroup: React.FC = () => {
             <ButtonWrap buttonConfig={{
                 placement: "bottom",
                 tooltip: "Latest Added Models",
-                variant: "success",
+                variant: "warning",
                 buttonIcon: <SlDocs />,
                 disable: false,
             }}

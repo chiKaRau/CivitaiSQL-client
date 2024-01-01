@@ -36,7 +36,6 @@ import {
 
 //TODO
 //Custom Panel
-//Cart Icon
 //nsfw
 //fix added record but doesn't reflect to modeInfopanel
 //prob use setState for modellist, then fetch...

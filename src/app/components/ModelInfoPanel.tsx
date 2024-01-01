@@ -18,7 +18,7 @@ const ModelInfoPanel: React.FC = () => {
     const { isInDatabase } = databaseModel
     const databaseData: Record<string, any> | undefined = databaseModel.databaseModelObject;
     const databaseModelsList = databaseData;
-    console.log(databaseModelsList)
+
     const [showDatabaseSection, setShowDatabaseSection] = useState(false);
 
     const toggleDatabaseSection = () => {
