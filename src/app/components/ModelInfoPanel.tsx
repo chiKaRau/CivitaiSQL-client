@@ -18,7 +18,7 @@ const ModelInfoPanel: React.FC = () => {
     const { isInDatabase } = databaseModel
     const databaseData: Record<string, any> | undefined = databaseModel.databaseModelObject;
     const databaseModelsList = databaseData;
-
+    console.log(databaseModelsList)
     const [showDatabaseSection, setShowDatabaseSection] = useState(false);
 
     const toggleDatabaseSection = () => {
@@ -42,7 +42,7 @@ const ModelInfoPanel: React.FC = () => {
                         </Button>
                     )}
                 </div>
-                
+
                 {isInDatabase && <hr />}
 
                 <div className="inputContainer">
@@ -54,12 +54,23 @@ const ModelInfoPanel: React.FC = () => {
                     <input className="inputField" type="text" placeholder="Url" value={civitaiUrl} />
                 </div>
             </div>
-
             {isInDatabase && showDatabaseSection && (
                 <div className="databaseSection">
                     {databaseModelsList?.map((element: any, index: any) => (
-                        <div key={index}>
-                            <p className="databaseIdText">ID: {element.id}</p>
+                        <div>
+                            <div key={index} className="databaseModelRow">
+                                <div className="databaseIdContainer">
+                                    <p className="databaseIdText">ID: {element.id}</p>
+                                </div>
+                                <div className="modelVersionContainer">
+                                    <p className="databaseIdText">mID: {element.modelNumber}</p>
+                                    {!(civitaiVersionID === element.versionNumber) ?
+                                        <p className="databaseIdText">vID: {element.versionNumber}</p>
+                                        :
+                                        <p className="databaseIdText">vID: <b> {element.versionNumber} </b></p>
+                                    }
+                                </div>
+                            </div>
                             <p>{index + 1}# : {element.name}</p>
                         </div>
                     ))}

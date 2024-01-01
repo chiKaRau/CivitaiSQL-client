@@ -46,15 +46,6 @@ const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanel> = (props)
         setPossibleCombinationTags(retrievePossibleCombination(modelName, modelTags))
     }, [])
 
-    useEffect(() => {
-        //Prevent trigger handleUpdateModelsList on mount
-        if (isInitialMount.current) {
-            isInitialMount.current = false;
-        } else {
-            handleUpdateModelsList();
-        }
-    }, [selectedTag])
-
     const handleSelectTag = (tag: string) => {
         if (tag === selectedTag) {
             setSelectedTag("")

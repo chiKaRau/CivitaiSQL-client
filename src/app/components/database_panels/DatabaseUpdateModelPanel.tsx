@@ -5,7 +5,7 @@ import Col from 'react-bootstrap/Col';
 import { BiUndo } from "react-icons/bi"
 import { Carousel } from 'react-bootstrap';
 import Spinner from 'react-bootstrap/Spinner';
-import { BsFillFileEarmarkArrowUpFill } from 'react-icons/bs';
+import { BsFillFileEarmarkArrowUpFill, BsFillCartCheckFill } from 'react-icons/bs';
 import { Button } from 'react-bootstrap';
 
 //Store
@@ -18,7 +18,9 @@ import { setError, clearError } from '../../store/actions/errorsActions';
 import {
     fetchUpdateRecordAtDatabase,
     fetchDatabaseModelInfoByModelID,
-    fetchDownloadFilesByServer, fetchDownloadFilesByBrowser
+    fetchDownloadFilesByServer,
+    fetchDownloadFilesByBrowser,
+    fetchCheckCartList
 } from "../../api/civitaiSQL_api"
 
 //utils
@@ -48,6 +50,7 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
 
     const [modelsList, setModelsList] = useState<{ name: string; url: string; id: number; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
     const [visibleToasts, setVisibleToasts] = useState<boolean[]>([])
+    const [visibleIsCarted, setVisibleIsCarted] = useState<boolean[]>([])
     const [isLoading, setIsLoading] = useState(false)
     const [updateOption, setUpdateOption] = useState("Database_and_UpdateFolder")
     const [hasUpdateCompleted, setHasUpdateCompleted] = useState(false)
@@ -73,6 +76,16 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
         const data = await fetchDatabaseModelInfoByModelID(modelID, dispatch);
         setModelsList(data)
         setVisibleToasts(data?.map(() => true))
+
+
+        const cartListData = data || [];
+        const cartedStatusArray = await Promise.all(
+            cartListData.map(async (element: any) => {
+                return await handleCheckCartList(element.url);
+            })
+        );
+        setVisibleIsCarted(cartedStatusArray);
+
         setIsLoading(false)
     }
 
@@ -81,6 +94,7 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
         newVisibleToasts[index] = false;
         setVisibleToasts(newVisibleToasts);
     };
+
 
     useEffect(() => {
         if (hasUpdateCompleted) {
@@ -162,6 +176,23 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
         setIsLoading(false)
     }
 
+    const handleCheckCartList = async (url: string) => {
+        setIsLoading(true)
+        dispatch(clearError());
+
+        //Check for null or empty
+        if (url === "" || url === undefined || url === null) {
+            dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
+            setIsLoading(false)
+            return false;
+        }
+
+        let isCarted = await fetchCheckCartList(url, dispatch);
+
+        setIsLoading(false)
+        return isCarted ? true : false;
+    }
+
     return (
         <div className="panel-container">
             {/* ... other JSX elements ... */}
@@ -183,7 +214,6 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                     <>
                         {modelsList?.map((model, index) => {
                             if (!visibleToasts[index]) return null;
-
                             return (
                                 <div key={index} className="panel-toast-container">
                                     <Toast onClose={() => handleClose(index)}>
@@ -249,15 +279,18 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                                             </div>
 
                                             {/**Update button */}
-                                            <Button
-                                                variant={"primary"}
-                                                disabled={isLoading}
-                                                onClick={() => handleUpdateModel(model?.id)}
-                                                className="btn btn-primary btn-lg w-100"
-                                            >
-                                                <BsFillFileEarmarkArrowUpFill />
-                                                {isLoading && <span className="button-state-complete">✓</span>}
-                                            </Button>
+                                            <div className="panel-update-button-container">
+                                                <Button
+                                                    variant={"primary"}
+                                                    disabled={isLoading}
+                                                    onClick={() => handleUpdateModel(model?.id)}
+                                                    className="btn btn-primary btn-lg w-100"
+                                                >
+                                                    <BsFillFileEarmarkArrowUpFill />
+                                                    {isLoading && <span className="button-state-complete">✓</span>}
+                                                </Button>
+                                                {visibleIsCarted[index] ? <BsFillCartCheckFill className="icon" /> : null}
+                                            </div>
 
                                         </Toast.Body>
                                     </Toast>

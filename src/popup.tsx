@@ -139,23 +139,29 @@ const Popup = () => {
   return (
     <>
       {
-        isConnectedToDatabase ?
-          (
-            !gloablIsLoading ?
-              <div className="container">
-                <ErrorAlert />
-                {isModelPage ? <CivitaiModelScreen /> : <CivitaiModelsListScreen />}
+        isModelPage ?
+          (isConnectedToDatabase ?
+            (
+              !gloablIsLoading ?
+                <div className="container">
+                  <ErrorAlert />
+                  <CivitaiModelScreen />
+                </div>
+                :
+                <div className="container container-content-center">
+                  <Spinner animation="grow" />
+                </div>
+            )
+            :
+            <div className="container">
+              <div className="centered-container">
+                <h2> Connecting to database... </h2>
               </div>
-              :
-              <div className="container container-content-center">
-                <Spinner animation="grow" />
-              </div>
-          )
+            </div>)
           :
           <div className="container">
-            <div className="centered-container">
-              <h2> Connecting to database... </h2>
-            </div>
+            <ErrorAlert />
+            <CivitaiModelsListScreen />
           </div>
       }
 
