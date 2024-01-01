@@ -14,7 +14,6 @@ import { useSelector, useDispatch } from 'react-redux';
 import { AppState } from '../../store/configureStore';
 import { setError, clearError } from '../../store/actions/errorsActions';
 
-
 //api
 import { fetchDatabaseRelatedModelsByName } from "../../api/civitaiSQL_api"
 

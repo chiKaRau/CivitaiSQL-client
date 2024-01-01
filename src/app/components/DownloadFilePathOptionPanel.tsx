@@ -5,12 +5,12 @@ import { useSelector, useDispatch } from 'react-redux';
 import { AppState } from '../store/configureStore';
 import { updateDownloadFilePath } from "../store/actions/chromeActions"
 
-
 //components
 import { Button, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import TextField from '@mui/material/TextField';
 import Autocomplete from '@mui/material/Autocomplete';
 import { BsPencilFill } from "react-icons/bs"
+import TagsPanel from './TagsPanel';
 
 //api
 import {
@@ -58,6 +58,8 @@ const DownloadFilePathOptionPanel: React.FC = () => {
 
     return (
         <>
+            <TagsPanel />
+
             <div className="autocomplete-container">
                 <div className="autocomplete-container-row">
                     <Autocomplete

@@ -24,26 +24,32 @@ import CivitaiModelsListScreen from "./app/components/screens/CivitaiModelsListS
 import { setupBookmark } from "./app/utils/chromeUtils"
 
 //Apis
-import { fetchCivitaiModelInfoFromCivitaiByModelID, fetchDatabaseModelInfoByModelID } from "./app/api/civitaiSQL_api"
+import {
+  fetchCivitaiModelInfoFromCivitaiByModelID,
+  fetchDatabaseModelInfoByModelID,
+  fetchVerifyConnectingDatabase
+} from "./app/api/civitaiSQL_api"
 
 //README
 //2 Sources: Civitai (web api) and Database (local database)
 //All panels are fetching record from database
 
 //TODO
-//Tag Panel
 //Custom Panel
 //Cart Icon
 //Error if not connect to either civitai and database at start
 //UI for name and url?
 //model exist in database?
 //error hanlding
+//nsfw
+
 
 const Popup = () => {
-  const gloablIsLoading = useSelector((state: AppState) => state.loading.globalIsLoading);
   const dispatch = useDispatch();
 
+  const gloablIsLoading = useSelector((state: AppState) => state.loading.globalIsLoading);
   const [isModelPage, setIsModelPage] = useState(true);
+  const [isConnectedToDatabase, setIsConnectedDatabase] = useState(false);
 
   //Initialize Models Info
   useEffect(() => {
@@ -77,6 +83,11 @@ const Popup = () => {
 
   const setupDatabaseModelInfo = async (modelID: string, dispatch: any) => {
     dispatch(clearError());
+
+    const connect = await fetchVerifyConnectingDatabase(dispatch);
+    if (connect) {
+      setIsConnectedDatabase(true)
+    }
 
     //Check for null or empty
     if (modelID === "" || modelID === undefined || modelID === null) {
@@ -129,16 +140,27 @@ const Popup = () => {
 
   return (
     <>
-      {!gloablIsLoading ?
-        <div className="container">
-          <ErrorAlert />
-          {isModelPage ? <CivitaiModelScreen /> : <CivitaiModelsListScreen />}
-        </div>
-        :
-        <div className="container container-content-center">
-          <Spinner animation="grow" />
-        </div>
+      {
+        isConnectedToDatabase ?
+          (
+            !gloablIsLoading ?
+              <div className="container">
+                <ErrorAlert />
+                {isModelPage ? <CivitaiModelScreen /> : <CivitaiModelsListScreen />}
+              </div>
+              :
+              <div className="container container-content-center">
+                <Spinner animation="grow" />
+              </div>
+          )
+          :
+          <div className="container">
+            <div className="centered-container">
+              <h2> Connecting to database... </h2>
+            </div>
+          </div>
       }
+
     </>
   );
 };

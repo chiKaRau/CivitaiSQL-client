@@ -1,0 +1,48 @@
+{
+    "prefixsList": [
+        {
+            "name": "anime",
+            "value": "/@scan@/ACG/Characters (Anime)/"
+        },
+        {
+            "name": "games",
+            "value": "/@scan@/ACG/Characters (Games)/"
+        },
+        {
+            "name": "socal",
+            "value": "/@scan@/ACG/Characters (Social Game)/"
+        },
+        {
+            "name": "idol",
+            "value": "/@scan@/ACG/Characters (Idol Series)/"
+        },
+        {
+            "name": "western",
+            "value": "/@scan@/ACG/Characters (Western)/"
+        },
+        {
+            "name": "others",
+            "value": "/@scan@/ACG/Characters (Others)/"
+        },
+        {
+            "name": "manga",
+            "value": "/@scan@/ACG/Characters (manga)/"
+        },
+        {
+            "name": "h",
+            "value": "/@scan@/ACG/Characters (Hentai)/"
+        },
+        {
+            "name": "males",
+            "value": "/@scan@/ACG/Characters (Males)/"
+        },
+        {
+            "name": "real",
+            "value": "/@scan@/Real/"
+        },
+        {
+            "name": "background",
+            "value": "/@scan@/ACG/Background/"
+        }
+    ]
+}

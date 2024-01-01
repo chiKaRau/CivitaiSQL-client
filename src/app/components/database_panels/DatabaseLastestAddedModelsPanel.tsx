@@ -6,14 +6,14 @@ import Col from 'react-bootstrap/Col';
 import { BiUndo } from "react-icons/bi"
 import { Carousel } from 'react-bootstrap';
 import Spinner from 'react-bootstrap/Spinner';
-import CollapsePanel from "../CollapsePanel";
+import CollapsePanel from "./CollapsePanel";
 
 //Store
 import { useSelector, useDispatch } from 'react-redux';
 import { AppState } from '../../store/configureStore';
 
 //api
-import { fetchDatabaseLastestAddedModelsPanel } from "../../api/civitaiSQL_api"
+import { fetchDatabaseLatestAddedModelsPanel } from "../../api/civitaiSQL_api"
 
 //Interface
 interface DatabaseLastestAddedModelsPanelProps {
@@ -35,7 +35,7 @@ const DatabaseLastestAddedModelsPanel: React.FC<DatabaseLastestAddedModelsPanelP
 
     const handleUpdateModelsList = async () => {
         setIsLoading(true)
-        const data = await fetchDatabaseLastestAddedModelsPanel(dispatch);
+        const data = await fetchDatabaseLatestAddedModelsPanel(dispatch);
         setModelsObject(data)
         setIsLoading(false)
     }

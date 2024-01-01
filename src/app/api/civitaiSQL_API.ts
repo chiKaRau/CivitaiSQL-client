@@ -2,6 +2,26 @@ import axios from "axios"
 import config from "../config/config.json"
 import { setError, clearError } from '../store/actions/errorsActions';
 
+export const fetchVerifyConnectingDatabase = async (dispatch: any) => {
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+        const response = await axios.get(`${config.domain}/api/verify-connecting-database`);
+        if (response.status >= 200 && response.status < 300) {
+            return response.data.success
+        } else {
+            // Handle the case when response is false
+            throw new Error("Failed Connecting to Database");
+        }
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Civitai Info retrieval:", error.message);
+        // Optionally, you can throw an error or return a specific value
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}
+
+
 //dispatch cannot be used inside the functional components or custoom hook, async function is not allowed.
 export const fetchCivitaiModelInfoFromCivitaiByModelID = async (modelID: string, dispatch: any) => {
     try {
@@ -14,9 +34,7 @@ export const fetchCivitaiModelInfoFromCivitaiByModelID = async (modelID: string,
             return responseData.payload.model;
         } else {
             // Handle the case when success is false
-            console.error("Civitai Info retrieval failed. Message:", responseData.message);
-            // Optionally, you can throw an error or return a specific value
-            throw new Error("Civitai Info retrieval failed");
+            throw new Error("Retriving Civitai model info from Civitai failed.");
         }
     } catch (error: any) {
         // Handle other types of errors, e.g., network issues
@@ -39,9 +57,7 @@ export const fetchDatabaseModelInfoByModelID = async (modelID: string, dispatch:
             }
         } else {
             // Handle the case when success is false
-            console.error("Civitai Info retrieval failed. Message:", responseData.message);
-            // Optionally, you can throw an error or return a specific value
-            throw new Error("Civitai Info retrieval failed");
+            throw new Error("Retriving model info from Database failed.");
         }
     } catch (error: any) {
         // Handle other types of errors, e.g., network issues
@@ -64,9 +80,7 @@ export const fetchDatabaseRelatedModelsByName = async (name: string, dispatch: a
             }
         } else {
             // Handle the case when success is false
-            console.error("Civitai Info retrieval failed. Message:", responseData.message);
-            // Optionally, you can throw an error or return a specific value
-            throw new Error("Civitai Info retrieval failed");
+            throw new Error("Retriving related model info from Database failed.");
         }
     } catch (error: any) {
         // Handle other types of errors, e.g., network issues
@@ -76,7 +90,7 @@ export const fetchDatabaseRelatedModelsByName = async (name: string, dispatch: a
     }
 }
 
-export const fetchDatabaseLastestAddedModelsPanel = async (dispatch: any) => {
+export const fetchDatabaseLatestAddedModelsPanel = async (dispatch: any) => {
     try {
         // Clear any previous errors
         dispatch(clearError());
@@ -89,9 +103,7 @@ export const fetchDatabaseLastestAddedModelsPanel = async (dispatch: any) => {
             }
         } else {
             // Handle the case when success is false
-            console.error("Civitai Info retrieval failed. Message:", responseData.message);
-            // Optionally, you can throw an error or return a specific value
-            throw new Error("Civitai Info retrieval failed");
+            throw new Error("Retriving latest model info from Database failed.");
         }
     } catch (error: any) {
         // Handle other types of errors, e.g., network issues
@@ -112,17 +124,13 @@ export const fetchAddRecordToDatabase = async (selectedCategory: string, url: st
         const responseData = response.data;
 
         if (!(response.status >= 200 && response.status < 300)) {
-            // Handle the case when success is false
-            console.error("Civitai Info retrieval failed. Message:", responseData.message);
-            // Optionally, you can throw an error or return a specific value
-            throw new Error("Civitai Info retrieval failed");
+            // Handle the case when response is false
+            throw new Error("Failed adding record into Database.");
         }
 
         if (!responseData.success) {
             // Handle the case when success is false
-            console.error("Civitai Info retrieval failed. Message:", responseData.message);
-            // Optionally, you can throw an error or return a specific value
-            throw new Error("Civitai Info retrieval failed");
+            throw new Error("Failed adding record into Database.");
         }
 
     } catch (error: any) {
@@ -143,17 +151,13 @@ export const fetchRemoveRecordFromDatabaseByID = async (id: number, dispatch: an
         const responseData = response.data;
 
         if (!(response.status >= 200 && response.status < 300)) {
-            // Handle the case when success is false
-            console.error("Civitai Info retrieval failed. Message:", responseData.message);
-            // Optionally, you can throw an error or return a specific value
-            throw new Error("Civitai Info retrieval failed");
+            // Handle the case when response is false
+            throw new Error("Failed removing record into Database.");
         }
 
         if (!responseData.success) {
             // Handle the case when success is false
-            console.error("Civitai Info retrieval failed. Message:", responseData.message);
-            // Optionally, you can throw an error or return a specific value
-            throw new Error("Civitai Info retrieval failed");
+            throw new Error("Failed removing record into Database.");
         }
 
     } catch (error: any) {
@@ -174,17 +178,13 @@ export const fetchUpdateRecordAtDatabase = async (id: number, url: string, selec
         const responseData = response.data;
 
         if (!(response.status >= 200 && response.status < 300)) {
-            // Handle the case when success is false
-            console.error("Civitai Info retrieval failed. Message:", responseData.message);
-            // Optionally, you can throw an error or return a specific value
-            throw new Error("Civitai Info retrieval failed");
+            // Handle the case when response is false
+            throw new Error("Failed updating record into Database.");
         }
 
         if (!responseData.success) {
             // Handle the case when success is false
-            console.error("Civitai Info retrieval failed. Message:", responseData.message);
-            // Optionally, you can throw an error or return a specific value
-            throw new Error("Civitai Info retrieval failed");
+            throw new Error("Failed updating record into Database.");
         }
 
     } catch (error: any) {
@@ -208,10 +208,8 @@ export const fetchGetCategoriesList = async (dispatch: any) => {
                 return responseData.payload.categoriesList;
             }
         } else {
-            // Handle the case when success is false
-            console.error("Civitai Info retrieval failed. Message:", responseData.message);
-            // Optionally, you can throw an error or return a specific value
-            throw new Error("Civitai Info retrieval failed");
+            // Handle the case when response is false
+            throw new Error("Retriving Categories List from Database failed.");
         }
     } catch (error: any) {
         // Handle other types of errors, e.g., network issues
@@ -227,9 +225,10 @@ export const fetchGetFoldersList = async (dispatch: any) => {
         dispatch(clearError());
         const response = await axios.get(`${config.domain}/api/get_folders_list`);
         if (response.status >= 200 && response.status < 300) {
-                return response.data.payload.foldersList;
+            return response.data.payload.foldersList;
         } else {
-            throw new Error("Civitai Info retrieval failed");
+            // Handle the case when response is false
+            throw new Error("Retriving Folders List from Database failed.");
         }
     } catch (error: any) {
         // Handle other types of errors, e.g., network issues
@@ -246,8 +245,8 @@ export const fetchOpenDownloadDirectory = async (dispatch: any) => {
         dispatch(clearError());
         const response = await axios.get(`${config.domain}/api/open-download-directory`);
         if (!(response.status >= 200 && response.status < 300)) {
-            // Handle the case when success is false
-            throw new Error("Civitai Info retrieval failed");
+            // Handle the case when response is false
+            throw new Error("Failed opening download directory.");
         }
     } catch (error: any) {
         // Handle other types of errors, e.g., network issues
@@ -272,8 +271,8 @@ export const fetchDownloadFilesByServer = async (url: string, name: string,
         });
 
         if (!(response.status >= 200 && response.status < 300)) {
-            // Handle the case when success is false
-            throw new Error("Civitai Info retrieval failed");
+            // Handle the case when response is false
+            throw new Error("Failed download files by server.");
         }
 
     } catch (error: any) {
@@ -294,8 +293,8 @@ export const fetchDownloadFilesByBrowser = async (url: string, downloadFilePath:
         });
 
         if (!(response.status >= 200 && response.status < 300)) {
-            // Handle the case when success is false
-            throw new Error("Civitai Info retrieval failed");
+            // Handle the case when response is false
+            throw new Error("Failed download files by browser.");
         }
 
     } catch (error: any) {

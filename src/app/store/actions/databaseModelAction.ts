@@ -1,11 +1,11 @@
 // actions/userActions.js
 import {
-    UPDATE_ISINDATABASE, UPDATE_DATABASE_MODEL_OBJECT
+    UPDATE_IS_IN_DATABASE, UPDATE_DATABASE_MODEL_OBJECT
 } from '../constants/DatabaseModelActionTypes';
 
-export const UpdateIsInDatabase = (isInDatabase: boolean) => ({
-    type: UPDATE_ISINDATABASE,
-    payload: isInDatabase,
+export const UpdateIsInDatabase = (newIsInDatabase: boolean) => ({
+    type: UPDATE_IS_IN_DATABASE,
+    payload: newIsInDatabase,
 });
 
 export const UpdateDatabaseModelObject = (newDatabaseModelObject: object) => ({

@@ -18,7 +18,7 @@ const CategoriesListSelector: React.FC = () => {
     const isInitialMount = useRef(true);
 
     const chrome = useSelector((state: AppState) => state.chrome);
-    const { selectedCategory, categoriesList } = chrome;
+    const { selectedCategory, categoriesList, downloadFilePath } = chrome;
 
     const dispatch = useDispatch();
     const [isLoading, setIsLoading] = useState(false)
@@ -27,6 +27,10 @@ const CategoriesListSelector: React.FC = () => {
         initializeDatafromChromeStorage(dispatch);
         setupCategoriesInfo()
     }, [])
+
+    useEffect(() => {
+        updateSelectedCategoryByFilePath()
+    }, [downloadFilePath])
 
     //Update Chrome Storage
     useEffect(() => {
@@ -43,6 +47,46 @@ const CategoriesListSelector: React.FC = () => {
         const data = await fetchGetCategoriesList(dispatch);
         dispatch(updateCategoriesList(data));
         setIsLoading(false)
+    }
+
+    //TODO
+    const updateSelectedCategoryByFilePath = () => {
+        //Since DB tables name are different than folder, need to change name for matching
+        let pathArray = []
+        for (let category of categoriesList) {
+            if (category === "Type Character") {
+                pathArray.push("Type")
+            } else {
+                pathArray.push(category)
+            }
+        }
+
+        //Find First Match
+        let firstMatch = null;
+        if (!(downloadFilePath === null || downloadFilePath.length === 0)) {
+            for (let category of pathArray) {
+                if (downloadFilePath.includes(category)) {
+                    if (firstMatch === null || downloadFilePath.indexOf(category) < downloadFilePath.indexOf(firstMatch)) {
+                        firstMatch = category;
+                    }
+                }
+            }
+        }
+
+        //Changing back for setting sheet
+        if (downloadFilePath.includes("Type")) {
+            firstMatch = "Type Character"
+        }
+
+        if (downloadFilePath.includes("Males")) {
+            firstMatch = "Males"
+        }
+
+        if (firstMatch === null) {
+            firstMatch = selectedCategory
+        }
+
+        dispatch(updateSelectedCategory(firstMatch))
     }
 
     return (

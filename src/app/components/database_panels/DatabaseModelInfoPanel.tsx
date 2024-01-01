@@ -41,7 +41,6 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) =>
     const databaseModel = useSelector((state: AppState) => state.databaseModel);
     const databaseData: Record<string, any> | undefined = databaseModel.databaseModelObject;
     const databaseModelsList = databaseData;
-    const { isInDatabase } = databaseModel
 
     const chrome = useSelector((state: AppState) => state.chrome);
     const { selectedCategory, bookmarkID } = chrome;
