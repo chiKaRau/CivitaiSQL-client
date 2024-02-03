@@ -4,3 +4,15 @@ function polling() {
 }
 
 polling();
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "openNewWindow") {
+    console.log("open new window")
+    chrome.windows.create({
+      url: chrome.runtime.getURL('window.html'),
+      type: 'popup',
+      width: 600,
+      height: 600
+    });
+  }
+});

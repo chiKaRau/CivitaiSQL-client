@@ -115,7 +115,7 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) =>
     }
 
     const handleRemoveModelBookmarkByUrl = (url: string) => {
-        removeBookmarkByUrl(url, dispatch);
+        removeBookmarkByUrl(url, dispatch, false);
         if (url === civitaiUrl) {
             dispatch(setIsBookmarked(true))
         }

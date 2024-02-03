@@ -109,7 +109,7 @@ const ButtonsGroup: React.FC = () => {
                 disable: false,
             }}
                 handleFunctionCall={isBookmarked ?
-                    () => unBookmarkThisModel(bookmarkID, dispatch)
+                    () => unBookmarkThisModel(bookmarkID, dispatch, false)
                     :
                     () => bookmarkThisModel(data?.type, dispatch)} />
 

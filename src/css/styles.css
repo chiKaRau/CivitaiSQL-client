@@ -368,3 +368,30 @@
     margin-left: 5px;
 }
 
+.truncated-text-container {
+    height: 30px;
+    border-radius: 3px;
+    border-radius: 3px;
+    display: flex;
+    width: 300px;
+    overflow: hidden;
+    position: relative;
+    padding: 5px;
+}
+
+.truncated-text-container span {
+    height: 30px;
+    width: 300px;
+    text-overflow: ellipsis;
+    display: block;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    transform: translateX(0);
+    transition: 1s;
+}
+
+.truncated-text-container:first-of-type:hover span {
+    width: auto;
+    transform: translateX(calc(300px - 110%));
+}

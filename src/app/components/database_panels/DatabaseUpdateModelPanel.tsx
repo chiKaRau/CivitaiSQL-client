@@ -164,7 +164,7 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                 dispatch(updateDownloadFilePath(downloadFilePath))
                 break;
             case "Database_Only":
-                dispatch(updateDownloadFilePath('/@scan@/ACG/Temp/'))
+                dispatch(updateDownloadFilePath(downloadFilePath))
                 break;
             default:
                 dispatch(updateDownloadFilePath('/@scan@/ACG/Temp/'))
@@ -172,7 +172,14 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
         }
 
         fetchUpdateRecordAtDatabase(id, civitaiUrl, selectedCategory, dispatch);
-        setHasUpdateCompleted(true)
+
+        if (updateOption !== "Database_Only") {
+            setHasUpdateCompleted(true)
+        } else {
+            bookmarkThisModel(civitaiData?.type, dispatch)
+            setHasUpdateCompleted(false)
+            props.toggleDatabaseUpdateModelPanelOpen()
+        }
         setIsLoading(false)
     }
 
@@ -254,7 +261,11 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                                                         onChange={() => setUpdateOption('Database_and_UpdateFolder')}
                                                         className="radio-input"
                                                     />
-                                                    Database & Update Folder
+                                                    <div className="truncated-text-container">
+                                                        <span>
+                                                            Database & /Update/{downloadFilePath.split('/').reverse()[1]}/
+                                                        </span>
+                                                    </div>
                                                 </label>
                                                 <label className="radio-label">
                                                     <input
@@ -264,7 +275,11 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                                                         onChange={() => setUpdateOption('Database_and_FileFolder')}
                                                         className="radio-input"
                                                     />
-                                                    Database & File Folder
+                                                    <div className="truncated-text-container">
+                                                        <span>
+                                                            Database & {downloadFilePath}
+                                                        </span>
+                                                    </div>
                                                 </label>
                                                 <label className="radio-label">
                                                     <input

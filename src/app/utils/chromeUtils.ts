@@ -35,21 +35,34 @@ export const bookmarkThisModel = (modelType: string, dispatch: any) => {
     });
 }
 
-export const unBookmarkThisModel = (bookmarkId: string, dispatch: any) => {
+export const bookmarkThisUrl = (modelType: string, url: string, title: string) => {
+    const bookmarkData = {
+        title: title,
+        url: url,
+        parentId: findBookmarkfolderbyModelType(modelType) // Specify the ID of the parent folder where you want to place the bookmark
+    };
+    chrome.bookmarks.create(bookmarkData, function (bookmark) {
+        // Bookmark created, no further action taken
+    });
+}
+
+export const unBookmarkThisModel = (bookmarkId: string, dispatch: any, listmode: boolean) => {
     chrome.bookmarks.remove(bookmarkId, () => {
         dispatch(updateBookmarkID(""));
         dispatch(setIsBookmarked(false));
     });
 }
 
-export const removeBookmarkByUrl = (url: string, dispatch: any) => {
+export const removeBookmarkByUrl = (url: string, dispatch: any, listmode: boolean) => {
     chrome.bookmarks.search({ url }, function (bookmarks) {
         if (bookmarks.length > 0) {
             const bookmarkId = bookmarks[0].id;
             chrome.bookmarks.remove(bookmarkId, function () {
                 // Update your state or perform any other actions after removing the bookmark
-                dispatch(updateBookmarkID(""));
-                dispatch(setIsBookmarked(false));
+                if (!listmode) {
+                    dispatch(updateBookmarkID(""));
+                    dispatch(setIsBookmarked(false));
+                }
             });
         }
     });
