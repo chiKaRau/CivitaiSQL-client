@@ -42,7 +42,7 @@ const ButtonsGroup: React.FC = () => {
                 tooltip: "Model Information",
                 variant: "success",
                 buttonIcon: <BsInfoCircleFill />,
-                disable: false,
+                disabled: false,
             }}
                 handleFunctionCall={() => dispatch(togglePanel("DatabaseModelInfoPanel"))} />
 
@@ -52,7 +52,7 @@ const ButtonsGroup: React.FC = () => {
                 tooltip: "Related Models",
                 variant: "secondary",
                 buttonIcon: <PiMagnifyingGlassBold />,
-                disable: false,
+                disabled: false,
             }}
                 handleFunctionCall={() => dispatch(togglePanel("DatabaseRelatedModelsPanel"))} />
 
@@ -62,7 +62,7 @@ const ButtonsGroup: React.FC = () => {
                 tooltip: "Latest Added Models",
                 variant: "warning",
                 buttonIcon: <SlDocs />,
-                disable: false,
+                disabled: false,
             }}
                 handleFunctionCall={() => dispatch(togglePanel("DatabaseLastestAddedModelsPanel"))} />
 
@@ -72,7 +72,7 @@ const ButtonsGroup: React.FC = () => {
                 tooltip: "Update this Model",
                 variant: "success",
                 buttonIcon: <GrCopy />,
-                disable: false,
+                disabled: false,
             }}
                 handleFunctionCall={() => dispatch(togglePanel("DatabaseUpdateModelPanel"))} />
 
@@ -82,7 +82,7 @@ const ButtonsGroup: React.FC = () => {
                 tooltip: "Add a custom model",
                 variant: "success",
                 buttonIcon: <RiFileAddFill />,
-                disable: false,
+                disabled: false,
             }}
                 handleFunctionCall={() => dispatch(togglePanel("DatabaseCustomModelPanel"))} />
 
@@ -96,7 +96,7 @@ const ButtonsGroup: React.FC = () => {
                 tooltip: "Open Download Directory",
                 variant: "primary",
                 buttonIcon: <AiFillFolderOpen />,
-                disable: false,
+                disabled: false,
             }}
                 handleFunctionCall={() => fetchOpenDownloadDirectory(dispatch)} />
 
@@ -106,7 +106,7 @@ const ButtonsGroup: React.FC = () => {
                 tooltip: isBookmarked ? "Unbookmark this model" : "bookmark this model",
                 variant: "success",
                 buttonIcon: isBookmarked ? <BsStarFill /> : <BsStar />,
-                disable: false,
+                disabled: false,
             }}
                 handleFunctionCall={isBookmarked ?
                     () => unBookmarkThisModel(bookmarkID, dispatch, false)

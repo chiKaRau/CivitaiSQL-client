@@ -5,13 +5,9 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   if (message.action === "browser-download") {
     console.log("browser-download")
     const { name, modelID, versionID, downloadFilePath, filesList } = message.data
-
-
     try {
-
       const zip = new JSZip();
       const promises = [];
-
       for (const { name, downloadUrl } of filesList) {
         const promise = await fetch(downloadUrl)
           .then((response) => response.arrayBuffer())
@@ -142,6 +138,67 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
       // Revert any CSS changes
       if (item instanceof HTMLElement) {
         item.style.border = '';
+      }
+    });
+  }
+});
+
+chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+  if (message.action === "checkSavedMode") {
+    let newUrlList: string[] = []; // Explicitly define urls as an array of strings
+    document.querySelectorAll('.mantine-Card-root').forEach((item) => {
+      if (item instanceof HTMLAnchorElement) {
+        // Check if the URL is not already in checkedUrlList
+        if (message.checkedUrlList && !message.checkedUrlList.includes(item.href)) {
+          newUrlList.push(item.href);
+        }
+      }
+
+    });
+    chrome.runtime.sendMessage({ action: "checkUrlsInDatabase", newUrlList: newUrlList });
+  }
+});
+
+
+chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+  if (message.action === "display-saved") {
+    const savedList = message.savedList;
+    document.querySelectorAll('.mantine-Card-root').forEach((item) => {
+      if (item instanceof HTMLAnchorElement) {
+        const url = item.href;
+        const savedInfo = savedList.find((info: any) => info.url === url);
+        if (savedInfo) {
+          // Create a label
+          const label = document.createElement('div');
+          label.classList.add('saved-label');
+          label.textContent = savedInfo.saved ? 'Saved' : 'Not Saved';
+          label.style.position = 'absolute';
+          label.style.top = '50%';
+          label.style.left = '50%';
+          label.style.transform = 'translate(-50%, -50%)';
+          label.style.zIndex = '1001';
+          label.style.backgroundColor = savedInfo.saved ? 'lightgreen' : 'tomato'; // Example colors
+          label.style.color = 'white'; // Text color
+          label.style.textShadow = '0px 0px 3px black'; // Text shadow for readability
+          label.style.padding = '5px';
+          label.style.borderRadius = '5px';
+
+          // Add label to the item
+          if (item instanceof HTMLElement) {
+            item.style.position = 'relative';
+            item.appendChild(label);
+          }
+        }
+      }
+    });
+  } else if (message.action === "remove-saved") {
+    document.querySelectorAll('.mantine-Card-root').forEach((item) => {
+      if (item instanceof HTMLAnchorElement) {
+        // Remove only the label with the 'saved-label' class
+        const label = item.querySelector('.saved-label');
+        if (label) {
+          item.removeChild(label);
+        }
       }
     });
   }

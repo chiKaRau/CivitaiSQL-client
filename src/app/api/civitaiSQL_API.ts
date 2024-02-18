@@ -327,3 +327,26 @@ export const fetchCheckCartList = async (url: string, dispatch: any) => {
         dispatch(setError({ hasError: true, errorMessage: error.message }));
     }
 }
+
+export const fetchCheckIfUrlExistInDatabase = async (url: string, dispatch: any) => {
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+        const response = await axios.post(`${config.domain}/api/check-if-url-exist-in-database`, { url: url });
+        const responseData = response.data;
+
+        if (response.status >= 200 && response.status < 300) {
+            if (responseData.success) {
+                return responseData.payload.isSaved;
+            }
+        } else {
+            // Handle the case when success is false
+            throw new Error("Retriving related model info from Database failed.");
+        }
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Civitai Info retrieval:", error.message);
+        // Optionally, you can throw an error or return a specific value
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}

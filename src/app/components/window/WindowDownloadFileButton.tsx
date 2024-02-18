@@ -81,7 +81,7 @@ const WindowDownloadFileButton: React.FC = (props: any) => {
     };
 
     return (
-        <OverlayTrigger placement={"bottom"}
+        <OverlayTrigger placement={"top"}
             overlay={<Tooltip id="tooltip">{`Download By ${downloadMethod === "server" ? "server" : "browser"}`}</Tooltip>}>
             <Dropdown as={ButtonGroup}>
                 <Button variant="success"

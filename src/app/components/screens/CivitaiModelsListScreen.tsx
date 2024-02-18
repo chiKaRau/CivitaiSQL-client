@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { AppState } from '../../store/configureStore';
 
@@ -9,19 +9,20 @@ const CivitaiModelsListScreen: React.FC = () => {
     //Any Changes and Updates in Reducer would trigger rerender
     //const counter = useSelector((state: AppState) => state.counter);
     //const user = useSelector((state: AppState) => state.user);
-
     //const dispatch = useDispatch();
-    const openNewWindow = () => {
 
+    useEffect(() => {
+        openNewWindow()
+    }, [])
+
+    const openNewWindow = () => {
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
             // Store the original tab ID in local storage
             chrome.storage.local.set({ originalTabId: tabs[0].id });
-
             // Then open the new window
             chrome.runtime.sendMessage({ action: "openNewWindow" });
-
+            window.close(); // This closes the popup window
         });
-
     };
 
     return (
