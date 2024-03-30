@@ -159,6 +159,36 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   }
 });
 
+chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+  if (message.action === "checkUpdateAvaliableMode") {
+    let newUrlList: string[] = []; // Explicitly define urls as an array of strings
+    document.querySelectorAll('.mantine-Card-root').forEach((item) => {
+      if (item instanceof HTMLAnchorElement) {
+        newUrlList.push(item.href);
+
+      }
+
+    });
+    chrome.runtime.sendMessage({ action: "checkifmodelAvaliable", newUrlList: newUrlList });
+  }
+});
+
+chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+  if (message.action === "sortingMode") {
+
+    console.log("sortingMode")
+
+    let newUrlList: string[] = []; // Explicitly define urls as an array of strings
+    document.querySelectorAll('.mantine-Card-root').forEach((item) => {
+      if (item instanceof HTMLAnchorElement) {
+
+      }
+
+    });
+  }
+});
+
+
 
 chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   if (message.action === "display-saved") {
@@ -171,13 +201,13 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
           // Create a label
           const label = document.createElement('div');
           label.classList.add('saved-label');
-          label.textContent = savedInfo.saved ? 'Saved' : 'Not Saved';
+          label.textContent = savedInfo.quantity > 0 ? `Saved : ${savedInfo.quantity}` : 'Not Saved';
           label.style.position = 'absolute';
           label.style.top = '50%';
           label.style.left = '50%';
           label.style.transform = 'translate(-50%, -50%)';
           label.style.zIndex = '1001';
-          label.style.backgroundColor = savedInfo.saved ? 'lightgreen' : 'tomato'; // Example colors
+          label.style.backgroundColor = savedInfo.quantity > 0 ? 'lightgreen' : 'tomato'; // Example colors
           label.style.color = 'white'; // Text color
           label.style.textShadow = '0px 0px 3px black'; // Text shadow for readability
           label.style.padding = '5px';
@@ -203,3 +233,39 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
     });
   }
 });
+
+chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+  if (message.action === "display-update-avaliable") {
+    const savedList = message.savedList;
+    document.querySelectorAll('.mantine-Card-root').forEach((item) => {
+      if (item instanceof HTMLAnchorElement) {
+        const url = item.href;
+        const savedInfo = savedList.find((info: any) => info.url === url);
+        if (savedInfo.isUpdateAvaliable) {
+          // Create a label
+          const label = document.createElement('div');
+          label.classList.add('update-label');
+          label.textContent = 'Update Avaliable';
+          label.style.position = 'absolute';
+          label.style.top = '70%';
+          label.style.left = '50%';
+          label.style.transform = 'translate(-50%, -50%)';
+          label.style.zIndex = '1001';
+          label.style.backgroundColor = 'lightgreen'; // Example colors
+          label.style.color = 'white'; // Text color
+          label.style.textShadow = '0px 0px 3px black'; // Text shadow for readability
+          label.style.padding = '5px';
+          label.style.borderRadius = '5px';
+
+          // Add label to the item
+          if (item instanceof HTMLElement) {
+            item.style.position = 'relative';
+            item.appendChild(label);
+          }
+        }
+      }
+    });
+  }
+});
+
+

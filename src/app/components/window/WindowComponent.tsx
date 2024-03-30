@@ -6,7 +6,7 @@ import { AppState } from '../../store/configureStore';
 
 //Icons Components
 import { AiFillFolderOpen } from "react-icons/ai"
-import { BsStar, BsFillCloudArrowUpFill, BsFillCartCheckFill } from 'react-icons/bs';
+import { BsStar, BsFillCloudArrowUpFill, BsFillCartCheckFill, Bs0Circle } from 'react-icons/bs';
 
 
 //components
@@ -17,6 +17,11 @@ import ButtonWrap from "../buttons/ButtonWrap";
 import { Button, OverlayTrigger, Tooltip, Form, Dropdown, ButtonGroup } from 'react-bootstrap';
 import ErrorAlert from '../ErrorAlert';
 
+interface updateAvaliable {
+    url: string;
+    isUpdateAvaliable: any; // Consider specifying a more accurate type instead of 'any' if possible
+}
+
 //Apis
 import {
     fetchCivitaiModelInfoFromCivitaiByModelID,
@@ -26,12 +31,16 @@ import {
     fetchDatabaseModelInfoByModelID,
     fetchRemoveRecordFromDatabaseByID,
     fetchOpenDownloadDirectory,
-    fetchCheckIfUrlExistInDatabase
+    fetchCheckIfUrlExistInDatabase,
+    fetchCheckQuantityofUrlinDatabaseByUrl,
+    fetchCheckQuantityofUrlinDatabaseByModelID,
+    fetchCheckIfModelUpdateAvaliable
 } from "../../api/civitaiSQL_api"
 
 //utils
 import { bookmarkThisUrl, updateDownloadMethodIntoChromeStorage, callChromeBrowserDownload, removeBookmarkByUrl } from "../../utils/chromeUtils"
 import { retrieveCivitaiFileName, retrieveCivitaiFilesList } from "../../utils/objectUtils"
+import { BiSolidBarChartSquare, BiSolidHdd } from 'react-icons/bi';
 
 const WindowComponent: React.FC = () => {
 
@@ -39,6 +48,9 @@ const WindowComponent: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false)
 
     const [countdown, setCountdown] = useState(0);
+    const [counter, setCounter] = useState(0);
+    const [counting, setCounting] = useState(false);
+    const [checkingListSize, setCheckingListSize] = useState(0);
 
     const [checkboxMode, setCheckboxMode] = useState(false);
     const [resetMode, setResetMode] = useState(false);
@@ -88,6 +100,9 @@ const WindowComponent: React.FC = () => {
                 // Update checkedUrlList to include both the previous and new URLs
                 setCheckedUrlList(prevCheckedUrlList => [...prevCheckedUrlList, ...message.newUrlList]);
 
+            } else if (message.action === "checkifmodelAvaliable") {
+                // Process the new URLs (e.g., check them in the database)
+                checkIfModelUpdateAvaliable(message.newUrlList)
             }
         };
         chrome.runtime.onMessage.addListener(messageListener);
@@ -105,6 +120,22 @@ const WindowComponent: React.FC = () => {
         });
     };
 
+    const handleCheckUpdateAvaliable = () => {
+        chrome.storage.local.get('originalTabId', (result) => {
+            if (result.originalTabId) {
+                chrome.tabs.sendMessage(result.originalTabId, { action: "checkUpdateAvaliableMode" });
+            }
+        });
+    };
+
+    const handleSorting = () => {
+        chrome.storage.local.get('originalTabId', (result) => {
+            if (result.originalTabId) {
+                chrome.tabs.sendMessage(result.originalTabId, { action: "sortingMode" });
+            }
+        });
+    }
+
 
     const resetCheckedUrlList = () => {
         setCheckedUrlList([]);
@@ -116,10 +147,9 @@ const WindowComponent: React.FC = () => {
     }
 
     const checkIfUrlExistInDatabase = async (newUrlList: any) => {
-
         let results = await Promise.all(newUrlList.map(async (url: string) => {
-            const isSaved = await fetchCheckIfUrlExistInDatabase(url, dispatch);
-            return { url, saved: isSaved };
+            const quantity = await fetchCheckQuantityofUrlinDatabaseByModelID(url, dispatch);
+            return { url, quantity };
         }));
 
         if (results) {
@@ -129,6 +159,37 @@ const WindowComponent: React.FC = () => {
                 }
             });
         }
+    };
+
+    const checkIfModelUpdateAvaliable = async (newUrlList: any) => {
+        setCounting(true)
+        setCheckingListSize(newUrlList.length)
+
+        // Utility function to delay execution
+        const delay = async (ms: any) => {
+            for (let i = ms / 1000; i > 0; i--) {
+                await new Promise(res => setTimeout(res, 1000));
+            }
+
+            setCounter(prev => prev + 1);
+        };
+
+        let results: updateAvaliable[] = [];
+        for (let url of newUrlList) {
+            const isUpdateAvaliable = await fetchCheckIfModelUpdateAvaliable(url, dispatch);
+            await delay(1000);
+            results.push({ url, isUpdateAvaliable });
+        }
+
+        if (results) {
+            chrome.storage.local.get('originalTabId', (result) => {
+                if (result.originalTabId) {
+                    chrome.tabs.sendMessage(result.originalTabId, { action: "display-update-avaliable", savedList: results })
+                }
+            });
+        }
+        setCounter(0)
+        setCounting(false)
     };
 
     const handleToggleCheckBoxMode = () => {
@@ -382,6 +443,27 @@ const WindowComponent: React.FC = () => {
             }}
                 handleFunctionCall={() => handleRemoveBookmarks()} />
 
+
+            {/**Checked If update avaliable Button for User page*/}
+            <ButtonWrap buttonConfig={{
+                placement: "top",
+                tooltip: "check if update avaliable by compare db",
+                variant: "primary",
+                buttonIcon: <BiSolidHdd />,
+                disable: counting,
+            }}
+                handleFunctionCall={() => handleCheckUpdateAvaliable()} />
+
+            {/**Checked If update avaliable Button for User page*/}
+            <ButtonWrap buttonConfig={{
+                placement: "top",
+                tooltip: "handling Sorting",
+                variant: "primary",
+                buttonIcon: <BiSolidBarChartSquare />,
+                disable: counting,
+            }}
+                handleFunctionCall={() => handleSorting()} />
+
             {/**Categories List Selector */}
             < CategoriesListSelector />
 
@@ -391,6 +473,7 @@ const WindowComponent: React.FC = () => {
 
             {workingModelID !== "" && <p>Processing Model Name: {processingModelName}</p>}
             {countdown > 0 && <p>Next request in: {countdown} seconds</p>}
+            {counting && <p>Checking Model Avaliable: {counter} / {checkingListSize} </p>}
 
             <>
                 <span>Start : {startModelName}</span>
