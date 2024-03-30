@@ -84,10 +84,14 @@ const CategoriesListSelector: React.FC = () => {
         }
 
         if (downloadFilePath.includes("Art")) {
-            if(downloadFilePath.includes("Artist")) {
+            if (downloadFilePath.includes("Artist")) {
                 firstMatch = "Artist"
             } else {
-                firstMatch = "Art"
+                if (downloadFilePath.includes("SAO")) {
+                    firstMatch = "Characters"
+                } else {
+                    firstMatch = "Art"
+                }
             }
         }
 

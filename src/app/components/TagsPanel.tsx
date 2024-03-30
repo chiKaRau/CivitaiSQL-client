@@ -28,6 +28,8 @@ const TagsPanel: React.FC = () => {
         }
     })
 
+    modelTagsList?.push({"name": "Temp", "value": "Temp"});
+
     const chrome = useSelector((state: AppState) => state.chrome);
     const { downloadFilePath } = chrome;
 

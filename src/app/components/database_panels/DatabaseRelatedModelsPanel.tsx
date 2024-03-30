@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 
 //Components
-import { Toast } from 'react-bootstrap';
+import { Toast, Badge } from 'react-bootstrap';
 import Col from 'react-bootstrap/Col';
 import { BiUndo } from "react-icons/bi"
 import { Carousel } from 'react-bootstrap';
@@ -15,7 +15,10 @@ import { AppState } from '../../store/configureStore';
 import { setError, clearError } from '../../store/actions/errorsActions';
 
 //api
-import { fetchDatabaseRelatedModelsByName } from "../../api/civitaiSQL_api"
+import {
+    fetchDatabaseRelatedModelsByName,
+    fetchDatabaseRelatedModelsByTagsList
+} from "../../api/civitaiSQL_api"
 
 //util
 import { retrievePossibleCombination } from "../../utils/stringUtils"
@@ -31,11 +34,13 @@ const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanel> = (props)
     const civitaiModel = useSelector((state: AppState) => state.civitaiModel);
     const dispatch = useDispatch();
 
-    const [modelsList, setModelsList] = useState<{ name: string; url: string; id: number; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
+    const [modelsList, setModelsList] = useState<{ name: string; url: string; id: number; baseModel: string; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
     const [visibleToasts, setVisibleToasts] = useState<boolean[]>([])
     const [possibleCombinationTags, setPossibleCombinationTags] = useState<string[]>([]);
-    const [selectedTag, setSelectedTag] = useState("")
+    const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(false)
+    const [inputValue, setInputValue] = useState("")
+
 
     const data: Record<string, any> | undefined = civitaiModel.civitaiModelObject;
     const modelName = data?.name;
@@ -46,11 +51,24 @@ const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanel> = (props)
         setPossibleCombinationTags(retrievePossibleCombination(modelName, modelTags))
     }, [])
 
-    const handleSelectTag = (tag: string) => {
-        if (tag === selectedTag) {
-            setSelectedTag("")
+    const handleAddTagIntoSelectedTagsListBySelecting = (tag: string) => {
+        if (selectedTags.includes(tag)) {
+            // Remove the tag from the array
+            setSelectedTags(selectedTags.filter(t => t !== tag));
+
+            // Remove the tag from inputValue if it exists
+            setInputValue(prevValue => {
+                // Split the inputValue by commas or spaces, trim each part, and filter out the tag
+                const tags = prevValue.split(/[\s,]+/).map(t => t.trim()).filter(t => t !== tag && t !== "");
+                // Rejoin the remaining tags with ", " to form the updated inputValue
+                return tags.join(", ");
+            });
         } else {
-            setSelectedTag(tag)
+            // Add the tag to the array
+            setSelectedTags([...selectedTags, tag]);
+
+            // Append the tag to inputValue, ensuring it's properly formatted
+            setInputValue(prevValue => prevValue ? `${prevValue}, ${tag}` : tag);
         }
     }
 
@@ -59,13 +77,13 @@ const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanel> = (props)
         dispatch(clearError());
 
         //Check for null or empty
-        if (selectedTag === "" || selectedTag === undefined || selectedTag === null) {
+        if (inputValue === null || inputValue === undefined || inputValue === "") {
             dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
             setIsLoading(false)
             return;
         }
 
-        const data = await fetchDatabaseRelatedModelsByName(selectedTag, dispatch);
+        const data = await fetchDatabaseRelatedModelsByTagsList(inputValue.split(/,\s*|\s+/), dispatch);
         setModelsList(data)
         setVisibleToasts(data?.map(() => true))
         setIsLoading(false)
@@ -76,6 +94,11 @@ const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanel> = (props)
         newVisibleToasts[index] = false;
         setVisibleToasts(newVisibleToasts);
     };
+
+    const handleClearTags = () => {
+        setSelectedTags([])
+        setInputValue("")
+    }
 
     return (
         <div className="panel-container">
@@ -92,21 +115,26 @@ const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanel> = (props)
 
                 {/*Input Field */}
                 <InputGroup className="mb-3">
+                    <Button variant="danger" disabled={isLoading}
+                        onClick={handleClearTags}>
+                        {isLoading ? <BsArrowRepeat className="spinner" /> : "Clear"}
+                    </Button>
                     <FormControl
                         placeholder="file name"
-                        value={selectedTag}
-                        onChange={(e) => setSelectedTag(e.target.value)}
+                        value={inputValue}
+                        onChange={(e) => setInputValue(e.target.value)}
                     />
-                    <Button variant="outline-secondary" disabled={isLoading} onClick={() => handleUpdateModelsList()}>
-                        {isLoading ? <BsArrowRepeat className="spinner" /> : <BsCheck />}
+                    <Button variant="primary" disabled={isLoading}
+                        onClick={() => handleUpdateModelsList()}>
+                        {isLoading ? <BsArrowRepeat className="spinner" /> : "Submit"}
                     </Button>
                 </InputGroup>
 
                 {/*Possible Tags */}
                 {possibleCombinationTags.map((tag, index) => (
                     <label key={index}
-                        className={`panel-tag-button ${tag === selectedTag ? 'panel-tag-default' : 'panel-tag-selected'}`}
-                        onClick={() => handleSelectTag(tag)}>
+                        className={`panel-tag-button ${inputValue.split(/,\s*|\s+/).includes(tag) ? 'panel-tag-default' : 'panel-tag-selected'}`}
+                        onClick={() => handleAddTagIntoSelectedTagsListBySelecting(tag)}>
                         {tag}
                     </label>
                 ))}
@@ -125,7 +153,7 @@ const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanel> = (props)
                                     <Toast onClose={() => handleClose(index)}>
                                         <Toast.Header>
                                             <Col xs={10} className="panel-toast-header">
-                                                <b><span>#{model?.id}</span> : <span>{model?.name}</span></b>
+                                                <Badge>{model?.baseModel}</Badge>  <b><span> #{model?.id}</span> : <span>{model?.name}</span></b>
                                             </Col>
                                         </Toast.Header>
                                         <Toast.Body>

@@ -15,6 +15,7 @@ import DownloadFilePathOptionPanel from '../DownloadFilePathOptionPanel';
 import WindowDownloadFileButton from "./WindowDownloadFileButton"
 import ButtonWrap from "../buttons/ButtonWrap";
 import { Button, OverlayTrigger, Tooltip, Form, Dropdown, ButtonGroup } from 'react-bootstrap';
+import ErrorAlert from '../ErrorAlert';
 
 //Apis
 import {
@@ -40,6 +41,7 @@ const WindowComponent: React.FC = () => {
     const [countdown, setCountdown] = useState(0);
 
     const [checkboxMode, setCheckboxMode] = useState(false);
+    const [resetMode, setResetMode] = useState(false);
 
     const [urlList, setUrlList] = useState<string[]>([]);
     const [checkedUrlList, setCheckedUrlList] = useState<string[]>([]);
@@ -50,6 +52,20 @@ const WindowComponent: React.FC = () => {
     const chromeData = useSelector((state: AppState) => state.chrome);
     const { downloadMethod, downloadFilePath, selectedCategory } = chromeData;
 
+    const [startModelName, setStartModelName] = useState("");
+    const [processingModelName, setProcessingModelName] = useState("");
+    const [endModelName, setEndModelName] = useState("");
+
+
+    useEffect(() => {
+        resetCheckedUrlList();
+        handleCheckSavedDatabase();
+        setResetMode(false)
+    }, [resetMode])
+
+    useEffect(() => {
+        handleToggleCheckBoxMode()
+    }, [])
 
     useEffect(() => {
         //console.log('Updated checkedUrlList:', checkedUrlList.length);
@@ -154,6 +170,7 @@ const WindowComponent: React.FC = () => {
                 }
             }
         }
+        setResetMode(true)
     }
 
     // Function to handle the API call and update the button state
@@ -174,6 +191,9 @@ const WindowComponent: React.FC = () => {
             console.log("fail")
             return;
         }
+
+        let data = null;
+
         if (downloadMethod === "server") {
             //If download Method is server, the server will download the file into server's folder
             await fetchDownloadFilesByServer(civitaiUrl, civitaiFileName, civitaiModelID,
@@ -192,9 +212,10 @@ const WindowComponent: React.FC = () => {
                     });
                 }
             });
-
-
         }
+
+        return data;
+
     };
 
     const handleMultipleBookmarkAndAddtoDatabase = async () => {
@@ -229,6 +250,11 @@ const WindowComponent: React.FC = () => {
     }
 
     const handleMultipleBundle = async () => {
+
+        setStartModelName(urlList[0].split('/').pop() || "");
+        setProcessingModelName("");
+        setEndModelName(urlList[urlList.length - 1].split('/').pop() || "");
+
         setIsLoading(true)
         // Utility function to delay execution
         const delay = async (ms: any) => {
@@ -242,16 +268,19 @@ const WindowComponent: React.FC = () => {
             //Fetch Civitai ModelInfo
             const modelId = url.match(/\/models\/(\d+)/)?.[1] || '';
             setWorkingModelID(modelId)
+            setProcessingModelName(url.split('/').pop() || "");
             // Fetch data with error handling
             try {
                 const data = await fetchCivitaiModelInfoFromCivitaiByModelID(modelId, dispatch);
                 if (data) {
+                    //Download File
+                    handleDownloadMultipleFile(data, url);
+
                     // Add to database
                     handleAddModeltoDatabase(url);
                     //Bookmark this url
                     bookmarkThisUrl(data.type, url, `${data.name} - ${data.id} | Stable Diffusion LoRA | Civitai`)
-                    //Download File
-                    handleDownloadMultipleFile(data, url);
+
                     // Remove the processed URL from the urlList
                     setUrlList(currentUrls => currentUrls.filter(currentUrl => currentUrl !== url));
                     chrome.storage.local.get('originalTabId', (result) => {
@@ -259,20 +288,25 @@ const WindowComponent: React.FC = () => {
                             chrome.tabs.sendMessage(result.originalTabId, { action: "uncheck-url", url: url });
                         }
                     });
-
                 }
+
             } catch (error) {
-                console.error('Error fetching data for modelId:', modelId, error);
+                console.error(error);
+                setProcessingModelName(url.split('/').pop() || "");
+                break;
             }
             // Throttle requests
             await delay(3000);
         }
         setWorkingModelID("")
         setIsLoading(false)
+        setResetMode(true)
     };
 
     return (
         <div className="container">
+            <ErrorAlert />
+
             <center><h1>Model List Mode</h1></center>
 
             <Form>
@@ -294,8 +328,7 @@ const WindowComponent: React.FC = () => {
                 disable: urlList.length === 0 || !(checkboxMode),
             }}
                 handleFunctionCall={() => {
-                    resetCheckedUrlList();
-                    handleCheckSavedDatabase();
+                    setResetMode(true)
                 }} />
 
             {/**Checked Saved Button*/}
@@ -356,8 +389,15 @@ const WindowComponent: React.FC = () => {
             < DownloadFilePathOptionPanel />
 
 
-            {workingModelID !== "" && <p>ModelID: {workingModelID}</p>}
+            {workingModelID !== "" && <p>Processing Model Name: {processingModelName}</p>}
             {countdown > 0 && <p>Next request in: {countdown} seconds</p>}
+
+            <>
+                <span>Start : {startModelName}</span>
+                <br />
+                <span>End : {endModelName}</span>
+                <br />
+            </>
 
             {/* Display URLs in a text area */}
             <textarea

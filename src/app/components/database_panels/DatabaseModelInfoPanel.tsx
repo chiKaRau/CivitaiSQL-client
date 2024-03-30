@@ -7,7 +7,7 @@ import { Carousel } from 'react-bootstrap';
 import Spinner from 'react-bootstrap/Spinner';
 import { SlDocs } from "react-icons/sl"
 import { TbCloudX } from "react-icons/tb"
-import { Button, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { Button, Badge } from 'react-bootstrap';
 
 //Store
 import { useSelector, useDispatch } from 'react-redux';
@@ -45,7 +45,7 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) =>
     const chrome = useSelector((state: AppState) => state.chrome);
     const { selectedCategory, bookmarkID } = chrome;
 
-    const [modelsList, setModelsList] = useState<{ name: string; url: string; id: number; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
+    const [modelsList, setModelsList] = useState<{ name: string; url: string; id: number; baseModel: string; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
     const [visibleToasts, setVisibleToasts] = useState<boolean[]>([])
     const [isLoading, setIsLoading] = useState(false)
 
@@ -69,6 +69,7 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) =>
 
         const data = await fetchDatabaseModelInfoByModelID(modelID, dispatch);
         setModelsList(data)
+        console.log(data)
         setVisibleToasts(data?.map(() => true))
         setIsLoading(false)
     }
@@ -158,7 +159,7 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) =>
                                     <Toast onClose={() => handleClose(index)}>
                                         <Toast.Header>
                                             <Col xs={10} className="panel-toast-header">
-                                                <b><span>#{model?.id}</span> : <span>{model?.name}</span></b>
+                                                <Badge>{model?.baseModel}</Badge><b><span> #{model?.id}</span> : <span>{model?.name}</span></b>
                                             </Col>
                                         </Toast.Header>
                                         <Toast.Body>

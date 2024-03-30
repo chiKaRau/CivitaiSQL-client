@@ -36,15 +36,6 @@ const ButtonsGroup: React.FC = () => {
 
     return (
         <div className="buttonGroup">
-            {/**Database's ModelInfoPanel Button */}
-            <ButtonWrap buttonConfig={{
-                placement: "bottom",
-                tooltip: "Model Information",
-                variant: "success",
-                buttonIcon: <BsInfoCircleFill />,
-                disabled: false,
-            }}
-                handleFunctionCall={() => dispatch(togglePanel("DatabaseModelInfoPanel"))} />
 
             {/**Database's RelatedModelsPanel Button */}
             <ButtonWrap buttonConfig={{
@@ -56,15 +47,15 @@ const ButtonsGroup: React.FC = () => {
             }}
                 handleFunctionCall={() => dispatch(togglePanel("DatabaseRelatedModelsPanel"))} />
 
-            {/**Database's LatestAddedModelsPanel Button */}
+            {/**Database's ModelInfoPanel Button */}
             <ButtonWrap buttonConfig={{
                 placement: "bottom",
-                tooltip: "Latest Added Models",
-                variant: "warning",
-                buttonIcon: <SlDocs />,
+                tooltip: "Model Information",
+                variant: "success",
+                buttonIcon: <BsInfoCircleFill />,
                 disabled: false,
             }}
-                handleFunctionCall={() => dispatch(togglePanel("DatabaseLastestAddedModelsPanel"))} />
+                handleFunctionCall={() => dispatch(togglePanel("DatabaseModelInfoPanel"))} />
 
             {/**Database's UpdateModelPanel Button */}
             <ButtonWrap buttonConfig={{
@@ -85,6 +76,16 @@ const ButtonsGroup: React.FC = () => {
                 disabled: false,
             }}
                 handleFunctionCall={() => dispatch(togglePanel("DatabaseCustomModelPanel"))} />
+
+            {/**Database's LatestAddedModelsPanel Button */}
+            <ButtonWrap buttonConfig={{
+                placement: "bottom",
+                tooltip: "Latest Added Models",
+                variant: "warning",
+                buttonIcon: <SlDocs />,
+                disabled: false,
+            }}
+                handleFunctionCall={() => dispatch(togglePanel("DatabaseLastestAddedModelsPanel"))} />
 
 
             {/**Download Button */}
