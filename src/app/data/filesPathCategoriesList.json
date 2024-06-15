@@ -4,7 +4,7 @@
         {"name": "Real", "value": "/@scan@/Real/"},
         {"name": "Characters", "value": "/@scan@/ACG/Characters ("},
         {"name": "Appearance", "value": "/@scan@/ACG/Appearance/"},
-        {"name": "Style", "value": "/@scan@/ACG/Style/Art/"},
+        {"name": "Style", "value": "/@scan@/ACG/Style/"},
         {"name": "Poses", "value": "/@scan@/ACG/Poses/"},
         {"name": "Creature", "value": "/@scan@/ACG/Creature/"},
         {"name": "Object", "value": "/@scan@/ACG/Object/"},

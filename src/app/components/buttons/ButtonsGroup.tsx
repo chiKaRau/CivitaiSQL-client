@@ -14,6 +14,8 @@ import { RiFileAddFill } from "react-icons/ri";
 import { MdAccessAlarms } from "react-icons/md"
 import { PiCellSignalFullLight, PiCellSignalSlash } from "react-icons/pi"
 import { SlDocs } from "react-icons/sl"
+import { TbDatabaseSearch, TbDatabaseHeart, TbDatabasePlus, TbDatabaseEdit } from "react-icons/tb";
+import { AiFillDatabase } from "react-icons/ai";
 
 //api
 import { fetchOpenDownloadDirectory } from "../../api/civitaiSQL_api"
@@ -42,7 +44,7 @@ const ButtonsGroup: React.FC = () => {
                 placement: "bottom",
                 tooltip: "Related Models",
                 variant: "secondary",
-                buttonIcon: <PiMagnifyingGlassBold />,
+                buttonIcon: <TbDatabaseSearch />,
                 disabled: false,
             }}
                 handleFunctionCall={() => dispatch(togglePanel("DatabaseRelatedModelsPanel"))} />
@@ -52,7 +54,7 @@ const ButtonsGroup: React.FC = () => {
                 placement: "bottom",
                 tooltip: "Model Information",
                 variant: "success",
-                buttonIcon: <BsInfoCircleFill />,
+                buttonIcon: <TbDatabaseHeart />,
                 disabled: false,
             }}
                 handleFunctionCall={() => dispatch(togglePanel("DatabaseModelInfoPanel"))} />
@@ -62,7 +64,7 @@ const ButtonsGroup: React.FC = () => {
                 placement: "bottom",
                 tooltip: "Update this Model",
                 variant: "success",
-                buttonIcon: <GrCopy />,
+                buttonIcon: <TbDatabaseEdit />,
                 disabled: false,
             }}
                 handleFunctionCall={() => dispatch(togglePanel("DatabaseUpdateModelPanel"))} />
@@ -72,7 +74,7 @@ const ButtonsGroup: React.FC = () => {
                 placement: "bottom",
                 tooltip: "Add a custom model",
                 variant: "success",
-                buttonIcon: <RiFileAddFill />,
+                buttonIcon: <TbDatabasePlus />,
                 disabled: false,
             }}
                 handleFunctionCall={() => dispatch(togglePanel("DatabaseCustomModelPanel"))} />
@@ -82,7 +84,7 @@ const ButtonsGroup: React.FC = () => {
                 placement: "bottom",
                 tooltip: "Latest Added Models",
                 variant: "warning",
-                buttonIcon: <SlDocs />,
+                buttonIcon: <AiFillDatabase />,
                 disabled: false,
             }}
                 handleFunctionCall={() => dispatch(togglePanel("DatabaseLastestAddedModelsPanel"))} />

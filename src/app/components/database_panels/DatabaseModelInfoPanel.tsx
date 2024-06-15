@@ -62,10 +62,17 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) =>
     }, [])
 
     useEffect(() => {
-        setModelsList(originalModelsList?.filter(model =>
-            baseModelList.some(baseModelObj => baseModelObj.baseModel === model.baseModel && baseModelObj.display)
-        ));
+        //Preventing First time update
+        if (isInitialMount.current) {
+            isInitialMount.current = false;
+        } else {
+            setModelsList(originalModelsList?.reverse().filter(model =>
+                baseModelList.some(baseModelObj => baseModelObj.baseModel === model.baseModel && baseModelObj.display)
+            ));
+            setOriginalModelsList(originalModelsList?.reverse());
+        }
     }, [baseModelList]);
+
 
     const handleUpdateModelsList = async () => {
         setIsLoading(true)
@@ -81,8 +88,8 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) =>
         }
 
         const data = await fetchDatabaseModelInfoByModelID(modelID, dispatch);
-        setModelsList(data?.reverse())
-        setOriginalModelsList(data?.reverse());
+        setModelsList(data)
+        setOriginalModelsList(data);
         const uniqueBaseModels = Array.from(
             new Set(data?.map((obj: any) => obj.baseModel))
         ).map(baseModel => ({ baseModel: baseModel as string, display: true }));
@@ -93,6 +100,7 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) =>
 
     const handleReverseModelList = () => {
         setModelsList(modelsList?.reverse());
+        setOriginalModelsList(originalModelsList?.reverse());
         setIsSorted(!isSorted)
     }
 
@@ -178,14 +186,14 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) =>
                     </div>
 
                     <div className="collapse-panel-container" style={{ flexShrink: 0, margin: 0, padding: "0px 10px 0px 10px" }}>
-                        <div className="toggle-section" onClick={handleToggleColapPanel} aria-controls="collapse-panel" aria-expanded={isColapPanelOpen} style={{
+                        <div className="toggle-section" onClick={handleToggleColapPanel} aria-controls="collapse-panel-info" aria-expanded={isColapPanelOpen} style={{
                             textAlign: 'center'
                         }}>
                             <BsType />
                         </div>
 
                         <Collapse in={isColapPanelOpen}>
-                            <div id="collapse-panel" style={{
+                            <div id="collapse-panel-info" style={{
                                 marginTop: '10px',
                                 padding: '10px',
                                 borderRadius: '5px',

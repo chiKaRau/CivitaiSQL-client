@@ -78,6 +78,7 @@ const DownloadFilePathOptionPanel: React.FC = () => {
 
             // Additional checks for specific exceptions
             const isCharactersSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "Characters" && item.display);
+            const isRealSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "Real" && item.display);
             const isPosesSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "Poses" && item.display);
             const isMalesSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "Males" && item.display);
             const isSFWSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "SFW" && item.display);
@@ -97,9 +98,18 @@ const DownloadFilePathOptionPanel: React.FC = () => {
                 return false;
             }
 
+            if (isPosesSelected && !isRealSelected && folder.toLowerCase().includes("/real/")) {
+                return false;
+            }
+
+            if (isPosesSelected && !isRealSelected && folder.toLowerCase().includes("/real/")) {
+                return false;
+            }
+
             if (isSFWSelected && !isNSFWSelected && folder.toLowerCase().includes("/nsfw/")) {
                 return false;
             }
+            
 
             if (!isEXSelected && folder.toLowerCase().includes("/ex/")) {
                 return false;

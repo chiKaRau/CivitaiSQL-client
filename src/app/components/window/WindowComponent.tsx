@@ -6,13 +6,19 @@ import { AppState } from '../../store/configureStore';
 
 //Icons Components
 import { AiFillFolderOpen } from "react-icons/ai"
-import { BsStar, BsFillCloudArrowUpFill, BsFillCartCheckFill, Bs0Circle } from 'react-icons/bs';
+import { BsDownload } from 'react-icons/bs';
+import { TbDatabaseSearch, TbDatabasePlus, TbDatabaseMinus } from "react-icons/tb";
+import { PiPlusMinusFill } from "react-icons/pi";
+import { FaMagnifyingGlass, FaMagnifyingGlassPlus } from "react-icons/fa6";
+import { MdOutlineApps, MdOutlineTipsAndUpdates } from "react-icons/md";
+import { FcGenericSortingAsc, FcGenericSortingDesc } from "react-icons/fc";
 
 
 //components
 import CategoriesListSelector from '../CategoriesListSelector';
 import DownloadFilePathOptionPanel from '../DownloadFilePathOptionPanel';
 import WindowDownloadFileButton from "./WindowDownloadFileButton"
+import WindowCollapseButton from "./WindowCollapseButton"
 import ButtonWrap from "../buttons/ButtonWrap";
 import { Button, OverlayTrigger, Tooltip, Form, Dropdown, ButtonGroup } from 'react-bootstrap';
 import ErrorAlert from '../ErrorAlert';
@@ -67,6 +73,15 @@ const WindowComponent: React.FC = () => {
     const [startModelName, setStartModelName] = useState("");
     const [processingModelName, setProcessingModelName] = useState("");
     const [endModelName, setEndModelName] = useState("");
+
+    const [isSorted, setIsSorted] = useState(true);
+
+    const [collapseButtonStates, setCollapseButtonStates] = useState<{ [key: string]: boolean }>({
+        checkDatabaseButton: false,
+        bookmarkButton: false, // Initial value to help TypeScript infer the types
+        downloadButton: false, // You can add more initial panels as needed
+        utilsButtons: false
+    });
 
 
     useEffect(() => {
@@ -134,6 +149,7 @@ const WindowComponent: React.FC = () => {
                 chrome.tabs.sendMessage(result.originalTabId, { action: "sortingMode" });
             }
         });
+        setIsSorted(!isSorted)
     }
 
 
@@ -364,6 +380,13 @@ const WindowComponent: React.FC = () => {
         setResetMode(true)
     };
 
+    const handleToggleCollapseButton = (panelId: any) => {
+        setCollapseButtonStates((prevStates) => ({
+            ...prevStates,
+            [panelId]: !prevStates[panelId],
+        }));
+    };
+
     return (
         <div className="container">
             <ErrorAlert />
@@ -380,89 +403,131 @@ const WindowComponent: React.FC = () => {
                 />
             </Form>
 
-            {/**Checked Saved Button for User page*/}
-            <ButtonWrap buttonConfig={{
-                placement: "top",
-                tooltip: "Check if database has this model (User Page prefer)",
-                variant: "primary",
-                buttonIcon: <BsFillCloudArrowUpFill />,
-                disable: urlList.length === 0 || !(checkboxMode),
-            }}
-                handleFunctionCall={() => {
-                    setResetMode(true)
-                }} />
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start' }}>
 
-            {/**Checked Saved Button*/}
-            <OverlayTrigger placement={"top"}
-                overlay={<Tooltip id="tooltip">{`Check if database has this model`}</Tooltip>}>
-                <Dropdown as={ButtonGroup}>
-                    <Button variant="success"
-                        onClick={handleCheckSavedDatabase} >
-                        <BsFillCloudArrowUpFill />
-                    </Button>
-                    <Dropdown.Toggle split variant="success" id="dropdown-split-basic" />
-                    <Dropdown.Menu>
-                        <Dropdown.Item
-                            onClick={resetCheckedUrlList} >
-                            Reset
-                        </Dropdown.Item>
-                    </Dropdown.Menu>
-                </Dropdown>
-            </OverlayTrigger>
+                <WindowCollapseButton
+                    panelId="checkDatabaseButton"
+                    isPanelOpen={collapseButtonStates['checkDatabaseButton']}
+                    handleTogglePanel={handleToggleCollapseButton}
+                    icons={<TbDatabaseSearch />}
+                    buttons={
+                        <div>
+                            {/**Checked Saved Button for User page*/}
+                            <ButtonWrap buttonConfig={{
+                                placement: "top",
+                                tooltip: "Check if database has this model (User Page prefer)",
+                                variant: "primary",
+                                buttonIcon: <FaMagnifyingGlass />,
+                                disable: urlList.length === 0 || !(checkboxMode),
+                            }}
+                                handleFunctionCall={() => {
+                                    setResetMode(true)
+                                }} />
 
-            {/**Bookmark and add to database Button*/}
-            <ButtonWrap buttonConfig={{
-                placement: "top",
-                tooltip: "Bookmark and add to database",
-                variant: "primary",
-                buttonIcon: <BsFillCartCheckFill />,
-                disabled: (urlList.length === 0 || !checkboxMode),
-            }}
-                handleFunctionCall={() => handleMultipleBookmarkAndAddtoDatabase()} />
+                            {/**Checked Saved Button*/}
+                            <OverlayTrigger placement={"top"}
+                                overlay={<Tooltip id="tooltip">{`Check if database has this model`}</Tooltip>}>
+                                <Dropdown as={ButtonGroup}>
+                                    <Button variant="success"
+                                        onClick={handleCheckSavedDatabase} >
+                                        <FaMagnifyingGlassPlus />
+                                    </Button>
+                                    <Dropdown.Toggle split variant="success" id="dropdown-split-basic" />
+                                    <Dropdown.Menu>
+                                        <Dropdown.Item
+                                            onClick={resetCheckedUrlList} >
+                                            Reset
+                                        </Dropdown.Item>
+                                    </Dropdown.Menu>
+                                </Dropdown>
+                            </OverlayTrigger>
+                        </div>
+                    }
+                />
 
-            {/**Switch Download Method Button*/}
-            <WindowDownloadFileButton />
+                <WindowCollapseButton
+                    panelId="downloadButton"
+                    isPanelOpen={collapseButtonStates['downloadButton']}
+                    handleTogglePanel={handleToggleCollapseButton}
+                    icons={<BsDownload />}
+                    buttons={
+                        <div>
+                            {/**Switch Download Method Button*/}
+                            <WindowDownloadFileButton />
 
-            {/**Open Download Button */}
-            <ButtonWrap buttonConfig={{
-                placement: "top",
-                tooltip: "Open Download Directory",
-                variant: "primary",
-                buttonIcon: <AiFillFolderOpen />,
-                disabled: false,
-            }}
-                handleFunctionCall={() => fetchOpenDownloadDirectory(dispatch)} />
+                            {/**Open Download Button */}
+                            <ButtonWrap buttonConfig={{
+                                placement: "top",
+                                tooltip: "Open Download Directory",
+                                variant: "primary",
+                                buttonIcon: <AiFillFolderOpen />,
+                                disabled: false,
+                            }}
+                                handleFunctionCall={() => fetchOpenDownloadDirectory(dispatch)} />
+                        </div>
+                    }
+                />
 
-            {/**Remove bookmarks */}
-            <ButtonWrap buttonConfig={{
-                placement: "top",
-                tooltip: "Remove Urls' bookmark",
-                variant: "primary",
-                buttonIcon: <BsStar />,
-                disabled: (urlList.length === 0 || !checkboxMode),
-            }}
-                handleFunctionCall={() => handleRemoveBookmarks()} />
+                <WindowCollapseButton
+                    panelId="bookmarkButton"
+                    isPanelOpen={collapseButtonStates['bookmarkButton']}
+                    handleTogglePanel={handleToggleCollapseButton}
+                    icons={<PiPlusMinusFill />}
+                    buttons={
+                        <div>
+                            {/**Bookmark and add to database Button*/}
+                            <ButtonWrap buttonConfig={{
+                                placement: "top",
+                                tooltip: "Bookmark and add to database",
+                                variant: "primary",
+                                buttonIcon: <TbDatabasePlus />,
+                                disabled: (urlList.length === 0 || !checkboxMode),
+                            }}
+                                handleFunctionCall={() => handleMultipleBookmarkAndAddtoDatabase()} />
 
+                            {/**Remove bookmarks */}
+                            <ButtonWrap buttonConfig={{
+                                placement: "top",
+                                tooltip: "Remove Urls' bookmark",
+                                variant: "primary",
+                                buttonIcon: <TbDatabaseMinus />,
+                                disabled: (urlList.length === 0 || !checkboxMode),
+                            }}
+                                handleFunctionCall={() => handleRemoveBookmarks()} />
+                        </div>
+                    }
+                />
 
-            {/**Checked If update avaliable Button for User page*/}
-            <ButtonWrap buttonConfig={{
-                placement: "top",
-                tooltip: "check if update avaliable by compare db",
-                variant: "primary",
-                buttonIcon: <BiSolidHdd />,
-                disable: counting,
-            }}
-                handleFunctionCall={() => handleCheckUpdateAvaliable()} />
+                <WindowCollapseButton
+                    panelId="utilsButton"
+                    isPanelOpen={collapseButtonStates['utilsButton']}
+                    handleTogglePanel={handleToggleCollapseButton}
+                    icons={<MdOutlineApps />}
+                    buttons={
+                        <div>
+                            {/**Checked If update avaliable Button for User page*/}
+                            <ButtonWrap buttonConfig={{
+                                placement: "top",
+                                tooltip: "check if update avaliable",
+                                variant: "primary",
+                                buttonIcon: <MdOutlineTipsAndUpdates />,
+                                disable: counting,
+                            }}
+                                handleFunctionCall={() => handleCheckUpdateAvaliable()} />
 
-            {/**Checked If update avaliable Button for User page*/}
-            <ButtonWrap buttonConfig={{
-                placement: "top",
-                tooltip: "handling Sorting",
-                variant: "primary",
-                buttonIcon: <BiSolidBarChartSquare />,
-                disable: counting,
-            }}
-                handleFunctionCall={() => handleSorting()} />
+                            {/**Checked If update avaliable Button for User page*/}
+                            <ButtonWrap buttonConfig={{
+                                placement: "top",
+                                tooltip: "handling Sorting",
+                                variant: "primary",
+                                buttonIcon: isSorted ? <FcGenericSortingAsc /> : <FcGenericSortingDesc />,
+                                disable: counting,
+                            }}
+                                handleFunctionCall={() => handleSorting()} />
+                        </div>
+                    }
+                />
+            </div>
 
             {/**Categories List Selector */}
             < CategoriesListSelector />

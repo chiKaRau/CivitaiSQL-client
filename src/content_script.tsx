@@ -198,6 +198,14 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
       return;
     }
 
+    // Check the current order and determine if it's already sorted
+    const isCurrentlyReversed = container.lastChild === cards[cards.length - 1].element;
+
+    // Reverse the sorted cards if the current order is already sorted
+    if (isCurrentlyReversed) {
+      sortedCards.reverse();
+    }
+
     // Append the sorted cards to the container
     sortedCards.forEach(({ element }) => {
       container.appendChild(element);
