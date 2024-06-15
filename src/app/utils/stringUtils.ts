@@ -1,6 +1,7 @@
 
 export const retrievePossibleCombination = (name: string, tags: any) => {
-    const nameArray = name.split(" ");
+    const regex = /[^\p{L}\p{N}]+/u;
+    const nameArray = name.split(regex);
     const array1 = [], array2 = [];
 
     for (let i = 0; i < nameArray.length; i++) {

@@ -1,0 +1,19 @@
+{
+    "filesPathCategoriesList": [
+        {"name": "ACG", "value": "/@scan@/ACG/"},
+        {"name": "Real", "value": "/@scan@/Real/"},
+        {"name": "Characters", "value": "/@scan@/ACG/Characters ("},
+        {"name": "Appearance", "value": "/@scan@/ACG/Appearance/"},
+        {"name": "Style", "value": "/@scan@/ACG/Style/Art/"},
+        {"name": "Poses", "value": "/@scan@/ACG/Poses/"},
+        {"name": "Creature", "value": "/@scan@/ACG/Creature/"},
+        {"name": "Object", "value": "/@scan@/ACG/Object/"},
+        {"name": "Graphic", "value": "/@scan@/ACG/Graphic Element/"},
+        {"name": "Effect", "value": "/@scan@/ACG/Effects/"},
+        {"name": "OTK", "value": "/@scan@/ACG/OTK/"},
+        {"name": "Males", "value": "Males"},
+        {"name": "SFW", "value": "SFW"},
+        {"name": "NSFW", "value": "NSFW"},
+        {"name": "EX", "value": "EX"}
+    ]
+}

@@ -1,6 +1,7 @@
 import {
     updateBookmarkID, setIsBookmarked,
-    updateSelectedCategory, updateDownloadFilePath, updateDownloadMethod
+    updateSelectedCategory, updateDownloadFilePath,
+    updateDownloadMethod, UpdateSelectedFilteredCategoriesList
 } from "../store/actions/chromeActions"
 
 export const setupBookmark = (modelType: string, activeURL: string, dispatch: any) => {
@@ -102,6 +103,13 @@ export const initializeDatafromChromeStorage = (dispatch: any) => {
         }
     });
 
+    // Retrieve the last selected sheet option from Chrome storage
+    chrome.storage.sync.get(['selectedFilteredCategoriesList'], (result) => {
+        if (result.selectedFilteredCategoriesList) {
+            dispatch(UpdateSelectedFilteredCategoriesList(result.selectedFilteredCategoriesList))
+        }
+    });
+
 }
 
 export const updateSelectedCategoryIntoChromeStorage = (selectedCategory: string) => {
@@ -114,6 +122,14 @@ export const updateDownloadFilePathIntoChromeStorage = (downloadFilePath: string
 
 export const updateDownloadMethodIntoChromeStorage = (downloadMethod: string) => {
     chrome.storage.sync.set({ downloadMethod });
+}
+
+export const updateSelectedFilteredCategoriesListIntoChromeStorage = (selectedFilteredCategoriesList: any[]) => {
+    chrome.storage.sync.set({ selectedFilteredCategoriesList: JSON.stringify(selectedFilteredCategoriesList) });
+    //chrome.storage.sync.set({ selectedFilteredCategoriesList: null });
+    //if doesn't update, uncomment above code
+
+
 }
 
 export const callChromeBrowserDownload = (data: any) => {

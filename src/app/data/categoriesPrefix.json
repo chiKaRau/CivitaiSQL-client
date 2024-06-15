@@ -29,7 +29,7 @@
             "value": "/@scan@/ACG/Characters (manga)/"
         },
         {
-            "name": "h",
+            "name": "エロ",
             "value": "/@scan@/ACG/Characters (Hentai)/"
         },
         {
@@ -37,7 +37,19 @@
             "value": "/@scan@/ACG/Characters (Males)/"
         },
         {
-            "name": "real",
+            "name": "OTK",
+            "value": "/@scan@/ACG/OTK/"
+        },
+        {
+            "name": "Poses",
+            "value": "/@scan@/ACG/Poses/"
+        },
+        {
+            "name": "Appearance",
+            "value": "/@scan@/ACG/Appearance/"
+        },
+        {
+            "name": "Real",
             "value": "/@scan@/Real/"
         },
         {

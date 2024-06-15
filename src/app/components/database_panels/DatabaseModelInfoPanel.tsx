@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 //Components
-import { Toast } from 'react-bootstrap';
+import { Toast, Collapse } from 'react-bootstrap';
 import Col from 'react-bootstrap/Col';
 import { BiUndo } from "react-icons/bi"
 import { Carousel } from 'react-bootstrap';
@@ -8,6 +8,7 @@ import Spinner from 'react-bootstrap/Spinner';
 import { SlDocs } from "react-icons/sl"
 import { TbCloudX } from "react-icons/tb"
 import { Button, Badge } from 'react-bootstrap';
+import { BsCheck, BsArrowRepeat, BsSortDown, BsSortUp, BsType } from 'react-icons/bs';
 
 //Store
 import { useSelector, useDispatch } from 'react-redux';
@@ -45,14 +46,26 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) =>
     const chrome = useSelector((state: AppState) => state.chrome);
     const { selectedCategory, bookmarkID } = chrome;
 
+    const [originalModelsList, setOriginalModelsList] = useState<{ name: string; url: string; id: number; baseModel: string; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
     const [modelsList, setModelsList] = useState<{ name: string; url: string; id: number; baseModel: string; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
     const [visibleToasts, setVisibleToasts] = useState<boolean[]>([])
     const [isLoading, setIsLoading] = useState(false)
+
+    const [isSorted, setIsSorted] = useState(false)
+    const [baseModelList, setBaseModelList] = useState<{ baseModel: string, display: boolean }[]>([]);
+    const [isColapPanelOpen, setUsColapPanelOpen] = useState(false);
+
 
     //Retrivie Modellist when pane is open
     useEffect(() => {
         handleUpdateModelsList();
     }, [])
+
+    useEffect(() => {
+        setModelsList(originalModelsList?.filter(model =>
+            baseModelList.some(baseModelObj => baseModelObj.baseModel === model.baseModel && baseModelObj.display)
+        ));
+    }, [baseModelList]);
 
     const handleUpdateModelsList = async () => {
         setIsLoading(true)
@@ -68,11 +81,33 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) =>
         }
 
         const data = await fetchDatabaseModelInfoByModelID(modelID, dispatch);
-        setModelsList(data)
-        console.log(data)
+        setModelsList(data?.reverse())
+        setOriginalModelsList(data?.reverse());
+        const uniqueBaseModels = Array.from(
+            new Set(data?.map((obj: any) => obj.baseModel))
+        ).map(baseModel => ({ baseModel: baseModel as string, display: true }));
+        setBaseModelList(uniqueBaseModels);
         setVisibleToasts(data?.map(() => true))
         setIsLoading(false)
     }
+
+    const handleReverseModelList = () => {
+        setModelsList(modelsList?.reverse());
+        setIsSorted(!isSorted)
+    }
+
+    const handleToggleColapPanel = () => {
+        setUsColapPanelOpen(!isColapPanelOpen);
+    };
+
+    const handleToggleBaseModelCheckbox = (index: number) => {
+        setBaseModelList(prevState => {
+            const newState = [...prevState];
+            newState[index].display = !newState[index].display;
+            return newState;
+        });
+    };
+
 
     const handleClose = (index: any) => {
         const newVisibleToasts = [...visibleToasts];
@@ -133,6 +168,45 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) =>
 
                 <div className="panel-header-text">
                     <h6>Database's ModelInfo Panel</h6>
+                </div>
+
+                <div className="buttonGroup" style={{ padding: "5px", display: "flex", justifyContent: "flex-start", alignItems: "flex-start" }}>
+                    <div style={{ marginRight: '10px' }}>
+                        <Button variant="secondary" disabled={isLoading} onClick={handleReverseModelList}>
+                            {isLoading ? <BsArrowRepeat className="spinner" /> : (isSorted ? <BsSortUp /> : <BsSortDown />)}
+                        </Button>
+                    </div>
+
+                    <div className="collapse-panel-container" style={{ flexShrink: 0, margin: 0, padding: "0px 10px 0px 10px" }}>
+                        <div className="toggle-section" onClick={handleToggleColapPanel} aria-controls="collapse-panel" aria-expanded={isColapPanelOpen} style={{
+                            textAlign: 'center'
+                        }}>
+                            <BsType />
+                        </div>
+
+                        <Collapse in={isColapPanelOpen}>
+                            <div id="collapse-panel" style={{
+                                marginTop: '10px',
+                                padding: '10px',
+                                borderRadius: '5px',
+                                background: '#f9f9f9',
+                                width: '100%'
+                            }}>
+                                {baseModelList.map((item, index) => (
+                                    <div key={index}>
+                                        <label>
+                                            <input
+                                                type="checkbox"
+                                                checked={item.display}
+                                                onChange={() => handleToggleBaseModelCheckbox(index)}
+                                            />
+                                            {item.baseModel}
+                                        </label>
+                                    </div>
+                                ))}
+                            </div>
+                        </Collapse>
+                    </div>
                 </div>
 
                 <Button

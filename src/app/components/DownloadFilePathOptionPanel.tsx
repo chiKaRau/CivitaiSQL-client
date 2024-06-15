@@ -10,7 +10,7 @@ import { Button, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import TextField from '@mui/material/TextField';
 import Autocomplete from '@mui/material/Autocomplete';
 import { BsPencilFill } from "react-icons/bs"
-import TagsPanel from './TagsPanel';
+import FilesPathSettingPanel from './FilesPathSettingPanel';
 
 //api
 import {
@@ -26,35 +26,111 @@ import { updateDownloadFilePathIntoChromeStorage } from "../utils/chromeUtils"
 const DownloadFilePathOptionPanel: React.FC = () => {
     const inputRef = useRef<HTMLInputElement>(null);
     const chrome = useSelector((state: AppState) => state.chrome);
-    const { downloadFilePath } = chrome;
+    const { downloadFilePath, selectedFilteredCategoriesList } = chrome;
     const dispatch = useDispatch();
+    const [sortedandFilteredfoldersList, setSortedandFilteredfoldersList] = useState<string[]>([]);
     const [foldersList, setFoldersList] = useState([])
     const [isLoading, setIsLoading] = useState(false)
 
-    const sortedFoldersList = foldersList.sort((a : string, b : string) => {
+    const sortedFoldersList = foldersList.sort((a: string, b: string) => {
         // Extract the first character of each string to compare
         const firstCharA = a.charAt(0).toUpperCase();
         const firstCharB = b.charAt(0).toUpperCase();
-      
+
         // Check if both characters are digits or not
         const isDigitA = /\d/.test(firstCharA);
         const isDigitB = /\d/.test(firstCharB);
-      
+
         if (isDigitA && !isDigitB) {
-          // If A is a digit and B is not, A should come after B
-          return 1;
+            // If A is a digit and B is not, A should come after B
+            return 1;
         } else if (!isDigitA && isDigitB) {
-          // If B is a digit and A is not, A should come before B
-          return -1;
+            // If B is a digit and A is not, A should come before B
+            return -1;
         }
         // If both are digits or both are not digits, compare alphabetically/numerically
         return a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' });
-      });
+    });
 
     useEffect(() => {
         // Update FoldersList
         handleGetFoldersList()
     }, []);
+
+
+    useEffect(() => {
+        if (selectedFilteredCategoriesList) {
+            handleAddFilterIntoFoldersList(JSON.parse(selectedFilteredCategoriesList))
+        }
+    }, [selectedFilteredCategoriesList, foldersList])
+
+
+    const handleAddFilterIntoFoldersList = (selectedFilteredCategoriesList: any) => {
+
+        const filteredFolderList = (foldersList as any[]).filter(folder => {
+            const isIncluded = (selectedFilteredCategoriesList as any[]).some(item => {
+                return item.display && folder.toLowerCase().includes(item.category.value.toLowerCase());
+            });
+
+            if (!isIncluded) {
+                return false;
+            }
+
+            // Additional checks for specific exceptions
+            const isCharactersSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "Characters" && item.display);
+            const isPosesSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "Poses" && item.display);
+            const isMalesSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "Males" && item.display);
+            const isSFWSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "SFW" && item.display);
+            const isNSFWSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "NSFW" && item.display);
+            const isEXSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "EX" && item.display);
+
+            // Check exceptions
+            if (isCharactersSelected && !isMalesSelected && folder.toLowerCase().includes("(males)")) {
+                return false;
+            }
+
+            if (isPosesSelected && !isNSFWSelected && folder.toLowerCase().includes("/nsfw/")) {
+                return false;
+            }
+
+            if (isPosesSelected && !isSFWSelected && folder.toLowerCase().includes("/sfw/")) {
+                return false;
+            }
+
+            if (isSFWSelected && !isNSFWSelected && folder.toLowerCase().includes("/nsfw/")) {
+                return false;
+            }
+
+            if (!isEXSelected && folder.toLowerCase().includes("/ex/")) {
+                return false;
+            }
+
+
+
+            return true;
+        }).sort((a: string, b: string) => {
+            // Extract the first character of each string to compare
+            const firstCharA = a.charAt(0).toUpperCase();
+            const firstCharB = b.charAt(0).toUpperCase();
+
+            // Check if both characters are digits or not
+            const isDigitA = /\d/.test(firstCharA);
+            const isDigitB = /\d/.test(firstCharB);
+
+            if (isDigitA && !isDigitB) {
+                // If A is a digit and B is not, A should come after B
+                return 1;
+            } else if (!isDigitA && isDigitB) {
+                // If B is a digit and A is not, A should come before B
+                return -1;
+            }
+            // If both are digits or both are not digits, compare alphabetically/numerically
+            return a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' });
+        });
+
+        setSortedandFilteredfoldersList(filteredFolderList);
+
+    }
 
     const handleGetFoldersList = async () => {
         setIsLoading(true)
@@ -78,7 +154,7 @@ const DownloadFilePathOptionPanel: React.FC = () => {
 
     return (
         <>
-            <TagsPanel />
+            <FilesPathSettingPanel />
 
             <div className="autocomplete-container">
                 <div className="autocomplete-container-row">
@@ -88,7 +164,7 @@ const DownloadFilePathOptionPanel: React.FC = () => {
                         inputValue={downloadFilePath}
                         onInputChange={handleFoldersListOnChange}
                         id="controllable-states-demo"
-                        options={sortedFoldersList}
+                        options={sortedandFilteredfoldersList}
                         sx={{ width: 350 }}
                         renderInput={(params) => (
                             <TextField
@@ -108,17 +184,17 @@ const DownloadFilePathOptionPanel: React.FC = () => {
                         renderOption={(props, option) => {
                             // Check if the option includes the substring 'real'
                             const isMatch = option.includes("NSFW");
-                        
+
                             return (
-                              <li {...props}>
-                                {isMatch ? (
-                                  <strong>{option}</strong> // Render the option in bold if it includes 'real'
-                                ) : (
-                                  option // Render the option normally if it doesn't include 'real'
-                                )}
-                              </li>
+                                <li {...props}>
+                                    {isMatch ? (
+                                        <strong>{option}</strong> // Render the option in bold if it includes 'real'
+                                    ) : (
+                                        option // Render the option normally if it doesn't include 'real'
+                                    )}
+                                </li>
                             );
-                          }}
+                        }}
                     />
 
                     <div style={{ padding: "5px" }} />

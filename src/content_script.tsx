@@ -109,7 +109,6 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
           chrome.runtime.sendMessage({ action: "removeUrl", url: url });
         }
       });
-
     });
   } else if (message.action === "uncheck-url") {
     const urlToUncheck = message.url;
@@ -175,15 +174,33 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
 
 chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   if (message.action === "sortingMode") {
+    console.log("Sorting mode activated");
 
-    console.log("sortingMode")
+    // Cast the elements to HTMLAnchorElement to access href safely
+    const cards = Array.from(document.querySelectorAll('.mantine-Card-root'))
+      .filter((card): card is HTMLAnchorElement => card instanceof HTMLAnchorElement)
+      .map(card => ({ element: card, url: card.href.replace("-commission", "") }));
 
-    let newUrlList: string[] = []; // Explicitly define urls as an array of strings
-    document.querySelectorAll('.mantine-Card-root').forEach((item) => {
-      if (item instanceof HTMLAnchorElement) {
+    // Reverse the characters in each URL, sort them, then reverse the sort order
+    const sortedCards = cards.sort((a, b) => {
+      // Reverse the URL strings
+      const reverseA = a.url.split('').reverse().join('').toLowerCase();
+      const reverseB = b.url.split('').reverse().join('').toLowerCase();
 
-      }
+      // Compare the reversed URLs
+      return reverseA.localeCompare(reverseB);
+    });
 
+    // Select the container holding the cards
+    const container = document.querySelector('.mantine-1ofgurw');
+    if (!container) {
+      console.error('Card container not found.');
+      return;
+    }
+
+    // Append the sorted cards to the container
+    sortedCards.forEach(({ element }) => {
+      container.appendChild(element);
     });
   }
 });

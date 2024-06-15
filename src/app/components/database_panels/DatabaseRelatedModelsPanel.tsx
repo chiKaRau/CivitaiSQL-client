@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useRef } from "react";
 
 //Components
-import { Toast, Badge } from 'react-bootstrap';
+import { Toast, Badge, Collapse } from 'react-bootstrap';
 import Col from 'react-bootstrap/Col';
 import { BiUndo } from "react-icons/bi"
 import { Carousel } from 'react-bootstrap';
 import { Button, FormControl, InputGroup } from 'react-bootstrap';
-import { BsCheck, BsArrowRepeat } from 'react-icons/bs';
+import { BsCheck, BsArrowRepeat, BsSortDown, BsSortUp, BsType } from 'react-icons/bs';
 import Spinner from 'react-bootstrap/Spinner';
 
 //Store
@@ -33,14 +33,16 @@ const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanel> = (props)
 
     const civitaiModel = useSelector((state: AppState) => state.civitaiModel);
     const dispatch = useDispatch();
-
+    const [originalModelsList, setOriginalModelsList] = useState<{ name: string; url: string; id: number; baseModel: string; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
     const [modelsList, setModelsList] = useState<{ name: string; url: string; id: number; baseModel: string; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
     const [visibleToasts, setVisibleToasts] = useState<boolean[]>([])
     const [possibleCombinationTags, setPossibleCombinationTags] = useState<string[]>([]);
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(false)
     const [inputValue, setInputValue] = useState("")
-
+    const [isSorted, setIsSorted] = useState(false)
+    const [baseModelList, setBaseModelList] = useState<{ baseModel: string, display: boolean }[]>([]);
+    const [isColapPanelOpen, setUsColapPanelOpen] = useState(false);
 
     const data: Record<string, any> | undefined = civitaiModel.civitaiModelObject;
     const modelName = data?.name;
@@ -50,6 +52,12 @@ const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanel> = (props)
     useEffect(() => {
         setPossibleCombinationTags(retrievePossibleCombination(modelName, modelTags))
     }, [])
+
+    useEffect(() => {
+        setModelsList(originalModelsList?.filter(model =>
+            baseModelList.some(baseModelObj => baseModelObj.baseModel === model.baseModel && baseModelObj.display)
+        ));
+    }, [baseModelList]);
 
     const handleAddTagIntoSelectedTagsListBySelecting = (tag: string) => {
         if (selectedTags.includes(tag)) {
@@ -84,7 +92,12 @@ const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanel> = (props)
         }
 
         const data = await fetchDatabaseRelatedModelsByTagsList(inputValue.split(/,\s*|\s+/), dispatch);
-        setModelsList(data)
+        setModelsList(data?.reverse())
+        setOriginalModelsList(data?.reverse());
+        const uniqueBaseModels = Array.from(
+            new Set(data?.map((obj: any) => obj.baseModel))
+        ).map(baseModel => ({ baseModel: baseModel as string, display: true }));
+        setBaseModelList(uniqueBaseModels);
         setVisibleToasts(data?.map(() => true))
         setIsLoading(false)
     }
@@ -95,10 +108,27 @@ const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanel> = (props)
         setVisibleToasts(newVisibleToasts);
     };
 
+    const handleReverseModelList = () => {
+        setModelsList(modelsList?.reverse());
+        setIsSorted(!isSorted)
+    }
+
     const handleClearTags = () => {
         setSelectedTags([])
         setInputValue("")
     }
+
+    const handleToggleColapPanel = () => {
+        setUsColapPanelOpen(!isColapPanelOpen);
+    };
+
+    const handleToggleBaseModelCheckbox = (index: number) => {
+        setBaseModelList(prevState => {
+            const newState = [...prevState];
+            newState[index].display = !newState[index].display;
+            return newState;
+        });
+    };
 
     return (
         <div className="panel-container">
@@ -129,6 +159,45 @@ const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanel> = (props)
                         {isLoading ? <BsArrowRepeat className="spinner" /> : "Submit"}
                     </Button>
                 </InputGroup>
+
+                <div className="buttonGroup" style={{ padding: "5px", display: "flex", justifyContent: "flex-start", alignItems: "flex-start" }}>
+                    <div style={{ marginRight: '10px' }}>
+                        <Button variant="secondary" disabled={isLoading} onClick={handleReverseModelList}>
+                            {isLoading ? <BsArrowRepeat className="spinner" /> : (isSorted ? <BsSortUp /> : <BsSortDown />)}
+                        </Button>
+                    </div>
+
+                    <div className="collapse-panel-container" style={{ flexShrink: 0, margin: 0, padding: "0px 10px 0px 10px" }}>
+                        <div className="toggle-section" onClick={handleToggleColapPanel} aria-controls="collapse-panel" aria-expanded={isColapPanelOpen} style={{
+                            textAlign: 'center'
+                        }}>
+                            <BsType />
+                        </div>
+
+                        <Collapse in={isColapPanelOpen}>
+                            <div id="collapse-panel" style={{
+                                marginTop: '10px',
+                                padding: '10px',
+                                borderRadius: '5px',
+                                background: '#f9f9f9',
+                                width: '100%'
+                            }}>
+                                {baseModelList.map((item, index) => (
+                                    <div key={index}>
+                                        <label>
+                                            <input
+                                                type="checkbox"
+                                                checked={item.display}
+                                                onChange={() => handleToggleBaseModelCheckbox(index)}
+                                            />
+                                            {item.baseModel}
+                                        </label>
+                                    </div>
+                                ))}
+                            </div>
+                        </Collapse>
+                    </div>
+                </div>
 
                 {/*Possible Tags */}
                 {possibleCombinationTags.map((tag, index) => (

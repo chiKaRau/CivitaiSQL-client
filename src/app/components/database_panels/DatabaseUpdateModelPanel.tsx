@@ -3,10 +3,10 @@ import React, { useEffect, useState, useRef } from "react";
 import { Toast } from 'react-bootstrap';
 import Col from 'react-bootstrap/Col';
 import { BiUndo } from "react-icons/bi"
-import { Carousel } from 'react-bootstrap';
+import { Carousel, Collapse } from 'react-bootstrap';
 import Spinner from 'react-bootstrap/Spinner';
-import { BsFillFileEarmarkArrowUpFill, BsFillCartCheckFill } from 'react-icons/bs';
-import { Button } from 'react-bootstrap';
+import { BsFillFileEarmarkArrowUpFill, BsFillCartCheckFill, BsType, BsArrowRepeat, BsSortDown, BsSortUp } from 'react-icons/bs';
+import { Button, Badge } from 'react-bootstrap';
 
 //Store
 import { useSelector, useDispatch } from 'react-redux';
@@ -48,17 +48,28 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
     const chrome = useSelector((state: AppState) => state.chrome);
     const { selectedCategory, downloadMethod, downloadFilePath } = chrome;
 
-    const [modelsList, setModelsList] = useState<{ name: string; url: string; id: number; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
+    const [originalModelsList, setOriginalModelsList] = useState<{ name: string; url: string; id: number; baseModel: string; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
+    const [modelsList, setModelsList] = useState<{ name: string; url: string; id: number; baseModel: string; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
     const [visibleToasts, setVisibleToasts] = useState<boolean[]>([])
     const [visibleIsCarted, setVisibleIsCarted] = useState<boolean[]>([])
     const [isLoading, setIsLoading] = useState(false)
     const [updateOption, setUpdateOption] = useState("Database_and_UpdateFolder")
     const [hasUpdateCompleted, setHasUpdateCompleted] = useState(false)
 
+    const [isSorted, setIsSorted] = useState(false)
+    const [baseModelList, setBaseModelList] = useState<{ baseModel: string, display: boolean }[]>([]);
+    const [isColapPanelOpen, setUsColapPanelOpen] = useState(false);
+
     //Retrivie Modellist when pane is open
     useEffect(() => {
         handleUpdateModelsList();
     }, [])
+
+    useEffect(() => {
+        setModelsList(originalModelsList?.filter(model =>
+            baseModelList.some(baseModelObj => baseModelObj.baseModel === model.baseModel && baseModelObj.display)
+        ));
+    }, [baseModelList]);
 
     const handleUpdateModelsList = async () => {
         setIsLoading(true)
@@ -74,7 +85,12 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
         }
 
         const data = await fetchDatabaseModelInfoByModelID(modelID, dispatch);
-        setModelsList(data)
+        setModelsList(data?.reverse())
+        setOriginalModelsList(data?.reverse());
+        const uniqueBaseModels = Array.from(
+            new Set(data?.map((obj: any) => obj.baseModel))
+        ).map(baseModel => ({ baseModel: baseModel as string, display: true }));
+        setBaseModelList(uniqueBaseModels);
         setVisibleToasts(data?.map(() => true))
 
 
@@ -200,6 +216,23 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
         return isCarted ? true : false;
     }
 
+    const handleToggleColapPanel = () => {
+        setUsColapPanelOpen(!isColapPanelOpen);
+    };
+
+    const handleToggleBaseModelCheckbox = (index: number) => {
+        setBaseModelList(prevState => {
+            const newState = [...prevState];
+            newState[index].display = !newState[index].display;
+            return newState;
+        });
+    };
+
+    const handleReverseModelList = () => {
+        setModelsList(modelsList?.reverse());
+        setIsSorted(!isSorted)
+    }
+
     return (
         <div className="panel-container">
             {/* ... other JSX elements ... */}
@@ -211,6 +244,45 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
 
                 <div className="panel-header-text">
                     <h6>Database's Update Model Panel</h6>
+                </div>
+
+                <div className="buttonGroup" style={{ padding: "5px", display: "flex", justifyContent: "flex-start", alignItems: "flex-start" }}>
+                    <div style={{ marginRight: '10px' }}>
+                        <Button variant="secondary" disabled={isLoading} onClick={handleReverseModelList}>
+                            {isLoading ? <BsArrowRepeat className="spinner" /> : (isSorted ? <BsSortUp /> : <BsSortDown />)}
+                        </Button>
+                    </div>
+
+                    <div className="collapse-panel-container" style={{ flexShrink: 0, margin: 0, padding: "0px 10px 0px 10px" }}>
+                        <div className="toggle-section" onClick={handleToggleColapPanel} aria-controls="collapse-panel" aria-expanded={isColapPanelOpen} style={{
+                            textAlign: 'center'
+                        }}>
+                            <BsType />
+                        </div>
+
+                        <Collapse in={isColapPanelOpen}>
+                            <div id="collapse-panel" style={{
+                                marginTop: '10px',
+                                padding: '10px',
+                                borderRadius: '5px',
+                                background: '#f9f9f9',
+                                width: '100%'
+                            }}>
+                                {baseModelList.map((item, index) => (
+                                    <div key={index}>
+                                        <label>
+                                            <input
+                                                type="checkbox"
+                                                checked={item.display}
+                                                onChange={() => handleToggleBaseModelCheckbox(index)}
+                                            />
+                                            {item.baseModel}
+                                        </label>
+                                    </div>
+                                ))}
+                            </div>
+                        </Collapse>
+                    </div>
                 </div>
 
                 {isLoading ?
@@ -226,7 +298,7 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                                     <Toast onClose={() => handleClose(index)}>
                                         <Toast.Header>
                                             <Col xs={10} className="panel-toast-header">
-                                                <b><span>#{model?.id}</span> : <span>{model?.name}</span></b>
+                                                <Badge>{model?.baseModel}</Badge><b><span> #{model?.id}</span> : <span>{model?.name}</span></b>
                                             </Col>
                                         </Toast.Header>
                                         <Toast.Body>
