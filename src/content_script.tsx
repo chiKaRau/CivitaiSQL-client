@@ -161,14 +161,22 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
 chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   if (message.action === "checkUpdateAvaliableMode") {
     let newUrlList: string[] = []; // Explicitly define urls as an array of strings
-    document.querySelectorAll('.mantine-Card-root').forEach((item) => {
-      if (item instanceof HTMLAnchorElement) {
-        newUrlList.push(item.href);
+    let count = 0;
 
+    let elements = Array.from(document.querySelectorAll('.mantine-Card-root'));
+    // Start from the next item after the last processed one
+    let startIndex = message.lastUpdateProcessedIndex || 0;
+    let host = "https://civitai.com";
+    for (let i = startIndex; i < elements.length && count < message.updateCount; i++) {
+      let href = elements[i].getAttribute('href');
+
+      if (href && !message.checkedUpdateList.includes(href)) {
+        newUrlList.push(host + href);
+        count++;
       }
-
-    });
-    chrome.runtime.sendMessage({ action: "checkifmodelAvaliable", newUrlList: newUrlList });
+      startIndex = i + 1; // Update the last processed index
+    }
+    chrome.runtime.sendMessage({ action: "checkifmodelAvaliable", newUrlList: newUrlList, lastUpdateProcessedIndex: startIndex });
   }
 });
 
@@ -218,10 +226,11 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
 chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   if (message.action === "display-saved") {
     const savedList = message.savedList;
+
     document.querySelectorAll('.mantine-Card-root').forEach((item) => {
       if (item instanceof HTMLAnchorElement) {
         const url = item.href;
-        const savedInfo = savedList.find((info: any) => info.url === url);
+        const savedInfo = savedList?.find((info: any) => info.url === url);
         if (savedInfo) {
           // Create a label
           const label = document.createElement('div');
@@ -262,31 +271,70 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
 chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   if (message.action === "display-update-avaliable") {
     const savedList = message.savedList;
+
     document.querySelectorAll('.mantine-Card-root').forEach((item) => {
       if (item instanceof HTMLAnchorElement) {
         const url = item.href;
-        const savedInfo = savedList.find((info: any) => info.url === url);
-        if (savedInfo.isUpdateAvaliable) {
+        console.log(url)
+        const savedInfo = savedList?.find((info: any) => info.url === url);
+
+        if (savedInfo?.isUpdateAvaliable || savedInfo?.isEarlyAccess) {
           // Create a label
           const label = document.createElement('div');
-          label.classList.add('update-label');
-          label.textContent = 'Update Avaliable';
+          label.classList.add('update-early-label');
+
+          let text = '';
+          let backgroundColor = '';
+
+          if (savedInfo.isUpdateAvaliable && savedInfo.isEarlyAccess) {
+            text = 'Update Available & Early Access';
+            backgroundColor = 'linear-gradient(to right, lightgreen, red)';
+          } else if (savedInfo.isUpdateAvaliable) {
+            text = 'Update Available';
+            backgroundColor = 'lightgreen';
+          } else if (savedInfo.isEarlyAccess) {
+            text = 'Early Access';
+            backgroundColor = 'red';
+          }
+
+          label.textContent = text;
           label.style.position = 'absolute';
           label.style.top = '70%';
           label.style.left = '50%';
           label.style.transform = 'translate(-50%, -50%)';
           label.style.zIndex = '1001';
-          label.style.backgroundColor = 'lightgreen'; // Example colors
-          label.style.color = 'white'; // Text color
-          label.style.textShadow = '0px 0px 3px black'; // Text shadow for readability
-          label.style.padding = '5px';
+          label.style.background = backgroundColor;
+          label.style.color = 'white';
+          label.style.textShadow = '0px 0px 3px black';
+          label.style.padding = '5px 10px';
           label.style.borderRadius = '5px';
+          label.style.boxShadow = '0px 4px 6px rgba(0, 0, 0, 0.1)';
+          label.style.fontFamily = 'Arial, sans-serif';
+          label.style.fontSize = '14px';
+          label.style.fontWeight = 'bold';
+          label.style.letterSpacing = '1px';
+          label.style.textTransform = 'uppercase';
+          label.style.display = 'flex'; // Flexbox for centering
+          label.style.justifyContent = 'center'; // Center horizontally
+          label.style.alignItems = 'center'; // Center vertically
+          label.style.textAlign = 'center'; // Center text horizontally
 
           // Add label to the item
           if (item instanceof HTMLElement) {
             item.style.position = 'relative';
             item.appendChild(label);
           }
+        }
+
+      }
+    });
+  } else if (message.action === "remove-update-saved") {
+    document.querySelectorAll('.mantine-Card-root').forEach((item) => {
+      if (item instanceof HTMLAnchorElement) {
+        // Remove only the label with the 'update-early-label' class
+        const label = item.querySelector('.update-early-label');
+        if (label) {
+          item.removeChild(label);
         }
       }
     });

@@ -26,6 +26,7 @@ import ErrorAlert from '../ErrorAlert';
 interface updateAvaliable {
     url: string;
     isUpdateAvaliable: any; // Consider specifying a more accurate type instead of 'any' if possible
+    isEarlyAccess: any;
 }
 
 //Apis
@@ -83,6 +84,12 @@ const WindowComponent: React.FC = () => {
         utilsButtons: false
     });
 
+    const [updateCount, setUpdateCount] = useState(50);
+    const [checkedUpdateList, setCheckedUpdateList] = useState<string[]>([]);
+    const [lastUpdateProcessedIndex, setLastUpdateProcessedIndex] = useState(0);
+
+
+
 
     useEffect(() => {
         resetCheckedUrlList();
@@ -118,6 +125,11 @@ const WindowComponent: React.FC = () => {
             } else if (message.action === "checkifmodelAvaliable") {
                 // Process the new URLs (e.g., check them in the database)
                 checkIfModelUpdateAvaliable(message.newUrlList)
+
+                setCheckedUpdateList(prevCheckedUpdateList => [...prevCheckedUpdateList, ...message.newUrlList]);
+
+                setLastUpdateProcessedIndex(message.lastUpdateProcessedIndex)
+
             }
         };
         chrome.runtime.onMessage.addListener(messageListener);
@@ -138,7 +150,11 @@ const WindowComponent: React.FC = () => {
     const handleCheckUpdateAvaliable = () => {
         chrome.storage.local.get('originalTabId', (result) => {
             if (result.originalTabId) {
-                chrome.tabs.sendMessage(result.originalTabId, { action: "checkUpdateAvaliableMode" });
+                chrome.tabs.sendMessage(result.originalTabId,
+                    {
+                        action: "checkUpdateAvaliableMode", updateCount: updateCount,
+                        checkedUpdateList: checkedUpdateList, lastUpdateProcessedIndex: lastUpdateProcessedIndex
+                    });
             }
         });
     };
@@ -161,6 +177,14 @@ const WindowComponent: React.FC = () => {
             }
         });
     }
+    const resetCheckedUpdateList = () => {
+        setCheckedUpdateList([])
+        chrome.storage.local.get('originalTabId', (result) => {
+            if (result.originalTabId) {
+                chrome.tabs.sendMessage(result.originalTabId, { action: "remove-update-saved" });
+            }
+        });
+    }
 
     const checkIfUrlExistInDatabase = async (newUrlList: any) => {
         let results = await Promise.all(newUrlList.map(async (url: string) => {
@@ -178,34 +202,41 @@ const WindowComponent: React.FC = () => {
     };
 
     const checkIfModelUpdateAvaliable = async (newUrlList: any) => {
-        setCounting(true)
-        setCheckingListSize(newUrlList.length)
+        console.log(newUrlList)
+        if (newUrlList !== null && newUrlList !== undefined && newUrlList.length > 0) {
+            setCounting(true)
+            setCheckingListSize(newUrlList.length)
 
-        // Utility function to delay execution
-        const delay = async (ms: any) => {
-            for (let i = ms / 1000; i > 0; i--) {
-                await new Promise(res => setTimeout(res, 1000));
-            }
-
-            setCounter(prev => prev + 1);
-        };
-
-        let results: updateAvaliable[] = [];
-        for (let url of newUrlList) {
-            const isUpdateAvaliable = await fetchCheckIfModelUpdateAvaliable(url, dispatch);
-            await delay(1000);
-            results.push({ url, isUpdateAvaliable });
-        }
-
-        if (results) {
-            chrome.storage.local.get('originalTabId', (result) => {
-                if (result.originalTabId) {
-                    chrome.tabs.sendMessage(result.originalTabId, { action: "display-update-avaliable", savedList: results })
+            // Utility function to delay execution
+            const delay = async (ms: any) => {
+                for (let i = ms / 1000; i > 0; i--) {
+                    await new Promise(res => setTimeout(res, 1000));
                 }
-            });
+
+                setCounter(prev => prev + 1);
+            };
+
+            let results: updateAvaliable[] = [];
+            for (let url of newUrlList) {
+                if (url !== null) {
+                    const data = await fetchCheckIfModelUpdateAvaliable(url, dispatch);
+                    if (data) {
+                        await delay(1000);
+                        results.push({ url, isUpdateAvaliable: data.isUpdateAvaliable, isEarlyAccess: data.isEarlyAccess });
+                    }
+                }
+
+            }
+            if (results) {
+                chrome.storage.local.get('originalTabId', (result) => {
+                    if (result.originalTabId) {
+                        chrome.tabs.sendMessage(result.originalTabId, { action: "display-update-avaliable", savedList: results })
+                    }
+                });
+            }
+            setCounter(0)
+            setCounting(false)
         }
-        setCounter(0)
-        setCounting(false)
     };
 
     const handleToggleCheckBoxMode = () => {
@@ -387,6 +418,16 @@ const WindowComponent: React.FC = () => {
         }));
     };
 
+    const handleUpdateCountInputChange = (e: any) => {
+        const value = Number(e.target.value);
+        if (!isNaN(value) && value > 0) {
+            setUpdateCount(value);
+        } else if (value <= 0) {
+            setUpdateCount(1); // Set to minimum valid value if input is zero or negative
+        }
+    };
+
+
     return (
         <div className="container">
             <ErrorAlert />
@@ -505,25 +546,63 @@ const WindowComponent: React.FC = () => {
                     icons={<MdOutlineApps />}
                     buttons={
                         <div>
-                            {/**Checked If update avaliable Button for User page*/}
-                            <ButtonWrap buttonConfig={{
-                                placement: "top",
-                                tooltip: "check if update avaliable",
-                                variant: "primary",
-                                buttonIcon: <MdOutlineTipsAndUpdates />,
-                                disable: counting,
-                            }}
-                                handleFunctionCall={() => handleCheckUpdateAvaliable()} />
 
-                            {/**Checked If update avaliable Button for User page*/}
-                            <ButtonWrap buttonConfig={{
-                                placement: "top",
-                                tooltip: "handling Sorting",
-                                variant: "primary",
-                                buttonIcon: isSorted ? <FcGenericSortingAsc /> : <FcGenericSortingDesc />,
-                                disable: counting,
-                            }}
-                                handleFunctionCall={() => handleSorting()} />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                {counting && (
+                                    <b style={{
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        fontSize: '10px' // Adjust font size as needed
+                                    }}>
+                                        Checking Model Available: {counter} / {checkingListSize}
+                                    </b>
+                                )}
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                {/**Checked If update available Button for User page*/}
+
+                                {/**Checked Saved Button*/}
+                                <OverlayTrigger placement={"top"}
+                                    overlay={<Tooltip id="tooltip">{`check if update available or early access`}</Tooltip>}>
+                                    <Dropdown as={ButtonGroup}>
+                                        <Button variant="primary"
+                                            onClick={handleCheckUpdateAvaliable} >
+                                            <MdOutlineTipsAndUpdates />
+                                        </Button>
+                                        <Dropdown.Toggle split variant="primary" id="dropdown-split-basic" />
+                                        <Dropdown.Menu>
+                                            <Dropdown.Item
+                                                onClick={resetCheckedUpdateList} >
+                                                Reset
+                                            </Dropdown.Item>
+                                        </Dropdown.Menu>
+                                    </Dropdown>
+                                </OverlayTrigger>
+
+                                <div>
+                                    <input
+                                        type="number"
+                                        value={updateCount}
+                                        onChange={handleUpdateCountInputChange}
+                                        style={{ width: '50px' }} // Adjust width as needed
+                                        min="1" // Prevent negative numbers and zero
+                                        max="999"
+                                    />
+                                </div>
+
+                                {/**Checked If update available Button for User page*/}
+                                <ButtonWrap buttonConfig={{
+                                    placement: "top",
+                                    tooltip: "handling Sorting",
+                                    variant: "primary",
+                                    buttonIcon: isSorted ? <FcGenericSortingAsc /> : <FcGenericSortingDesc />,
+                                    disable: counting,
+                                }}
+                                    handleFunctionCall={() => handleSorting()} />
+                            </div>
+
                         </div>
                     }
                 />
@@ -538,7 +617,6 @@ const WindowComponent: React.FC = () => {
 
             {workingModelID !== "" && <p>Processing Model Name: {processingModelName}</p>}
             {countdown > 0 && <p>Next request in: {countdown} seconds</p>}
-            {counting && <p>Checking Model Avaliable: {counter} / {checkingListSize} </p>}
 
             <>
                 <span>Start : {startModelName}</span>

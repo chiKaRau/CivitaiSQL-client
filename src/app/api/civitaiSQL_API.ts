@@ -429,9 +429,10 @@ export const fetchCheckIfModelUpdateAvaliable = async (url: string, dispatch: an
 
         if (response.status >= 200 && response.status < 300) {
             if (responseData.success) {
-                return responseData.payload.isUpdateAvaliable;
+                return { isUpdateAvaliable: responseData.payload.isUpdateAvaliable, isEarlyAccess: responseData.payload.isEarlyAccess };
             } else {
-                return false;
+                // Handle the case when success is false
+                throw new Error("Retriving related model info from Database failed.");
             }
         } else {
             // Handle the case when success is false
