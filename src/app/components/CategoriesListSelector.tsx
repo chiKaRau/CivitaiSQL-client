@@ -14,6 +14,8 @@ import { initializeDatafromChromeStorage, updateSelectedCategoryIntoChromeStorag
 //components
 import { Form } from 'react-bootstrap';
 import { BiCategory } from "react-icons/bi";
+import { CiWarning } from "react-icons/ci";
+
 
 const CategoriesListSelector: React.FC = () => {
     const isInitialMount = useRef(true);
@@ -23,31 +25,43 @@ const CategoriesListSelector: React.FC = () => {
 
     const dispatch = useDispatch();
     const [isLoading, setIsLoading] = useState(false)
+    const [notMatchSelector, setNotMatchSelector] = useState(false)
 
     useEffect(() => {
         initializeDatafromChromeStorage(dispatch);
         setupCategoriesInfo()
+        handleCheckNotMatchSelector();
     }, [])
 
     useEffect(() => {
         updateSelectedCategoryByFilePath()
     }, [downloadFilePath])
 
+    useEffect(() => {
+        handleCheckNotMatchSelector();
+    }, [selectedCategory, downloadFilePath])
+
     //Update Chrome Storage
+    /*
     useEffect(() => {
         //Preventing First time update
         if (isInitialMount.current) {
             isInitialMount.current = false;
         } else {
-            updateSelectedCategoryIntoChromeStorage(selectedCategory);
+            //updateSelectedCategoryIntoChromeStorage(selectedCategory);
         }
     }, [selectedCategory]);
+    */
 
     const setupCategoriesInfo = async () => {
         setIsLoading(true)
         const data = await fetchGetCategoriesList(dispatch);
         dispatch(updateCategoriesList(data));
         setIsLoading(false)
+    }
+
+    const handleCheckNotMatchSelector = () => {
+        setNotMatchSelector(!downloadFilePath.replace(/\(.*?\)/g, '').includes(selectedCategory));
     }
 
     //TODO
@@ -83,6 +97,16 @@ const CategoriesListSelector: React.FC = () => {
             firstMatch = "Males"
         }
 
+        if (downloadFilePath.includes("Graphic Element/")) {
+            firstMatch = "Art"
+        }
+
+        if (downloadFilePath.includes("/Style/")) {
+            if (downloadFilePath.includes("Checkpoint")) {
+                firstMatch = "Art"
+            }
+        }
+
         if (downloadFilePath.includes("Art")) {
             if (downloadFilePath.includes("Artist")) {
 
@@ -101,10 +125,10 @@ const CategoriesListSelector: React.FC = () => {
             }
         }
 
-
         if (firstMatch === null) {
             firstMatch = selectedCategory
         }
+        
 
         dispatch(updateSelectedCategory(firstMatch))
     }
@@ -131,6 +155,7 @@ const CategoriesListSelector: React.FC = () => {
                     </Form.Select>
                 </Form.Group>
             </Form>
+            {notMatchSelector && <div style={{paddingLeft: "5px"}}> <CiWarning /> </div>}
         </div>
     );
 };

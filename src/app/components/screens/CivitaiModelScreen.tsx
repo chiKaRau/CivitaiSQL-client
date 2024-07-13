@@ -46,7 +46,7 @@ const CivitaiModelScreen: React.FC = () => {
     const toggleDatabaseSection = () => {
         setShowDatabaseSection(!showDatabaseSection);
     };
-
+    
     return (
         <>
             {/**Header Buttons */}
@@ -60,7 +60,7 @@ const CivitaiModelScreen: React.FC = () => {
 
             {/**Folder Lists Option */}
             < DownloadFilePathOptionPanel />
-
+            
             {/**Model Info Panel */}
             <ModelInfoPanel />
 

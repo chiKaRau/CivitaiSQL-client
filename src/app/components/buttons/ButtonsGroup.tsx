@@ -10,15 +10,17 @@ import { BsCheck, BsArrowRepeat, BsStarFill, BsStar, BsFillCloudArrowUpFill, BsI
 import { AiFillFolderOpen } from "react-icons/ai"
 import { GrCopy, GrPowerShutdown } from 'react-icons/gr';
 import { PiMagnifyingGlassBold } from "react-icons/pi"
+import { MdAddLocation } from "react-icons/md";
+
 import { RiFileAddFill } from "react-icons/ri";
-import { MdAccessAlarms } from "react-icons/md"
+import { MdAccessAlarms, MdOutlineApps } from "react-icons/md"
 import { PiCellSignalFullLight, PiCellSignalSlash } from "react-icons/pi"
 import { SlDocs } from "react-icons/sl"
 import { TbDatabaseSearch, TbDatabaseHeart, TbDatabasePlus, TbDatabaseEdit } from "react-icons/tb";
 import { AiFillDatabase } from "react-icons/ai";
 
 //api
-import { fetchOpenDownloadDirectory } from "../../api/civitaiSQL_api"
+import { fetchOpenDownloadDirectory, fetchAppendToMustAddList } from "../../api/civitaiSQL_api"
 
 //utils
 import { bookmarkThisModel, unBookmarkThisModel } from "../../utils/chromeUtils"
@@ -26,18 +28,32 @@ import { bookmarkThisModel, unBookmarkThisModel } from "../../utils/chromeUtils"
 //Components
 import ButtonWrap from "./ButtonWrap";
 import DownloadFileButton from "./DownloadFileButton";
+import WindowCollapseButton from "../window/WindowCollapseButton";
 
 const ButtonsGroup: React.FC = () => {
     const civitaiModel = useSelector((state: AppState) => state.civitaiModel);
     const data: Record<string, any> | undefined = civitaiModel.civitaiModelObject;
+    const { civitaiUrl } = civitaiModel
+
 
     const chrome = useSelector((state: AppState) => state.chrome);
     const { isBookmarked, bookmarkID } = chrome
 
+    const [collapseButtonStates, setCollapseButtonStates] = useState<{ [key: string]: boolean }>({
+        utilsButtons: false
+    });
+
+    const handleToggleCollapseButton = (panelId: any) => {
+        setCollapseButtonStates((prevStates) => ({
+            ...prevStates,
+            [panelId]: !prevStates[panelId],
+        }));
+    };
+
     const dispatch = useDispatch();
 
     return (
-        <div className="buttonGroup">
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start' }}>
 
             {/**Database's RelatedModelsPanel Button */}
             <ButtonWrap buttonConfig={{
@@ -93,15 +109,36 @@ const ButtonsGroup: React.FC = () => {
             {/**Download Button */}
             <DownloadFileButton />
 
-            {/**Open Download Button */}
-            <ButtonWrap buttonConfig={{
-                placement: "bottom",
-                tooltip: "Open Download Directory",
-                variant: "primary",
-                buttonIcon: <AiFillFolderOpen />,
-                disabled: false,
-            }}
-                handleFunctionCall={() => fetchOpenDownloadDirectory(dispatch)} />
+            <WindowCollapseButton
+                panelId="utilsButton"
+                isPanelOpen={collapseButtonStates['utilsButton']}
+                handleTogglePanel={handleToggleCollapseButton}
+                icons={<MdOutlineApps />}
+                buttons={
+                    <div>
+                        {/**Open Download Button */}
+                        <ButtonWrap buttonConfig={{
+                            placement: "bottom",
+                            tooltip: "Open Download Directory",
+                            variant: "primary",
+                            buttonIcon: <AiFillFolderOpen />,
+                            disabled: false,
+                        }}
+                            handleFunctionCall={() => fetchOpenDownloadDirectory(dispatch)} />
+
+                        {/**Must Add List Button */}
+                        <ButtonWrap buttonConfig={{
+                            placement: "bottom",
+                            tooltip: "must add",
+                            variant: "primary",
+                            buttonIcon: <MdAddLocation />,
+                            disabled: false,
+                        }}
+                            handleFunctionCall={() => fetchAppendToMustAddList(civitaiUrl, dispatch)} />
+
+                    </div>
+                }
+            />
 
             {/**Bookmark Button */}
             <ButtonWrap buttonConfig={{

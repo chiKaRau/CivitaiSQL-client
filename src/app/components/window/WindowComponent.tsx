@@ -84,7 +84,7 @@ const WindowComponent: React.FC = () => {
         utilsButtons: false
     });
 
-    const [updateCount, setUpdateCount] = useState(50);
+    const [updateCount, setUpdateCount] = useState(5);
     const [checkedUpdateList, setCheckedUpdateList] = useState<string[]>([]);
     const [lastUpdateProcessedIndex, setLastUpdateProcessedIndex] = useState(0);
 

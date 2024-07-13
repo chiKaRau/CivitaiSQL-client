@@ -279,6 +279,25 @@ export const fetchOpenDownloadDirectory = async (dispatch: any) => {
     }
 }
 
+export const fetchAppendToMustAddList = async (url: string, dispatch: any) => {
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+        const response = await axios.post(`${config.domain}/api/append-to-must-add-list`, {
+            url: url
+        });
+        if (!(response.status >= 200 && response.status < 300)) {
+            // Handle the case when response is false
+            throw new Error("Failed opening download directory.");
+        }
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Civitai Info retrieval:", error.message);
+        // Optionally, you can throw an error or return a specific value
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}
+
 export const fetchDownloadFilesByServer = async (url: string, name: string,
     modelID: string, versionID: string, downloadFilePath: string,
     filesList: { name: string; downloadUrl: string }[], dispatch: any) => {

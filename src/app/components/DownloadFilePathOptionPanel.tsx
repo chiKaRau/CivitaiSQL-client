@@ -18,7 +18,7 @@ import {
 } from "../api/civitaiSQL_api"
 
 //utils
-import { updateDownloadFilePathIntoChromeStorage } from "../utils/chromeUtils"
+import { updateDownloadFilePathIntoChromeStorage, updateSelectedCategoryIntoChromeStorage } from "../utils/chromeUtils"
 
 //Suggestion
 //Auto Complete
@@ -26,7 +26,7 @@ import { updateDownloadFilePathIntoChromeStorage } from "../utils/chromeUtils"
 const DownloadFilePathOptionPanel: React.FC = () => {
     const inputRef = useRef<HTMLInputElement>(null);
     const chrome = useSelector((state: AppState) => state.chrome);
-    const { downloadFilePath, selectedFilteredCategoriesList } = chrome;
+    const { downloadFilePath, selectedFilteredCategoriesList, selectedCategory } = chrome;
     const dispatch = useDispatch();
     const [sortedandFilteredfoldersList, setSortedandFilteredfoldersList] = useState<string[]>([]);
     const [foldersList, setFoldersList] = useState([])
@@ -219,6 +219,7 @@ const DownloadFilePathOptionPanel: React.FC = () => {
                             className="tooltip-button"
                             onClick={() => {
                                 updateDownloadFilePathIntoChromeStorage(downloadFilePath);
+                                updateSelectedCategoryIntoChromeStorage(selectedCategory);
                             }}
                         >
                             <BsPencilFill />

@@ -343,7 +343,7 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                                                     />
                                                     <div className="truncated-text-container">
                                                         <span>
-                                                            Database & /Update/{downloadFilePath.split('/').reverse()[1]}/
+                                                            Database & /Update/{downloadFilePath.split("/").slice(3).join("/")}
                                                         </span>
                                                     </div>
                                                 </label>

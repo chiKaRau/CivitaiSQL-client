@@ -50,6 +50,7 @@ const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanel> = (props)
 
     //Find Possible tags from civitai name and tags
     useEffect(() => {
+        console.log(retrievePossibleCombination(modelName, modelTags));
         setPossibleCombinationTags(retrievePossibleCombination(modelName, modelTags))
     }, [])
 

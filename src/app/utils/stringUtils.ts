@@ -15,7 +15,7 @@ export const retrievePossibleCombination = (name: string, tags: any) => {
 
     for (let element of nameArray) {
         let cut = element.replace(/[()]/g, '')
-        if (cut.length > 2) {
+        if (cut.length >= 2) {
             array2.push(cut.toLowerCase())
         }
     }
@@ -23,7 +23,7 @@ export const retrievePossibleCombination = (name: string, tags: any) => {
     for (let element of array1) {
         let temp = element.split(" ");
         let cut = temp[0].replace(/[()]/g, '')
-        if (cut.length > 2) {
+        if (cut.length >= 2) {
             array2.push(cut.toLowerCase())
         }
     }
