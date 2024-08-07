@@ -181,7 +181,8 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
 
         switch (updateOption) {
             case "Database_and_UpdateFolder":
-                dispatch(updateDownloadFilePath(`/@scan@/Update/${downloadFilePath.split('/').reverse()[1]}/`))
+                dispatch(updateDownloadFilePath(`/@scan@/Update/${downloadFilePath.replace("/@scan@/ACG/", "")}/`))
+                //dispatch(updateDownloadFilePath(`/@scan@/Update/${downloadFilePath.split('/').reverse()[1]}/`))
                 break;
             case "Database_and_FileFolder":
                 dispatch(updateDownloadFilePath(downloadFilePath))
