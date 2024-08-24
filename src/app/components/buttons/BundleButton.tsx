@@ -12,11 +12,17 @@ import { Button, OverlayTrigger, Tooltip, Dropdown, ButtonGroup } from 'react-bo
 import {
     fetchDownloadFilesByServer,
     fetchDownloadFilesByBrowser,
+    fetchDownloadFilesByServer_v2,
+    fetchDownloadFilesByBrowser_v2,
     fetchAddRecordToDatabase,
+    fetchCivitaiModelInfoFromCivitaiByVersionID
 } from "../../api/civitaiSQL_api"
 
 //utils
-import { updateDownloadMethodIntoChromeStorage, callChromeBrowserDownload, bookmarkThisModel } from "../../utils/chromeUtils"
+import {
+    updateDownloadMethodIntoChromeStorage, callChromeBrowserDownload,
+    callChromeBrowserDownload_v2, bookmarkThisModel
+} from "../../utils/chromeUtils"
 import { retrieveCivitaiFileName, retrieveCivitaiFilesList } from "../../utils/objectUtils"
 
 const BundleButton: React.FC = (props: any) => {
@@ -46,6 +52,13 @@ const BundleButton: React.FC = (props: any) => {
         handleAddModeltoDatabase()
         bookmarkThisModel(civitaiData?.type, dispatch)
     }
+
+    const handleBundleAll_v2 = async () => {
+        handleDownloadFile_v2();
+        handleAddModeltoDatabase()
+        bookmarkThisModel(civitaiData?.type, dispatch)
+    }
+
 
     const handleAddModeltoDatabase = () => {
         setIsLoading(true)
@@ -101,19 +114,87 @@ const BundleButton: React.FC = (props: any) => {
         setIsLoading(false);
     };
 
+    // Function to handle the API call and update the button state
+    const handleDownloadFile_v2 = async () => {
+        setIsLoading(true);
+        dispatch(clearError());
+
+        let civitaiFileName = retrieveCivitaiFileName(civitaiData, civitaiVersionID);
+        //the fileList would contains the urls of all files such as safetensor, training data, ...
+        let civitaiModelFileList = retrieveCivitaiFilesList(civitaiData, civitaiVersionID)
+
+        //Check for null or empty
+        if (
+            civitaiUrl === null || civitaiUrl === "" ||
+            civitaiFileName === null || civitaiFileName === "" ||
+            civitaiModelID === null || civitaiModelID === "" ||
+            civitaiVersionID === null || civitaiVersionID === "" ||
+            downloadFilePath === null || downloadFilePath === "" ||
+            civitaiModelFileList === null || !civitaiModelFileList.length
+        ) {
+            dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
+            setIsLoading(false)
+            return;
+        }
+
+        let modelObject = {
+            downloadFilePath, civitaiFileName, civitaiModelID,
+            civitaiVersionID, civitaiModelFileList, civitaiUrl
+        }
+
+        if (downloadMethod === "server") {
+            //If download Method is server, the server will download the file into server's folder
+            await fetchDownloadFilesByServer_v2(modelObject, dispatch);
+        } else {
+            //if download Method is browser, the chrome browser will download the file into server's folder
+            await fetchDownloadFilesByBrowser_v2(civitaiUrl, downloadFilePath, dispatch);
+
+            try {
+                const data = await fetchCivitaiModelInfoFromCivitaiByVersionID(civitaiVersionID, dispatch);
+                if (data) {
+                    callChromeBrowserDownload_v2({ ...modelObject, modelVersionObject: data })
+                } else {
+                    throw new Error();
+                }
+            } catch (error) {
+                console.error('Error fetching data for civitaiVersionID:', civitaiVersionID, error);
+                dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
+            }
+
+        }
+        setIsLoading(false);
+    };
+
     return (
-        <OverlayTrigger placement={"bottom"}
-            overlay={<Tooltip id="tooltip">Download | Bookmark | Add Record</Tooltip>}>
-            <Button
-                variant={"primary"}
-                onClick={handleBundleAll}
-                disabled={isLoading}
-                className="btn btn-primary btn-lg w-100"
-            >
-                Bundle Action
-                {isLoading && <span className="button-state-complete">✓</span>}
-            </Button>
-        </OverlayTrigger>
+        <>
+            {/*
+            <OverlayTrigger placement={"bottom"}
+                overlay={<Tooltip id="tooltip">Download | Bookmark | Add Record</Tooltip>}>
+                <Button
+                    variant={"primary"}
+                    onClick={handleBundleAll}
+                    disabled={isLoading}
+                    className="btn btn-primary btn-lg w-100"
+                >
+                    Bundle Action
+                    {isLoading && <span className="button-state-complete">✓</span>}
+                </Button>
+            </OverlayTrigger>
+            */}
+
+            <OverlayTrigger placement={"bottom"}
+                overlay={<Tooltip id="tooltip">Download | Bookmark | Add Record</Tooltip>}>
+                <Button
+                    variant={"primary"}
+                    onClick={handleBundleAll_v2}
+                    disabled={isLoading}
+                    className="btn btn-primary btn-lg w-100"
+                >
+                    Bundle Action
+                    {isLoading && <span className="button-state-complete">✓</span>}
+                </Button>
+            </OverlayTrigger>
+        </>
     );
 };
 

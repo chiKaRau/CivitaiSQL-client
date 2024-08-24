@@ -139,3 +139,11 @@ export const callChromeBrowserDownload = (data: any) => {
         }
     });
 }
+
+export const callChromeBrowserDownload_v2 = (data: any) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+        if (tabs[0]?.url) {
+            chrome.tabs.sendMessage(tabs[0].id as number, { action: "browser-download_v2", data: data });
+        }
+    });
+}

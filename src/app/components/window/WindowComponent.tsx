@@ -34,14 +34,17 @@ import {
     fetchCivitaiModelInfoFromCivitaiByModelID,
     fetchAddRecordToDatabase,
     fetchDownloadFilesByServer,
+    fetchDownloadFilesByServer_v2,
     fetchDownloadFilesByBrowser,
     fetchDatabaseModelInfoByModelID,
     fetchRemoveRecordFromDatabaseByID,
     fetchOpenDownloadDirectory,
     fetchCheckIfUrlExistInDatabase,
     fetchCheckQuantityofUrlinDatabaseByUrl,
+    fetchDownloadFilesByBrowser_v2,
     fetchCheckQuantityofUrlinDatabaseByModelID,
-    fetchCheckIfModelUpdateAvaliable
+    fetchCheckIfModelUpdateAvaliable,
+    fetchCivitaiModelInfoFromCivitaiByVersionID
 } from "../../api/civitaiSQL_api"
 
 //utils
@@ -323,6 +326,54 @@ const WindowComponent: React.FC = () => {
         }
 
         return data;
+    };
+
+    // Function to handle the API call and update the button state
+    const handleDownloadMultipleFile_v2 = async (civitaiData: any, civitaiUrl: string) => {
+        let civitaiVersionID = civitaiData?.modelVersions[0]?.id.toString();
+        let civitaiModelID = civitaiData?.id.toString();
+
+        let civitaiFileName = retrieveCivitaiFileName(civitaiData, civitaiVersionID);
+        //the fileList would contains the urls of all files such as safetensor, training data, ...
+        let civitaiModelFileList = retrieveCivitaiFilesList(civitaiData, civitaiVersionID)
+
+        //Check for null or empty
+        if (
+            civitaiUrl === null || civitaiUrl === "" ||
+            civitaiFileName === null || civitaiFileName === "" ||
+            civitaiModelID === null || civitaiModelID === "" ||
+            civitaiVersionID === null || civitaiVersionID === "" ||
+            downloadFilePath === null || downloadFilePath === "" ||
+            civitaiModelFileList === null || !civitaiModelFileList.length
+        ) {
+            console.log("fail")
+            return;
+        }
+
+        let modelObject = {
+            downloadFilePath, civitaiFileName, civitaiModelID,
+            civitaiVersionID, civitaiModelFileList, civitaiUrl
+        }
+
+        if (downloadMethod === "server") {
+            //If download Method is server, the server will download the file into server's folder
+            await fetchDownloadFilesByServer_v2(modelObject, dispatch);
+
+        } else {
+            //if download Method is browser, the chrome browser will download the file into server's folder
+            await fetchDownloadFilesByBrowser_v2(civitaiUrl, downloadFilePath, dispatch);
+
+            const data = await fetchCivitaiModelInfoFromCivitaiByVersionID(civitaiVersionID, dispatch);
+            if (data) {
+                chrome.storage.local.get('originalTabId', (result) => {
+                    if (result.originalTabId) {
+                        chrome.tabs.sendMessage(result.originalTabId, {
+                            action: "browser-download_v2", data: { ...modelObject, modelVersionObject: data }
+                        });
+                    }
+                });
+            }
+        }
 
     };
 
@@ -386,6 +437,61 @@ const WindowComponent: React.FC = () => {
 
                     // Add to database
                     handleAddModeltoDatabase(url);
+                    //Bookmark this url
+                    bookmarkThisUrl(data.type, url, `${data.name} - ${data.id} | Stable Diffusion LoRA | Civitai`)
+
+                    // Remove the processed URL from the urlList
+                    setUrlList(currentUrls => currentUrls.filter(currentUrl => currentUrl !== url));
+                    chrome.storage.local.get('originalTabId', (result) => {
+                        if (result.originalTabId) {
+                            chrome.tabs.sendMessage(result.originalTabId, { action: "uncheck-url", url: url });
+                        }
+                    });
+                }
+
+            } catch (error) {
+                console.error(error);
+                setProcessingModelName(url.split('/').pop() || "");
+                break;
+            }
+            // Throttle requests
+            await delay(3000);
+        }
+        setWorkingModelID("")
+        setIsLoading(false)
+        setResetMode(true)
+    };
+
+    const handleMultipleBundle_v2 = async () => {
+
+        setStartModelName(urlList[0].split('/').pop() || "");
+        setProcessingModelName("");
+        setEndModelName(urlList[urlList.length - 1].split('/').pop() || "");
+
+        setIsLoading(true)
+        // Utility function to delay execution
+        const delay = async (ms: any) => {
+            for (let i = ms / 1000; i > 0; i--) {
+                setCountdown(i);
+                await new Promise(res => setTimeout(res, 1000));
+            }
+            setCountdown(0);
+        };
+        for (let url of urlList) {
+            //Fetch Civitai ModelInfo
+            const modelId = url.match(/\/models\/(\d+)/)?.[1] || '';
+            setWorkingModelID(modelId)
+            setProcessingModelName(url.split('/').pop() || "");
+            // Fetch data with error handling
+            try {
+                const data = await fetchCivitaiModelInfoFromCivitaiByModelID(modelId, dispatch);
+                if (data) {
+                    //Download File
+                    handleDownloadMultipleFile_v2(data, url);
+
+                    //Add to database
+                    handleAddModeltoDatabase(url);
+
                     //Bookmark this url
                     bookmarkThisUrl(data.type, url, `${data.name} - ${data.id} | Stable Diffusion LoRA | Civitai`)
 
@@ -631,12 +737,26 @@ const WindowComponent: React.FC = () => {
                 readOnly
                 style={{ width: '100%', height: '200px' }}
             />
-
+            {/*
             <OverlayTrigger placement={"top"}
                 overlay={<Tooltip id="tooltip">Download | Bookmark | Add Record</Tooltip>}>
                 <Button
                     variant={"primary"}
                     onClick={handleMultipleBundle}
+                    disabled={isLoading || urlList.length === 0 || !checkboxMode}
+                    className="btn btn-primary btn-lg w-100"
+                >
+                    Bundle Action
+                    {isLoading && <span className="button-state-complete">✓</span>}
+                </Button>
+            </OverlayTrigger>
+            */}
+
+            <OverlayTrigger placement={"top"}
+                overlay={<Tooltip id="tooltip">Download | Bookmark | Add Record</Tooltip>}>
+                <Button
+                    variant={"primary"}
+                    onClick={handleMultipleBundle_v2}
                     disabled={isLoading || urlList.length === 0 || !checkboxMode}
                     className="btn btn-primary btn-lg w-100"
                 >

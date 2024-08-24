@@ -67,6 +67,131 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
 });
 
 chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+  if (message.action === "browser-download_v2") {
+    console.log("browser-download_v2");
+    const { downloadFilePath, civitaiFileName, civitaiModelID,
+      civitaiVersionID, civitaiModelFileList, civitaiUrl, modelVersionObject } = message.data;
+
+    let baseModel = modelVersionObject?.baseModel;
+
+    // Normalize downloadFilePath to remove leading/trailing slashes
+    const normalizedDownloadFilePath = downloadFilePath.replace(/^\/+|\/+$/g, '');
+
+    let fname = civitaiFileName.replace(".safetensors", "");
+
+    try {
+      const zip = new JSZip();
+      const promises = [];
+
+      // Download all model files
+      for (const { name, downloadUrl } of civitaiModelFileList) {
+        const promise = fetch(downloadUrl)
+          .then((response) => response.arrayBuffer())
+          .then((data) => {
+
+            const fileName = `${civitaiModelID}_${civitaiVersionID}_${baseModel}_${name}`;
+            const filePath = `${normalizedDownloadFilePath}/${fileName}`;
+            const parts = filePath.split('/');
+            let folder = zip;
+
+            for (const part of parts.slice(0, -1)) {
+              const nextFolder = folder.folder(part);
+              if (nextFolder) {
+                folder = nextFolder;
+              } else {
+                console.error('JSZip instance is null');
+                break;
+              }
+            }
+
+            folder.file(parts[parts.length - 1], data);
+          }).catch((error) => console.error(`Error downloading ${name}: ${error}`));
+        promises.push(promise);
+      }
+
+      // Wait for all promises to complete
+      await Promise.all(promises);
+
+      // Add .info file to the zip
+      const infoFileName = `${civitaiModelID}_${civitaiVersionID}_${baseModel}_${fname}.civitai.info`;
+      const infoFilePath = `${normalizedDownloadFilePath}/${infoFileName}`;
+      const infoContent = JSON.stringify(modelVersionObject, null, 2);
+      zip.file(infoFilePath, infoContent);
+
+      // Handle preview image
+      // Extract image URLs in a single line
+      const imageUrlsArray = [
+        ...(modelVersionObject.resources || []).filter((r: any) => r.type === 'image' && r.url).map((r: any) => r.url),
+        ...(modelVersionObject.images || []).filter((i: any) => i.url).map((i: any) => i.url)
+      ];
+
+      let previewImageAdded = false;
+
+      for (const imageUrl of imageUrlsArray) {
+        try {
+          const imageResponse = await fetch(imageUrl);
+          if (imageResponse.ok) {
+            const imageBlob = await imageResponse.blob();
+            const imageFileName = `${civitaiModelID}_${civitaiVersionID}_${baseModel}_${fname}.preview.png`;
+            const imageFilePath = `${normalizedDownloadFilePath}/${imageFileName}`;
+
+            zip.file(imageFilePath, imageBlob);
+            previewImageAdded = true;
+            break; // Stop after adding the first valid image
+          }
+        } catch (error) {
+          console.error(`Failed to download image from ${imageUrl}: ${error}`);
+        }
+      }
+
+      // If no valid image was found, use a placeholder
+      if (!previewImageAdded) {
+        try {
+          const placeholderUrl = "https://placehold.co/350x450.png";
+          const placeholderResponse = await fetch(placeholderUrl);
+          if (placeholderResponse.ok) {
+            const placeholderBlob = await placeholderResponse.blob();
+            const placeholderFileName = `${civitaiModelID}_${civitaiVersionID}_${baseModel}_${fname}.preview.png`;
+            const placeholderFilePath = `${normalizedDownloadFilePath}/${placeholderFileName}`;
+
+            zip.file(placeholderFilePath, placeholderBlob);
+          } else {
+            console.error("Failed to download the placeholder image.");
+          }
+        } catch (error) {
+          console.error("Failed to download the placeholder image.");
+        }
+      }
+
+      // Generate the zip archive
+      const zipContent = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 9 } });
+
+      // Create a download link for the zip file
+      const zipBlob = new Blob([zipContent]);
+      const zipUrl = URL.createObjectURL(zipBlob);
+
+      const downloadLink = document.createElement('a');
+      downloadLink.href = zipUrl;
+      downloadLink.download = `${civitaiModelID}_${civitaiVersionID}_${baseModel}_${civitaiFileName.split(".")[0]}.zip`;
+      downloadLink.style.display = 'none';
+
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+
+      // Clean up the URL object
+      URL.revokeObjectURL(zipUrl);
+
+    } catch (e) {
+      console.log("error", e);
+    }
+
+  }
+});
+
+
+
+chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   if (message.action === "display-checkboxes") {
     document.querySelectorAll('.mantine-Card-root').forEach((item, index) => {
 

@@ -44,6 +44,28 @@ export const fetchCivitaiModelInfoFromCivitaiByModelID = async (modelID: string,
     }
 }
 
+//dispatch cannot be used inside the functional components or custoom hook, async function is not allowed.
+export const fetchCivitaiModelInfoFromCivitaiByVersionID = async (versionID: string, dispatch: any) => {
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+        const response = await axios.post(`${config.domain}/api/find-civitaiModel-info-by-versionID`, { versionID: versionID });
+        const responseData = response.data;
+
+        if (response.status >= 200 && response.status < 300) {
+            return responseData.payload.model;
+        } else {
+            // Handle the case when success is false
+            throw new Error("Retriving Civitai model info from Civitai failed.");
+        }
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Civitai Info retrieval:", error.message);
+        // Optionally, you can throw an error or return a specific value
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}
+
 export const fetchDatabaseModelInfoByModelID = async (modelID: string, dispatch: any) => {
     try {
         // Clear any previous errors
@@ -325,7 +347,57 @@ export const fetchDownloadFilesByServer = async (url: string, name: string,
     }
 }
 
+export const fetchDownloadFilesByServer_v2 = async (
+    modelObject: {
+        downloadFilePath: string, civitaiFileName: string, civitaiModelID: string,
+        civitaiVersionID: string, civitaiModelFileList: { name: string; downloadUrl: string }[], civitaiUrl: string
+    }
+    , dispatch: any) => {
+
+
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+        const response = await axios.post(`${config.domain}/api/download-file-server-v2`, {
+            modelObject
+        });
+
+        if (!(response.status >= 200 && response.status < 300)) {
+            // Handle the case when response is false
+            throw new Error("Failed download files by server.");
+        }
+
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Civitai Info retrieval:", error.message);
+        // Optionally, you can throw an error or return a specific value
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}
+
 export const fetchDownloadFilesByBrowser = async (url: string, downloadFilePath: string, dispatch: any) => {
+
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+        const response = await axios.post(`${config.domain}/api/download-file-browser`, {
+            url: url, downloadFilePath: downloadFilePath,
+        });
+
+        if (!(response.status >= 200 && response.status < 300)) {
+            // Handle the case when response is false
+            throw new Error("Failed download files by browser.");
+        }
+
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Civitai Info retrieval:", error.message);
+        // Optionally, you can throw an error or return a specific value
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}
+
+export const fetchDownloadFilesByBrowser_v2 = async (url: string, downloadFilePath: string, dispatch: any) => {
 
     try {
         // Clear any previous errors
