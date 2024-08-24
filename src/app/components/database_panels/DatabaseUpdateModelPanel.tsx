@@ -20,11 +20,14 @@ import {
     fetchDatabaseModelInfoByModelID,
     fetchDownloadFilesByServer,
     fetchDownloadFilesByBrowser,
-    fetchCheckCartList
+    fetchCheckCartList,
+    fetchDownloadFilesByServer_v2,
+    fetchDownloadFilesByBrowser_v2,
+    fetchCivitaiModelInfoFromCivitaiByVersionID
 } from "../../api/civitaiSQL_api"
 
 //utils
-import { bookmarkThisModel, callChromeBrowserDownload } from "../../utils/chromeUtils"
+import { bookmarkThisModel, callChromeBrowserDownload, callChromeBrowserDownload_v2 } from "../../utils/chromeUtils"
 import { retrieveCivitaiFileName, retrieveCivitaiFilesList } from "../../utils/objectUtils"
 
 //Interface
@@ -59,6 +62,17 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
     const [isSorted, setIsSorted] = useState(false)
     const [baseModelList, setBaseModelList] = useState<{ baseModel: string, display: boolean }[]>([]);
     const [isColapPanelOpen, setUsColapPanelOpen] = useState(false);
+
+    let UpdateDownloadFilePath = "";
+
+    // Check if downloadFilePath matches the format /@scan@/{some word} (with optional trailing slash)
+    const regex = /^\/@scan@\/[^\/]+\/?$/; // Matches /@scan@/{some word} or /@scan@/{some word}/
+
+    if (regex.test(downloadFilePath)) {
+        UpdateDownloadFilePath = `/@scan@/Update/${downloadFilePath.replace("/@scan@/", "")}`;
+    } else {
+        UpdateDownloadFilePath = `/@scan@/Update/${downloadFilePath.replace("/@scan@/ACG/", "")}`;
+    }
 
     //Retrivie Modellist when pane is open
     useEffect(() => {
@@ -121,7 +135,8 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
 
     useEffect(() => {
         if (hasUpdateCompleted) {
-            handleDownload();
+            //handleDownload();
+            handleDownload_v2();
             bookmarkThisModel(civitaiData?.type, dispatch)
             setHasUpdateCompleted(false)
             props.toggleDatabaseUpdateModelPanelOpen()
@@ -166,6 +181,58 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
         setIsLoading(false)
     }
 
+    const handleDownload_v2 = async () => {
+
+        setIsLoading(true);
+        dispatch(clearError());
+
+        let civitaiFileName = retrieveCivitaiFileName(civitaiData, civitaiVersionID);
+        //the fileList would contains the urls of all files such as safetensor, training data, ...
+        let civitaiModelFileList = retrieveCivitaiFilesList(civitaiData, civitaiVersionID)
+
+        //Check for null or empty
+        if (
+            civitaiUrl === null || civitaiUrl === "" ||
+            civitaiFileName === null || civitaiFileName === "" ||
+            civitaiModelID === null || civitaiModelID === "" ||
+            civitaiVersionID === null || civitaiVersionID === "" ||
+            downloadFilePath === null || downloadFilePath === "" ||
+            civitaiModelFileList === null || !civitaiModelFileList.length
+        ) {
+            dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
+            setIsLoading(false)
+            return;
+        }
+
+        let modelObject = {
+            downloadFilePath, civitaiFileName, civitaiModelID,
+            civitaiVersionID, civitaiModelFileList, civitaiUrl
+        }
+
+        if (downloadMethod === "server") {
+            //If download Method is server, the server will download the file into server's folder
+            await fetchDownloadFilesByServer_v2(modelObject, dispatch);
+        } else {
+            //if download Method is browser, the chrome browser will download the file into server's folder
+            await fetchDownloadFilesByBrowser_v2(civitaiUrl, downloadFilePath, dispatch);
+
+            try {
+                const data = await fetchCivitaiModelInfoFromCivitaiByVersionID(civitaiVersionID, dispatch);
+                if (data) {
+                    callChromeBrowserDownload_v2({ ...modelObject, modelVersionObject: data })
+                } else {
+                    throw new Error();
+                }
+            } catch (error) {
+                console.error('Error fetching data for civitaiVersionID:', civitaiVersionID, error);
+                dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
+            }
+
+        }
+
+        setIsLoading(false)
+    }
+
     const handleUpdateModel = async (id: number) => {
         setIsLoading(true)
         dispatch(clearError());
@@ -181,7 +248,8 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
 
         switch (updateOption) {
             case "Database_and_UpdateFolder":
-                dispatch(updateDownloadFilePath(`/@scan@/Update/${downloadFilePath.replace("/@scan@/ACG/", "")}/`))
+
+                dispatch(updateDownloadFilePath(UpdateDownloadFilePath))
                 //dispatch(updateDownloadFilePath(`/@scan@/Update/${downloadFilePath.split('/').reverse()[1]}/`))
                 break;
             case "Database_and_FileFolder":
@@ -344,7 +412,7 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                                                     />
                                                     <div className="truncated-text-container">
                                                         <span>
-                                                            Database & /Update/{downloadFilePath.split("/").slice(3).join("/")}
+                                                            Database & Update to {UpdateDownloadFilePath}
                                                         </span>
                                                     </div>
                                                 </label>
