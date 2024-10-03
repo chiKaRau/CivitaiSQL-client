@@ -256,6 +256,7 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
       // Remove the checkbox
       const checkbox = item.querySelector('input[type="checkbox"]');
       if (checkbox) {
+        console.log("Removing checkbox");
         item.removeChild(checkbox);
       }
 
@@ -386,6 +387,7 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         // Remove only the label with the 'saved-label' class
         const label = item.querySelector('.saved-label');
         if (label) {
+          console.log("Removing saved label");
           item.removeChild(label);
         }
       }
@@ -459,6 +461,7 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         // Remove only the label with the 'update-early-label' class
         const label = item.querySelector('.update-early-label');
         if (label) {
+          console.log("Removing update label");
           item.removeChild(label);
         }
       }

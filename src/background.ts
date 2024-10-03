@@ -12,7 +12,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       url: chrome.runtime.getURL('window.html'),
       type: 'popup',
       width: 600,
-      height: 700
+      height: 700,
+      left: 1350
     });
   }
 });

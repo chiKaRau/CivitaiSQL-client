@@ -14,6 +14,7 @@ import { filesPathCategoriesList } from "../data/filesPathCategoriesList.json"
 
 //utils
 import { updateSelectedFilteredCategoriesListIntoChromeStorage } from "../utils/chromeUtils"
+import FilesPathTagsListSelector from './FilesPathTagsListSelector';
 
 const FilesPathSettingPanel: React.FC = () => {
     const isInitialMount = useRef(true);
@@ -128,6 +129,14 @@ const FilesPathSettingPanel: React.FC = () => {
                             </label>
                         </OverlayTrigger>
                     ))}
+
+
+                    <br />
+
+                    <hr />
+
+                    <FilesPathTagsListSelector />
+
                     <br />
 
                     <center> Selected Categories</center>
@@ -155,7 +164,6 @@ const FilesPathSettingPanel: React.FC = () => {
                         ))}
 
                     </div>
-                    <br />
 
                 </div>
             </Collapse >

@@ -283,6 +283,29 @@ export const fetchGetFoldersList = async (dispatch: any) => {
     }
 }
 
+export const fetchGetTagsList = async (dispatch: any) => {
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+
+        const response = await axios.get(`${config.domain}/api/get_tags_list`);
+
+        if (response.status >= 200 && response.status < 300) {
+            const { topTags, recentTags } = response.data.payload;
+
+            // Return both topTags and recentTags
+            return { topTags, recentTags };
+        } else {
+            // Handle the case when response status is not successful
+            throw new Error("Retrieving Tags List from Database failed.");
+        }
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Tags List retrieval:", error.message);
+        // Dispatch the error to the state
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}
 
 export const fetchOpenDownloadDirectory = async (dispatch: any) => {
     try {

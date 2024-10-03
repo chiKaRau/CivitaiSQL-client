@@ -10,7 +10,6 @@ import { Button, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import TextField from '@mui/material/TextField';
 import Autocomplete from '@mui/material/Autocomplete';
 import { BsPencilFill } from "react-icons/bs"
-import FilesPathSettingPanel from './FilesPathSettingPanel';
 
 //api
 import {
@@ -19,6 +18,7 @@ import {
 
 //utils
 import { updateDownloadFilePathIntoChromeStorage, updateSelectedCategoryIntoChromeStorage } from "../utils/chromeUtils"
+import FilesPathSettingPanel from './FilesPathSettingPanel';
 
 //Suggestion
 //Auto Complete
@@ -109,7 +109,7 @@ const DownloadFilePathOptionPanel: React.FC = () => {
             if (isSFWSelected && !isNSFWSelected && folder.toLowerCase().includes("/nsfw/")) {
                 return false;
             }
-            
+
 
             if (!isEXSelected && folder.toLowerCase().includes("/ex/")) {
                 return false;
@@ -150,8 +150,9 @@ const DownloadFilePathOptionPanel: React.FC = () => {
     }
 
     const handleFoldersListOnChange = (event: any, newValue: string | null) => {
-        const disallowedRegex = /[<>:"\\\|?*]/g;
-        dispatch(updateDownloadFilePath(newValue?.replace(disallowedRegex, '') || ""))
+            const disallowedRegex = /[<>:"\\\|?*]/g;
+            dispatch(updateDownloadFilePath(newValue?.replace(disallowedRegex, '') || ""))
+        
     }
 
     // Handler for blur event
@@ -191,20 +192,6 @@ const DownloadFilePathOptionPanel: React.FC = () => {
                                 }}
                             />
                         )}
-                        renderOption={(props, option) => {
-                            // Check if the option includes the substring 'real'
-                            const isMatch = option.includes("NSFW");
-
-                            return (
-                                <li {...props}>
-                                    {isMatch ? (
-                                        <strong>{option}</strong> // Render the option in bold if it includes 'real'
-                                    ) : (
-                                        option // Render the option normally if it doesn't include 'real'
-                                    )}
-                                </li>
-                            );
-                        }}
                     />
 
                     <div style={{ padding: "5px" }} />

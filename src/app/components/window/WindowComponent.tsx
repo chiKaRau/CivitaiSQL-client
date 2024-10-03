@@ -510,7 +510,7 @@ const WindowComponent: React.FC = () => {
                 break;
             }
             // Throttle requests
-            await delay(3000);
+            await delay(2000);
         }
         setWorkingModelID("")
         setIsLoading(false)
