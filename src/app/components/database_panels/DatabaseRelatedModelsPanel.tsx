@@ -46,10 +46,11 @@ const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanel> = (props)
 
     const data: Record<string, any> | undefined = civitaiModel.civitaiModelObject;
     const modelName = data?.name;
-    const modelTags = data?.tags;
+    const modelTags = data?.tags.concat(data?.modelVersions.map((version: { name: string }) => version.name));
 
     //Find Possible tags from civitai name and tags
     useEffect(() => {
+        console.log(data)
         console.log(retrievePossibleCombination(modelName, modelTags));
         setPossibleCombinationTags(retrievePossibleCombination(modelName, modelTags))
     }, [])
