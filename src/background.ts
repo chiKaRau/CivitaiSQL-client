@@ -13,7 +13,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       type: 'popup',
       width: 600,
       height: 700,
-      left: 1350
+      left: 1450
     });
   }
 });

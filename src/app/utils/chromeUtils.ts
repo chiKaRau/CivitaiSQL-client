@@ -54,19 +54,44 @@ export const unBookmarkThisModel = (bookmarkId: string, dispatch: any, listmode:
     });
 }
 
-export const removeBookmarkByUrl = (url: string, dispatch: any, listmode: boolean) => {
-    chrome.bookmarks.search({ url }, function (bookmarks) {
-        if (bookmarks.length > 0) {
-            const bookmarkId = bookmarks[0].id;
-            chrome.bookmarks.remove(bookmarkId, function () {
-                // Update your state or perform any other actions after removing the bookmark
-                if (!listmode) {
-                    dispatch(updateBookmarkID(""));
-                    dispatch(setIsBookmarked(false));
-                }
+export const removeBookmarkByUrl = (url: string, dispatch: any, listmode: boolean, windowMode: boolean) => {
+
+    if (windowMode) {
+        const modelId = url.match(/\/models\/(\d+)/)?.[1] || '';
+
+        const baseUrl = `https://civitai.com/models/${modelId}`; // Construct base URL for the model
+
+        // Search for all bookmarks and filter by matching URLs
+        chrome.bookmarks.search({}, function (bookmarks) {
+            const matchingBookmarks = bookmarks.filter((bookmark) =>
+                bookmark.url?.startsWith(baseUrl) // Check if the URL starts with the base URL
+            );
+
+            // Remove all matching bookmarks
+            matchingBookmarks.forEach((bookmark) => {
+                chrome.bookmarks.remove(bookmark.id, function () {
+                    // Perform actions after each bookmark is removed
+                    if (!listmode) {
+                        dispatch(updateBookmarkID(""));
+                        dispatch(setIsBookmarked(false));
+                    }
+                });
             });
-        }
-    });
+        });
+    } else {
+        chrome.bookmarks.search({ url }, function (bookmarks) {
+            if (bookmarks.length > 0) {
+                const bookmarkId = bookmarks[0].id;
+                chrome.bookmarks.remove(bookmarkId, function () {
+                    // Update your state or perform any other actions after removing the bookmark
+                    if (!listmode) {
+                        dispatch(updateBookmarkID(""));
+                        dispatch(setIsBookmarked(false));
+                    }
+                });
+            }
+        });
+    }
 };
 
 export const findBookmarkfolderbyModelType = (modelType: string) => {

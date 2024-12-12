@@ -46,7 +46,10 @@ const CivitaiModelScreen: React.FC = () => {
     const toggleDatabaseSection = () => {
         setShowDatabaseSection(!showDatabaseSection);
     };
-    
+
+    const [isHandleRefresh, setIsHandleRefresh] = useState(false);
+
+
     return (
         <>
             {/**Header Buttons */}
@@ -59,8 +62,8 @@ const CivitaiModelScreen: React.FC = () => {
             < CategoriesListSelector />
 
             {/**Folder Lists Option */}
-            < DownloadFilePathOptionPanel />
-            
+            < DownloadFilePathOptionPanel setIsHandleRefresh={setIsHandleRefresh} isHandleRefresh={isHandleRefresh} />
+
             {/**Model Info Panel */}
             <ModelInfoPanel />
 

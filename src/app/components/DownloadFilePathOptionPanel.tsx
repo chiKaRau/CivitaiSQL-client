@@ -23,7 +23,12 @@ import FilesPathSettingPanel from './FilesPathSettingPanel';
 //Suggestion
 //Auto Complete
 
-const DownloadFilePathOptionPanel: React.FC = () => {
+interface DownloadFilePathOptionPanelProps {
+    isHandleRefresh: boolean;
+    setIsHandleRefresh: (isHandleRefresh: boolean) => void;
+}
+
+const DownloadFilePathOptionPanel: React.FC<DownloadFilePathOptionPanelProps> = ({ isHandleRefresh, setIsHandleRefresh }) => {
     const inputRef = useRef<HTMLInputElement>(null);
     const chrome = useSelector((state: AppState) => state.chrome);
     const { downloadFilePath, selectedFilteredCategoriesList, selectedCategory } = chrome;
@@ -56,6 +61,13 @@ const DownloadFilePathOptionPanel: React.FC = () => {
         // Update FoldersList
         handleGetFoldersList()
     }, []);
+
+    useEffect(() => {
+        // Update FoldersList
+        if (isHandleRefresh) {
+            handleGetFoldersList()
+        }
+    }, [isHandleRefresh]);
 
 
     useEffect(() => {
@@ -150,9 +162,9 @@ const DownloadFilePathOptionPanel: React.FC = () => {
     }
 
     const handleFoldersListOnChange = (event: any, newValue: string | null) => {
-            const disallowedRegex = /[<>:"\\\|?*]/g;
-            dispatch(updateDownloadFilePath(newValue?.replace(disallowedRegex, '') || ""))
-        
+        const disallowedRegex = /[<>:"\\\|?*]/g;
+        dispatch(updateDownloadFilePath(newValue?.replace(disallowedRegex, '') || ""))
+
     }
 
     // Handler for blur event
@@ -165,7 +177,7 @@ const DownloadFilePathOptionPanel: React.FC = () => {
 
     return (
         <>
-            <FilesPathSettingPanel />
+            <FilesPathSettingPanel setIsHandleRefresh={setIsHandleRefresh} isHandleRefresh={isHandleRefresh} />
 
             <div className="autocomplete-container">
                 <div className="autocomplete-container-row">
@@ -174,6 +186,7 @@ const DownloadFilePathOptionPanel: React.FC = () => {
                         onChange={handleFoldersListOnChange}
                         inputValue={downloadFilePath}
                         onInputChange={handleFoldersListOnChange}
+                        key="1"
                         id="controllable-states-demo"
                         options={sortedandFilteredfoldersList}
                         sx={{ width: 350 }}

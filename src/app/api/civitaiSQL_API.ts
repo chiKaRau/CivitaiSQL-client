@@ -283,12 +283,20 @@ export const fetchGetFoldersList = async (dispatch: any) => {
     }
 }
 
-export const fetchGetTagsList = async (dispatch: any) => {
+export const fetchGetTagsList = async (dispatch: any, selectedPrefix: string) => {
     try {
         // Clear any previous errors
         dispatch(clearError());
 
-        const response = await axios.get(`${config.domain}/api/get_tags_list`);
+        // Construct the URL with the prefix as a query parameter if it's provided
+        let url = `${config.domain}/api/get_tags_list`;
+        if (selectedPrefix) {
+            // Encode the prefix to handle special characters
+            const encodedPrefix = encodeURIComponent(selectedPrefix);
+            url += `?prefix=${encodedPrefix}`;
+        }
+
+        const response = await axios.get(url);
 
         if (response.status >= 200 && response.status < 300) {
             const { topTags, recentTags } = response.data.payload;
@@ -306,6 +314,51 @@ export const fetchGetTagsList = async (dispatch: any) => {
         dispatch(setError({ hasError: true, errorMessage: error.message }));
     }
 }
+
+
+export const fetchGetCategoriesPrefixsList = async (dispatch: any) => {
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+
+        const response = await axios.get(`${config.domain}/api/get_categories_prefix_list`);
+
+        if (response.status >= 200 && response.status < 300) {
+            return response.data.payload.categoriesPrefixsList;
+        } else {
+            // Handle the case when response status is not successful
+            throw new Error("Retrieving Categories Prefixs List from Database failed.");
+        }
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Categories Prefixs List retrieval:", error.message);
+        // Dispatch the error to the state
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}
+
+export const fetchGetFilePathCategoriesList = async (dispatch: any) => {
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+
+        const response = await axios.get(`${config.domain}/api/get_filePath_categories_list`);
+
+        if (response.status >= 200 && response.status < 300) {
+            return response.data.payload.filePathCategoriesList;
+
+        } else {
+            // Handle the case when response status is not successful
+            throw new Error("Retrieving FilePath Categories List from Database failed.");
+        }
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during FilePath Categories List retrieval:", error.message);
+        // Dispatch the error to the state
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}
+
 
 export const fetchOpenDownloadDirectory = async (dispatch: any) => {
     try {
@@ -559,3 +612,36 @@ export const fetchCheckIfModelUpdateAvaliable = async (url: string, dispatch: an
         dispatch(setError({ hasError: true, errorMessage: error.message }));
     }
 }
+
+export const fetchFindVersionNumbersForModel = async (modelId: string, versionIds: any, dispatch: any) => {
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+        const response = await axios.post(`${config.domain}/api/find-version-numbers-for-model`, {
+            modelNumber: modelId,
+            versionNumbers: versionIds
+        });
+        const responseData = response.data;
+
+        if (response.status >= 200 && response.status < 300) {
+            if (responseData.success) {
+                return new Set(response.data.payload.existedVersionsList.map(String));
+            } else {
+
+                if ("No models found with the given model number" !== responseData.message) {
+
+                    // Handle the case when success is false
+                    throw new Error("Retriving related model info from Database failed.");
+                }
+            }
+        } else {
+            // Handle the case when success is false
+            throw new Error("Retriving related model info from Database failed.");
+        }
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Civitai Info retrieval:", error.message);
+        // Optionally, you can throw an error or return a specific value
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+} 

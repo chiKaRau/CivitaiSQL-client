@@ -21,10 +21,13 @@
     "@emotion/styled": "^11.11.0",
     "@mui/material": "^6.1.2",
     "@reduxjs/toolkit": "^2.0.1",
+    "ag-grid-community": "^32.3.3",
+    "ag-grid-react": "^32.3.3",
     "axios": "^1.6.3",
     "boostrap": "^2.0.0",
     "bootstrap": "^5.3.2",
     "chrome-extension-typescript-starter": "file:",
+    "downshift": "^9.0.8",
     "install": "^0.13.0",
     "jszip": "^3.10.1",
     "npm": "^10.2.5",
@@ -33,6 +36,7 @@
     "react-dom": "^18.3.1",
     "react-icons": "^4.12.0",
     "react-redux": "^9.1.2",
+    "react-select": "^5.8.3",
     "redux": "^5.0.1"
   },
   "devDependencies": {

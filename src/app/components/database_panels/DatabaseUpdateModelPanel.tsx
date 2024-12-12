@@ -82,6 +82,8 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
     useEffect(() => {
         //Preventing First time update
         if (isInitialMount.current) {
+            console.log("test-civitaiUrl");
+            console.log(civitaiUrl);
             isInitialMount.current = false;
         } else {
             setModelsList(originalModelsList?.reverse().filter(model =>

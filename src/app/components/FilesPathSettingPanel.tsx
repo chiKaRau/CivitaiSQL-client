@@ -8,15 +8,17 @@ import { updateDownloadFilePath, UpdateSelectedFilteredCategoriesList } from "..
 //components
 import { Collapse, OverlayTrigger, Tooltip } from 'react-bootstrap';
 
-//data
-import categoriesPrefix from "../data/categoriesPrefix.json"
-import { filesPathCategoriesList } from "../data/filesPathCategoriesList.json"
-
 //utils
 import { updateSelectedFilteredCategoriesListIntoChromeStorage } from "../utils/chromeUtils"
 import FilesPathTagsListSelector from './FilesPathTagsListSelector';
+import { fetchGetCategoriesPrefixsList, fetchGetFilePathCategoriesList } from '../api/civitaiSQL_api';
 
-const FilesPathSettingPanel: React.FC = () => {
+interface FilesPathSettingPanelProps {
+    isHandleRefresh: boolean;
+    setIsHandleRefresh: (isHandleRefresh: boolean) => void;
+}
+
+const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ isHandleRefresh, setIsHandleRefresh }) => {
     const isInitialMount = useRef(true);
     const dispatch = useDispatch();
 
@@ -41,18 +43,48 @@ const FilesPathSettingPanel: React.FC = () => {
 
     const [open, setOpen] = useState(false);
 
-    const [prefixsList, setPrefixsList] = useState<{ name: string; value: string; }[]>(categoriesPrefix.prefixsList);
+    const [prefixsList, setPrefixsList] = useState<{ name: string; value: string; }[]>([]);
     const [suffixsList, setSuffixsList] = useState<{ name: string; value: string; }[]>(modelTagsList);
+    const [filePathCategoriesList, setFilePathCategoriesList] = useState<{ name: string; value: string; }[]>([]);
+
 
     const [selectedPrefix, setSelectedPrefix] = useState("");
     const [selectedSuffix, setSelectedSuffix] = useState("");
     // Initializing state with the entire object and display property
     const [selectedFilteredCategoriesList, setSelectedFilteredCategoriesList] = useState<{ category: { name: string, value: string }, display: boolean }[]>(
-        filesPathCategoriesList.map((category) => ({
+        filePathCategoriesList.map((category) => ({
             category: category,
             display: true
         }))
     );
+
+    useEffect(() => {
+        const fetchPrefixsList = async () => {
+            try {
+                const data = await fetchGetCategoriesPrefixsList(dispatch);
+                if (data) {
+                    setPrefixsList(data);
+                }
+            } catch (error) {
+                console.error("Error fetching categories prefix list:", error);
+            }
+        };
+
+        fetchPrefixsList();
+
+        const fetchFilePathList = async () => {
+            try {
+                const data = await fetchGetFilePathCategoriesList(dispatch);
+                if (data) {
+                    setFilePathCategoriesList(data);
+                }
+            } catch (error) {
+                console.error("Error fetching file path categories list:", error);
+            }
+        };
+
+        fetchFilePathList();
+    }, [dispatch]); // Include `dispatch` in the dependency array to avoid stale closures
 
     useEffect(() => {
         if (chrome.selectedFilteredCategoriesList) {
@@ -135,7 +167,7 @@ const FilesPathSettingPanel: React.FC = () => {
 
                     <hr />
 
-                    <FilesPathTagsListSelector />
+                    <FilesPathTagsListSelector setIsHandleRefresh={setIsHandleRefresh} selectedPrefix={selectedPrefix} isHandleRefresh={isHandleRefresh} />
 
                     <br />
 

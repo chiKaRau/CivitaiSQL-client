@@ -29,7 +29,8 @@
     "tabs",
     "activeTab",
     "bookmarks",
-    "downloads"
+    "downloads",
+    "windows"
   ],
   "host_permissions": [
     "<all_urls>"

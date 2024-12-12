@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, version } from 'react';
 
 //Store
 import { useSelector, useDispatch } from 'react-redux';
@@ -12,6 +12,8 @@ import { PiPlusMinusFill } from "react-icons/pi";
 import { FaMagnifyingGlass, FaMagnifyingGlassPlus } from "react-icons/fa6";
 import { MdOutlineApps, MdOutlineTipsAndUpdates } from "react-icons/md";
 import { FcGenericSortingAsc, FcGenericSortingDesc } from "react-icons/fc";
+import { PiTabsFill } from "react-icons/pi";
+import { LuPanelLeftOpen, LuPanelRightOpen } from "react-icons/lu";
 
 
 //components
@@ -22,6 +24,7 @@ import WindowCollapseButton from "./WindowCollapseButton"
 import ButtonWrap from "../buttons/ButtonWrap";
 import { Button, OverlayTrigger, Tooltip, Form, Dropdown, ButtonGroup } from 'react-bootstrap';
 import ErrorAlert from '../ErrorAlert';
+import URLGrid from './URLGrid';
 
 interface updateAvaliable {
     url: string;
@@ -51,6 +54,8 @@ import {
 import { bookmarkThisUrl, updateDownloadMethodIntoChromeStorage, callChromeBrowserDownload, removeBookmarkByUrl } from "../../utils/chromeUtils"
 import { retrieveCivitaiFileName, retrieveCivitaiFilesList } from "../../utils/objectUtils"
 import { BiSolidBarChartSquare, BiSolidHdd } from 'react-icons/bi';
+import WindowFullInfoModelPanel from './WindowFullInfoModelPanel';
+import SetOriginalTabButton from './SetOriginalTabButton';
 
 const WindowComponent: React.FC = () => {
 
@@ -78,7 +83,13 @@ const WindowComponent: React.FC = () => {
     const [processingModelName, setProcessingModelName] = useState("");
     const [endModelName, setEndModelName] = useState("");
 
+    const [selectedUrl, setSelectedUrl] = useState("");
+
+    const [isFullInfoModelPanelVisible, setIsFullInfoModelPanelVisible] = useState(false);
+
     const [isSorted, setIsSorted] = useState(true);
+
+    const [tabCreator, setTabCreator] = useState("");
 
     const [collapseButtonStates, setCollapseButtonStates] = useState<{ [key: string]: boolean }>({
         checkDatabaseButton: false,
@@ -87,17 +98,16 @@ const WindowComponent: React.FC = () => {
         utilsButtons: false
     });
 
-    const [updateCount, setUpdateCount] = useState(5);
+    const [updateCount, setUpdateCount] = useState(10);
     const [checkedUpdateList, setCheckedUpdateList] = useState<string[]>([]);
     const [lastUpdateProcessedIndex, setLastUpdateProcessedIndex] = useState(0);
 
-
-
+    const [isHandleRefresh, setIsHandleRefresh] = useState(false);
 
     useEffect(() => {
         resetCheckedUrlList();
         handleCheckSavedDatabase();
-        setResetMode(false)
+        setResetMode(false);
     }, [resetMode])
 
     useEffect(() => {
@@ -181,7 +191,9 @@ const WindowComponent: React.FC = () => {
         });
     }
     const resetCheckedUpdateList = () => {
-        setCheckedUpdateList([])
+        setCheckedUpdateList([]);
+        setUpdateCount(10);
+        setLastUpdateProcessedIndex(0);
         chrome.storage.local.get('originalTabId', (result) => {
             if (result.originalTabId) {
                 chrome.tabs.sendMessage(result.originalTabId, { action: "remove-update-saved" });
@@ -263,26 +275,32 @@ const WindowComponent: React.FC = () => {
         for (let url of urlList) {
             const modelId = url.match(/\/models\/(\d+)/)?.[1] || '';
             const data = await fetchDatabaseModelInfoByModelID(modelId, dispatch);
-            if (data) {
-                let id = data[0].id;
-                //Check for null or empty
-                if (id !== null && id !== undefined) {
-                    fetchRemoveRecordFromDatabaseByID(id, dispatch)
-                    removeBookmarkByUrl(url, dispatch, true)
-                    // Remove the processed URL from the urlList
-                    setUrlList(currentUrls => currentUrls.filter(currentUrl => currentUrl !== url));
-                    chrome.storage.local.get('originalTabId', (result) => {
-                        if (result.originalTabId) {
-                            chrome.tabs.sendMessage(result.originalTabId, { action: "uncheck-url", url: url });
 
-                        }
-                    });
+            if (data && Array.isArray(data)) {
+                for (let record of data) {
+                    const id = record.id;
 
+                    if (id !== null && id !== undefined) {
+                        // Perform actions for each id
+                        await fetchRemoveRecordFromDatabaseByID(id, dispatch); // Ensure asynchronous execution
+                        removeBookmarkByUrl(url, dispatch, true, true); // Remove bookmark by URL
+
+                        // Remove the processed URL from the urlList
+                        setUrlList(currentUrls => currentUrls.filter(currentUrl => currentUrl !== url));
+
+                        // Send a message to the original tab if available
+                        chrome.storage.local.get('originalTabId', (result) => {
+                            if (result.originalTabId) {
+                                chrome.tabs.sendMessage(result.originalTabId, { action: "uncheck-url", url: url });
+                            }
+                        });
+                    }
                 }
             }
         }
-        setResetMode(true)
-    }
+
+        setResetMode(true);
+    };
 
     // Function to handle the API call and update the button state
     const handleDownloadMultipleFile = async (civitaiData: any, civitaiUrl: string) => {
@@ -329,9 +347,10 @@ const WindowComponent: React.FC = () => {
     };
 
     // Function to handle the API call and update the button state
-    const handleDownloadMultipleFile_v2 = async (civitaiData: any, civitaiUrl: string) => {
-        let civitaiVersionID = civitaiData?.modelVersions[0]?.id.toString();
-        let civitaiModelID = civitaiData?.id.toString();
+    const handleDownloadMultipleFile_v2 = async (civitaiData: any, civitaiUrl: string, modelId: string, versionIndex: any) => {
+
+        let civitaiVersionID = civitaiData?.modelVersions[versionIndex]?.id.toString();
+        let civitaiModelID = modelId;
 
         let civitaiFileName = retrieveCivitaiFileName(civitaiData, civitaiVersionID);
         //the fileList would contains the urls of all files such as safetensor, training data, ...
@@ -406,6 +425,7 @@ const WindowComponent: React.FC = () => {
             }
         }
         setWorkingModelID("")
+        setResetMode(true);
     }
 
     const handleMultipleBundle = async () => {
@@ -433,7 +453,7 @@ const WindowComponent: React.FC = () => {
                 const data = await fetchCivitaiModelInfoFromCivitaiByModelID(modelId, dispatch);
                 if (data) {
                     //Download File
-                    handleDownloadMultipleFile(data, url);
+                    //handleDownloadMultipleFile(data, url);
 
                     // Add to database
                     handleAddModeltoDatabase(url);
@@ -487,7 +507,22 @@ const WindowComponent: React.FC = () => {
                 const data = await fetchCivitaiModelInfoFromCivitaiByModelID(modelId, dispatch);
                 if (data) {
                     //Download File
-                    handleDownloadMultipleFile_v2(data, url);
+
+                    let versionIndex = 0;
+                    const uri = new URL(url);
+
+                    if (uri.searchParams.has('modelVersionId')) {
+                        let modelVersionId = uri.searchParams.get('modelVersionId');
+                        versionIndex = data.modelVersions.findIndex((version: any) => {
+                            return version.id == modelVersionId
+                        });
+                    }
+
+                    if (versionIndex === -1) {
+                        continue;
+                    }
+
+                    handleDownloadMultipleFile_v2(data, url, modelId, versionIndex);
 
                     //Add to database
                     handleAddModeltoDatabase(url);
@@ -497,11 +532,13 @@ const WindowComponent: React.FC = () => {
 
                     // Remove the processed URL from the urlList
                     setUrlList(currentUrls => currentUrls.filter(currentUrl => currentUrl !== url));
+
                     chrome.storage.local.get('originalTabId', (result) => {
                         if (result.originalTabId) {
                             chrome.tabs.sendMessage(result.originalTabId, { action: "uncheck-url", url: url });
                         }
                     });
+
                 }
 
             } catch (error) {
@@ -533,6 +570,57 @@ const WindowComponent: React.FC = () => {
         }
     };
 
+    const toggleFullInfoModelPanel = () => {
+        setIsFullInfoModelPanelVisible(!isFullInfoModelPanelVisible);
+    };
+
+    const handleSetOriginalTab = async () => {
+        try {
+            // Step 1: Retrieve all windows
+            const windows = await chrome.windows.getAll({ populate: false });
+            console.log('Retrieved Windows:', windows);
+
+            // Step 2: Find the first window of type 'normal' (main browser window)
+            const normalWindow = windows.find(win => win.type === 'normal');
+            console.log('Normal Window:', normalWindow);
+
+            if (!normalWindow) {
+                console.error('No normal window found.');
+                return;
+            }
+
+            // Step 3: Query the active tab in the normal window
+            const [activeTab] = await chrome.tabs.query({ active: true, windowId: normalWindow.id });
+            console.log('Active Tab in Normal Window:', activeTab);
+
+            if (activeTab && activeTab.id) {
+                // Step 4: Save the active tab's ID to chrome.storage.local
+                await chrome.storage.local.set({ originalTabId: activeTab.id });
+                setTabCreator(activeTab?.title || "");
+                setResetMode(true);
+                setCheckboxMode(true); // Toggle the checkbox mode
+                setIsHandleRefresh(true);
+                setCheckedUpdateList([]);
+                setUpdateCount(10);
+                setLastUpdateProcessedIndex(0);
+                chrome.storage.local.get('originalTabId', (result) => {
+                    if (result.originalTabId) {
+                        chrome.tabs.sendMessage(result.originalTabId, { action: "remove-update-saved" });
+                    }
+                });
+                chrome.storage.local.get('originalTabId', (result) => {
+                    if (result.originalTabId) {
+                        chrome.tabs.sendMessage(result.originalTabId, { action: "display-checkboxes" });
+                    }
+                });
+                console.log(`Original Tab ID set to: ${activeTab.id}`);
+            } else {
+                console.error('No active tab found in the normal window.');
+            }
+        } catch (error) {
+            console.error('Error setting originalTabId:', error);
+        }
+    };
 
     return (
         <div className="container">
@@ -544,7 +632,7 @@ const WindowComponent: React.FC = () => {
                 <Form.Check
                     type="switch"
                     id="custom-switch"
-                    label="CheckBox Mode"
+                    label="Download Mode"
                     checked={checkboxMode}
                     onChange={handleToggleCheckBoxMode}
                 />
@@ -635,7 +723,7 @@ const WindowComponent: React.FC = () => {
                             {/**Remove bookmarks */}
                             <ButtonWrap buttonConfig={{
                                 placement: "top",
-                                tooltip: "Remove Urls' bookmark",
+                                tooltip: "Remove all Bookmark and database from that Model",
                                 variant: "primary",
                                 buttonIcon: <TbDatabaseMinus />,
                                 disabled: (urlList.length === 0 || !checkboxMode),
@@ -707,6 +795,18 @@ const WindowComponent: React.FC = () => {
                                     disable: counting,
                                 }}
                                     handleFunctionCall={() => handleSorting()} />
+
+                                {/**Checked If update available Button for User page*/}
+                                <ButtonWrap buttonConfig={{
+                                    placement: "top",
+                                    tooltip: `Set to Current Tabs: ${tabCreator}`,
+                                    variant: "primary",
+                                    buttonIcon: <PiTabsFill />,
+                                    disable: counting,
+                                }}
+                                    handleFunctionCall={() => {
+                                        handleSetOriginalTab()
+                                    }} />
                             </div>
 
                         </div>
@@ -714,29 +814,30 @@ const WindowComponent: React.FC = () => {
                 />
             </div>
 
+            {/**Full Info Model Panel toggle button */}
+            {selectedUrl !== "" && <ButtonWrap buttonConfig={{
+                placement: "top",
+                tooltip: "Set to Current Tabs",
+                variant: "primary",
+                buttonIcon: isFullInfoModelPanelVisible ? <LuPanelLeftOpen /> : <LuPanelRightOpen />,
+                disable: counting,
+            }}
+                handleFunctionCall={() => toggleFullInfoModelPanel()} />}
+
             {/**Categories List Selector */}
             < CategoriesListSelector />
 
             {/**Folder Lists Option */}
-            < DownloadFilePathOptionPanel />
+            < DownloadFilePathOptionPanel setIsHandleRefresh={setIsHandleRefresh} isHandleRefresh={isHandleRefresh} />
 
 
             {workingModelID !== "" && <p>Processing Model Name: {processingModelName}</p>}
             {countdown > 0 && <p>Next request in: {countdown} seconds</p>}
 
-            <>
-                <span>Start : {startModelName}</span>
-                <br />
-                <span>End : {endModelName}</span>
-                <br />
-            </>
-
             {/* Display URLs in a text area */}
-            <textarea
-                value={urlList.join('\n')}
-                readOnly
-                style={{ width: '100%', height: '200px' }}
-            />
+            <URLGrid urlList={urlList} setUrlList={setUrlList} selectedUrl={selectedUrl} onUrlSelect={setSelectedUrl} />
+
+
             {/*
             <OverlayTrigger placement={"top"}
                 overlay={<Tooltip id="tooltip">Download | Bookmark | Add Record</Tooltip>}>
@@ -764,6 +865,11 @@ const WindowComponent: React.FC = () => {
                     {isLoading && <span className="button-state-complete">✓</span>}
                 </Button>
             </OverlayTrigger>
+
+            {selectedUrl !== "" && (isFullInfoModelPanelVisible &&
+                <WindowFullInfoModelPanel url={selectedUrl} urlList={urlList} setUrlList={setUrlList}
+                    onClose={toggleFullInfoModelPanel} />)}
+
 
         </div>
     );

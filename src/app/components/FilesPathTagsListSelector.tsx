@@ -3,7 +3,13 @@ import { fetchGetTagsList } from '../api/civitaiSQL_api'; // Assuming this is wh
 import { useDispatch } from 'react-redux';
 import { updateDownloadFilePath } from '../store/actions/chromeActions';
 
-const FilesPathTagsListSelector: React.FC = () => {
+interface FilesPathTagsListSelectorProps {
+    selectedPrefix: string;
+    isHandleRefresh: boolean;
+    setIsHandleRefresh: (isHandleRefresh: boolean) => void;
+}
+
+const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({ isHandleRefresh, selectedPrefix, setIsHandleRefresh }) => {
     const [topTags, setTopTags] = useState<any[]>([]);
     const [recentTags, setRecentTags] = useState<any[]>([]);
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
@@ -12,7 +18,7 @@ const FilesPathTagsListSelector: React.FC = () => {
     useEffect(() => {
         // Fetch tags list on component mount
         const loadTags = async () => {
-            const result = await fetchGetTagsList(dispatch);
+            const result = await fetchGetTagsList(dispatch, selectedPrefix);
             if (result) {
                 setTopTags(result.topTags || []);
                 setRecentTags(result.recentTags || []);
@@ -20,7 +26,8 @@ const FilesPathTagsListSelector: React.FC = () => {
         };
 
         loadTags();
-    }, [dispatch]);
+        setIsHandleRefresh(false)
+    }, [dispatch, isHandleRefresh, selectedPrefix]);
 
     const handleTagClick = (tag: string) => {
         setSelectedTag(tag); // Set the clicked tag as selected

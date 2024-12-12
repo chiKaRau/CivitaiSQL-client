@@ -250,6 +250,22 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         }
       }
     });
+  } else if (message.action === "check-url") {
+    console.log("check-url-content")
+    const urlToCheck = message.url;
+    document.querySelectorAll('.mantine-Card-root').forEach(item => {
+      if (!(item instanceof HTMLAnchorElement)) {
+        return;
+      }
+      const url = item.href;
+      if (url === urlToCheck) {
+        const checkbox = item.querySelector('input[type="checkbox"]');
+        if (checkbox && checkbox instanceof HTMLInputElement) {
+          checkbox.checked = true; // Now TypeScript knows checkbox is an HTMLInputElement
+          item.style.border = '2px solid yellow';
+        }
+      }
+    });
   } else if (message.action === "remove-checkboxes") {
     // Logic to remove checkboxes and revert CSS changes
     document.querySelectorAll('.mantine-Card-root').forEach(item => {
