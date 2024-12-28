@@ -141,16 +141,15 @@ const WindowComponent: React.FC = () => {
 
                 setCheckedUpdateList(prevCheckedUpdateList => [...prevCheckedUpdateList, ...message.newUrlList]);
 
-                setLastUpdateProcessedIndex(message.lastUpdateProcessedIndex)
+                //setLastUpdateProcessedIndex(message.lastUpdateProcessedIndex)
 
-            }
+            } 
         };
         chrome.runtime.onMessage.addListener(messageListener);
         return () => {
             chrome.runtime.onMessage.removeListener(messageListener);
         };
     }, []);
-
 
     const handleCheckSavedDatabase = () => {
         chrome.storage.local.get('originalTabId', (result) => {

@@ -1,6 +1,9 @@
 import JSZip from 'jszip';
 console.log("Calling Content Script")
 
+const cardSelector =
+  '.relative.flex.overflow-hidden.rounded-md.border-gray-3.bg-gray-0.shadow-gray-4.dark\\:border-dark-4.dark\\:bg-dark-6.dark\\:shadow-dark-8.flex-col';
+
 chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   if (message.action === "browser-download") {
     console.log("browser-download")
@@ -191,298 +194,737 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
 
 
 
-chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
-  if (message.action === "display-checkboxes") {
-    document.querySelectorAll('.mantine-Card-root').forEach((item, index) => {
+chrome.runtime.onMessage.addListener(
+  async (
+    message: {
+      action: string;
+      savedList?: Array<{
+        url: string;
+        quantity?: number;
+        isUpdateAvaliable?: boolean;
+        isEarlyAccess?: boolean
+      }>;
+      url?: string;
+    },
+    sender: chrome.runtime.MessageSender,
+    sendResponse: (response?: any) => void
+  ) => {
+    // Select the parent container with class 'mantine-1ofgurw'
+    const parentContainer: HTMLElement | null = document.querySelector('.mantine-1ofgurw');
 
-      // Create a checkbox
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.id = `checkbox-${index}`;
-      checkbox.style.position = 'absolute';
-      checkbox.style.top = '10px';
-      checkbox.style.right = '10px';
-      checkbox.style.zIndex = '1000';
-      checkbox.style.transform = "scale(2.5)";
-
-      // Add checkbox to the item
-      if (item instanceof HTMLElement) {
-        item.style.position = 'relative';
-        item.appendChild(checkbox);
-      }
-
-      // Event listener for the checkbox
-      checkbox.addEventListener('click', function (event) {
-        // Stop event from propagating to item
-        event.stopPropagation();
-      });
-
-      // Checkbox change event listener
-      checkbox.addEventListener('change', function () {
-        console.log(checkbox.checked);
-
-        if (!(item instanceof HTMLAnchorElement)) {
-          return;
-        }
-        const url = item.href;
-
-        if (checkbox.checked) {
-          item.style.border = '2px solid yellow';
-          chrome.runtime.sendMessage({ action: "addUrl", url: url });
-        } else {
-          item.style.border = '';
-          chrome.runtime.sendMessage({ action: "removeUrl", url: url });
-        }
-      });
-    });
-  } else if (message.action === "uncheck-url") {
-    const urlToUncheck = message.url;
-    document.querySelectorAll('.mantine-Card-root').forEach(item => {
-      if (!(item instanceof HTMLAnchorElement)) {
-        return;
-      }
-      const url = item.href;
-      if (url === urlToUncheck) {
-        const checkbox = item.querySelector('input[type="checkbox"]');
-        if (checkbox && checkbox instanceof HTMLInputElement) {
-          checkbox.checked = false; // Now TypeScript knows checkbox is an HTMLInputElement
-          item.style.border = ''; // Remove the border style if needed
-        }
-      }
-    });
-  } else if (message.action === "check-url") {
-    console.log("check-url-content")
-    const urlToCheck = message.url;
-    document.querySelectorAll('.mantine-Card-root').forEach(item => {
-      if (!(item instanceof HTMLAnchorElement)) {
-        return;
-      }
-      const url = item.href;
-      if (url === urlToCheck) {
-        const checkbox = item.querySelector('input[type="checkbox"]');
-        if (checkbox && checkbox instanceof HTMLInputElement) {
-          checkbox.checked = true; // Now TypeScript knows checkbox is an HTMLInputElement
-          item.style.border = '2px solid yellow';
-        }
-      }
-    });
-  } else if (message.action === "remove-checkboxes") {
-    // Logic to remove checkboxes and revert CSS changes
-    document.querySelectorAll('.mantine-Card-root').forEach(item => {
-      // Remove the checkbox
-      const checkbox = item.querySelector('input[type="checkbox"]');
-      if (checkbox) {
-        console.log("Removing checkbox");
-        item.removeChild(checkbox);
-      }
-
-      // Revert any CSS changes
-      if (item instanceof HTMLElement) {
-        item.style.border = '';
-      }
-    });
-  }
-});
-
-chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
-  if (message.action === "checkSavedMode") {
-    let newUrlList: string[] = []; // Explicitly define urls as an array of strings
-    document.querySelectorAll('.mantine-Card-root').forEach((item) => {
-      if (item instanceof HTMLAnchorElement) {
-        // Check if the URL is not already in checkedUrlList
-        if (message.checkedUrlList && !message.checkedUrlList.includes(item.href)) {
-          newUrlList.push(item.href);
-        }
-      }
-
-    });
-    chrome.runtime.sendMessage({ action: "checkUrlsInDatabase", newUrlList: newUrlList });
-  }
-});
-
-chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
-  if (message.action === "checkUpdateAvaliableMode") {
-    let newUrlList: string[] = []; // Explicitly define urls as an array of strings
-    let count = 0;
-
-    let elements = Array.from(document.querySelectorAll('.mantine-Card-root'));
-    // Start from the next item after the last processed one
-    let startIndex = message.lastUpdateProcessedIndex || 0;
-    let host = "https://civitai.com";
-    for (let i = startIndex; i < elements.length && count < message.updateCount; i++) {
-      let href = elements[i].getAttribute('href');
-
-      if (href && !message.checkedUpdateList.includes(href)) {
-        newUrlList.push(host + href);
-        count++;
-      }
-      startIndex = i + 1; // Update the last processed index
-    }
-    chrome.runtime.sendMessage({ action: "checkifmodelAvaliable", newUrlList: newUrlList, lastUpdateProcessedIndex: startIndex });
-  }
-});
-
-chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
-  if (message.action === "sortingMode") {
-    console.log("Sorting mode activated");
-
-    // Cast the elements to HTMLAnchorElement to access href safely
-    const cards = Array.from(document.querySelectorAll('.mantine-Card-root'))
-      .filter((card): card is HTMLAnchorElement => card instanceof HTMLAnchorElement)
-      .map(card => ({ element: card, url: card.href.replace("-commission", "") }));
-
-    // Reverse the characters in each URL, sort them, then reverse the sort order
-    const sortedCards = cards.sort((a, b) => {
-      // Reverse the URL strings
-      const reverseA = a.url.split('').reverse().join('').toLowerCase();
-      const reverseB = b.url.split('').reverse().join('').toLowerCase();
-
-      // Compare the reversed URLs
-      return reverseA.localeCompare(reverseB);
-    });
-
-    // Select the container holding the cards
-    const container = document.querySelector('.mantine-1ofgurw');
-    if (!container) {
-      console.error('Card container not found.');
+    if (!parentContainer) {
+      console.warn("Container with class 'mantine-1ofgurw' not found.");
       return;
     }
 
-    // Check the current order and determine if it's already sorted
-    const isCurrentlyReversed = container.lastChild === cards[cards.length - 1].element;
+    // Select only the direct child divs of the parent container
+    const cardElements: NodeListOf<HTMLDivElement> = parentContainer.querySelectorAll(':scope > div');
 
-    // Reverse the sorted cards if the current order is already sorted
-    if (isCurrentlyReversed) {
-      sortedCards.reverse();
+    if (message.action === "display-checkboxes") {
+      cardElements.forEach((item: HTMLDivElement, index: number) => {
+        // Create a checkbox element
+        const checkbox: HTMLInputElement = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = `checkbox-${index}`;
+        checkbox.style.position = 'absolute';
+        checkbox.style.top = '10px';
+        checkbox.style.right = '10px';
+        checkbox.style.zIndex = '1000';
+        checkbox.style.transform = "scale(2.5)";
+
+        // Add checkbox to the item
+        item.style.position = 'relative';
+        item.appendChild(checkbox);
+
+        // Event listener to prevent event propagation when clicking the checkbox
+        checkbox.addEventListener('click', (event: MouseEvent) => {
+          event.stopPropagation(); // Prevents the click from triggering other event listeners on parent elements
+        });
+
+        // Checkbox change event listener
+        checkbox.addEventListener('change', () => {
+          const linkElement: HTMLAnchorElement | null = item.querySelector('a');
+
+          if (linkElement && linkElement.href) {
+            const url: string = linkElement.href;
+
+            if (checkbox.checked) {
+              item.style.border = '2px solid yellow';
+              chrome.runtime.sendMessage({ action: "addUrl", url: url });
+            } else {
+              item.style.border = '';
+              chrome.runtime.sendMessage({ action: "removeUrl", url: url });
+            }
+          }
+        });
+      });
+    } else if (message.action === "uncheck-url") {
+      const urlToUncheck: string | undefined = message.url;
+
+      if (!urlToUncheck) {
+        console.warn("urlToUncheck is undefined or null.");
+        return;
+      }
+
+      cardElements.forEach((item: HTMLDivElement) => {
+        const linkElement: HTMLAnchorElement | null = item.querySelector('a');
+
+        if (linkElement && linkElement.href === urlToUncheck) {
+          const checkbox: HTMLInputElement | null = item.querySelector('input[type="checkbox"]');
+          if (checkbox) {
+            checkbox.checked = false;
+            item.style.border = '';
+          }
+        }
+      });
+    } else if (message.action === "check-url") {
+      const urlToCheck: string | undefined = message.url;
+
+      if (!urlToCheck) {
+        console.warn("urlToCheck is undefined or null.");
+        return;
+      }
+
+      cardElements.forEach((item: HTMLDivElement) => {
+        const linkElement: HTMLAnchorElement | null = item.querySelector('a');
+
+        if (linkElement && linkElement.href === urlToCheck) {
+          const checkbox: HTMLInputElement | null = item.querySelector('input[type="checkbox"]');
+          if (checkbox) {
+            checkbox.checked = true;
+            item.style.border = '2px solid yellow';
+          }
+        }
+      });
+    } else if (message.action === "remove-checkboxes") {
+      cardElements.forEach((item: HTMLDivElement) => {
+        const checkbox: HTMLInputElement | null = item.querySelector('input[type="checkbox"]');
+
+        if (checkbox) {
+          item.removeChild(checkbox);
+        }
+
+        // Revert any CSS changes
+        item.style.border = '';
+      });
     }
 
-    // Append the sorted cards to the container
-    sortedCards.forEach(({ element }) => {
-      container.appendChild(element);
+    // Indicate that the response is handled asynchronously
+    return true;
+  }
+);
+
+
+
+chrome.runtime.onMessage.addListener(
+  async (
+    message: { action: string; checkedUrlList?: string[] },
+    sender: chrome.runtime.MessageSender,
+    sendResponse: (response?: any) => void
+  ) => {
+    if (message.action === "checkSavedMode") {
+      const newUrlList: string[] = [];
+
+      // Select the parent container with class 'mantine-1ofgurw'
+      const parentContainer: HTMLElement | null = document.querySelector('.mantine-1ofgurw');
+
+      if (parentContainer) {
+        // Select only the direct child divs of the parent
+        const childDivs: NodeListOf<HTMLDivElement> = parentContainer.querySelectorAll(':scope > div');
+
+        childDivs.forEach((item: HTMLDivElement) => {
+          // Optionally, ensure the div has an 'id'
+          // if (!item.id) return;
+
+          // Find the first <a> element within the current div
+          const linkElement: HTMLAnchorElement | null = item.querySelector('a');
+          console.log
+          if (linkElement && linkElement.href) {
+            // Check if 'checkedUrlList' exists and does not include the current href
+            if (message.checkedUrlList && !message.checkedUrlList.includes(linkElement.href)) {
+              newUrlList.push(linkElement.href);
+            }
+          }
+        });
+
+        // Send the list of new URLs back for further processing
+        chrome.runtime.sendMessage({
+          action: "checkUrlsInDatabase",
+          newUrlList: newUrlList,
+        });
+      } else {
+        console.warn("Parent container with class 'mantine-1ofgurw' not found.");
+      }
+    }
+
+    // Indicate that the response is handled asynchronously
+    return true;
+  }
+);
+
+
+chrome.runtime.onMessage.addListener(async (message: any, sender, sendResponse) => {
+  if (message.action === "checkUpdateAvaliableMode") {
+    const newUrlList: string[] = [];
+
+    // Select the parent container with class 'mantine-1ofgurw'
+    const parentContainer: HTMLElement | null = document.querySelector('.mantine-1ofgurw');
+
+    if (parentContainer) {
+      // Select only the direct child divs of the parent
+      const childDivs: NodeListOf<HTMLDivElement> = parentContainer.querySelectorAll(':scope > div');
+
+      childDivs.forEach((item: HTMLDivElement) => {
+        // Optionally, ensure the div has an 'id'
+        // if (!item.id) return;
+
+        // Find the first <a> element within the current div
+        const linkElement: HTMLAnchorElement | null = item.querySelector('a');
+        if (linkElement && linkElement.href) {
+          // Check if 'checkedUrlList' exists and does not include the current href
+          if (linkElement.href && !message.checkedUpdateList.includes(linkElement.href)) {
+            newUrlList.push(linkElement.href);
+          }
+        }
+      });
+    }
+
+    chrome.runtime.sendMessage({
+      action: "checkifmodelAvaliable",
+      newUrlList: newUrlList,
     });
   }
 });
 
 
+// Create a Map to cache hrefs associated with each div's unique id
+const hrefMap: Map<string, string> = new Map();
 
-chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
-  if (message.action === "display-saved") {
-    const savedList = message.savedList;
+// Flag to track the current sort order (true for ascending, false for descending)
+let isSortedAscending: boolean = true;
 
-    document.querySelectorAll('.mantine-Card-root').forEach((item) => {
-      if (item instanceof HTMLAnchorElement) {
-        const url = item.href;
-        const savedInfo = savedList?.find((info: any) => info.url === url);
-        if (savedInfo) {
-          // Create a label
-          const label = document.createElement('div');
-          label.classList.add('saved-label');
-          label.textContent = savedInfo.quantity > 0 ? `Saved : ${savedInfo.quantity}` : 'Not Saved';
-          label.style.position = 'absolute';
-          label.style.top = '50%';
-          label.style.left = '50%';
-          label.style.transform = 'translate(-50%, -50%)';
-          label.style.zIndex = '1001';
-          label.style.backgroundColor = savedInfo.quantity > 0 ? 'lightgreen' : 'tomato'; // Example colors
-          label.style.color = 'white'; // Text color
-          label.style.textShadow = '0px 0px 3px black'; // Text shadow for readability
-          label.style.padding = '5px';
-          label.style.borderRadius = '5px';
+// Function to sort the divs based on cached hrefs
+function sortDivs(container: HTMLElement): void {
+  // Select all child divs within the container
+  const cardDivs = Array.from(container.children).filter(child => child instanceof HTMLElement) as HTMLElement[];
 
-          // Add label to the item
-          if (item instanceof HTMLElement) {
-            item.style.position = 'relative';
-            item.appendChild(label);
-          }
-        }
-      }
-    });
-  } else if (message.action === "remove-saved") {
-    document.querySelectorAll('.mantine-Card-root').forEach((item) => {
-      if (item instanceof HTMLAnchorElement) {
-        // Remove only the label with the 'saved-label' class
-        const label = item.querySelector('.saved-label');
-        if (label) {
-          console.log("Removing saved label");
-          item.removeChild(label);
-        }
-      }
-    });
+  // Map each div to its cached href
+  const sortableCards: { element: HTMLElement; url: string }[] = cardDivs.map(div => {
+    const divId: string = div.id;
+    let url: string = hrefMap.get(divId) || "";
+
+    // If the div currently has an <a>, update the cache
+    const anchor = div.querySelector('a') as HTMLAnchorElement | null;
+    if (anchor) {
+      url = anchor.href.replace("-commission", "");
+      hrefMap.set(divId, url);
+    }
+
+    // If there's still no URL, assign a default value to ensure consistent sorting
+    if (!url) {
+      url = isSortedAscending ? "zzz-default" : ""; // Adjust as needed
+    }
+
+    return { element: div, url };
+  });
+
+  console.log("test-sortableCards")
+  console.log(sortableCards);
+
+  // Sort the cards based on the reversed URL strings
+  sortableCards.sort((a, b) => {
+    const reverseA: string = a.url.split('').reverse().join('').toLowerCase();
+    const reverseB: string = b.url.split('').reverse().join('').toLowerCase();
+    return reverseA.localeCompare(reverseB);
+  });
+
+  // If the current sort is descending, reverse the sorted array to make it ascending
+  if (!isSortedAscending) {
+    sortableCards.reverse();
+  }
+
+  // Create a DocumentFragment to optimize DOM manipulation
+  const fragment: DocumentFragment = document.createDocumentFragment();
+  sortableCards.forEach(card => {
+    fragment.appendChild(card.element); // Move the existing <div> into the fragment
+  });
+
+  // Append the sorted elements back to the container
+  container.appendChild(fragment);
+
+  // Toggle the sort state for the next activation
+  isSortedAscending = !isSortedAscending;
+
+  console.log(`Cards have been sorted in ${isSortedAscending ? 'ascending' : 'descending'} order.`);
+}
+
+// Listener for messages from the Chrome extension
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "sortingMode") {
+    console.log("Sorting mode activated");
+
+    // Select the container holding the card divs
+    const container = document.querySelector('.mantine-1ofgurw') as HTMLElement | null;
+    if (!container) {
+      console.error('Card container with class "mantine-1ofgurw" not found.');
+      return;
+    }
+
+    // Perform the sorting based on the updated hrefMap
+    sortDivs(container);
   }
 });
 
-chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
-  if (message.action === "display-update-avaliable") {
-    const savedList = message.savedList;
+// Initialize the hrefMap with existing <a> elements
+initializeHrefMap();
 
-    document.querySelectorAll('.mantine-Card-root').forEach((item) => {
-      if (item instanceof HTMLAnchorElement) {
-        const url = item.href;
-        console.log(url)
-        const savedInfo = savedList?.find((info: any) => info.url === url);
+// Function to scan and cache hrefs from existing divs on page load
+function initializeHrefMap(): void {
+  // Select the container holding the card divs
+  const container = document.querySelector('.mantine-1ofgurw') as HTMLElement | null;
+  if (!container) {
+    console.error('Card container with class "mantine-1ofgurw" not found.');
+    return;
+  }
 
-        if (savedInfo?.isUpdateAvaliable || savedInfo?.isEarlyAccess) {
-          // Create a label
-          const label = document.createElement('div');
-          label.classList.add('update-early-label');
+  // Select all child divs within the container
+  const cardDivs = Array.from(container.children).filter(child => child instanceof HTMLElement) as HTMLElement[];
 
-          let text = '';
-          let backgroundColor = '';
+  cardDivs.forEach(div => {
+    const divId: string = div.id;
+    const anchor = div.querySelector('a') as HTMLAnchorElement | null;
 
-          if (savedInfo.isUpdateAvaliable && savedInfo.isEarlyAccess) {
-            text = 'Update Available & Early Access';
-            backgroundColor = 'linear-gradient(to right, lightgreen, red)';
-          } else if (savedInfo.isUpdateAvaliable) {
-            text = 'Update Available';
-            backgroundColor = 'lightgreen';
-          } else if (savedInfo.isEarlyAccess) {
-            text = 'Early Access';
-            backgroundColor = 'red';
-          }
+    if (anchor) {
+      // Process the href by removing "-commission" as per your original logic
+      const processedUrl: string = anchor.href.replace("-commission", "");
+      hrefMap.set(divId, processedUrl);
+    }
+  });
 
-          label.textContent = text;
-          label.style.position = 'absolute';
-          label.style.top = '70%';
-          label.style.left = '50%';
-          label.style.transform = 'translate(-50%, -50%)';
-          label.style.zIndex = '1001';
-          label.style.background = backgroundColor;
-          label.style.color = 'white';
-          label.style.textShadow = '0px 0px 3px black';
-          label.style.padding = '5px 10px';
-          label.style.borderRadius = '5px';
-          label.style.boxShadow = '0px 4px 6px rgba(0, 0, 0, 0.1)';
-          label.style.fontFamily = 'Arial, sans-serif';
-          label.style.fontSize = '14px';
-          label.style.fontWeight = 'bold';
-          label.style.letterSpacing = '1px';
-          label.style.textTransform = 'uppercase';
-          label.style.display = 'flex'; // Flexbox for centering
-          label.style.justifyContent = 'center'; // Center horizontally
-          label.style.alignItems = 'center'; // Center vertically
-          label.style.textAlign = 'center'; // Center text horizontally
+  console.log(`Initialized hrefMap with ${hrefMap.size} entries.`);
+}
 
-          // Add label to the item
-          if (item instanceof HTMLElement) {
-            item.style.position = 'relative';
-            item.appendChild(label);
-          }
+chrome.runtime.onMessage.addListener(
+  async (
+    message: { action: string; savedList?: Array<{ url: string; quantity: number }> },
+    sender: chrome.runtime.MessageSender,
+    sendResponse: (response?: any) => void
+  ) => {
+    if (message.action === "display-saved" || message.action === "remove-saved") {
+      // Select the parent container with class 'mantine-1ofgurw'
+      const container: HTMLElement | null = document.querySelector('.mantine-1ofgurw');
+
+      if (!container) {
+        console.warn("Container with class 'mantine-1ofgurw' not found.");
+        return;
+      }
+
+      // Select only the direct child divs of the container
+      const cardElements: NodeListOf<HTMLDivElement> = container.querySelectorAll(':scope > div');
+
+      console.log(`Number of first-level card elements: ${cardElements.length}`);
+
+      if (message.action === "display-saved") {
+        const savedList: Array<{ url: string; quantity: number }> | undefined = message.savedList;
+
+        // If savedList is not defined, just return
+        if (!savedList) {
+          console.warn("savedList is undefined or null.");
+          return;
         }
 
+        cardElements.forEach((item: HTMLDivElement) => {
+          // Find the first <a> element inside the card
+          const linkElement: HTMLAnchorElement | null = item.querySelector('a');
+
+          if (linkElement && linkElement.href) {
+            const url: string = linkElement.href;
+            // Find the corresponding saved info for the URL
+            const savedInfo = savedList.find((info) => info.url === url);
+
+            if (savedInfo) {
+              // Check if a label already exists to avoid duplicates
+              const existingLabel = item.querySelector('.saved-label') as HTMLDivElement | null;
+
+              if (!existingLabel) {
+                // Create a label element
+                const label: HTMLDivElement = document.createElement('div');
+                label.classList.add('saved-label');
+                label.textContent = savedInfo.quantity > 0 ? `Saved: ${savedInfo.quantity}` : 'Not Saved';
+
+                // Style the label
+                Object.assign(label.style, {
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  zIndex: '1001',
+                  backgroundColor: savedInfo.quantity > 0 ? 'lightgreen' : 'tomato',
+                  color: 'white',
+                  textShadow: '0px 0px 3px black',
+                  padding: '5px',
+                  borderRadius: '5px',
+                  pointerEvents: 'none', // Prevents the label from interfering with user interactions
+                });
+
+                // Ensure the parent has relative positioning
+                item.style.position = 'relative';
+                item.appendChild(label);
+              } else {
+                // **Else Block: Update Existing Label**
+
+                // Update the text content based on savedInfo.quantity
+                existingLabel.textContent = savedInfo.quantity > 0 ? `Saved: ${savedInfo.quantity}` : 'Not Saved';
+
+                // Update the background color based on savedInfo.quantity
+                existingLabel.style.backgroundColor = savedInfo.quantity > 0 ? 'lightgreen' : 'tomato';
+
+                // Optional: If other styles need to be updated based on savedInfo, do it here
+                // For example:
+                // existingLabel.style.borderColor = savedInfo.quantity > 0 ? 'green' : 'red';
+              }
+            }
+
+          }
+        });
+      } else if (message.action === "remove-saved") {
+        console.log("Removing saved labels...");
+
+        cardElements.forEach((item: HTMLDivElement) => {
+          // Find the saved label within the card
+          const label: HTMLElement | null = item.querySelector('.saved-label');
+
+          if (label) {
+            console.log("Removing saved label from:", item);
+            label.remove(); // Remove the label element directly
+          }
+        });
       }
-    });
-  } else if (message.action === "remove-update-saved") {
-    document.querySelectorAll('.mantine-Card-root').forEach((item) => {
-      if (item instanceof HTMLAnchorElement) {
+    }
+
+    // Indicate that the response is handled asynchronously
+    return true;
+  }
+);
+
+
+
+chrome.runtime.onMessage.addListener(
+  async (
+    message: { action: string; savedList?: Array<{ url: string; quantity?: number; isUpdateAvaliable?: boolean; isEarlyAccess?: boolean }> },
+    sender: chrome.runtime.MessageSender,
+    sendResponse: (response?: any) => void
+  ) => {
+    const parentContainer: HTMLElement | null = document.querySelector('.mantine-1ofgurw');
+
+    if (!parentContainer) {
+      console.warn("Container with class 'mantine-1ofgurw' not found.");
+      return;
+    }
+
+    // Select only the direct child divs of the parent container
+    const cardElements: NodeListOf<HTMLDivElement> = parentContainer.querySelectorAll(':scope > div');
+
+    if (message.action === "display-update-avaliable") {
+      const savedList: Array<{ url: string; quantity?: number; isUpdateAvaliable?: boolean; isEarlyAccess?: boolean }> | undefined = message.savedList;
+
+      if (!savedList) {
+        console.warn("savedList is undefined or null.");
+        return;
+      }
+
+      cardElements.forEach((item: HTMLDivElement) => {
+        // Find the first <a> element inside the card
+        const linkElement: HTMLAnchorElement | null = item.querySelector('a');
+
+        if (linkElement && linkElement.href) {
+          const url: string = linkElement.href;
+          // Find the corresponding saved info for the URL
+          const savedInfo = savedList.find((info) => info.url === url);
+
+          if (savedInfo?.isUpdateAvaliable || savedInfo?.isEarlyAccess) {
+            // Check if the label already exists to avoid duplicates
+            if (!item.querySelector('.update-early-label')) {
+              // Create a label element
+              const label: HTMLDivElement = document.createElement('div');
+              label.classList.add('update-early-label');
+
+              let text: string = '';
+              let backgroundColor: string = '';
+
+              if (savedInfo.isUpdateAvaliable && savedInfo.isEarlyAccess) {
+                text = 'Update Available & Early Access';
+                backgroundColor = 'linear-gradient(to right, lightgreen, red)';
+              } else if (savedInfo.isUpdateAvaliable) {
+                text = 'Update Available';
+                backgroundColor = 'lightgreen';
+              } else if (savedInfo.isEarlyAccess) {
+                text = 'Early Access';
+                backgroundColor = 'red';
+              }
+
+              // Apply label styles
+              label.textContent = text;
+              Object.assign(label.style, {
+                position: 'absolute',
+                top: '70%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                zIndex: '1001',
+                background: backgroundColor,
+                color: 'white',
+                textShadow: '0px 0px 3px black',
+                padding: '5px 10px',
+                borderRadius: '5px',
+                boxShadow: '0px 4px 6px rgba(0, 0, 0, 0.1)',
+                fontFamily: 'Arial, sans-serif',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                letterSpacing: '1px',
+                textTransform: 'uppercase',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                textAlign: 'center',
+              });
+
+              // Ensure the parent has relative positioning
+              item.style.position = 'relative';
+              item.appendChild(label);
+            }
+          }
+        }
+      });
+    } else if (message.action === "remove-update-saved") {
+      console.log("Removing update and early access labels...");
+
+      cardElements.forEach((item: HTMLDivElement) => {
         // Remove only the label with the 'update-early-label' class
-        const label = item.querySelector('.update-early-label');
+        const label: HTMLElement | null = item.querySelector('.update-early-label');
         if (label) {
-          console.log("Removing update label");
-          item.removeChild(label);
+          console.log("Removing update label from:", item);
+          label.remove(); // Remove the label element directly
         }
+      });
+    }
+
+    // Indicate that the response is handled asynchronously
+    return true;
+  }
+);
+
+// contentScript.ts
+
+// Utility function to wait for the parent container to be available
+function waitForElement(selector: string, timeout = 10000): Promise<HTMLElement> {
+  return new Promise((resolve, reject) => {
+    const element = document.querySelector(selector);
+    if (element) {
+      resolve(element as HTMLElement);
+      return;
+    }
+
+    const observer = new MutationObserver((mutations, obs) => {
+      const el = document.querySelector(selector);
+      if (el) {
+        resolve(el as HTMLElement);
+        obs.disconnect();
       }
     });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+
+    setTimeout(() => {
+      observer.disconnect();
+      reject(new Error(`Element with selector "${selector}" not found within ${timeout}ms.`));
+    }, timeout);
+  });
+}
+
+// Function to initialize the MutationObserver
+function initMutationObserver(parentContainer: HTMLElement) {
+  // console.log("Initializing MutationObserver on parent container:", parentContainer);
+
+  // Callback function to execute when mutations are observed
+  const callback: MutationCallback = (mutationsList, observer) => {
+    for (const mutation of mutationsList) {
+      // Handle added nodes
+      if (mutation.type === 'childList') {
+        if (mutation.addedNodes.length > 0) {
+          mutation.addedNodes.forEach((node) => {
+            if (node instanceof HTMLElement) {
+              // console.log("New node added:", node);
+
+              // Check if the added node is a card item (direct child div)
+              if (node.matches(':scope > div')) {
+                // console.log("New card item detected:", node);
+
+                if (node.tagName.toLowerCase() === 'a') {
+                  const anchor = node as HTMLAnchorElement;
+                  //console.log("New <a> tag detected within card item:", anchor);
+
+                  // If node.href is already absolute, use it directly
+                  // Otherwise, construct the absolute URL using getAttribute
+                  const suffixUrl = anchor.href; // Or use new URL(anchor.getAttribute('href')!, 'https://civitai.com').href;
+
+                  chrome.runtime.sendMessage({
+                    action: "checkUrlsInDatabase",
+                    newUrlList: [suffixUrl],
+                  });
+
+                  const divParent = anchor.closest('div[id]') as HTMLElement | null;
+                  if (divParent) {
+                    const divId = divParent.id;
+                    const processedUrl = anchor.href.replace("-commission", "");
+
+                    // Update the hrefMap with the new href
+                    hrefMap.set(divId, processedUrl);
+                    console.log(`Added href to hrefMap: [${divId}] ${processedUrl}`);
+                  }
+
+                }
+
+                // Optionally, process the new card item here
+              }
+
+              // Additionally, observe any nested changes within the added node
+              observeCardItem(node);
+            }
+          });
+        }
+
+        if (mutation.removedNodes.length > 0) {
+          mutation.removedNodes.forEach((node) => {
+            if (node instanceof HTMLElement) {
+              // console.log("Node removed:", node);
+              // Optionally, handle the removal of card items here
+            }
+          });
+        }
+      }
+
+      // Optionally, handle attribute changes if needed
+      if (mutation.type === 'attributes') {
+        // console.log(`Attribute "${mutation.attributeName}" modified on:`, mutation.target);
+      }
+    }
+  };
+
+  // Create a MutationObserver instance linked to the callback function
+  const observer = new MutationObserver(callback);
+
+  // Configuration of the observer:
+  // - childList: true => Observe addition and removal of child nodes
+  // - subtree: true => Observe changes within all descendants
+  // This is important for detecting when content within card items is added dynamically
+  observer.observe(parentContainer, {
+    childList: true,
+    subtree: true,
+  });
+
+  // console.log("MutationObserver initialized and now watching for changes.");
+}
+
+// Function to observe nested changes within a card item (e.g., when <a> tags are added)
+function observeCardItem(cardItem: HTMLElement) {
+  // Check if the card item already has an observer to prevent multiple observers
+  if (cardItem.hasAttribute('data-observed')) {
+    return;
   }
-});
+
+  // Mark the card item as observed
+  cardItem.setAttribute('data-observed', 'true');
+
+  // Callback for nested mutations within the card item
+  const nestedCallback: MutationCallback = (mutationsList, observer) => {
+    for (const mutation of mutationsList) {
+      if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+        mutation.addedNodes.forEach((node) => {
+          if (node instanceof HTMLElement) {
+            // console.log("Nested node added within card item:", node);
+            // Check if an <a> tag is added
+            if (node.tagName.toLowerCase() === 'a') {
+              const anchor = node as HTMLAnchorElement;
+              //console.log("New <a> tag detected within card item:", anchor);
+
+              // If node.href is already absolute, use it directly
+              // Otherwise, construct the absolute URL using getAttribute
+              const suffixUrl = anchor.href; // Or use new URL(anchor.getAttribute('href')!, 'https://civitai.com').href;
+
+              chrome.runtime.sendMessage({
+                action: "checkUrlsInDatabase",
+                newUrlList: [suffixUrl],
+              });
+
+              const divParent = anchor.closest('div[id]') as HTMLElement | null;
+              if (divParent) {
+                const divId = divParent.id;
+                const processedUrl = anchor.href.replace("-commission", "");
+
+                // Update the hrefMap with the new href
+                hrefMap.set(divId, processedUrl);
+                console.log(`Added href to hrefMap: [${divId}] ${processedUrl}`);
+              }
+            }
+          }
+        });
+      }
+
+      if (mutation.type === 'attributes') {
+        // console.log(`Attribute "${mutation.attributeName}" modified on:`, mutation.target);
+      }
+    }
+  };
+
+  // Create a MutationObserver for the card item
+  const nestedObserver = new MutationObserver(nestedCallback);
+
+  // Start observing the card item for child additions and attribute changes
+  nestedObserver.observe(cardItem, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+  });
+
+  // console.log("Nested MutationObserver initialized for card item:", cardItem);
+}
+
+// Function to process existing card items on initial load
+function processExistingCards(parentContainer: HTMLElement) {
+  const cardItems = parentContainer.querySelectorAll(':scope > div');
+  // console.log(`Processing ${cardItems.length} existing card items.`);
+
+  cardItems.forEach((item) => {
+    // console.log("Existing card item:", item);
+    // Optionally, process each card item (e.g., extract URLs, apply labels)
+    observeCardItem(item as HTMLElement);
+  });
+}
+
+// Main function to initialize the content script
+async function main() {
+  const parentContainerSelector = '[class^="mantine-1ofgurw"]'; // Adjust this selector as needed
+
+  try {
+    const parentContainer = await waitForElement(parentContainerSelector, 15000); // Wait up to 15 seconds
+    // console.log("Parent container found:", parentContainer);
+
+    // Initialize the MutationObserver on the parent container
+    initMutationObserver(parentContainer);
+
+    // Process existing card items
+    processExistingCards(parentContainer);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the main function once the script is loaded
+main();
+
+
 
 
