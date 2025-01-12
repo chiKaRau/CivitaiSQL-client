@@ -504,6 +504,34 @@ export const fetchAddOfflineDownloadFileIntoOfflineDownloadList = async (
     }
 }
 
+export const fetchRemoveOfflineDownloadFileIntoOfflineDownloadList = async (
+    modelObject: {
+        civitaiModelID: string,
+        civitaiVersionID: string
+    }
+    , dispatch: any) => {
+
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+        const response = await axios.post(`${config.domain}/api/remove-offline-download-file-into-offline-download-list`, {
+            modelObject
+        });
+
+        if (!(response.status >= 200 && response.status < 300)) {
+            // Handle the case when response is false
+            throw new Error("Failed adding offline download file into offline download list by server.");
+        }
+
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Civitai Info retrieval:", error.message);
+        // Optionally, you can throw an error or return a specific value
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}
+
+
 export const fetchDownloadFilesByBrowser = async (url: string, downloadFilePath: string, dispatch: any) => {
 
     try {

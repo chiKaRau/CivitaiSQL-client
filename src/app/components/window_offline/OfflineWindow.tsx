@@ -30,7 +30,8 @@ import {
     fetchAddRecordToDatabase,
     fetchDownloadFilesByServer,
     fetchDownloadFilesByServer_v2,
-    fetchAddOfflineDownloadFileIntoOfflineDownloadList
+    fetchAddOfflineDownloadFileIntoOfflineDownloadList,
+    fetchRemoveOfflineDownloadFileIntoOfflineDownloadList
 } from "../../api/civitaiSQL_api"
 
 import {
@@ -251,6 +252,9 @@ const OfflineWindow: React.FC = () => {
     // In your OfflineWindow component
     const [isPaused, setIsPaused] = useState(false);
 
+    const [selectCount, setSelectCount] = useState(20);
+
+
     const handlePauseToggle = () => {
         setIsPaused((prev) => !prev);
     };
@@ -461,18 +465,26 @@ const OfflineWindow: React.FC = () => {
             headerClass: 'custom-header', // Optional: for additional styling
         },
         {
-            headerName: "Model Name",
-            field: "modelName",
-            sortable: true,
-            filter: false,
-            cellStyle: cellStyle,
+            headerName: 'Model Name',
+            field: 'modelName',
+            flex: 1,
+            tooltipField: 'modelName', // This tells AG Grid to show the field's content as tooltip
+            cellStyle: {
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+            },
         },
         {
-            headerName: "Version Name",
-            field: "versionName",
-            sortable: true,
-            filter: false,
-            cellStyle: cellStyle,
+            headerName: 'Version Name',
+            field: 'versionName',
+            flex: 1,
+            tooltipField: 'versionName',
+            cellStyle: {
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+            },
         },
         {
             headerName: "Model ID",
@@ -496,30 +508,62 @@ const OfflineWindow: React.FC = () => {
             cellStyle: cellStyle,
         },
         {
-            headerName: "URL",
-            field: "url",
-            sortable: true,
-            filter: false,
-            cellRenderer: (params: any) => (
-                <a href={params.value} target="_blank" rel="noopener noreferrer" style={{ color: isDarkMode ? '#1e90ff' : '#007bff' }}>
-                    {params.value}
-                </a>
-            ),
-            cellStyle: cellStyle,
+            headerName: 'URL',
+            field: 'url',
+            flex: 2, // give URL more space
+            tooltipField: 'url',
+            cellStyle: {
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                padding: '5px',
+            },
+            cellRenderer: (params: any) => {
+                return (
+                    <span
+                        style={{
+                            display: 'inline-block',
+                            width: '100%',
+                            userSelect: 'text', // optional: let user copy
+                        }}
+                    >
+                        {params.value}
+                    </span>
+                );
+            },
         },
         {
-            headerName: "Category",
-            field: "category",
-            sortable: true,
-            filter: false,
-            cellStyle: cellStyle,
+            headerName: 'FilePath',
+            field: 'filepath',
+            flex: 1,
+            tooltipField: 'filepath',
+            cellStyle: {
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+            },
         },
         {
-            headerName: "FilePath",
-            field: "filepath",
+            headerName: 'Category',
+            field: 'category',
+            flex: 1,
+            tooltipField: 'category',
+            cellStyle: {
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+            },
+        },
+        {
+            headerName: "Early Access Ends",
+            field: "earlyAccessEndsAt",
             sortable: true,
             filter: false,
             cellStyle: cellStyle,
+            // Optionally format the date or show a fallback if null
+            valueFormatter: (params) => {
+                return params.value ? new Date(params.value).toLocaleString() : "Active";
+            }
         },
         {
             headerName: "File Size (MB)",
@@ -546,10 +590,12 @@ const OfflineWindow: React.FC = () => {
                 category: entry.selectedCategory ?? 'N/A',
                 filepath: entry.downloadFilePath ?? 'N/A',
                 url: entry.civitaiUrl ?? 'N/A',
-                filesize: filesizeMB + " MB"
+                filesize: filesizeMB + " MB",
+                earlyAccessEndsAt: entry.modelVersionObject?.earlyAccessEndsAt ?? null,
             };
         });
     }, [filteredDownloadList]);
+
 
     // Define default column properties
     const defaultColDef: ColDef = {
@@ -687,10 +733,28 @@ const OfflineWindow: React.FC = () => {
         console.log("Download Now button clicked");
 
         // Collect selected entries from the filtered list
-        const entriesToDownload = filteredDownloadList.filter(entry => selectedIds.has(entry.civitaiVersionID));
+        const entriesToDownload = filteredDownloadList.filter(entry => {
+            // Must be selected
+            const isSelected = selectedIds.has(entry.civitaiVersionID);
+
+            // Check earlyAccessEndsAt
+            const earlyAccessEndsAt = entry.modelVersionObject?.earlyAccessEndsAt;
+
+            // Check downloadFilePath
+            const downloadFilePath = entry.downloadFilePath ?? "";
+
+            // Exclude if earlyAccessEndsAt is null
+            // OR if downloadFilePath is "/@scan@/ACG/Pending/" or "/@scan@/ACG/Pending"
+            const shouldExclude =
+                !earlyAccessEndsAt ||
+                downloadFilePath === "/@scan@/ACG/Pending/" ||
+                downloadFilePath === "/@scan@/ACG/Pending";
+
+            return isSelected && !shouldExclude;
+        });
 
         if (entriesToDownload.length === 0) {
-            alert("No entries selected for download.");
+            alert("No valid entries to download. Either they're missing earlyAccessEndsAt or pointing to /@scan@/ACG/Pending.");
             return;
         }
 
@@ -919,6 +983,67 @@ const OfflineWindow: React.FC = () => {
         }
     };
 
+    const handleRemoveSelected = async () => {
+        if (selectedIds.size === 0) {
+            alert("No items selected to remove.");
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            // Filter the offlineDownloadList to only those selected
+            const selectedEntries = offlineDownloadList.filter((entry) =>
+                selectedIds.has(entry.civitaiVersionID)
+            );
+
+            // Remove each entry using your API call
+            for (const entry of selectedEntries) {
+                await fetchRemoveOfflineDownloadFileIntoOfflineDownloadList(
+                    {
+                        civitaiModelID: entry.civitaiModelID,
+                        civitaiVersionID: entry.civitaiVersionID,
+                    },
+                    dispatch
+                );
+            }
+
+            // Now fetch the updated offline list
+            const updatedData = await fetchOfflineDownloadList(dispatch);
+            if (Array.isArray(updatedData)) {
+                setOfflineDownloadList(updatedData);
+                // If you want to clear selection after removal, do:
+                setSelectedIds(new Set());
+                // Or, reselect all if you prefer:
+                // const allIds = updatedData.map((entry: OfflineDownloadEntry) => entry.civitaiVersionID);
+                // setSelectedIds(new Set(allIds));
+            } else {
+                console.warn("fetchOfflineDownloadList returned non-array data:", updatedData);
+                setOfflineDownloadList([]);
+                setSelectedIds(new Set());
+            }
+        } catch (error: any) {
+            console.error("Failed to remove selected entries:", error.message);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleSelectFirstN = () => {
+        // 1) Slice the filtered list
+        const firstN = filteredDownloadList.slice(0, selectCount);
+
+        // 2) Build a new Set
+        const newSelected = new Set<string>(
+            firstN.map(entry => entry.civitaiVersionID)
+        );
+
+        // 3) Update selectedIds
+        //    (Potentially, you could merge this with existing selection if you prefer)
+        setSelectedIds(newSelected);
+    };
+
+
+
     const handleCancelDownload = () => {
         // Unpause (so we don't get stuck in a paused loop)
         setIsPaused(false);
@@ -955,13 +1080,14 @@ const OfflineWindow: React.FC = () => {
             }}>
                 {filteredDownloadList.map((entry, index) => {
                     const isSelected = selectedIds.has(entry.civitaiVersionID);
+                    const earlyEnds = entry.modelVersionObject?.earlyAccessEndsAt;
+
                     return (
                         <Card
                             key={index}
                             style={{
-                                // Smaller overall card width
                                 width: '100%',
-                                maxWidth: '380px', // try 350-400px to match your desired size
+                                maxWidth: '380px',
                                 border: '1px solid',
                                 borderColor: isDarkMode ? '#555' : '#ccc',
                                 borderRadius: '8px',
@@ -975,8 +1101,8 @@ const OfflineWindow: React.FC = () => {
                                 opacity: isModifyMode && !isSelected ? 0.8 : 1,
                                 transition: 'background-color 0.3s ease, color 0.3s ease, opacity 0.3s ease',
                                 overflow: 'hidden',
-                                margin: '0 auto', // center the card if you like
-                                padding: '10px'   // minimal padding
+                                margin: '0 auto',
+                                padding: '10px'
                             }}
                             onClick={(e) => {
                                 if (isModifyMode && e.ctrlKey) {
@@ -984,6 +1110,25 @@ const OfflineWindow: React.FC = () => {
                                 }
                             }}
                         >
+                            {earlyEnds && (
+                                <div
+                                    style={{
+                                        position: 'absolute',
+                                        top: '5px',
+                                        right: '5px',
+                                        color: 'red',
+                                        fontWeight: 'bold',
+                                        fontSize: '0.8rem',
+                                        backgroundColor: isDarkMode ? '#444' : '#fff',
+                                        padding: '2px 4px',
+                                        borderRadius: '4px',
+                                        border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
+                                    }}
+                                >
+                                    Ends: {new Date(earlyEnds).toLocaleString()}
+                                </div>
+                            )}
+
                             {/* Selection Checkbox */}
                             <Form.Check
                                 type="checkbox"
@@ -1003,18 +1148,27 @@ const OfflineWindow: React.FC = () => {
                             />
 
                             {/* Model Name */}
-                            <div style={{
-                                marginTop: '40px', // leaves space for checkbox
-                                marginBottom: '5px',
-                                fontSize: '0.95rem',
-                                fontWeight: 'bold',
-                                textAlign: 'center',
-                                borderBottom: `1px solid ${isDarkMode ? '#555' : '#ccc'}`,
-                                paddingBottom: '5px',
-                                wordWrap: 'break-word',
-                            }}>
+                            <div
+                                style={{
+                                    marginTop: '40px',
+                                    marginBottom: '5px',
+                                    fontSize: '0.95rem',
+                                    fontWeight: 'bold',
+                                    textAlign: 'center',
+                                    borderBottom: `1px solid ${isDarkMode ? '#555' : '#ccc'}`,
+                                    paddingBottom: '5px',
+                                    wordWrap: 'break-word',
+                                    // Add ellipsis
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                }}
+                                // Use HTML title for a simple tooltip
+                                title={entry.civitaiFileName ?? 'N/A'}
+                            >
                                 {entry.civitaiFileName ?? 'N/A'}
                             </div>
+
 
                             {/* Carousel for Images */}
                             {entry.imageUrlsArray && entry.imageUrlsArray.length > 0 ? (
@@ -1059,15 +1213,19 @@ const OfflineWindow: React.FC = () => {
                             )}
 
                             {/* Version Name */}
-                            <div style={{
-                                fontSize: '0.85rem',
-                                textAlign: 'center',
-                                borderTop: `1px solid ${isDarkMode ? '#555' : '#ccc'}`,
-                                marginTop: '5px',
-                                paddingTop: '5px',
-                                marginBottom: '5px',
-                                wordWrap: 'break-word',
-                            }}>
+                            <div
+                                style={{
+                                    fontSize: '0.85rem',
+                                    textAlign: 'center',
+                                    marginTop: '5px',
+                                    wordWrap: 'break-word',
+                                    // For ellipsis
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                }}
+                                title={entry.modelVersionObject?.name ?? 'N/A'}
+                            >
                                 <strong>Version:</strong> {entry.modelVersionObject?.name ?? 'N/A'}
                             </div>
 
@@ -1078,8 +1236,30 @@ const OfflineWindow: React.FC = () => {
                                 wordWrap: 'break-word',
                                 padding: '0 5px',
                             }}>
-                                <p><strong>Download Path:</strong> {entry.downloadFilePath ?? 'N/A'}</p>
-                                <p><strong>Category:</strong> {entry.selectedCategory ?? 'N/A'}</p>
+                                {/* FilePath */}
+                                <p
+                                    style={{
+                                        // ...
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                    }}
+                                    title={entry.downloadFilePath ?? 'N/A'}
+                                >
+                                    <strong>Download Path:</strong> {entry.downloadFilePath ?? 'N/A'}
+                                </p>
+                                {/* Category */}
+                                <p
+                                    style={{
+                                        // ...
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                    }}
+                                    title={entry.selectedCategory ?? 'N/A'}
+                                >
+                                    <strong>Category:</strong> {entry.selectedCategory ?? 'N/A'}
+                                </p>
                                 <p><strong>Version ID:</strong> {entry.modelVersionObject?.id ?? 'N/A'}</p>
                                 <p><strong>Model ID:</strong> {entry.modelVersionObject?.modelId ?? 'N/A'}</p>
                                 <p><strong>Base Model:</strong> {entry.modelVersionObject?.baseModel ?? 'N/A'}</p>
@@ -1137,6 +1317,7 @@ const OfflineWindow: React.FC = () => {
             }}>
                 {filteredDownloadList.map((entry, index) => {
                     const isSelected = selectedIds.has(entry.civitaiVersionID);
+                    const earlyEnds = entry.modelVersionObject?.earlyAccessEndsAt;
                     const firstImageUrl = entry.imageUrlsArray?.[0] ?? null;
 
                     return (
@@ -1146,11 +1327,7 @@ const OfflineWindow: React.FC = () => {
                                 border: '1px solid',
                                 borderColor: isDarkMode ? '#555' : '#ccc',
                                 borderRadius: '4px',
-                                // Let’s keep a max width & height, but not strictly fix it
-                                width: 'auto',
                                 maxWidth: '180px',
-                                // Remove fixed height or set a maxHeight
-                                // height: 'auto',
                                 boxShadow: isDarkMode
                                     ? '1px 1px 6px rgba(255,255,255,0.1)'
                                     : '1px 1px 6px rgba(0,0,0,0.1)',
@@ -1169,6 +1346,25 @@ const OfflineWindow: React.FC = () => {
                                 }
                             }}
                         >
+                            {earlyEnds && (
+                                <div
+                                    style={{
+                                        position: 'absolute',
+                                        top: '5px',
+                                        right: '5px',
+                                        color: 'red',
+                                        fontWeight: 'bold',
+                                        fontSize: '0.8rem',
+                                        backgroundColor: isDarkMode ? '#444' : '#fff',
+                                        padding: '2px 4px',
+                                        borderRadius: '4px',
+                                        border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
+                                    }}
+                                >
+                                    Ends: {new Date(earlyEnds).toLocaleString()}
+                                </div>
+                            )}
+
                             {/* Selection Checkbox */}
                             <Form.Check
                                 type="checkbox"
@@ -1188,16 +1384,23 @@ const OfflineWindow: React.FC = () => {
                             />
 
                             {/* Model Name */}
-                            <div style={{
-                                marginTop: '40px', // spacing for checkbox
-                                marginBottom: '5px',
-                                fontSize: '0.9rem',
-                                fontWeight: 'bold',
-                                textAlign: 'center',
-                                borderBottom: `1px solid ${isDarkMode ? '#555' : '#ccc'}`,
-                                paddingBottom: '5px',
-                                wordWrap: 'break-word',
-                            }}>
+                            <div
+                                style={{
+                                    marginTop: '40px',
+                                    marginBottom: '5px',
+                                    fontSize: '0.9rem',
+                                    fontWeight: 'bold',
+                                    textAlign: 'center',
+                                    borderBottom: `1px solid ${isDarkMode ? '#555' : '#ccc'}`,
+                                    paddingBottom: '5px',
+                                    wordWrap: 'break-word',
+                                    // Ellipsis styles
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                }}
+                                title={entry.civitaiFileName ?? 'N/A'}
+                            >
                                 {entry.civitaiFileName ?? 'N/A'}
                             </div>
 
@@ -1229,15 +1432,22 @@ const OfflineWindow: React.FC = () => {
                             )}
 
                             {/* Version Name */}
-                            <div style={{
-                                fontSize: '0.75rem',
-                                textAlign: 'center',
-                                borderTop: `1px solid ${isDarkMode ? '#555' : '#ccc'}`,
-                                marginTop: '5px',
-                                paddingTop: '5px',
-                                marginBottom: '5px',
-                                wordWrap: 'break-word',
-                            }}>
+                            <div
+                                style={{
+                                    fontSize: '0.75rem',
+                                    textAlign: 'center',
+                                    borderTop: `1px solid ${isDarkMode ? '#555' : '#ccc'}`,
+                                    marginTop: '5px',
+                                    paddingTop: '5px',
+                                    marginBottom: '5px',
+                                    wordWrap: 'break-word',
+                                    // Ellipsis
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                }}
+                                title={entry.modelVersionObject?.name ?? 'N/A'}
+                            >
                                 <strong>Version:</strong> {entry.modelVersionObject?.name ?? 'N/A'}
                             </div>
 
@@ -1247,15 +1457,37 @@ const OfflineWindow: React.FC = () => {
                                 lineHeight: 1.2,
                                 wordWrap: 'break-word',
                             }}>
-                                <p>
+                                {/* FilePath */}
+                                <p
+                                    style={{
+                                        fontSize: '0.7rem',
+                                        lineHeight: 1.2,
+                                        wordWrap: 'break-word',
+                                        // Ellipsis
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                    }}
+                                    title={entry.downloadFilePath ?? 'N/A'}
+                                >
                                     <strong>Path:</strong>{' '}
-                                    {entry.downloadFilePath
-                                        ? entry.downloadFilePath.length > 15
-                                            ? `${entry.downloadFilePath.substring(0, 12)}...`
-                                            : entry.downloadFilePath
-                                        : 'N/A'}
+                                    {entry.downloadFilePath ?? 'N/A'}
                                 </p>
-                                <p><strong>Category:</strong> {entry.selectedCategory ?? 'N/A'}</p>
+                                {/* Category */}
+                                <p
+                                    style={{
+                                        fontSize: '0.7rem',
+                                        lineHeight: 1.2,
+                                        wordWrap: 'break-word',
+                                        // Ellipsis
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                    }}
+                                    title={entry.selectedCategory ?? 'N/A'}
+                                >
+                                    <strong>Category:</strong> {entry.selectedCategory ?? 'N/A'}
+                                </p>
                             </div>
                         </Card>
                     );
@@ -1400,7 +1632,6 @@ const OfflineWindow: React.FC = () => {
                             border: '1px solid',
                             borderColor: isDarkMode ? '#777' : '#ccc',
                         }}
-                        disabled={isModifyMode} // Optionally disable filtering in Modify Mode
                     />
                     <select
                         value={filterCondition}
@@ -1412,7 +1643,6 @@ const OfflineWindow: React.FC = () => {
                             border: '1px solid',
                             borderColor: isDarkMode ? '#777' : '#ccc',
                         }}
-                        disabled={isModifyMode} // Optionally disable filtering in Modify Mode
                     >
                         <option value="contains">Contains</option>
                         <option value="does not contain">Does not contain</option>
@@ -1445,6 +1675,51 @@ const OfflineWindow: React.FC = () => {
                         )}
                     </Button>
 
+                    {/* Select Count UI */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <label
+                            htmlFor="selectCountInput"
+                            style={{ color: isDarkMode ? '#fff' : '#000', marginRight: '5px' }}
+                        >
+                            Select Count:
+                        </label>
+
+                        <input
+                            id="selectCountInput"
+                            type="number"
+                            min={5}
+                            step={5}
+                            value={selectCount}
+                            onChange={(e) => {
+                                // Make sure we parse the value as a number
+                                const newVal = parseInt(e.target.value, 10);
+                                if (!isNaN(newVal)) {
+                                    setSelectCount(newVal);
+                                }
+                            }}
+                            style={{
+                                width: '100px',
+                                padding: '5px',
+                                borderRadius: '4px',
+                                border: '1px solid #ccc',
+                                backgroundColor: isDarkMode ? '#555' : '#fff',
+                                color: isDarkMode ? '#fff' : '#000',
+                            }}
+                        />
+                    </div>
+
+                    {/* "Select First N" Button */}
+                    <Button
+                        onClick={handleSelectFirstN}
+                        style={{
+                            ...downloadButtonStyle,
+                            backgroundColor: '#007bff',
+                            color: '#fff',
+                        }}
+                    >
+                        Select First {selectCount}
+                    </Button>
+
                     <Button
                         onClick={handlePauseToggle}
                         disabled={selectedIds.size === 0 || isLoading === false /* or any other condition */}
@@ -1461,17 +1736,32 @@ const OfflineWindow: React.FC = () => {
 
                     {/* Action Button for Modify Mode */}
                     {isModifyMode && (
-                        <Button
-                            onClick={handleProcessSelected}
-                            style={{
-                                ...downloadButtonStyle,
-                                backgroundColor: '#ffc107',
-                                color: '#000',
-                            }}
-                            disabled={selectedIds.size === 0}
-                        >
-                            Process Selected
-                        </Button>
+                        <>
+                            <Button
+                                onClick={handleProcessSelected}
+                                style={{
+                                    ...downloadButtonStyle,
+                                    backgroundColor: '#ffc107',
+                                    color: '#000',
+                                }}
+                                disabled={selectedIds.size === 0}
+                            >
+                                Process Selected
+                            </Button>
+
+                            {/* New Remove button */}
+                            <Button
+                                onClick={handleRemoveSelected}
+                                style={{
+                                    ...downloadButtonStyle,
+                                    backgroundColor: '#dc3545',
+                                    color: '#fff',
+                                }}
+                                disabled={selectedIds.size === 0}
+                            >
+                                Remove Selected
+                            </Button>
+                        </>
                     )}
                 </div>
 
@@ -1515,7 +1805,7 @@ const OfflineWindow: React.FC = () => {
                                     columnDefs={columnDefs}
                                     defaultColDef={defaultColDef}
                                     pagination={true}
-                                    paginationPageSize={10}
+                                    // paginationPageSize={10}
                                     getRowStyle={getRowStyle}
                                     onRowClicked={(params: any) => {
                                         if (isModifyMode && params.event.ctrlKey) {

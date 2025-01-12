@@ -434,7 +434,7 @@ const WindowComponent: React.FC = () => {
         console.log("open offline window")
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
             // Store the original tab ID in local storage
-            chrome.storage.local.set({ originalTabId: tabs[0].id });
+            // chrome.storage.local.set({ originalTabId: tabs[0].id });
             // Then open the new window
             chrome.runtime.sendMessage({ action: "openOfflineWindow" });
             //window.close(); // This closes the popup window
