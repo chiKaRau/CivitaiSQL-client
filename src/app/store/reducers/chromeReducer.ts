@@ -9,6 +9,7 @@ interface ChromeState {
     selectedFilteredCategoriesList: string;
     downloadFilePath: string;
     downloadMethod: string;
+    offlineMode: boolean;
 }
 
 const initialState: ChromeState = {
@@ -18,7 +19,8 @@ const initialState: ChromeState = {
     categoriesList: [],
     selectedFilteredCategoriesList: "",
     downloadFilePath: '/@scan@/ACG/Characters (Anime)/',
-    downloadMethod: 'server'
+    downloadMethod: 'server',
+    offlineMode: false
 };
 
 const chromelReducer = (state = initialState, action: ChromeActionTypes): ChromeState => {
@@ -37,6 +39,8 @@ const chromelReducer = (state = initialState, action: ChromeActionTypes): Chrome
             return { ...state, downloadMethod: action.payload };
         case 'UPDATE_SELECTED_FILTERED_CATEGORIES_LIST':
             return { ...state, selectedFilteredCategoriesList: action.payload };
+        case 'UPDATE_OFFLINEMODE':
+            return { ...state, offlineMode: action.payload };
         default:
             return state;
     }

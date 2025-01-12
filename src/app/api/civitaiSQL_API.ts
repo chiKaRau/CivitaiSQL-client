@@ -451,6 +451,59 @@ export const fetchDownloadFilesByServer_v2 = async (
     }
 }
 
+export const fetchOfflineDownloadList = async (dispatch: any) => {
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+
+        // Make the GET request to the backend
+        const response = await axios.get(`${config.domain}/api/get_offline_download_list`);
+
+        // Check if the response status is in the 2xx range
+        if (response.status >= 200 && response.status < 300) {
+            const responseData = response.data;
+            return responseData?.payload?.offlineDownloadList;
+        } else {
+            // Handle unexpected HTTP status codes
+            throw new Error('Unexpected response status: ' + response.status);
+        }
+
+    } catch (error: any) {
+        // Log the error to the console
+        console.error("Error during offline download list retrieval:", error.message);
+
+        // Dispatch the error to the Redux store
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+};
+
+export const fetchAddOfflineDownloadFileIntoOfflineDownloadList = async (
+    modelObject: {
+        downloadFilePath: string, civitaiFileName: string, civitaiModelID: string,
+        civitaiVersionID: string, civitaiModelFileList: { name: string; downloadUrl: string }[], civitaiUrl: string, selectedCategory: string
+    }, isModifyMode: boolean
+    , dispatch: any) => {
+
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+        const response = await axios.post(`${config.domain}/api/add-offline-download-file-into-offline-download-list`, {
+            modelObject, isModifyMode
+        });
+
+        if (!(response.status >= 200 && response.status < 300)) {
+            // Handle the case when response is false
+            throw new Error("Failed adding offline download file into offline download list by server.");
+        }
+
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Civitai Info retrieval:", error.message);
+        // Optionally, you can throw an error or return a specific value
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}
+
 export const fetchDownloadFilesByBrowser = async (url: string, downloadFilePath: string, dispatch: any) => {
 
     try {
@@ -528,6 +581,29 @@ export const fetchCheckIfUrlExistInDatabase = async (url: string, dispatch: any)
         if (response.status >= 200 && response.status < 300) {
             if (responseData.success) {
                 return responseData.payload.isSaved;
+            }
+        } else {
+            // Handle the case when success is false
+            throw new Error("Retriving related model info from Database failed.");
+        }
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Civitai Info retrieval:", error.message);
+        // Optionally, you can throw an error or return a specific value
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}
+
+export const fetchCheckQuantityOfOfflinedownloadList = async (url: string, dispatch: any) => {
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+        const response = await axios.post(`${config.domain}/api/check-quantity-of-offlinedownload-list`, { url: url });
+        const responseData = response.data;
+
+        if (response.status >= 200 && response.status < 300) {
+            if (responseData.success) {
+                return responseData.payload.quantity;
             }
         } else {
             // Handle the case when success is false

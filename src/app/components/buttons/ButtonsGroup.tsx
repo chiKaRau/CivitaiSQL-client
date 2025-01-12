@@ -7,6 +7,7 @@ import { togglePanel } from '../../store/actions/panelActions';
 
 //Icons Components
 import { BsCheck, BsArrowRepeat, BsStarFill, BsStar, BsFillCloudArrowUpFill, BsInfoCircleFill, BsFillCartCheckFill } from 'react-icons/bs';
+import { MdOutlineDownloadForOffline, MdOutlineDownload } from "react-icons/md";
 import { AiFillFolderOpen } from "react-icons/ai"
 import { GrCopy, GrPowerShutdown } from 'react-icons/gr';
 import { PiMagnifyingGlassBold } from "react-icons/pi"
@@ -23,7 +24,7 @@ import { AiFillDatabase } from "react-icons/ai";
 import { fetchOpenDownloadDirectory, fetchAppendToMustAddList } from "../../api/civitaiSQL_api"
 
 //utils
-import { bookmarkThisModel, unBookmarkThisModel } from "../../utils/chromeUtils"
+import { bookmarkThisModel, unBookmarkThisModel, updateOfflineModeIntoChromeStorage } from "../../utils/chromeUtils"
 
 //Components
 import ButtonWrap from "./ButtonWrap";
@@ -37,7 +38,7 @@ const ButtonsGroup: React.FC = () => {
 
 
     const chrome = useSelector((state: AppState) => state.chrome);
-    const { isBookmarked, bookmarkID } = chrome
+    const { isBookmarked, bookmarkID, offlineMode } = chrome
 
     const [collapseButtonStates, setCollapseButtonStates] = useState<{ [key: string]: boolean }>({
         utilsButtons: false
@@ -135,6 +136,16 @@ const ButtonsGroup: React.FC = () => {
                             disabled: false,
                         }}
                             handleFunctionCall={() => fetchAppendToMustAddList(civitaiUrl, dispatch)} />
+
+                        {/**offline mode button */}
+                        <ButtonWrap buttonConfig={{
+                            placement: "bottom",
+                            tooltip: offlineMode ? "offline" : "online",
+                            variant: offlineMode ? "success" : "primary",
+                            buttonIcon: offlineMode ? <MdOutlineDownloadForOffline /> : <MdOutlineDownload />,
+                            disabled: false,
+                        }}
+                            handleFunctionCall={() => updateOfflineModeIntoChromeStorage(!offlineMode, dispatch)} />
 
                     </div>
                 }

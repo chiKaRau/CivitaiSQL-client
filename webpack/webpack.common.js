@@ -9,6 +9,7 @@ module.exports = {
         options: path.join(srcDir, 'options.tsx'),
         background: path.join(srcDir, 'background.ts'),
         window: path.join(srcDir, 'window.tsx'), // Add this line
+        offlinewindow: path.join(srcDir, 'offlinewindow.tsx'), // Add this line
         content_script: path.join(srcDir, 'content_script.tsx'),
         
     },

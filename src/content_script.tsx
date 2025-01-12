@@ -193,6 +193,346 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
 });
 
 
+//outer zip with inner zip and png
+// chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+//   if (message.action === "browser-download_v2") {
+//     console.log("browser-download_v2");
+
+//     const {
+//       downloadFilePath,
+//       civitaiFileName,
+//       civitaiModelID,
+//       civitaiVersionID,
+//       civitaiModelFileList,
+//       civitaiUrl,
+//       modelVersionObject
+//     } = message.data;
+
+//     let baseModel = modelVersionObject?.baseModel;
+
+//     // Normalize downloadFilePath to remove leading/trailing slashes
+//     const normalizedDownloadFilePath = downloadFilePath.replace(/^\/+|\/+$/g, '');
+
+//     let fname = civitaiFileName.replace(".safetensors", "");
+
+//     try {
+//       const zip = new JSZip();
+//       const promises = [];
+
+//       // ----- 1) Download all model files and add them to ZIP -----
+//       for (const { name, downloadUrl } of civitaiModelFileList) {
+//         const promise = fetch(downloadUrl)
+//           .then((response) => response.arrayBuffer())
+//           .then((data) => {
+//             const fileName = `${civitaiModelID}_${civitaiVersionID}_${baseModel}_${name}`;
+//             const filePath = `${normalizedDownloadFilePath}/${fileName}`;
+//             const parts = filePath.split('/');
+//             let folder = zip;
+
+//             // Navigate within zip folder structure
+//             for (const part of parts.slice(0, -1)) {
+//               const nextFolder = folder.folder(part);
+//               if (nextFolder) {
+//                 folder = nextFolder;
+//               } else {
+//                 console.error('JSZip instance is null');
+//                 break;
+//               }
+//             }
+
+//             // Add file to zip
+//             folder.file(parts[parts.length - 1], data);
+//           })
+//           .catch((error) => console.error(`Error downloading ${name}: ${error}`));
+
+//         promises.push(promise);
+//       }
+
+//       // Wait for all file-download promises to complete
+//       await Promise.all(promises);
+
+//       // ----- 2) Add the .info file into the zip -----
+//       const infoFileName = `${civitaiModelID}_${civitaiVersionID}_${baseModel}_${fname}.civitai.info`;
+//       const infoFilePath = `${normalizedDownloadFilePath}/${infoFileName}`;
+//       const infoContent = JSON.stringify(modelVersionObject, null, 2);
+//       zip.file(infoFilePath, infoContent);
+
+//       // ----- 3) Handle preview image (and optionally a placeholder) -----
+//       const imageUrlsArray = [
+//         ...(modelVersionObject.resources || [])
+//           .filter((r: any) => r.type === 'image' && r.url)
+//           .map((r: any) => r.url),
+//         ...(modelVersionObject.images || [])
+//           .filter((i: any) => i.url)
+//           .map((i: any) => i.url)
+//       ];
+
+//       let previewImageBlob = null;   // <<-- ADDED (Store the final blob to download it separately)
+//       let previewImageFileName = `${civitaiModelID}_${civitaiVersionID}_${baseModel}_${fname}.preview.png`;
+//       const previewImagePathInZip = `${normalizedDownloadFilePath}/${previewImageFileName}`;
+
+//       // Try each image URL until one works
+//       for (const imageUrl of imageUrlsArray) {
+//         try {
+//           const imageResponse = await fetch(imageUrl);
+//           if (imageResponse.ok) {
+//             previewImageBlob = await imageResponse.blob();
+//             break; // Stop after first valid image
+//           }
+//         } catch (error) {
+//           console.error(`Failed to download image from ${imageUrl}: ${error}`);
+//         }
+//       }
+
+//       // If no valid image was found, use a placeholder
+//       if (!previewImageBlob) {
+//         try {
+//           const placeholderUrl = "https://placehold.co/350x450.png";
+//           const placeholderResponse = await fetch(placeholderUrl);
+//           if (placeholderResponse.ok) {
+//             previewImageBlob = await placeholderResponse.blob();
+//           } else {
+//             console.error("Failed to download the placeholder image.");
+//           }
+//         } catch (error) {
+//           console.error("Failed to download the placeholder image.");
+//         }
+//       }
+
+//       // If we have a blob (either from a real image or placeholder), add it to the ZIP
+//       if (previewImageBlob) {
+//         zip.file(previewImagePathInZip, previewImageBlob);
+//       }
+
+//       // ----- 4) Generate the ZIP and initiate ZIP download -----
+//       const zipContent = await zip.generateAsync({
+//         type: 'blob',
+//         compression: 'DEFLATE',
+//         compressionOptions: { level: 9 }
+//       });
+
+//       const zipBlob = new Blob([zipContent]);
+//       const zipUrl = URL.createObjectURL(zipBlob);
+
+//       const downloadLink = document.createElement('a');
+//       downloadLink.href = zipUrl;
+//       downloadLink.download = `${civitaiModelID}_${civitaiVersionID}_${baseModel}_${fname}.zip`;
+//       downloadLink.style.display = 'none';
+
+//       document.body.appendChild(downloadLink);
+//       downloadLink.click();
+//       document.body.removeChild(downloadLink);
+
+//       // Clean up the ZIP object URL
+//       URL.revokeObjectURL(zipUrl);
+
+//       // ----- 5) ALSO download the preview.png separately (outside the ZIP) -----
+//       if (previewImageBlob) {     // <<-- ADDED
+//         const previewUrl = URL.createObjectURL(previewImageBlob);
+//         const previewDownloadLink = document.createElement('a');
+//         previewDownloadLink.href = previewUrl;
+//         // e.g. "123_123_pony_abc.preview.png"
+//         previewDownloadLink.download = previewImageFileName;
+//         previewDownloadLink.style.display = 'none';
+
+//         document.body.appendChild(previewDownloadLink);
+//         previewDownloadLink.click();
+//         document.body.removeChild(previewDownloadLink);
+
+//         // Clean up the preview image URL
+//         URL.revokeObjectURL(previewUrl);
+//       }
+//       // ----------------------------------------------------------
+
+//     } catch (e) {
+//       console.log("error", e);
+//     }
+
+//   }
+// });
+
+//zip wih png
+// chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+//   if (message.action === "browser-download_v2") {
+//     console.log("browser-download_v2");
+
+//     const {
+//       downloadFilePath,
+//       civitaiFileName,
+//       civitaiModelID,
+//       civitaiVersionID,
+//       civitaiModelFileList,
+//       civitaiUrl,
+//       modelVersionObject
+//     } = message.data;
+
+//     const baseModel = modelVersionObject?.baseModel || "baseModel"; // Provide a default if undefined
+
+//     // Normalize downloadFilePath to remove leading/trailing slashes
+//     const normalizedDownloadFilePath = downloadFilePath.replace(/^\/+|\/+$/g, '');
+
+//     const fname = civitaiFileName.replace(".safetensors", "");
+
+//     try {
+//       // ----- 1) Create Inner ZIP -----
+//       const innerZip = new JSZip();
+
+//       // Add model files to inner zip
+//       for (const { name, downloadUrl } of civitaiModelFileList) {
+//         try {
+//           const response = await fetch(downloadUrl);
+//           if (!response.ok) {
+//             console.error(`Failed to download ${name}: ${response.statusText}`);
+//             continue;
+//           }
+//           const data = await response.arrayBuffer();
+//           const fileName = `${civitaiModelID}_${civitaiVersionID}_${baseModel}_${name}`;
+//           innerZip.file(fileName, data);
+//           console.log(`Added to Inner ZIP: ${fileName}`);
+//         } catch (error) {
+//           console.error(`Error downloading ${name}: ${error}`);
+//         }
+//       }
+
+//       // Add .civitai.info file to inner zip
+//       const infoFileName = `${civitaiModelID}_${civitaiVersionID}_${baseModel}_${fname}.civitai.info`;
+//       const infoContent = JSON.stringify(modelVersionObject, null, 2);
+//       innerZip.file(infoFileName, infoContent);
+//       console.log(`Added to Inner ZIP: ${infoFileName}`);
+
+//       // Handle preview image
+//       let previewImageBlob = null;
+//       const previewImageFileName = `${civitaiModelID}_${civitaiVersionID}_${baseModel}_${fname}.preview.png`;
+
+//       // Extract image URLs from modelVersionObject
+//       const imageUrlsArray = [
+//         ...(modelVersionObject.resources || [])
+//           .filter((r: any) => r.type === 'image' && r.url)
+//           .map((r: any) => r.url),
+//         ...(modelVersionObject.images || [])
+//           .filter((i: any) => i.url)
+//           .map((i: any) => i.url)
+//       ];
+
+//       // Try to download preview image from imageUrlsArray
+//       for (const imageUrl of imageUrlsArray) {
+//         try {
+//           const imageResponse = await fetch(imageUrl);
+//           if (imageResponse.ok) {
+//             previewImageBlob = await imageResponse.blob();
+//             console.log(`Downloaded preview image from: ${imageUrl}`);
+//             break; // Stop after first valid image
+//           }
+//         } catch (error) {
+//           console.error(`Failed to download image from ${imageUrl}: ${error}`);
+//         }
+//       }
+
+//       // If no valid image was found, use a placeholder
+//       if (!previewImageBlob) {
+//         try {
+//           const placeholderUrl = "https://placehold.co/350x450.png";
+//           const placeholderResponse = await fetch(placeholderUrl);
+//           if (placeholderResponse.ok) {
+//             previewImageBlob = await placeholderResponse.blob();
+//             console.log(`Downloaded placeholder image from: ${placeholderUrl}`);
+//           } else {
+//             console.error("Failed to download the placeholder image.");
+//           }
+//         } catch (error) {
+//           console.error("Failed to download the placeholder image.", error);
+//         }
+//       }
+
+//       // If we have a blob (either from a real image or placeholder), add it to inner zip
+//       if (previewImageBlob) {
+//         innerZip.file(previewImageFileName, previewImageBlob);
+//         console.log(`Added to Inner ZIP: ${previewImageFileName}`);
+//       }
+
+//       // Generate inner zip blob
+//       const innerZipContent = await innerZip.generateAsync({
+//         type: 'blob',
+//         compression: 'DEFLATE',
+//         compressionOptions: { level: 9 }
+//       });
+//       console.log("Inner ZIP generated.");
+
+//       // ----- 2) Create Outer ZIP -----
+//       const outerZip = new JSZip();
+
+//       // Create nested directory structure inside outer zip
+//       const nestedDirPath = normalizedDownloadFilePath; // e.g., abc/def/ghi/jkl/
+//       const nestedDir = outerZip.folder(nestedDirPath);
+//       if (!nestedDir) {
+//         console.error(`Failed to create nested directory: ${nestedDirPath}`);
+//         return;
+//       }
+
+//       // Add inner zip as a file in the nested directory
+//       const innerZipFileName = `${civitaiModelID}_${civitaiVersionID}_${baseModel}_${fname}.zip`;
+//       nestedDir.file(innerZipFileName, innerZipContent);
+//       console.log(`Added Inner ZIP to Outer ZIP: ${nestedDirPath}/${innerZipFileName}`);
+
+//       // Add preview.png to nested directory
+//       if (previewImageBlob) {
+//         nestedDir.file(previewImageFileName, previewImageBlob);
+//         console.log(`Added Preview PNG to Outer ZIP: ${nestedDirPath}/${previewImageFileName}`);
+//       }
+
+//       // Generate outer zip blob
+//       const outerZipContent = await outerZip.generateAsync({
+//         type: 'blob',
+//         compression: 'DEFLATE',
+//         compressionOptions: { level: 9 }
+//       });
+//       console.log("Outer ZIP generated.");
+
+//       // ----- 3) Download the Outer ZIP -----
+//       const outerZipBlob = new Blob([outerZipContent], { type: 'application/zip' });
+//       const outerZipUrl = URL.createObjectURL(outerZipBlob);
+
+//       const downloadLink = document.createElement('a');
+//       downloadLink.href = outerZipUrl;
+//       downloadLink.download = `${civitaiModelID}_${civitaiVersionID}_${baseModel}_${fname}.zip`;
+//       downloadLink.style.display = 'none';
+
+//       document.body.appendChild(downloadLink);
+//       downloadLink.click();
+//       document.body.removeChild(downloadLink);
+
+//       // Clean up the ZIP object URL
+//       URL.revokeObjectURL(outerZipUrl);
+//       console.log("Outer ZIP downloaded.");
+
+//       // ----- 4) Remove the Separate Download of Preview.png -----
+//       // **Removed**: The previous code downloaded the preview.png separately.
+//       // This ensures that preview.png is only inside the nested directory and the inner zip.
+//       /*
+//       if (previewImageBlob) {     
+//         const previewUrl = URL.createObjectURL(previewImageBlob);
+//         const previewDownloadLink = document.createElement('a');
+//         previewDownloadLink.href = previewUrl;
+//         // e.g. "123_123_pony_abc.preview.png"
+//         previewDownloadLink.download = previewImageFileName;
+//         previewDownloadLink.style.display = 'none';
+
+//         document.body.appendChild(previewDownloadLink);
+//         previewDownloadLink.click();
+//         document.body.removeChild(previewDownloadLink);
+
+//         // Clean up the preview image URL
+//         URL.revokeObjectURL(previewUrl);
+//       }
+//       */
+
+//     } catch (e) {
+//       console.error("Error during ZIP creation:", e);
+//     }
+
+//   }
+// });
+
 
 chrome.runtime.onMessage.addListener(
   async (
@@ -363,42 +703,38 @@ chrome.runtime.onMessage.addListener(
 );
 
 
-chrome.runtime.onMessage.addListener(async (message: any, sender, sendResponse) => {
+// Assuming hrefMap is already defined and populated elsewhere in your code
+// const hrefMap: Map<string, string> = new Map();
+
+chrome.runtime.onMessage.addListener((message: any, sender, sendResponse) => {
   if (message.action === "checkUpdateAvaliableMode") {
     const newUrlList: string[] = [];
 
-    // Select the parent container with class 'mantine-1ofgurw'
-    const parentContainer: HTMLElement | null = document.querySelector('.mantine-1ofgurw');
+    // Convert checkedUpdateList to a Set for faster lookup (O(1) complexity)
+    const checkedSet = new Set<string>(message.checkedUpdateList);
 
-    if (parentContainer) {
-      // Select only the direct child divs of the parent
-      const childDivs: NodeListOf<HTMLDivElement> = parentContainer.querySelectorAll(':scope > div');
+    // Iterate over the hrefMap values
+    hrefMap.forEach((href: string) => {
+      if (!checkedSet.has(href)) {
+        newUrlList.push(href);
+      }
+    });
 
-      childDivs.forEach((item: HTMLDivElement) => {
-        // Optionally, ensure the div has an 'id'
-        // if (!item.id) return;
-
-        // Find the first <a> element within the current div
-        const linkElement: HTMLAnchorElement | null = item.querySelector('a');
-        if (linkElement && linkElement.href) {
-          // Check if 'checkedUrlList' exists and does not include the current href
-          if (linkElement.href && !message.checkedUpdateList.includes(linkElement.href)) {
-            newUrlList.push(linkElement.href);
-          }
-        }
-      });
-    }
-
+    // Send the newUrlList back to the extension
     chrome.runtime.sendMessage({
       action: "checkifmodelAvaliable",
       newUrlList: newUrlList,
     });
+
+    console.log(`checkUpdateAvaliableMode: Found ${newUrlList.length} new URLs to check.`);
   }
 });
 
 
 // Create a Map to cache hrefs associated with each div's unique id
 const hrefMap: Map<string, string> = new Map();
+
+const updateInfoMap: Map<string, { quantity: number; isUpdateAvaliable: boolean; isEarlyAccess: boolean }> = new Map();
 
 // Flag to track the current sort order (true for ascending, false for descending)
 let isSortedAscending: boolean = true;
@@ -607,11 +943,113 @@ chrome.runtime.onMessage.addListener(
   }
 );
 
+chrome.runtime.onMessage.addListener(
+  async (
+    message: { action: string; offlineList?: Array<{ url: string; quantity: number }> },
+    sender: chrome.runtime.MessageSender,
+    sendResponse: (response?: any) => void
+  ) => {
+    if (message.action === "display-offline" || message.action === "remove-offline") {
+      // Select the parent container with class 'mantine-1ofgurw'
+      const container: HTMLElement | null = document.querySelector('.mantine-1ofgurw');
 
+      if (!container) {
+        console.warn("Container with class 'mantine-1ofgurw' not found.");
+        return;
+      }
+
+      // Select only the direct child divs of the container
+      const cardElements: NodeListOf<HTMLDivElement> = container.querySelectorAll(':scope > div');
+
+      console.log(`Number of first-level card elements: ${cardElements.length}`);
+
+      if (message.action === "display-offline") {
+        const offlinelist: Array<{ url: string; quantity: number }> | undefined = message.offlineList;
+
+        // If offlineList is not defined, just return
+        if (!offlinelist) {
+          console.warn("offlineList is undefined or null.");
+          return;
+        }
+
+        cardElements.forEach((item: HTMLDivElement) => {
+          // Find the first <a> element inside the card
+          const linkElement: HTMLAnchorElement | null = item.querySelector('a');
+
+          if (linkElement && linkElement.href) {
+            const url: string = linkElement.href;
+            // Find the corresponding offline info for the URL
+            const offlineInfo = offlinelist.find((info) => info.url === url);
+
+            // Only do something if offlineInfo is found
+            if (offlineInfo) {
+              // Check if a label already exists
+              const existingLabel = item.querySelector('.offline-label') as HTMLDivElement | null;
+
+              // Only show a label if quantity > 0
+              if (offlineInfo.quantity > 0) {
+                // Create or update the label
+                if (!existingLabel) {
+                  // Create a new label
+                  const label: HTMLDivElement = document.createElement('div');
+                  label.classList.add('offline-label');
+                  label.textContent = `Offline: ${offlineInfo.quantity}`;
+
+                  // Style the label
+                  Object.assign(label.style, {
+                    position: 'absolute',
+                    top: '40%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    zIndex: '1001',
+                    backgroundColor: 'blue', // <-- Use a different color here
+                    color: 'white',
+                    textShadow: '0px 0px 3px black',
+                    padding: '5px',
+                    borderRadius: '5px',
+                    pointerEvents: 'none', // Prevents the label from interfering with user interactions
+                  });
+
+                  // Ensure the parent has relative positioning
+                  item.style.position = 'relative';
+                  item.appendChild(label);
+                } else {
+                  // Update the existing label
+                  existingLabel.textContent = `Offline: ${offlineInfo.quantity}`;
+                  existingLabel.style.backgroundColor = 'blue'; // <-- Use a different color here
+                }
+              } else {
+                // If quantity <= 0, remove any existing label
+                if (existingLabel) {
+                  existingLabel.remove();
+                }
+              }
+            }
+          }
+        });
+      } else if (message.action === "remove-offline") {
+        console.log("Removing offline labels...");
+
+        cardElements.forEach((item: HTMLDivElement) => {
+          // Find the label within the card
+          const label: HTMLElement | null = item.querySelector('.offline-label');
+
+          if (label) {
+            console.log("Removing offline label from:", item);
+            label.remove(); // Remove the label element directly
+          }
+        });
+      }
+    }
+
+    // Indicate that the response is handled asynchronously
+    return true;
+  }
+);
 
 chrome.runtime.onMessage.addListener(
   async (
-    message: { action: string; savedList?: Array<{ url: string; quantity?: number; isUpdateAvaliable?: boolean; isEarlyAccess?: boolean }> },
+    message: { action: string; savedList?: Array<{ url: string; quantity: number; isUpdateAvaliable: boolean; isEarlyAccess: boolean }> },
     sender: chrome.runtime.MessageSender,
     sendResponse: (response?: any) => void
   ) => {
@@ -626,92 +1064,203 @@ chrome.runtime.onMessage.addListener(
     const cardElements: NodeListOf<HTMLDivElement> = parentContainer.querySelectorAll(':scope > div');
 
     if (message.action === "display-update-avaliable") {
-      const savedList: Array<{ url: string; quantity?: number; isUpdateAvaliable?: boolean; isEarlyAccess?: boolean }> | undefined = message.savedList;
+      const savedList: Array<{ url: string; quantity: number; isUpdateAvaliable: boolean; isEarlyAccess: boolean }> | undefined = message.savedList;
 
       if (!savedList) {
         console.warn("savedList is undefined or null.");
         return;
       }
 
-      cardElements.forEach((item: HTMLDivElement) => {
-        // Find the first <a> element inside the card
-        const linkElement: HTMLAnchorElement | null = item.querySelector('a');
-
-        if (linkElement && linkElement.href) {
-          const url: string = linkElement.href;
-          // Find the corresponding saved info for the URL
-          const savedInfo = savedList.find((info) => info.url === url);
-
-          if (savedInfo?.isUpdateAvaliable || savedInfo?.isEarlyAccess) {
-            // Check if the label already exists to avoid duplicates
-            if (!item.querySelector('.update-early-label')) {
-              // Create a label element
-              const label: HTMLDivElement = document.createElement('div');
-              label.classList.add('update-early-label');
-
-              let text: string = '';
-              let backgroundColor: string = '';
-
-              if (savedInfo.isUpdateAvaliable && savedInfo.isEarlyAccess) {
-                text = 'Update Available & Early Access';
-                backgroundColor = 'linear-gradient(to right, lightgreen, red)';
-              } else if (savedInfo.isUpdateAvaliable) {
-                text = 'Update Available';
-                backgroundColor = 'lightgreen';
-              } else if (savedInfo.isEarlyAccess) {
-                text = 'Early Access';
-                backgroundColor = 'red';
-              }
-
-              // Apply label styles
-              label.textContent = text;
-              Object.assign(label.style, {
-                position: 'absolute',
-                top: '70%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                zIndex: '1001',
-                background: backgroundColor,
-                color: 'white',
-                textShadow: '0px 0px 3px black',
-                padding: '5px 10px',
-                borderRadius: '5px',
-                boxShadow: '0px 4px 6px rgba(0, 0, 0, 0.1)',
-                fontFamily: 'Arial, sans-serif',
-                fontSize: '14px',
-                fontWeight: 'bold',
-                letterSpacing: '1px',
-                textTransform: 'uppercase',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                textAlign: 'center',
-              });
-
-              // Ensure the parent has relative positioning
-              item.style.position = 'relative';
-              item.appendChild(label);
-            }
-          }
-        }
+      // Populate updateInfoMap with the received savedList
+      savedList.forEach(item => {
+        updateInfoMap.set(item.url, {
+          quantity: item.quantity || 0,
+          isUpdateAvaliable: item.isUpdateAvaliable || false,
+          isEarlyAccess: item.isEarlyAccess || false,
+        });
       });
+
+      console.log(`display-update-avaliable: Stored update information for ${updateInfoMap.size} URLs.`);
+
+      // Display update labels on currently loaded cards
+      displayUpdateLabels();
     } else if (message.action === "remove-update-saved") {
       console.log("Removing update and early access labels...");
 
-      cardElements.forEach((item: HTMLDivElement) => {
-        // Remove only the label with the 'update-early-label' class
-        const label: HTMLElement | null = item.querySelector('.update-early-label');
-        if (label) {
-          console.log("Removing update label from:", item);
-          label.remove(); // Remove the label element directly
-        }
-      });
+      // Remove labels from all card elements
+      removeUpdateLabels();
     }
 
     // Indicate that the response is handled asynchronously
     return true;
   }
 );
+
+function displayUpdateLabels(): void {
+  const parentContainer: HTMLElement | null = document.querySelector('.mantine-1ofgurw');
+
+  if (!parentContainer) {
+    console.warn("Container with class 'mantine-1ofgurw' not found.");
+    return;
+  }
+
+  // Select only the direct child divs of the parent container
+  const cardElements: NodeListOf<HTMLDivElement> = parentContainer.querySelectorAll(':scope > div');
+
+  cardElements.forEach((item: HTMLDivElement) => {
+    // Find the first <a> element inside the card
+    const linkElement: HTMLAnchorElement | null = item.querySelector('a');
+
+    if (linkElement && linkElement.href) {
+      const url: string = linkElement.href;
+      const updateInfo = updateInfoMap.get(url);
+
+      if (updateInfo?.isUpdateAvaliable || updateInfo?.isEarlyAccess) {
+        // Check if the label already exists to avoid duplicates
+        if (!item.querySelector('.update-early-label')) {
+          // Create a label element
+          const label: HTMLDivElement = document.createElement('div');
+          label.classList.add('update-early-label');
+
+          let text: string = '';
+          let backgroundColor: string = '';
+
+          if (updateInfo.isUpdateAvaliable && updateInfo.isEarlyAccess) {
+            text = 'Update Available & Early Access';
+            backgroundColor = 'linear-gradient(to right, lightgreen, red)';
+          } else if (updateInfo.isUpdateAvaliable) {
+            text = 'Update Available';
+            backgroundColor = 'lightgreen';
+          } else if (updateInfo.isEarlyAccess) {
+            text = 'Early Access';
+            backgroundColor = 'red';
+          }
+
+          // Apply label styles
+          label.textContent = text;
+          Object.assign(label.style, {
+            position: 'absolute',
+            top: '70%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: '1001',
+            background: backgroundColor,
+            color: 'white',
+            textShadow: '0px 0px 3px black',
+            padding: '5px 10px',
+            borderRadius: '5px',
+            boxShadow: '0px 4px 6px rgba(0, 0, 0, 0.1)',
+            fontFamily: 'Arial, sans-serif',
+            fontSize: '14px',
+            fontWeight: 'bold',
+            letterSpacing: '1px',
+            textTransform: 'uppercase',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            textAlign: 'center',
+            pointerEvents: 'none', // Ensure label doesn't interfere with user interactions
+          });
+
+          // Ensure the parent has relative positioning
+          item.style.position = 'relative';
+          item.appendChild(label);
+        }
+      }
+    }
+  });
+
+  console.log("Displayed update labels based on updateInfoMap.");
+}
+
+// 10. Function to remove update labels
+function removeUpdateLabels(): void {
+  const parentContainer: HTMLElement | null = document.querySelector('.mantine-1ofgurw');
+
+  if (!parentContainer) {
+    console.warn("Container with class 'mantine-1ofgurw' not found.");
+    return;
+  }
+
+  // Select only the direct child divs of the parent container
+  const cardElements: NodeListOf<HTMLDivElement> = parentContainer.querySelectorAll(':scope > div');
+
+  cardElements.forEach((item: HTMLDivElement) => {
+    // Remove only the label with the 'update-early-label' class
+    const label: HTMLElement | null = item.querySelector('.update-early-label');
+    if (label) {
+      console.log("Removing update label from:", item);
+      label.remove(); // Remove the label element directly
+    }
+  });
+
+  // Optionally, clear the updateInfoMap if you no longer need the update information
+  // updateInfoMap.clear();
+
+  console.log("Removed all update labels from card elements.");
+}
+
+function handleNewCard(cardItem: HTMLElement): void {
+  const linkElement: HTMLAnchorElement | null = cardItem.querySelector('a');
+
+  if (linkElement && linkElement.href) {
+    const url: string = linkElement.href;
+    const updateInfo = updateInfoMap.get(url);
+
+    if (updateInfo?.isUpdateAvaliable || updateInfo?.isEarlyAccess) {
+      // Check if the label already exists to avoid duplicates
+      if (!cardItem.querySelector('.update-early-label')) {
+        // Create a label element
+        const label: HTMLDivElement = document.createElement('div');
+        label.classList.add('update-early-label');
+
+        let text: string = '';
+        let backgroundColor: string = '';
+
+        if (updateInfo.isUpdateAvaliable && updateInfo.isEarlyAccess) {
+          text = 'Update Available & Early Access';
+          backgroundColor = 'linear-gradient(to right, lightgreen, red)';
+        } else if (updateInfo.isUpdateAvaliable) {
+          text = 'Update Available';
+          backgroundColor = 'lightgreen';
+        } else if (updateInfo.isEarlyAccess) {
+          text = 'Early Access';
+          backgroundColor = 'red';
+        }
+
+        // Apply label styles
+        label.textContent = text;
+        Object.assign(label.style, {
+          position: 'absolute',
+          top: '70%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          zIndex: '1001',
+          background: backgroundColor,
+          color: 'white',
+          textShadow: '0px 0px 3px black',
+          padding: '5px 10px',
+          borderRadius: '5px',
+          boxShadow: '0px 4px 6px rgba(0, 0, 0, 0.1)',
+          fontFamily: 'Arial, sans-serif',
+          fontSize: '14px',
+          fontWeight: 'bold',
+          letterSpacing: '1px',
+          textTransform: 'uppercase',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          textAlign: 'center',
+          pointerEvents: 'none', // Ensure label doesn't interfere with user interactions
+        });
+
+        // Ensure the parent has relative positioning
+        cardItem.style.position = 'relative';
+        cardItem.appendChild(label);
+      }
+    }
+  }
+}
 
 // contentScript.ts
 
@@ -783,6 +1332,12 @@ function initMutationObserver(parentContainer: HTMLElement) {
                     // Update the hrefMap with the new href
                     hrefMap.set(divId, processedUrl);
                     console.log(`Added href to hrefMap: [${divId}] ${processedUrl}`);
+
+                    // Check if this URL has update information
+                    if (updateInfoMap.has(processedUrl)) {
+                      handleNewCard(divParent);
+                    }
+
                   }
 
                 }
@@ -867,6 +1422,12 @@ function observeCardItem(cardItem: HTMLElement) {
                 // Update the hrefMap with the new href
                 hrefMap.set(divId, processedUrl);
                 console.log(`Added href to hrefMap: [${divId}] ${processedUrl}`);
+
+                // Check if this URL has update information
+                if (updateInfoMap.has(processedUrl)) {
+                  handleNewCard(divParent);
+                }
+
               }
             }
           }

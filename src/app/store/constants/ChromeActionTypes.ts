@@ -6,6 +6,7 @@ export const UPDATE_CATEGORIES_LIST = 'UPDATE_CATEGORIES_LIST';
 export const UPDATE_DOWNLOAD_FILEPATH = 'UPDATE_DOWNLOAD_FILEPATH';
 export const UPDATE_DOWNLOAD_METHOD = 'UPDATE_DOWNLOAD_METHOD';
 export const UPDATE_SELECTED_FILTERED_CATEGORIES_LIST = 'UPDATE_SELECTED_FILTERED_CATEGORIES_LIST';
+export const UPDATE_OFFLINEMODE = 'UPDATE_OFFLINEMODE';
 
 export interface UpdateBookmarkID {
     type: typeof UPDATE_BOOKMARKID;
@@ -42,7 +43,12 @@ export interface UpdateSelectedFilteredCategoriesListAction {
     payload: string;
 }
 
+export interface UpdateOfflineMode {
+    type: typeof UPDATE_OFFLINEMODE;
+    payload: boolean;
+};
+
 export type ChromeActionTypes = UpdateBookmarkID | SetIsBookmarked |
     UpdateSelectedCategoryAction | UpdateCategoriesListAction |
     UpdateDownloadFilePathAction | UpdateDownloadMethodAction |
-    UpdateSelectedFilteredCategoriesListAction;
+    UpdateSelectedFilteredCategoriesListAction | UpdateOfflineMode;

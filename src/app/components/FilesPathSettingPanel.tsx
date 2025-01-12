@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 //Store
 import { useSelector, useDispatch } from 'react-redux';
 import { AppState } from '../store/configureStore';
-import { updateDownloadFilePath, UpdateSelectedFilteredCategoriesList } from "../store/actions/chromeActions"
+import { updateDownloadFilePath, updateSelectedFilteredCategoriesList } from "../store/actions/chromeActions"
 
 //components
 import { Collapse, OverlayTrigger, Tooltip } from 'react-bootstrap';
@@ -104,7 +104,7 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ isHandleR
             isInitialMount.current = false;
         } else {
             updateSelectedFilteredCategoriesListIntoChromeStorage(selectedFilteredCategoriesList);
-            dispatch(UpdateSelectedFilteredCategoriesList(JSON.stringify(selectedFilteredCategoriesList)))
+            dispatch(updateSelectedFilteredCategoriesList(JSON.stringify(selectedFilteredCategoriesList)))
         }
     }, [selectedFilteredCategoriesList]);
 

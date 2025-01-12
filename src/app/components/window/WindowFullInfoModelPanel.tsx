@@ -22,10 +22,11 @@ interface PanelProps {
     url: string;
     setUrlList: (updater: (prevUrlList: string[]) => string[]) => void; // Callback to update the URL list
     onClose: () => void;
+    setIsFullInfoModelPanelVisible: (isFullInfoModelPanelVisible: boolean) => void;
     urlList: string[]; // Pass the list of URLs to check for duplicates
 }
 
-const FullInfoModelPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, onClose }) => {
+const FullInfoModelPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, onClose, setIsFullInfoModelPanelVisible }) => {
     const dispatch = useDispatch();
 
     const [modelData, setModelData] = useState<Model | null>(null);
@@ -50,7 +51,16 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, on
     useEffect(() => {
         if (hasUpdated) {
             fetchModelInfo();
+            // Remove the processed URL from the urlList
+            setUrlList(currentUrls => currentUrls.filter(currentUrl => currentUrl !== url));
+
+            chrome.storage.local.get('originalTabId', (result) => {
+                if (result.originalTabId) {
+                    chrome.tabs.sendMessage(result.originalTabId, { action: "uncheck-url", url: url });
+                }
+            });
             setHasUpdated(false);
+            setIsFullInfoModelPanelVisible(false)
         }
     }, [hasUpdated]);
 
