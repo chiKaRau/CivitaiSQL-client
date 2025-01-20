@@ -88,6 +88,10 @@ const CategoriesListSelector: React.FC = () => {
             }
         }
 
+        if (downloadFilePath.includes("/Pending/")) {
+            firstMatch = "Characters"
+        }
+
         //Changing back for setting sheet
         if (downloadFilePath.includes("Type")) {
             firstMatch = "Type Character"
@@ -128,7 +132,7 @@ const CategoriesListSelector: React.FC = () => {
         if (firstMatch === null) {
             firstMatch = selectedCategory
         }
-        
+
 
         dispatch(updateSelectedCategory(firstMatch))
     }
@@ -155,7 +159,7 @@ const CategoriesListSelector: React.FC = () => {
                     </Form.Select>
                 </Form.Group>
             </Form>
-            {notMatchSelector && <div style={{paddingLeft: "5px"}}> <CiWarning /> </div>}
+            {notMatchSelector && <div style={{ paddingLeft: "5px" }}> <CiWarning /> </div>}
         </div>
     );
 };

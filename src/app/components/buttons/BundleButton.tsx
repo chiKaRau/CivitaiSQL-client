@@ -175,6 +175,8 @@ const BundleButton: React.FC = (props: any) => {
         //the fileList would contains the urls of all files such as safetensor, training data, ...
         let civitaiModelFileList = retrieveCivitaiFilesList(civitaiData, civitaiVersionID)
 
+        let civitaiTags = civitaiData?.tags;
+
         //Check for null or empty
         if (
             civitaiUrl === null || civitaiUrl === "" ||
@@ -183,7 +185,8 @@ const BundleButton: React.FC = (props: any) => {
             civitaiVersionID === null || civitaiVersionID === "" ||
             downloadFilePath === null || downloadFilePath === "" ||
             selectedCategory === null || selectedCategory === "" ||
-            civitaiModelFileList === null || !civitaiModelFileList.length
+            civitaiModelFileList === null || !civitaiModelFileList.length ||
+            civitaiTags === null
         ) {
             dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
             setIsLoading(false)
@@ -192,7 +195,7 @@ const BundleButton: React.FC = (props: any) => {
 
         let modelObject = {
             downloadFilePath, civitaiFileName, civitaiModelID,
-            civitaiVersionID, civitaiModelFileList, civitaiUrl, selectedCategory
+            civitaiVersionID, civitaiModelFileList, civitaiUrl, selectedCategory, civitaiTags
         }
 
         //If download Method is server, the server will download the file into server's folder

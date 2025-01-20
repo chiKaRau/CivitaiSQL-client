@@ -283,6 +283,25 @@ export const fetchGetFoldersList = async (dispatch: any) => {
     }
 }
 
+export const fetchGetErrorModelList = async (dispatch: any) => {
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+        const response = await axios.get(`${config.domain}/api/get_error_model_list`);
+        if (response.status >= 200 && response.status < 300) {
+            return response.data.payload.errorModelList;
+        } else {
+            // Handle the case when response is false
+            throw new Error("Retriving Error model List failed.");
+        }
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Civitai Info retrieval:", error.message);
+        // Optionally, you can throw an error or return a specific value
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}
+
 export const fetchGetTagsList = async (dispatch: any, selectedPrefix: string) => {
     try {
         // Clear any previous errors
@@ -426,7 +445,7 @@ export const fetchDownloadFilesByServer = async (url: string, name: string,
 export const fetchDownloadFilesByServer_v2 = async (
     modelObject: {
         downloadFilePath: string, civitaiFileName: string, civitaiModelID: string,
-        civitaiVersionID: string, civitaiModelFileList: { name: string; downloadUrl: string }[], civitaiUrl: string
+        civitaiVersionID: string, civitaiModelFileList: { name: string; downloadUrl: string }[], civitaiUrl: string,
     }
     , dispatch: any) => {
 
@@ -440,7 +459,10 @@ export const fetchDownloadFilesByServer_v2 = async (
 
         if (!(response.status >= 200 && response.status < 300)) {
             // Handle the case when response is false
+            return false;
             throw new Error("Failed download files by server.");
+        } else {
+            return true;
         }
 
     } catch (error: any) {
@@ -477,16 +499,49 @@ export const fetchOfflineDownloadList = async (dispatch: any) => {
     }
 };
 
+/**
+ * Calls the backend API to backup the offline_download_list.json file.
+ *
+ * @param dispatch - Redux dispatch function to handle state changes.
+ */
+export const fetchBackupOfflineDownloadList = async (dispatch: any) => {
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+        console.log("Starting backup of offline_download_list.json");
+
+        // Make the POST request to the backup endpoint
+        const response = await axios.post(`${config.domain}/api/backup_offline_download_list`);
+        const responseData = response.data;
+        if (response.status >= 200 && response.status < 300) {
+            return responseData?.payload?.isBackedUp;
+        } else {
+            // Handle unexpected HTTP status codes
+            return false
+        }
+
+    } catch (error: any) {
+        // Handle errors (network issues, server errors, etc.)
+        console.error("Error during backup operation:", error.message);
+        // Dispatch an error state with the error message
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+        return false;
+    }
+};
+
 export const fetchAddOfflineDownloadFileIntoOfflineDownloadList = async (
     modelObject: {
         downloadFilePath: string, civitaiFileName: string, civitaiModelID: string,
-        civitaiVersionID: string, civitaiModelFileList: { name: string; downloadUrl: string }[], civitaiUrl: string, selectedCategory: string
+        civitaiVersionID: string, civitaiModelFileList: { name: string; downloadUrl: string }[], civitaiUrl: string, selectedCategory: string, civitaiTags: string[]
     }, isModifyMode: boolean
     , dispatch: any) => {
 
     try {
         // Clear any previous errors
         dispatch(clearError());
+        console.log("ABC")
+        console.log(modelObject)
+        console.log(isModifyMode)
         const response = await axios.post(`${config.domain}/api/add-offline-download-file-into-offline-download-list`, {
             modelObject, isModifyMode
         });
@@ -515,6 +570,33 @@ export const fetchRemoveOfflineDownloadFileIntoOfflineDownloadList = async (
         // Clear any previous errors
         dispatch(clearError());
         const response = await axios.post(`${config.domain}/api/remove-offline-download-file-into-offline-download-list`, {
+            modelObject
+        });
+
+        if (!(response.status >= 200 && response.status < 300)) {
+            // Handle the case when response is false
+            throw new Error("Failed adding offline download file into offline download list by server.");
+        }
+
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Civitai Info retrieval:", error.message);
+        // Optionally, you can throw an error or return a specific value
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}
+
+export const fetchRemoveFromErrorModelList = async (
+    modelObject: {
+        civitaiModelID: string,
+        civitaiVersionID: string
+    }
+    , dispatch: any) => {
+
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+        const response = await axios.post(`${config.domain}/api/remove-from-error-model-list`, {
             modelObject
         });
 

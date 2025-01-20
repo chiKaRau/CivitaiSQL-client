@@ -16,12 +16,16 @@ import { FcGenericSortingAsc, FcGenericSortingDesc } from "react-icons/fc";
 import { PiTabsFill } from "react-icons/pi";
 import { LuPanelLeftOpen, LuPanelRightOpen } from "react-icons/lu";
 import { BsReverseLayoutTextWindowReverse } from "react-icons/bs";
+import { FaTimes } from 'react-icons/fa'; // Import the '×' icon
+import { FaAngleDoubleLeft, FaAngleLeft, FaAngleRight, FaAngleDoubleRight } from 'react-icons/fa';
+
+
 
 // Components
 import CategoriesListSelector from '../CategoriesListSelector';
 import DownloadFilePathOptionPanel from '../DownloadFilePathOptionPanel';
 import ButtonWrap from "../buttons/ButtonWrap";
-import { Button, Spinner, OverlayTrigger, Tooltip, Form, Dropdown, ButtonGroup, Carousel, Card } from 'react-bootstrap';
+import { InputGroup, FormControl, Button, Spinner, OverlayTrigger, Tooltip, Form, Dropdown, ButtonGroup, Carousel, Card, Pagination } from 'react-bootstrap';
 import ErrorAlert from '../ErrorAlert';
 
 // APIs
@@ -31,7 +35,8 @@ import {
     fetchDownloadFilesByServer,
     fetchDownloadFilesByServer_v2,
     fetchAddOfflineDownloadFileIntoOfflineDownloadList,
-    fetchRemoveOfflineDownloadFileIntoOfflineDownloadList
+    fetchRemoveOfflineDownloadFileIntoOfflineDownloadList,
+    fetchBackupOfflineDownloadList
 } from "../../api/civitaiSQL_api"
 
 import {
@@ -48,6 +53,8 @@ import { ColDef, GridReadyEvent } from 'ag-grid-community';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
 import { AppState } from '../../store/configureStore';
+import FailedCardMode from './FailedCardMode';
+import ErrorCardMode from './ErrorCardMode';
 
 // TypeScript Interfaces
 interface CivitaiModelFile {
@@ -143,6 +150,7 @@ interface OfflineDownloadEntry {
     civitaiModelID: string;
     imageUrlsArray: string[];
     selectedCategory: string;
+    civitaiTags: string[];
 }
 
 // **1. SelectAllHeaderCheckbox Component**
@@ -219,7 +227,9 @@ const OfflineWindow: React.FC = () => {
     const dispatch = useDispatch();
     const [isLoading, setIsLoading] = useState(false);
     const [offlineDownloadList, setOfflineDownloadList] = useState<OfflineDownloadEntry[]>([]);
-    const [displayMode, setDisplayMode] = useState<'table' | 'bigCard' | 'smallCard'>('table');
+    const [displayMode, setDisplayMode] = useState<
+        'table' | 'bigCard' | 'smallCard' | 'failedCard' | 'errorCard'
+    >('table');
 
     // States for filtering
     const [filterText, setFilterText] = useState('');
@@ -246,14 +256,21 @@ const OfflineWindow: React.FC = () => {
     const [failedEntries, setFailedEntries] = useState<OfflineDownloadEntry[]>([]);
 
     // **New: State for Cooldown Management**
-    const [completedCount, setCompletedCount] = useState<number>(0);
-    const [delayTime, setDelayTime] = useState<number>(0);
+    // const [completedCount, setCompletedCount] = useState<number>(0);
+    // const [delayTime, setDelayTime] = useState<number>(0);
+
+    // State for tracking the 60s cooldown between batches
+    const [batchCooldown, setBatchCooldown] = useState<number | null>(null);
 
     // In your OfflineWindow component
     const [isPaused, setIsPaused] = useState(false);
 
     const [selectCount, setSelectCount] = useState(20);
 
+    const [currentBatchRange, setCurrentBatchRange] = useState<string | null>(null);
+
+    // Add this alongside your existing useState hooks
+    const [initiationDelay, setInitiationDelay] = useState<number | null>(null);
 
     const handlePauseToggle = () => {
         setIsPaused((prev) => !prev);
@@ -285,26 +302,63 @@ const OfflineWindow: React.FC = () => {
     // Utility function to pause execution for a given number of milliseconds
     const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-    // **New: Countdown Timer for delayTime**
+    // // **New: Countdown Timer for delayTime**
+    // useEffect(() => {
+    //     let timer: NodeJS.Timeout;
+
+    //     if (delayTime > 0) {
+    //         timer = setInterval(() => {
+    //             setDelayTime(prev => {
+    //                 if (prev <= 1) {
+    //                     clearInterval(timer);
+    //                     return 0;
+    //                 }
+    //                 return prev - 1;
+    //             });
+    //         }, 1000);
+    //     }
+
+    //     return () => {
+    //         if (timer) clearInterval(timer);
+    //     };
+    // }, [delayTime]);
+
     useEffect(() => {
         let timer: NodeJS.Timeout;
-
-        if (delayTime > 0) {
+        if (initiationDelay !== null && initiationDelay > 0) {
             timer = setInterval(() => {
-                setDelayTime(prev => {
-                    if (prev <= 1) {
+                setInitiationDelay(prev => {
+                    if (prev === null || prev <= 1) {
                         clearInterval(timer);
-                        return 0;
+                        return null;
                     }
                     return prev - 1;
                 });
             }, 1000);
         }
-
         return () => {
             if (timer) clearInterval(timer);
         };
-    }, [delayTime]);
+    }, [initiationDelay]);
+
+
+    useEffect(() => {
+        let timer: NodeJS.Timeout;
+        if (batchCooldown !== null && batchCooldown > 0) {
+            timer = setInterval(() => {
+                setBatchCooldown(prev => {
+                    if (prev === null || prev <= 1) {
+                        clearInterval(timer);
+                        return null;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+        }
+        return () => {
+            if (timer) clearInterval(timer);
+        };
+    }, [batchCooldown]);
 
     // Fetch data on mount
     useEffect(() => {
@@ -315,8 +369,8 @@ const OfflineWindow: React.FC = () => {
                 if (Array.isArray(data)) {
                     setOfflineDownloadList(data);
                     // Initialize all IDs as selected by default
-                    const allIds = data.map((entry: OfflineDownloadEntry) => entry.civitaiVersionID);
-                    setSelectedIds(new Set(allIds));
+                    // const allIds = data.map((entry: OfflineDownloadEntry) => entry.civitaiVersionID);
+                    // setSelectedIds(new Set(allIds));
                 } else {
                     console.warn("fetchOfflineDownloadList returned non-array data:", data);
                     setOfflineDownloadList([]);
@@ -333,47 +387,135 @@ const OfflineWindow: React.FC = () => {
         fetchData();
     }, [dispatch]);
 
+    useEffect(() => {
+        // Reset the selection when filterText or filterCondition changes
+        setSelectedIds(new Set());
+    }, [filterText, filterCondition]);
+
     // Function to determine if an entry matches the filter condition (OR logic)
     const doesEntryMatch = (entry: OfflineDownloadEntry): boolean => {
         const fieldsToCheck = [
             entry.civitaiFileName,
-            entry.modelVersionObject?.name,
-            entry.civitaiUrl
+            entry.modelVersionObject?.name, //version name
+            entry.civitaiUrl,
+            entry.modelVersionObject?.model?.name, //This should be the title
+            entry.civitaiTags,
+            entry.civitaiModelID,
+            entry.civitaiVersionID
         ];
 
+        // Iterate through each field using OR logic
         return fieldsToCheck.some(field => {
-            if (!field) return false;
+            if (!field) return false; // Skip if the field is null or undefined
 
-            const text = filterText.toLowerCase();
-            const fieldValue = field.toLowerCase();
+            const text = filterText.toLowerCase(); // Normalize filter text for case-insensitive comparison
 
-            switch (filterCondition) {
-                case 'contains':
-                    return fieldValue.includes(text);
-                case 'does not contain':
-                    return !fieldValue.includes(text);
-                case 'equals':
-                    return fieldValue === text;
-                case 'does not equal':
-                    return fieldValue !== text;
-                case 'begins with':
-                    return fieldValue.startsWith(text);
-                case 'ends with':
-                    return fieldValue.endsWith(text);
-                default:
-                    return false;
+            // If the field is an array, iterate through each item
+            if (Array.isArray(field)) {
+                return field.some(item => {
+                    const fieldValue = item.toLowerCase(); // Normalize item for comparison
+
+                    switch (filterCondition) {
+                        case 'contains':
+                            return fieldValue.includes(text);
+                        case 'does not contain':
+                            return !fieldValue.includes(text);
+                        case 'equals':
+                            return fieldValue === text;
+                        case 'does not equal':
+                            return fieldValue !== text;
+                        case 'begins with':
+                            return fieldValue.startsWith(text);
+                        case 'ends with':
+                            return fieldValue.endsWith(text);
+                        default:
+                            return false;
+                    }
+                });
             }
+            // If the field is a string, apply the filtering logic directly
+            else if (typeof field === 'string') {
+                const fieldValue = field.toLowerCase(); // Normalize field value for comparison
+
+                switch (filterCondition) {
+                    case 'contains':
+                        return fieldValue.includes(text);
+                    case 'does not contain':
+                        return !fieldValue.includes(text);
+                    case 'equals':
+                        return fieldValue === text;
+                    case 'does not equal':
+                        return fieldValue !== text;
+                    case 'begins with':
+                        return fieldValue.startsWith(text);
+                    case 'ends with':
+                        return fieldValue.endsWith(text);
+                    default:
+                        return false;
+                }
+            }
+
+            // If the field is neither an array nor a string, do not consider it a match
+            return false;
         });
     };
 
     // Memoized filtered list based on filterText and filterCondition
     const filteredDownloadList = useMemo(() => {
-        if (filterText.trim() === '') {
-            return offlineDownloadList;
+        // Apply filtering based on filterText and filterCondition
+        const filtered = filterText.trim() === ''
+            ? offlineDownloadList
+            : offlineDownloadList.filter(entry => doesEntryMatch(entry));
+
+        // Only sort if modify mode is off
+        if (!isModifyMode) {
+            // Sort the filtered list so that selected entries come first
+            return [...filtered].sort((a, b) => {
+                const aSelected = selectedIds.has(a.civitaiVersionID) ? 1 : 0;
+                const bSelected = selectedIds.has(b.civitaiVersionID) ? 1 : 0;
+                return bSelected - aSelected; // Descending: selected first
+            });
         }
 
-        return offlineDownloadList.filter(entry => doesEntryMatch(entry));
-    }, [offlineDownloadList, filterText, filterCondition]);
+        // If modify mode is on, return the filtered list without sorting
+        return filtered;
+    }, [offlineDownloadList, filterText, filterCondition, selectedIds, isModifyMode]);
+
+    // **Add Pagination State and Logic**
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(100); // Default to 100 as in table mode
+
+    const totalPages = Math.ceil(filteredDownloadList.length / itemsPerPage);
+    const totalItems = filteredDownloadList.length;
+
+    const paginatedDownloadList = useMemo(() => {
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        return filteredDownloadList.slice(startIndex, startIndex + itemsPerPage);
+    }, [filteredDownloadList, currentPage, itemsPerPage]);
+
+    // Compute current range
+    const startItem = useMemo(() => {
+        return filteredDownloadList.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+    }, [filteredDownloadList, currentPage, itemsPerPage]);
+
+    const endItem = useMemo(() => {
+        return Math.min(currentPage * itemsPerPage, filteredDownloadList.length);
+    }, [filteredDownloadList, currentPage, itemsPerPage]);
+
+    // **New: Separate useEffect for itemsPerPage changes**
+    useEffect(() => {
+        setCurrentPage(1);
+        console.log(`Items per page changed to ${itemsPerPage}. Resetting to page 1.`);
+    }, [itemsPerPage]);
+
+    // **New: Adjust currentPage if it exceeds totalPages**
+    useEffect(() => {
+        const newTotalPages = Math.ceil(filteredDownloadList.length / itemsPerPage);
+        if (currentPage > newTotalPages) {
+            setCurrentPage(newTotalPages > 0 ? newTotalPages : 1);
+            console.log(`Adjusted currentPage to ${newTotalPages > 0 ? newTotalPages : 1} based on new totalPages.`);
+        }
+    }, [itemsPerPage, filteredDownloadList, currentPage]);
 
     // Define themes
     const darkTheme = {
@@ -426,6 +568,12 @@ const OfflineWindow: React.FC = () => {
     // **3. Define column definitions for Ag-Grid with dynamic styles**
     const columnDefs: ColDef[] = [
         {
+            headerName: 'ID',
+            field: 'id',
+            width: 60,
+            cellStyle: { textAlign: 'center', padding: '5px' } // Center-align ID column 
+        },
+        {
             headerName: "",
             field: "select",
             sortable: false,
@@ -463,6 +611,17 @@ const OfflineWindow: React.FC = () => {
                 />
             ),
             headerClass: 'custom-header', // Optional: for additional styling
+        },
+        {
+            headerName: 'Title',
+            field: 'title',
+            flex: 1,
+            tooltipField: 'title', // This tells AG Grid to show the field's content as tooltip
+            cellStyle: {
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+            },
         },
         {
             headerName: 'Model Name',
@@ -576,12 +735,14 @@ const OfflineWindow: React.FC = () => {
 
     // Prepare row data by extracting necessary fields and computing file size
     const rowData = useMemo(() => {
-        return filteredDownloadList.map(entry => {
+        return filteredDownloadList.map((entry, index) => {
             // Safely access modelVersionObject and files
             const safetensorFile = entry.modelVersionObject?.files?.find(file => file.name.endsWith('.safetensors'));
             const filesizeMB = safetensorFile ? (safetensorFile.sizeKB / 1024).toFixed(2) : 'N/A';
 
             return {
+                id: index + 1,
+                title: entry?.modelVersionObject?.model?.name ?? 'N/A',
                 modelName: entry.civitaiFileName ?? 'N/A',
                 versionName: entry.modelVersionObject?.name ?? 'N/A',
                 modelId: entry.modelVersionObject?.modelId ?? 'N/A',
@@ -608,12 +769,45 @@ const OfflineWindow: React.FC = () => {
     // Inline styles
     const containerStyle: React.CSSProperties = {
         width: '100%',
-        height: '100%',
+        height: '100vh', // Use full viewport height
+        display: 'flex',
+        flexDirection: 'column',
         padding: '20px',
         boxSizing: 'border-box',
         fontFamily: 'Arial, sans-serif',
         backgroundColor: currentTheme.gridBackgroundColor,
         transition: 'background-color 0.3s ease',
+    };
+
+    const contentStyle: React.CSSProperties = {
+        flex: 1, // Take up remaining space
+        overflowY: 'auto', // Enable vertical scrolling
+        paddingBottom: '60px', // Space for the fixed pagination
+    };
+
+    const footerStyle: React.CSSProperties = {
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        width: '100%',
+        backgroundColor: isDarkMode ? '#333' : '#f8f9fa', // Match theme
+        padding: '10px 20px',
+        boxShadow: '0 -2px 4px rgba(0, 0, 0, 0.1)',
+        zIndex: 1000, // Ensure it stays above other elements
+    };
+
+
+
+    // Define styles for the selection count display
+    const selectionCountStyle: React.CSSProperties = {
+        padding: '8px 12px',
+        borderRadius: '4px',
+        backgroundColor: isDarkMode ? '#444' : '#e0e0e0',
+        color: isDarkMode ? '#fff' : '#000',
+        marginTop: '10px', // Adds spacing from the buttons above
+        fontWeight: 'bold',
+        width: '100%', // Ensures it takes the full width for a new row
+        textAlign: 'center', // Centers the text
     };
 
     const headerStyleContainer: React.CSSProperties = {
@@ -634,7 +828,9 @@ const OfflineWindow: React.FC = () => {
         height: '600px',
         width: '100%',
         transition: 'background-color 0.3s ease, color 0.3s ease',
+        paddingBottom: '60px', // Space for the fixed pagination if needed
     };
+
 
     const filterContainerStyle: React.CSSProperties = {
         display: 'flex',
@@ -697,7 +893,7 @@ const OfflineWindow: React.FC = () => {
 
         // Reset failed entries if necessary
         setFailedEntries([]);
-        setCompletedCount(0); // Reset completed count on refresh
+        // setCompletedCount(0); // Reset completed count on refresh
 
         try {
             setIsLoading(true);
@@ -708,8 +904,8 @@ const OfflineWindow: React.FC = () => {
 
             if (Array.isArray(updatedData)) {
                 setOfflineDownloadList(updatedData);
-                const allIds = updatedData.map((entry: OfflineDownloadEntry) => entry.civitaiVersionID);
-                setSelectedIds(new Set(allIds));
+                // const allIds = updatedData.map((entry: OfflineDownloadEntry) => entry.civitaiVersionID);
+                // setSelectedIds(new Set(allIds));
                 console.log("Download list successfully refreshed");
             } else {
                 console.warn("fetchOfflineDownloadList returned non-array data:", updatedData);
@@ -732,23 +928,36 @@ const OfflineWindow: React.FC = () => {
     const handleDownloadNow = async () => {
         console.log("Download Now button clicked");
 
+        const isBackupSuccessful = await fetchBackupOfflineDownloadList(dispatch);
+        if (!isBackupSuccessful) {
+            alert("Backup failed. Cannot proceed with the download.");
+            return;
+        }
+
         // Collect selected entries from the filtered list
         const entriesToDownload = filteredDownloadList.filter(entry => {
             // Must be selected
             const isSelected = selectedIds.has(entry.civitaiVersionID);
 
-            // Check earlyAccessEndsAt
+            // Grab early access date and file path
             const earlyAccessEndsAt = entry.modelVersionObject?.earlyAccessEndsAt;
-
-            // Check downloadFilePath
             const downloadFilePath = entry.downloadFilePath ?? "";
 
-            // Exclude if earlyAccessEndsAt is null
-            // OR if downloadFilePath is "/@scan@/ACG/Pending/" or "/@scan@/ACG/Pending"
-            const shouldExclude =
-                !earlyAccessEndsAt ||
-                downloadFilePath === "/@scan@/ACG/Pending/" ||
-                downloadFilePath === "/@scan@/ACG/Pending";
+            // Get current time
+            const now = new Date();
+
+            // If earlyAccessEndsAt is defined AND strictly after now, it's still in early access
+            const stillEarlyAccess = earlyAccessEndsAt
+                ? new Date(earlyAccessEndsAt) > now
+                : false;   // if null/undefined, treat as "not early access"
+
+            // Check if file path indicates pending
+            const isPendingPath =
+                downloadFilePath === "/@scan@/ACG/Pending" ||
+                downloadFilePath === "/@scan@/ACG/Pending/";
+
+            // Exclude if still in early access or if file path is pending
+            const shouldExclude = stillEarlyAccess || isPendingPath;
 
             return isSelected && !shouldExclude;
         });
@@ -760,8 +969,7 @@ const OfflineWindow: React.FC = () => {
 
         setDownloadProgress({ completed: 0, total: entriesToDownload.length });
         setFailedEntries([]);
-        setCompletedCount(0);
-        // Always reset isCancelled so a new click starts fresh
+        // setCompletedCount(0);
         setIsCancelled(false);
 
         // Callback to update the download list after each download completes
@@ -770,20 +978,18 @@ const OfflineWindow: React.FC = () => {
                 setFailedEntries(prev => [...prev, entry]);
             }
 
-            // Increment the completed count and initiate cooldown if necessary
-            setCompletedCount(prevCount => {
-                const newCount = prevCount + 1;
+            // setCompletedCount(prevCount => {
+            //     const newCount = prevCount + 1;
 
-                // After every 10 completions, initiate a cooldown
-                if (newCount % 10 === 0) {
-                    setDelayTime(60); // 60-second cooldown
-                    console.log("Cooldown initiated for 60 seconds after 10 downloads.");
-                }
+            //     // After every 10 completions, initiate a cooldown
+            //     if (newCount % 10 === 0) {
+            //         setDelayTime(60); // 60-second cooldown
+            //         console.log("Cooldown initiated for 60 seconds after 10 downloads.");
+            //     }
 
-                return newCount;
-            });
+            //     return newCount;
+            // });
 
-            // Update progress
             setDownloadProgress(prev => ({ completed: prev.completed + 1, total: prev.total }));
 
             // Optionally, update the download list
@@ -791,8 +997,6 @@ const OfflineWindow: React.FC = () => {
                 const updatedData = await fetchOfflineDownloadList(dispatch);
                 if (Array.isArray(updatedData)) {
                     setOfflineDownloadList(updatedData);
-                    const allIds = updatedData.map((entry: OfflineDownloadEntry) => entry.civitaiVersionID);
-                    setSelectedIds(new Set(allIds));
                 } else {
                     console.warn("fetchOfflineDownloadList returned non-array data:", updatedData);
                     setOfflineDownloadList([]);
@@ -800,65 +1004,99 @@ const OfflineWindow: React.FC = () => {
                 }
             } catch (error: any) {
                 console.error("Failed to fetch updated download list:", error.message);
-                // Optionally, dispatch an error to the Redux store
             }
         };
 
-        // Send selected entries to the backend for download
         try {
             setIsLoading(true);
             console.log("isLoading set to true");
-            await downloadSelectedEntries(entriesToDownload, dispatch, handleEachDownloadComplete, isPausedRef);
+
+            await downloadSelectedEntries(entriesToDownload, dispatch, handleEachDownloadComplete, isPausedRef, isCancelledRef);
         } catch (error: any) {
             console.error("Download failed:", error.message);
-            // Optionally, dispatch an error to the Redux store
-            // dispatch(setError({ hasError: true, errorMessage: error.message }));
         } finally {
             setIsLoading(false);
             console.log("isLoading set to false");
         }
     };
 
-    const handleAddModeltoDatabase = (url: string, selectedCategory: string) => {
-        fetchAddRecordToDatabase(selectedCategory, url, dispatch);
+    // Helper function to chunk an array into smaller arrays (batches)
+    function chunkArray<T>(arr: T[], size: number): T[][] {
+        const result: T[][] = [];
+        for (let i = 0; i < arr.length; i += size) {
+            result.push(arr.slice(i, i + size));
+        }
+        return result;
     }
 
-    // Updated downloadSelectedEntries with concurrency control and callback
+    /**
+     * Download selected entries in batches of 10.
+     * Wait for all entries in one batch to finish before moving to the next batch.
+     */
     const downloadSelectedEntries = async (
         entriesToDownload: OfflineDownloadEntry[],
         dispatch: any,
         onDownloadComplete: (success: boolean, entry: OfflineDownloadEntry) => void,
-        isPausedRef: React.MutableRefObject<boolean> // or pass boolean & a callback
+        isPausedRef: React.MutableRefObject<boolean>,
+        isCancelledRef: React.MutableRefObject<boolean>
     ) => {
-        const CONCURRENCY_LIMIT = 5;
+        const CONCURRENCY_LIMIT = 5; // or any number you want
         const semaphore = new Semaphore(CONCURRENCY_LIMIT);
 
-        // Helper sleep function
-        const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
+        // Split the entries into chunks (batches) of 10
+        const batches = chunkArray(entriesToDownload, 10);
 
-        // We’ll do 10 items per chunk
-        const chunkSize = 10;
-
-        for (let i = 0; i < entriesToDownload.length; i += chunkSize) {
-            // If user has paused, wait until user resumes
-            while (isPausedRef.current) {
-                console.log("Pausing before starting next batch...");
-                await sleep(500);
-                if (isCancelledRef.current) {
-                    console.log("Download canceled while paused, stopping now.");
-                    break;
-                }
+        let batchIndex = 0;
+        for (const batch of batches) {
+            // 1) Check if the entire download process has been cancelled
+            if (isCancelledRef.current) {
+                console.log("Download process cancelled before batch:", batchIndex);
+                break;
             }
 
-            // If user cancelled while paused, break out 
-            if (isCancelledRef.current) break;
 
-            // 2) Slice out up to 10 items for this chunk
-            const chunk = entriesToDownload.slice(i, i + chunkSize);
+            // Determine the range of the current batch
+            const start = batchIndex * 10 + 1;
+            const end = Math.min((batchIndex + 1) * 10, entriesToDownload.length);
+            setCurrentBatchRange(`Now processing ${start} ~ ${end}, please wait until processing next 10.`);
 
-            // 3) Start concurrent downloads of this chunk
-            const downloadPromises = chunk.map((entry) =>
-                semaphore.acquire(async () => {
+            console.log(`Processing batch #${batchIndex + 1} (size: ${batch.length})`);
+
+            // 2) Start downloads for this batch in concurrency-limited parallel
+            //    We'll store all tasks in an array, then await them all.
+            const tasks: Promise<void>[] = [];
+
+            for (const entry of batch) {
+                // Check pause/cancel status before starting each item
+                while (isPausedRef.current) {
+                    console.log("Download paused. Waiting to resume...");
+                    await sleep(500);
+                    if (isCancelledRef.current) {
+                        console.log("Download cancelled during pause.");
+                        break;
+                    }
+                }
+                if (isCancelledRef.current) break;
+
+                // *** ADD THIS RANDOM 5–7s DELAY *** 
+                // 1) Calculate the random delay for this file
+                const delayMilliseconds = 5000 + Math.random() * 10000; // 5000ms to 10000ms
+                const delaySeconds = Math.ceil(delayMilliseconds / 1000);
+
+                // 2) Update state so your "Next download will start in X seconds" appears
+                setInitiationDelay(delaySeconds);
+
+                // 3) (Optional) console log for debugging
+                console.log(`Waiting ${delaySeconds}s before starting ${entry.civitaiFileName}...`);
+
+                // 4) Sleep for that many seconds
+                await sleep(delayMilliseconds);
+
+                // 5) Once the delay is done, clear the UI message
+                setInitiationDelay(null);
+
+                // Acquire a slot in the semaphore
+                const task = semaphore.acquire(async () => {
                     let success = true;
                     try {
                         const {
@@ -869,51 +1107,92 @@ const OfflineWindow: React.FC = () => {
                             downloadFilePath,
                             civitaiModelFileList,
                             selectedCategory,
-                            modelVersionObject
+                            modelVersionObject,
                         } = entry;
 
-                        const downloadParams = {
-                            civitaiUrl,
-                            civitaiFileName,
-                            civitaiModelID,
-                            civitaiVersionID,
-                            downloadFilePath,
-                            civitaiModelFileList
-                        };
-
-                        // Make your API call
-                        await fetchDownloadFilesByServer_v2(downloadParams, dispatch);
-
-                        // Add to database, etc.
-                        fetchAddRecordToDatabase(selectedCategory, civitaiUrl, dispatch);
-
-                        bookmarkThisUrl(
-                            modelVersionObject?.baseModel ?? "N/A",
-                            civitaiUrl,
-                            `${modelVersionObject?.name ?? "N/A"} - ${civitaiModelID}`
+                        // Perform your actual download
+                        const isDownloadSuccessful = await fetchDownloadFilesByServer_v2(
+                            {
+                                civitaiUrl,
+                                civitaiFileName,
+                                civitaiModelID,
+                                civitaiVersionID,
+                                downloadFilePath,
+                                civitaiModelFileList
+                            },
+                            dispatch
                         );
-                    } catch (error: any) {
-                        console.error("Download failed for", entry.civitaiFileName, error);
+
+                        // If download is successful, do the DB insert and bookmark
+                        if (isDownloadSuccessful) {
+                            await fetchAddRecordToDatabase(selectedCategory, civitaiUrl, dispatch);
+                            bookmarkThisUrl(
+                                modelVersionObject?.model?.type ?? "N/A",
+                                civitaiUrl,
+                                `${modelVersionObject?.model?.name ?? "N/A"} - ${civitaiModelID} | Stable Diffusion LoRA | Civitai`
+                            );
+                        } else {
+                            success = false;
+                        }
+                    } catch (err) {
+                        console.error("Download failed for", entry.civitaiFileName, err);
                         success = false;
                     } finally {
+                        // Notify UI or state that this individual download is done
                         onDownloadComplete(success, entry);
                     }
-                })
-            );
+                });
 
-            // 4) Wait for this entire chunk to finish
-            await Promise.all(downloadPromises);
-
-            // 5) If more chunks remain, do a cooldown
-            if (i + chunkSize < entriesToDownload.length) {
-                console.log("Cooldown for 60 seconds after 10 downloads...");
-                await sleep(60_000);
+                tasks.push(task);
+                // Also check if user cancelled mid-loop
+                if (isCancelledRef.current) {
+                    console.log("Download cancelled after initiating some tasks in batch.");
+                    break;
+                }
             }
+
+            // 3) Wait for all tasks in this batch to complete
+            await Promise.allSettled(tasks);
+
+            // The entire batch is done here
+            console.log(`Batch #${batchIndex + 1} completed.`);
+
+            // If the user cancelled during or after the batch, break
+            if (isCancelledRef.current) {
+                console.log("Download process cancelled after completing a batch.");
+                break;
+            }
+
+            // Set a 60-second cooldown
+            console.log("Starting 60-second cooldown before next batch...");
+            setBatchCooldown(60);
+
+            // Option A: Simple approach: just sleep 60s
+            await sleep(60000);
+
+            // Clear the cooldown display
+            setBatchCooldown(null);
+
+            // Move on to the next batch
+            batchIndex++;
         }
+
+        // Finally, wait for any leftover concurrency tasks to settle
+        while ((semaphore as any).activeCount > 0) {
+            await sleep(500);
+        }
+        console.log("All batches processed or cancelled.");
     };
 
 
     const handleProcessSelected = async () => {
+
+        const isBackupSuccessful = await fetchBackupOfflineDownloadList(dispatch);
+        if (!isBackupSuccessful) {
+            alert("Backup failed. Cannot proceed with the download.");
+            return;
+        }
+
         const selectedEntries = offlineDownloadList.filter(entry => selectedIds.has(entry.civitaiVersionID));
 
         if (selectedEntries.length === 0) {
@@ -934,7 +1213,8 @@ const OfflineWindow: React.FC = () => {
                         downloadFilePath,
                         civitaiModelFileList,
                         selectedCategory,
-                        modelVersionObject
+                        modelVersionObject,
+                        civitaiTags
                     } = entry;
 
                     const modelObject = {
@@ -945,6 +1225,7 @@ const OfflineWindow: React.FC = () => {
                         civitaiModelFileList,
                         civitaiUrl,
                         selectedCategory: modify_selectedCategory,
+                        civitaiTags
                     };
 
                     // Update the backend with the model object
@@ -965,8 +1246,9 @@ const OfflineWindow: React.FC = () => {
             const updatedData = await fetchOfflineDownloadList(dispatch);
             if (Array.isArray(updatedData)) {
                 setOfflineDownloadList(updatedData);
-                const allIds = updatedData.map((entry: OfflineDownloadEntry) => entry.civitaiVersionID);
-                setSelectedIds(new Set(allIds));
+                // const allIds = updatedData.map((entry: OfflineDownloadEntry) => entry.civitaiVersionID);
+                // setSelectedIds(new Set(allIds));
+                setSelectedIds(new Set());
             } else {
                 console.warn("fetchOfflineDownloadList returned non-array data:", updatedData);
                 setOfflineDownloadList([]);
@@ -984,6 +1266,19 @@ const OfflineWindow: React.FC = () => {
     };
 
     const handleRemoveSelected = async () => {
+
+        const userConfirmed = window.confirm("Are you sure you want to remove the selected items?");
+        if (!userConfirmed) {
+            console.log("User canceled the removal operation.");
+            return; // Exit the function if the user cancels
+        }
+
+        const isBackupSuccessful = await fetchBackupOfflineDownloadList(dispatch);
+        if (!isBackupSuccessful) {
+            alert("Backup failed. Cannot proceed with the download.");
+            return;
+        }
+
         if (selectedIds.size === 0) {
             alert("No items selected to remove.");
             return;
@@ -1016,6 +1311,7 @@ const OfflineWindow: React.FC = () => {
                 // Or, reselect all if you prefer:
                 // const allIds = updatedData.map((entry: OfflineDownloadEntry) => entry.civitaiVersionID);
                 // setSelectedIds(new Set(allIds));
+                setSelectedIds(new Set());
             } else {
                 console.warn("fetchOfflineDownloadList returned non-array data:", updatedData);
                 setOfflineDownloadList([]);
@@ -1029,20 +1325,45 @@ const OfflineWindow: React.FC = () => {
     };
 
     const handleSelectFirstN = () => {
-        // 1) Slice the filtered list
-        const firstN = filteredDownloadList.slice(0, selectCount);
+        // Get the current time to compare with earlyAccessEndsAt
+        const now = new Date();
 
-        // 2) Build a new Set
+        // Create a Set of combined civitaiVersionID and civitaiModelID for efficient lookup
+        const failedIds = new Set(
+            failedEntries.map(entry => `${entry.civitaiVersionID}|${entry.civitaiModelID}`)
+        );
+
+        // Apply the same exclusion criteria as in handleDownloadNow
+        const validEntries = filteredDownloadList.filter(entry => {
+            const earlyAccessEndsAt = entry.modelVersionObject?.earlyAccessEndsAt;
+            const downloadFilePath = entry.downloadFilePath ?? "";
+
+            // Determine if the entry is still in early access
+            const stillEarlyAccess = earlyAccessEndsAt ? new Date(earlyAccessEndsAt) > now : false;
+
+            // Determine if the download path is pending
+            const isPendingPath =
+                downloadFilePath === "/@scan@/ACG/Pending" ||
+                downloadFilePath === "/@scan@/ACG/Pending/";
+
+            // Create the combined identifier for the current entry
+            const combinedId = `${entry.civitaiVersionID}|${entry.civitaiModelID}`;
+
+            // Exclude entries that are still in early access or have a pending path
+            return !stillEarlyAccess && !isPendingPath && !failedIds.has(combinedId);
+        });
+
+        // Select the first N entries from the valid entries
+        const firstN = validEntries.slice(0, selectCount);
+
+        // Build a new Set with the civitaiVersionIDs of the selected entries
         const newSelected = new Set<string>(
             firstN.map(entry => entry.civitaiVersionID)
         );
 
-        // 3) Update selectedIds
-        //    (Potentially, you could merge this with existing selection if you prefer)
+        // Update the selectedIds state with the new selection
         setSelectedIds(newSelected);
     };
-
-
 
     const handleCancelDownload = () => {
         // Unpause (so we don't get stuck in a paused loop)
@@ -1055,8 +1376,8 @@ const OfflineWindow: React.FC = () => {
         setIsLoading(false);
         setDownloadProgress({ completed: 0, total: 0 });
         setFailedEntries([]);
-        setCompletedCount(0);
-        setDelayTime(0);
+        // setCompletedCount(0);
+        // setDelayTime(0);
     };
 
     // **BigCardMode Component Implementation**
@@ -1066,235 +1387,281 @@ const OfflineWindow: React.FC = () => {
         isModifyMode: boolean;
         selectedIds: Set<string>;
         toggleSelect: (id: string) => void;
-    }> = ({ filteredDownloadList, isDarkMode, isModifyMode, selectedIds, toggleSelect }) => {
-        if (filteredDownloadList.length === 0) {
-            return <div style={{ color: isDarkMode ? '#fff' : '#000' }}>No downloads available.</div>;
-        }
+        handleSelectAll: () => void;
+    }> = ({
+        filteredDownloadList,
+        isDarkMode,
+        isModifyMode,
+        selectedIds,
+        toggleSelect,
+        handleSelectAll
+    }) => {
+            if (filteredDownloadList.length === 0) {
+                return (
+                    <div style={{ color: isDarkMode ? '#fff' : '#000' }}>
+                        No downloads available.
+                    </div>
+                );
+            }
 
-        return (
-            <div style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: '20px',
-                justifyContent: 'center'
-            }}>
-                {filteredDownloadList.map((entry, index) => {
-                    const isSelected = selectedIds.has(entry.civitaiVersionID);
-                    const earlyEnds = entry.modelVersionObject?.earlyAccessEndsAt;
-
-                    return (
-                        <Card
-                            key={index}
-                            style={{
-                                width: '100%',
-                                maxWidth: '380px',
-                                border: '1px solid',
-                                borderColor: isDarkMode ? '#555' : '#ccc',
-                                borderRadius: '8px',
-                                boxShadow: isDarkMode
-                                    ? '2px 2px 8px rgba(255,255,255,0.1)'
-                                    : '2px 2px 8px rgba(0,0,0,0.1)',
-                                backgroundColor: isDarkMode ? '#333' : '#fff',
-                                color: isDarkMode ? '#fff' : '#000',
-                                position: 'relative',
-                                cursor: isModifyMode ? 'pointer' : 'default',
-                                opacity: isModifyMode && !isSelected ? 0.8 : 1,
-                                transition: 'background-color 0.3s ease, color 0.3s ease, opacity 0.3s ease',
-                                overflow: 'hidden',
-                                margin: '0 auto',
-                                padding: '10px'
-                            }}
-                            onClick={(e) => {
-                                if (isModifyMode && e.ctrlKey) {
-                                    toggleSelect(entry.civitaiVersionID);
-                                }
-                            }}
-                        >
-                            {earlyEnds && (
-                                <div
+            return (
+                <div>
+                    <div
+                        style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: '20px',
+                            justifyContent: 'center'
+                        }}
+                    >
+                        {filteredDownloadList.map((entry, index) => {
+                            const isSelected = selectedIds.has(entry.civitaiVersionID);
+                            const earlyEnds = entry.modelVersionObject?.earlyAccessEndsAt;
+                            return (
+                                <Card
+                                    key={index}
                                     style={{
-                                        position: 'absolute',
-                                        top: '5px',
-                                        right: '5px',
-                                        color: 'red',
-                                        fontWeight: 'bold',
-                                        fontSize: '0.8rem',
-                                        backgroundColor: isDarkMode ? '#444' : '#fff',
-                                        padding: '2px 4px',
-                                        borderRadius: '4px',
-                                        border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
-                                    }}
-                                >
-                                    Ends: {new Date(earlyEnds).toLocaleString()}
-                                </div>
-                            )}
-
-                            {/* Selection Checkbox */}
-                            <Form.Check
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={(e) => {
-                                    e.stopPropagation();
-                                    toggleSelect(entry.civitaiVersionID);
-                                }}
-                                style={{
-                                    position: 'absolute',
-                                    top: '10px',
-                                    left: '10px',
-                                    transform: 'scale(1.2)',
-                                    cursor: isModifyMode ? 'pointer' : 'not-allowed',
-                                    accentColor: isDarkMode ? '#fff' : '#000',
-                                }}
-                            />
-
-                            {/* Model Name */}
-                            <div
-                                style={{
-                                    marginTop: '40px',
-                                    marginBottom: '5px',
-                                    fontSize: '0.95rem',
-                                    fontWeight: 'bold',
-                                    textAlign: 'center',
-                                    borderBottom: `1px solid ${isDarkMode ? '#555' : '#ccc'}`,
-                                    paddingBottom: '5px',
-                                    wordWrap: 'break-word',
-                                    // Add ellipsis
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                }}
-                                // Use HTML title for a simple tooltip
-                                title={entry.civitaiFileName ?? 'N/A'}
-                            >
-                                {entry.civitaiFileName ?? 'N/A'}
-                            </div>
-
-
-                            {/* Carousel for Images */}
-                            {entry.imageUrlsArray && entry.imageUrlsArray.length > 0 ? (
-                                <Carousel
-                                    variant={isDarkMode ? 'dark' : 'light'}
-                                    indicators={entry.imageUrlsArray.length > 1}
-                                    controls={entry.imageUrlsArray.length > 1}
-                                    interval={null}
-                                    style={{
-                                        marginBottom: '5px',
-                                    }}
-                                >
-                                    {entry.imageUrlsArray.map((imgUrl, imgIndex) => (
-                                        <Carousel.Item key={imgIndex}>
-                                            <img
-                                                className="d-block w-100"
-                                                src={imgUrl}
-                                                alt={`Slide ${imgIndex + 1}`}
-                                                style={{
-                                                    maxHeight: '300px',
-                                                    objectFit: 'contain',
-                                                    margin: '0 auto',
-                                                }}
-                                            />
-                                        </Carousel.Item>
-                                    ))}
-                                </Carousel>
-                            ) : (
-                                <div
-                                    style={{
-                                        height: '200px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        backgroundColor: isDarkMode ? '#555' : '#f0f0f0',
-                                        marginBottom: '5px',
-                                        borderRadius: '4px'
-                                    }}
-                                >
-                                    <span>No Images Available</span>
-                                </div>
-                            )}
-
-                            {/* Version Name */}
-                            <div
-                                style={{
-                                    fontSize: '0.85rem',
-                                    textAlign: 'center',
-                                    marginTop: '5px',
-                                    wordWrap: 'break-word',
-                                    // For ellipsis
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                }}
-                                title={entry.modelVersionObject?.name ?? 'N/A'}
-                            >
-                                <strong>Version:</strong> {entry.modelVersionObject?.name ?? 'N/A'}
-                            </div>
-
-                            {/* Entry Details */}
-                            <div style={{
-                                fontSize: '0.8rem',
-                                lineHeight: 1.3,
-                                wordWrap: 'break-word',
-                                padding: '0 5px',
-                            }}>
-                                {/* FilePath */}
-                                <p
-                                    style={{
-                                        // ...
-                                        whiteSpace: 'nowrap',
+                                        width: '100%',
+                                        maxWidth: '380px',
+                                        border: '1px solid',
+                                        borderColor: isDarkMode ? '#555' : '#ccc',
+                                        borderRadius: '8px',
+                                        boxShadow: isDarkMode
+                                            ? '2px 2px 8px rgba(255,255,255,0.1)'
+                                            : '2px 2px 8px rgba(0,0,0,0.1)',
+                                        backgroundColor: isDarkMode ? '#333' : '#fff',
+                                        color: isDarkMode ? '#fff' : '#000',
+                                        position: 'relative',
+                                        cursor: isModifyMode ? 'pointer' : 'default',
+                                        opacity: isModifyMode && !isSelected ? 0.8 : 1,
+                                        transition:
+                                            'background-color 0.3s ease, color 0.3s ease, opacity 0.3s ease',
                                         overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
+                                        margin: '0 auto',
+                                        padding: '10px'
                                     }}
-                                    title={entry.downloadFilePath ?? 'N/A'}
-                                >
-                                    <strong>Download Path:</strong> {entry.downloadFilePath ?? 'N/A'}
-                                </p>
-                                {/* Category */}
-                                <p
-                                    style={{
-                                        // ...
-                                        whiteSpace: 'nowrap',
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
+                                    onClick={(e) => {
+                                        if (isModifyMode && e.ctrlKey) {
+                                            toggleSelect(entry.civitaiVersionID);
+                                        }
                                     }}
-                                    title={entry.selectedCategory ?? 'N/A'}
                                 >
-                                    <strong>Category:</strong> {entry.selectedCategory ?? 'N/A'}
-                                </p>
-                                <p><strong>Version ID:</strong> {entry.modelVersionObject?.id ?? 'N/A'}</p>
-                                <p><strong>Model ID:</strong> {entry.modelVersionObject?.modelId ?? 'N/A'}</p>
-                                <p><strong>Base Model:</strong> {entry.modelVersionObject?.baseModel ?? 'N/A'}</p>
-                                <p>
-                                    <strong>URL:</strong>{' '}
-                                    {entry.civitaiUrl ? (
-                                        <a
-                                            href={entry.civitaiUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            style={{ color: isDarkMode ? '#1e90ff' : '#007bff' }}
+                                    {/* Early Access badge at the top-right */}
+                                    {earlyEnds && (
+                                        <div
+                                            style={{
+                                                position: 'absolute',
+                                                top: '5px',
+                                                right: '5px',
+                                                color: 'red',
+                                                fontWeight: 'bold',
+                                                fontSize: '0.8rem',
+                                                backgroundColor: isDarkMode ? '#444' : '#fff',
+                                                padding: '2px 4px',
+                                                borderRadius: '4px',
+                                                border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
+                                            }}
                                         >
-                                            Visit Model
-                                        </a>
-                                    ) : 'N/A'}
-                                </p>
-                                <p>
-                                    <strong>File Size:</strong>{' '}
-                                    {(() => {
-                                        const safetensorFile =
-                                            entry.modelVersionObject?.files?.find(file =>
-                                                file.name.endsWith('.safetensors')
-                                            );
-                                        return safetensorFile
-                                            ? `${(safetensorFile.sizeKB / 1024).toFixed(2)} MB`
-                                            : 'N/A';
-                                    })()}
-                                </p>
-                            </div>
-                        </Card>
-                    );
-                })}
-            </div>
-        );
-    };
+                                            Ends: {new Date(earlyEnds).toLocaleString()}
+                                        </div>
+                                    )}
+
+                                    {/* Selection Checkbox at the top-left */}
+                                    <Form.Check
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={(e) => {
+                                            e.stopPropagation();
+                                            toggleSelect(entry.civitaiVersionID);
+                                        }}
+                                        style={{
+                                            position: 'absolute',
+                                            top: '10px',
+                                            left: '10px',
+                                            transform: 'scale(1.2)',
+                                            cursor: isModifyMode ? 'pointer' : 'not-allowed',
+                                            accentColor: isDarkMode ? '#fff' : '#000',
+                                        }}
+                                    />
+
+                                    {/* ---- 1) BaseModel badge + Title ---- */}
+                                    <div
+                                        style={{
+                                            marginTop: '40px', // push down below the checkbox row
+                                            marginBottom: '5px',
+                                            textAlign: 'center',
+                                            borderBottom: `1px solid ${isDarkMode ? '#555' : '#ccc'}`,
+                                            paddingBottom: '5px',
+                                            whiteSpace: 'nowrap',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                        }}
+                                    >
+                                        {/* BaseModel as a badge, only if present */}
+                                        {entry.modelVersionObject?.baseModel && (
+                                            <span
+                                                style={{
+                                                    display: 'inline-block',
+                                                    fontSize: '0.7rem',
+                                                    fontWeight: 'bold',
+                                                    backgroundColor: '#007bff',
+                                                    color: '#fff',
+                                                    padding: '2px 6px',
+                                                    borderRadius: '4px',
+                                                    marginRight: '6px',
+                                                }}
+                                            >
+                                                {entry.modelVersionObject.baseModel}
+                                            </span>
+                                        )}
+                                        {/* Model title */}
+                                        <span
+                                            style={{
+                                                fontSize: '0.9rem',
+                                                fontWeight: 'bold',
+                                            }}
+                                            title={entry?.modelVersionObject?.model?.name ?? 'N/A'}
+                                        >
+                                            {entry?.modelVersionObject?.model?.name ?? 'N/A'}
+                                        </span>
+                                    </div>
+
+                                    {/* Carousel for Images */}
+                                    {entry.imageUrlsArray && entry.imageUrlsArray.length > 0 ? (
+                                        <Carousel
+                                            variant={isDarkMode ? 'dark' : 'light'}
+                                            indicators={entry.imageUrlsArray.length > 1}
+                                            controls={entry.imageUrlsArray.length > 1}
+                                            interval={null}
+                                            style={{
+                                                marginBottom: 0, // 2) Remove extra space under the carousel
+                                            }}
+                                        >
+                                            {entry.imageUrlsArray.map((imgUrl, imgIndex) => (
+                                                <Carousel.Item key={imgIndex}>
+                                                    <img
+                                                        className="d-block w-100"
+                                                        src={imgUrl}
+                                                        alt={`Slide ${imgIndex + 1}`}
+                                                        style={{
+                                                            maxHeight: '300px',
+                                                            objectFit: 'contain',
+                                                            margin: '0 auto',
+                                                        }}
+                                                    />
+                                                </Carousel.Item>
+                                            ))}
+                                        </Carousel>
+                                    ) : (
+                                        <div
+                                            style={{
+                                                height: '200px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                backgroundColor: isDarkMode ? '#555' : '#f0f0f0',
+                                                marginBottom: 0, // Keep the same no extra margin
+                                                borderRadius: '4px',
+                                            }}
+                                        >
+                                            <span>No Images Available</span>
+                                        </div>
+                                    )}
+
+                                    {/* 3) Smaller text under the carousel */}
+                                    <div
+                                        style={{
+                                            marginTop: '5px',
+                                            fontSize: '0.8rem', // smaller text
+                                            lineHeight: 1.3,
+                                            padding: '0 5px',
+                                        }}
+                                    >
+                                        {/* Version Name */}
+                                        <div
+                                            style={{
+                                                textAlign: 'center',
+                                                wordWrap: 'break-word',
+                                                whiteSpace: 'nowrap',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                            }}
+                                            title={entry.modelVersionObject?.name ?? 'N/A'}
+                                        >
+                                            <strong>Version:</strong> {entry.modelVersionObject?.name ?? 'N/A'}
+                                        </div>
+
+                                        {/* File Name */}
+                                        <p
+                                            style={{
+                                                margin: '4px 0',
+                                                whiteSpace: 'nowrap',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                            }}
+                                            title={entry.civitaiFileName ?? 'N/A'}
+                                        >
+                                            <strong>File Name:</strong> {entry.civitaiFileName ?? 'N/A'}
+                                        </p>
+
+                                        {/* 3) Show full download path with line wrapping */}
+                                        <p
+                                            style={{
+                                                margin: '4px 0',
+                                                whiteSpace: 'normal',     // allow multi-line
+                                                wordWrap: 'break-word',   // wrap long paths
+                                            }}
+                                        >
+                                            <strong>Download Path:</strong> {entry.downloadFilePath ?? 'N/A'}
+                                        </p>
+
+                                        {/* Category */}
+                                        <p style={{ margin: '4px 0' }}>
+                                            <strong>Category:</strong> {entry.selectedCategory ?? 'N/A'}
+                                        </p>
+
+                                        <p style={{ margin: '4px 0' }}>
+                                            <strong>Version ID:</strong> {entry.modelVersionObject?.id ?? 'N/A'}
+                                        </p>
+                                        <p style={{ margin: '4px 0' }}>
+                                            <strong>Model ID:</strong> {entry.modelVersionObject?.modelId ?? 'N/A'}
+                                        </p>
+                                        <p style={{ margin: '4px 0' }}>
+                                            <strong>URL:</strong>{' '}
+                                            {entry.civitaiUrl ? (
+                                                <a
+                                                    href={entry.civitaiUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    style={{ color: isDarkMode ? '#1e90ff' : '#007bff' }}
+                                                >
+                                                    Visit Model
+                                                </a>
+                                            ) : (
+                                                'N/A'
+                                            )}
+                                        </p>
+                                        <p style={{ margin: '4px 0' }}>
+                                            <strong>File Size:</strong>{' '}
+                                            {(() => {
+                                                const safetensorFile =
+                                                    entry.modelVersionObject?.files?.find(file =>
+                                                        file.name.endsWith('.safetensors')
+                                                    );
+                                                return safetensorFile
+                                                    ? `${(safetensorFile.sizeKB / 1024).toFixed(2)} MB`
+                                                    : 'N/A';
+                                            })()}
+                                        </p>
+                                    </div>
+                                </Card>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        };
+
 
     // **SmallCardMode Component Implementation**
     const SmallCardMode: React.FC<{
@@ -1303,223 +1670,524 @@ const OfflineWindow: React.FC = () => {
         isModifyMode: boolean;
         selectedIds: Set<string>;
         toggleSelect: (id: string) => void;
-    }> = ({ filteredDownloadList, isDarkMode, isModifyMode, selectedIds, toggleSelect }) => {
-        if (filteredDownloadList.length === 0) {
-            return <div style={{ color: isDarkMode ? '#fff' : '#000' }}>No downloads available.</div>;
+        handleSelectAll: () => void;
+    }> = ({
+        filteredDownloadList,
+        isDarkMode,
+        isModifyMode,
+        selectedIds,
+        toggleSelect,
+        handleSelectAll,
+    }) => {
+            if (filteredDownloadList.length === 0) {
+                return (
+                    <div style={{ color: isDarkMode ? '#fff' : '#000' }}>
+                        No downloads available.
+                    </div>
+                );
+            }
+
+            return (
+                <div>
+                    <div
+                        style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: '10px',
+                            justifyContent: 'center',
+                        }}
+                    >
+                        {filteredDownloadList.map((entry, index) => {
+                            const isSelected = selectedIds.has(entry.civitaiVersionID);
+                            const earlyEnds = entry.modelVersionObject?.earlyAccessEndsAt;
+                            const firstImageUrl = entry.imageUrlsArray?.[0] ?? null;
+
+                            return (
+                                <Card
+                                    key={index}
+                                    style={{
+                                        border: '1px solid',
+                                        borderColor: isDarkMode ? '#555' : '#ccc',
+                                        borderRadius: '4px',
+                                        maxWidth: '180px',
+                                        boxShadow: isDarkMode
+                                            ? '1px 1px 6px rgba(255,255,255,0.1)'
+                                            : '1px 1px 6px rgba(0,0,0,0.1)',
+                                        backgroundColor: isDarkMode ? '#333' : '#fff',
+                                        color: isDarkMode ? '#fff' : '#000',
+                                        position: 'relative',
+                                        cursor: isModifyMode ? 'pointer' : 'default',
+                                        opacity: isModifyMode && !isSelected ? 0.8 : 1,
+                                        transition:
+                                            'background-color 0.3s ease, color 0.3s ease, opacity 0.3s ease',
+                                        overflow: 'hidden',
+                                        padding: '10px',
+                                    }}
+                                    onClick={(e) => {
+                                        if (isModifyMode && e.ctrlKey) {
+                                            toggleSelect(entry.civitaiVersionID);
+                                        }
+                                    }}
+                                >
+                                    {earlyEnds && (
+                                        <div
+                                            style={{
+                                                position: 'absolute',
+                                                top: '5px',
+                                                right: '5px',
+                                                color: 'red',
+                                                fontWeight: 'bold',
+                                                fontSize: '0.8rem',
+                                                backgroundColor: isDarkMode ? '#444' : '#fff',
+                                                padding: '2px 4px',
+                                                borderRadius: '4px',
+                                                border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
+                                            }}
+                                        >
+                                            Ends: {new Date(earlyEnds).toLocaleString()}
+                                        </div>
+                                    )}
+
+                                    {/* Selection Checkbox */}
+                                    <Form.Check
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={(e) => {
+                                            e.stopPropagation();
+                                            toggleSelect(entry.civitaiVersionID);
+                                        }}
+                                        style={{
+                                            position: 'absolute',
+                                            top: '10px',
+                                            left: '10px',
+                                            transform: 'scale(1.2)',
+                                            cursor: isModifyMode ? 'pointer' : 'not-allowed',
+                                            accentColor: isDarkMode ? '#fff' : '#000',
+                                        }}
+                                    />
+
+                                    {/* Base Model Badge + Title */}
+                                    <div
+                                        style={{
+                                            marginTop: '40px',
+                                            marginBottom: '4px',
+                                            fontSize: '0.9rem',
+                                            fontWeight: 'bold',
+                                            textAlign: 'center',
+                                            borderBottom: `1px solid ${isDarkMode ? '#555' : '#ccc'}`,
+                                            paddingBottom: '4px',
+                                            whiteSpace: 'nowrap',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                        }}
+                                    >
+                                        {/* 1) BaseModel badge */}
+                                        {entry.modelVersionObject?.baseModel && (
+                                            <span
+                                                style={{
+                                                    display: 'inline-block',
+                                                    fontSize: '0.65rem',
+                                                    fontWeight: 'bold',
+                                                    backgroundColor: '#007bff',
+                                                    color: '#fff',
+                                                    padding: '2px 5px',
+                                                    borderRadius: '4px',
+                                                    marginRight: '5px',
+                                                }}
+                                            >
+                                                {entry.modelVersionObject.baseModel}
+                                            </span>
+                                        )}
+                                        {/* Model Title */}
+                                        <span
+                                            style={{
+                                                fontSize: '0.85rem',
+                                            }}
+                                            title={entry?.modelVersionObject?.model?.name ?? 'N/A'}
+                                        >
+                                            {entry?.modelVersionObject?.model?.name ?? 'N/A'}
+                                        </span>
+                                    </div>
+
+                                    {/* Image (Thumbnail) */}
+                                    {firstImageUrl ? (
+                                        <img
+                                            src={firstImageUrl}
+                                            alt={`Thumbnail ${index + 1}`}
+                                            style={{
+                                                width: '100%',
+                                                maxHeight: '100px',
+                                                objectFit: 'contain',
+                                                borderRadius: '4px',
+                                                marginBottom: '2px', // Minimizing extra space
+                                            }}
+                                        />
+                                    ) : (
+                                        <div
+                                            style={{
+                                                height: '100px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                backgroundColor: isDarkMode ? '#555' : '#f0f0f0',
+                                                marginBottom: '2px', // Minimizing extra space
+                                                borderRadius: '4px',
+                                            }}
+                                        >
+                                            <span>No Image</span>
+                                        </div>
+                                    )}
+
+                                    {/* Info Section under the image */}
+                                    <div
+                                        style={{
+                                            fontSize: '0.7rem',
+                                            lineHeight: 1.2,
+                                            marginTop: '2px',
+                                            marginBottom: '0px',
+                                        }}
+                                    >
+                                        {/* Version Name */}
+                                        <div
+                                            style={{
+                                                textAlign: 'center',
+                                                whiteSpace: 'nowrap',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                marginBottom: '4px',
+                                            }}
+                                            title={entry.modelVersionObject?.name ?? 'N/A'}
+                                        >
+                                            <strong>Ver:</strong> {entry.modelVersionObject?.name ?? 'N/A'}
+                                        </div>
+
+                                        {/* File Path - allow wrapping */}
+                                        <p
+                                            style={{
+                                                margin: '4px 0',
+                                                whiteSpace: 'normal',  // allow multi-line
+                                                wordWrap: 'break-word',
+                                            }}
+                                        >
+                                            <strong>Path:</strong> {entry.downloadFilePath ?? 'N/A'}
+                                        </p>
+
+                                        {/* Category */}
+                                        <p
+                                            style={{
+                                                margin: '4px 0',
+                                                whiteSpace: 'nowrap',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                            }}
+                                            title={entry.selectedCategory ?? 'N/A'}
+                                        >
+                                            <strong>Cat:</strong> {entry.selectedCategory ?? 'N/A'}
+                                        </p>
+                                    </div>
+                                </Card>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        };
+
+
+    // Inside your OfflineWindow component
+
+    const handleSelectAll = () => {
+        if (selectedIds.size === getSelectableEntries().length) {
+            // All selectable entries are selected; deselect all
+            setSelectedIds(new Set());
+        } else {
+            // Not all selectable entries are selected; select all
+            const newSelectedIds = new Set(selectedIds);
+            getSelectableEntries().forEach(entry => newSelectedIds.add(entry.civitaiVersionID));
+            setSelectedIds(newSelectedIds);
         }
+    };
 
-        return (
-            <div style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: '10px',
-                justifyContent: 'center',
-            }}>
-                {filteredDownloadList.map((entry, index) => {
-                    const isSelected = selectedIds.has(entry.civitaiVersionID);
-                    const earlyEnds = entry.modelVersionObject?.earlyAccessEndsAt;
-                    const firstImageUrl = entry.imageUrlsArray?.[0] ?? null;
-
-                    return (
-                        <Card
-                            key={index}
-                            style={{
-                                border: '1px solid',
-                                borderColor: isDarkMode ? '#555' : '#ccc',
-                                borderRadius: '4px',
-                                maxWidth: '180px',
-                                boxShadow: isDarkMode
-                                    ? '1px 1px 6px rgba(255,255,255,0.1)'
-                                    : '1px 1px 6px rgba(0,0,0,0.1)',
-                                backgroundColor: isDarkMode ? '#333' : '#fff',
-                                color: isDarkMode ? '#fff' : '#000',
-                                position: 'relative',
-                                cursor: isModifyMode ? 'pointer' : 'default',
-                                opacity: isModifyMode && !isSelected ? 0.8 : 1,
-                                transition: 'background-color 0.3s ease, color 0.3s ease, opacity 0.3s ease',
-                                overflow: 'hidden',
-                                padding: '10px'
-                            }}
-                            onClick={(e) => {
-                                if (isModifyMode && e.ctrlKey) {
-                                    toggleSelect(entry.civitaiVersionID);
-                                }
-                            }}
-                        >
-                            {earlyEnds && (
-                                <div
-                                    style={{
-                                        position: 'absolute',
-                                        top: '5px',
-                                        right: '5px',
-                                        color: 'red',
-                                        fontWeight: 'bold',
-                                        fontSize: '0.8rem',
-                                        backgroundColor: isDarkMode ? '#444' : '#fff',
-                                        padding: '2px 4px',
-                                        borderRadius: '4px',
-                                        border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
-                                    }}
-                                >
-                                    Ends: {new Date(earlyEnds).toLocaleString()}
-                                </div>
-                            )}
-
-                            {/* Selection Checkbox */}
-                            <Form.Check
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={(e) => {
-                                    e.stopPropagation();
-                                    toggleSelect(entry.civitaiVersionID);
-                                }}
-                                style={{
-                                    position: 'absolute',
-                                    top: '10px',
-                                    left: '10px',
-                                    transform: 'scale(1.2)',
-                                    cursor: isModifyMode ? 'pointer' : 'not-allowed',
-                                    accentColor: isDarkMode ? '#fff' : '#000',
-                                }}
-                            />
-
-                            {/* Model Name */}
-                            <div
-                                style={{
-                                    marginTop: '40px',
-                                    marginBottom: '5px',
-                                    fontSize: '0.9rem',
-                                    fontWeight: 'bold',
-                                    textAlign: 'center',
-                                    borderBottom: `1px solid ${isDarkMode ? '#555' : '#ccc'}`,
-                                    paddingBottom: '5px',
-                                    wordWrap: 'break-word',
-                                    // Ellipsis styles
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                }}
-                                title={entry.civitaiFileName ?? 'N/A'}
-                            >
-                                {entry.civitaiFileName ?? 'N/A'}
-                            </div>
-
-                            {/* Image Display */}
-                            {firstImageUrl ? (
-                                <img
-                                    src={firstImageUrl}
-                                    alt={`Thumbnail ${index + 1}`}
-                                    style={{
-                                        width: '100%',
-                                        maxHeight: '100px',
-                                        objectFit: 'contain',
-                                        borderRadius: '4px',
-                                        marginBottom: '5px',
-                                    }}
-                                />
-                            ) : (
-                                <div style={{
-                                    height: '100px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    backgroundColor: isDarkMode ? '#555' : '#f0f0f0',
-                                    marginBottom: '5px',
-                                    borderRadius: '4px'
-                                }}>
-                                    <span>No Image</span>
-                                </div>
-                            )}
-
-                            {/* Version Name */}
-                            <div
-                                style={{
-                                    fontSize: '0.75rem',
-                                    textAlign: 'center',
-                                    borderTop: `1px solid ${isDarkMode ? '#555' : '#ccc'}`,
-                                    marginTop: '5px',
-                                    paddingTop: '5px',
-                                    marginBottom: '5px',
-                                    wordWrap: 'break-word',
-                                    // Ellipsis
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                }}
-                                title={entry.modelVersionObject?.name ?? 'N/A'}
-                            >
-                                <strong>Version:</strong> {entry.modelVersionObject?.name ?? 'N/A'}
-                            </div>
-
-                            {/* Entry Details */}
-                            <div style={{
-                                fontSize: '0.7rem',
-                                lineHeight: 1.2,
-                                wordWrap: 'break-word',
-                            }}>
-                                {/* FilePath */}
-                                <p
-                                    style={{
-                                        fontSize: '0.7rem',
-                                        lineHeight: 1.2,
-                                        wordWrap: 'break-word',
-                                        // Ellipsis
-                                        whiteSpace: 'nowrap',
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                    }}
-                                    title={entry.downloadFilePath ?? 'N/A'}
-                                >
-                                    <strong>Path:</strong>{' '}
-                                    {entry.downloadFilePath ?? 'N/A'}
-                                </p>
-                                {/* Category */}
-                                <p
-                                    style={{
-                                        fontSize: '0.7rem',
-                                        lineHeight: 1.2,
-                                        wordWrap: 'break-word',
-                                        // Ellipsis
-                                        whiteSpace: 'nowrap',
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                    }}
-                                    title={entry.selectedCategory ?? 'N/A'}
-                                >
-                                    <strong>Category:</strong> {entry.selectedCategory ?? 'N/A'}
-                                </p>
-                            </div>
-                        </Card>
-                    );
-                })}
-            </div>
-        );
+    const getSelectableEntries = (): OfflineDownloadEntry[] => {
+        if (displayMode === 'failedCard') {
+            return failedEntries;
+        }
+        // Add other modes if needed
+        // For example, in 'bigCard' and 'smallCard' modes, return `paginatedDownloadList`
+        if (displayMode === 'bigCard' || displayMode === 'smallCard') {
+            return filteredDownloadList;
+        }
+        // Default to all filtered entries
+        return filteredDownloadList;
     };
 
     return (
-        <div>
-            <ErrorAlert />
-            <div style={containerStyle}>
-                <div style={headerStyleContainer}>
-                    <h2 style={{ color: isDarkMode ? '#fff' : '#000' }}>Offline Download List</h2>
-                    <div style={buttonGroupStyle}>
-                        {/* Refresh List Button */}
-                        <Button
-                            onClick={handleRefreshList}
+        <div style={containerStyle}>
+            {/* Scrollable Content Area */}
+            <div style={contentStyle}>
+                <div style={{
+                    position: 'sticky',
+                    top: 0,
+                    width: '100%',
+                    backgroundColor: 'white', // Adjust as needed
+                    padding: '20px',
+                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)', // Optional: Adds a subtle shadow
+                    zIndex: 1000, // Ensure it stays above other elements
+                }}>
+                    <div style={headerStyleContainer}>
+                        <h2 style={{ color: isDarkMode ? '#fff' : '#000' }}>Offline Download List</h2>
+                        <div style={buttonGroupStyle}>
+                            {/* Refresh List Button */}
+                            <Button
+                                onClick={handleRefreshList}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    padding: '8px',
+                                    borderRadius: '4px',
+                                    border: 'none',
+                                    backgroundColor: '#17a2b8', // Bootstrap Info color
+                                    cursor: isLoading ? 'not-allowed' : 'pointer',
+                                    marginRight: '10px',
+                                    color: '#fff',
+                                }}
+                                disabled={isLoading} // Disable while loading
+                                aria-label="Refresh Download List"
+                            >
+                                {isLoading ? (
+                                    <>
+                                        <Spinner
+                                            as="span"
+                                            animation="border"
+                                            size="sm"
+                                            role="status"
+                                            aria-hidden="true"
+                                            style={{ marginRight: '5px' }}
+                                        />
+                                        Refreshing...
+                                    </>
+                                ) : (
+                                    'Refresh List'
+                                )}
+                            </Button>
+
+                            {/* Existing Display Mode Buttons */}
+                            <Button
+                                variant={displayMode === 'table' ? 'primary' : 'secondary'}
+                                onClick={() => setDisplayMode('table')}
+                            >
+                                Table Mode
+                            </Button>
+                            <Button
+                                variant={displayMode === 'bigCard' ? 'primary' : 'secondary'}
+                                onClick={() => setDisplayMode('bigCard')}
+                            >
+                                Big Card Mode
+                            </Button>
+                            <Button
+                                variant={displayMode === 'smallCard' ? 'primary' : 'secondary'}
+                                onClick={() => setDisplayMode('smallCard')}
+                            >
+                                Small Card Mode
+                            </Button>
+
+                            {/* New: Failed Card Mode Button with Badge */}
+                            <Button
+                                variant={displayMode === 'failedCard' ? 'primary' : 'secondary'}
+                                onClick={() => setDisplayMode('failedCard')}
+                                style={{ position: 'relative' }}
+                            >
+                                Failed Card Mode
+                                {failedEntries.length > 0 && (
+                                    <span
+                                        style={{
+                                            position: 'absolute',
+                                            top: '-5px',
+                                            right: '-10px',
+                                            background: 'red',
+                                            color: 'white',
+                                            borderRadius: '50%',
+                                            padding: '2px 6px',
+                                            fontSize: '0.75rem',
+                                        }}
+                                    >
+                                        {failedEntries.length}
+                                    </span>
+                                )}
+                            </Button>
+
+                            <Button
+                                variant={displayMode === 'errorCard' ? 'primary' : 'secondary'}
+                                onClick={() => setDisplayMode('errorCard')}
+                            >
+                                Error Card Mode
+                            </Button>
+
+                            {/* Modify Mode Toggle Button */}
+                            <Button
+                                onClick={toggleModifyMode}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    padding: '8px',
+                                    borderRadius: '4px',
+                                    border: 'none',
+                                    backgroundColor: isModifyMode ? '#dc3545' : '#17a2b8',
+                                    cursor: 'pointer',
+                                    marginLeft: '10px',
+                                    color: '#fff',
+                                }}
+                                aria-label="Toggle Modify Mode"
+                            >
+                                {isModifyMode ? 'Exit Modify Mode' : 'Enter Modify Mode'}
+                            </Button>
+                            {/* Theme Toggle Button */}
+                            <Button
+                                onClick={toggleTheme}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    padding: '8px',
+                                    borderRadius: '4px',
+                                    border: 'none',
+                                    backgroundColor: 'transparent',
+                                    cursor: 'pointer',
+                                    marginLeft: '10px',
+                                }}
+                                aria-label="Toggle Theme"
+                            >
+                                {isDarkMode ? <FaSun color="#FFA500" /> : <FaMoon color="#4B0082" />}
+                            </Button>
+                        </div>
+                    </div>
+
+                    {(isModifyMode || displayMode === 'errorCard') && (
+                        <>
+                            {/** Categories List Selector */}
+                            <CategoriesListSelector />
+
+                            {/** Folder Lists Option */}
+                            <DownloadFilePathOptionPanel
+                                setIsHandleRefresh={setIsHandleRefresh}
+                                isHandleRefresh={isHandleRefresh}
+                            />
+                        </>
+                    )}
+
+
+                    {/* **New: Display Remaining Cooldown Time** */}
+                    {/* {delayTime > 0 && (
+                        <div style={{
+                            marginBottom: '20px',
+                            fontWeight: 'bold',
+                            color: isDarkMode ? '#fff' : '#000',
+                            backgroundColor: isDarkMode ? '#555' : '#f8f9fa',
+                            padding: '10px',
+                            borderRadius: '4px',
+                            textAlign: 'center'
+                        }}>
+                            Cooldown Active: Please wait {delayTime} second{delayTime !== 1 ? 's' : ''} before initiating more downloads.
+                        </div>
+                    )} */}
+
+                    {(batchCooldown !== null && batchCooldown > 0) || currentBatchRange ? (
+                        <div
                             style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                padding: '8px',
+                                marginBottom: '20px',
+                                fontWeight: 'bold',
+                                color: '#FFA500',
+                                backgroundColor: isDarkMode ? '#555' : '#f8f9fa',
+                                padding: '10px',
                                 borderRadius: '4px',
-                                border: 'none',
-                                backgroundColor: '#17a2b8', // Bootstrap Info color
-                                cursor: isLoading ? 'not-allowed' : 'pointer',
-                                marginRight: '10px',
-                                color: '#fff',
+                                textAlign: 'center'
                             }}
-                            disabled={isLoading} // Disable while loading
-                            aria-label="Refresh Download List"
+                        >
+                            {/* Render the cooldown message if it’s active */}
+                            {batchCooldown !== null && batchCooldown > 0 && (
+                                <p style={{ margin: 0 }}>
+                                    Cooling down: {batchCooldown} second
+                                    {batchCooldown !== 1 ? 's' : ''} left before the next batch...
+                                </p>
+                            )}
+
+                            {/* Render the current batch range if defined */}
+                            {currentBatchRange && (
+                                <p style={{ margin: 0 }}>
+                                    {currentBatchRange}
+                                </p>
+                            )}
+                        </div>
+                    ) : null}
+
+                    {initiationDelay !== null && initiationDelay > 0 && (
+                        <div style={{
+                            marginBottom: '20px',
+                            fontWeight: 'bold',
+                            color: '#FFA500', // Orange color for visibility
+                            backgroundColor: isDarkMode ? '#555' : '#f8f9fa',
+                            padding: '10px',
+                            borderRadius: '4px',
+                            textAlign: 'center'
+                        }}>
+                            Next download will start in {initiationDelay} second{initiationDelay !== 1 ? 's' : ''}.
+                        </div>
+                    )}
+
+                    {/* Filter Section */}
+                    <div style={filterContainerStyle}>
+                        {/* Filter Text Input with Clear Button */}
+                        <InputGroup style={{ flex: '1', minWidth: '200px' }}>
+                            <FormControl
+                                placeholder="Filter..."
+                                value={filterText}
+                                onChange={(e) => setFilterText(e.target.value)}
+                                style={{
+                                    backgroundColor: isDarkMode ? '#555' : '#fff',
+                                    color: isDarkMode ? '#fff' : '#000',
+                                    border: '1px solid',
+                                    borderColor: isDarkMode ? '#777' : '#ccc',
+                                }}
+                            />
+                            {filterText && (
+                                <Button
+                                    variant="outline-secondary"
+                                    onClick={() => setFilterText('')}
+                                    aria-label="Clear filter"
+                                    style={{
+                                        border: 'none',
+                                        backgroundColor: 'transparent',
+                                        padding: '0 5px',
+                                    }}
+                                >
+                                    <FaTimes size={12} /> {/* Adjust the size as needed */}
+                                </Button>
+                            )}
+                        </InputGroup>
+                        <select
+                            value={filterCondition}
+                            onChange={(e) => setFilterCondition(e.target.value as any)}
+                            style={{
+                                ...filterSelectStyle,
+                                backgroundColor: isDarkMode ? '#555' : '#fff',
+                                color: isDarkMode ? '#fff' : '#000',
+                                border: '1px solid',
+                                borderColor: isDarkMode ? '#777' : '#ccc',
+                            }}
+                        >
+                            <option value="contains">Contains</option>
+                            <option value="does not contain">Does not contain</option>
+                            <option value="equals">Equals</option>
+                            <option value="does not equal">Does not equal</option>
+                            <option value="begins with">Begins with</option>
+                            <option value="ends with">Ends with</option>
+                        </select>
+                        <Button
+                            onClick={handleDownloadNow}
+                            style={selectedIds.size > 0 ? downloadButtonStyle : downloadButtonDisabledStyle}
+                            disabled={selectedIds.size === 0 || isLoading || isModifyMode}
                         >
                             {isLoading ? (
                                 <>
@@ -1531,267 +2199,168 @@ const OfflineWindow: React.FC = () => {
                                         aria-hidden="true"
                                         style={{ marginRight: '5px' }}
                                     />
-                                    Refreshing...
+                                    Downloading...
                                 </>
                             ) : (
-                                'Refresh List'
+                                'Download Now'
                             )}
                         </Button>
 
-                        {/* Existing Display Mode Buttons */}
+                        {/* Select Count UI */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <label
+                                htmlFor="selectCountInput"
+                                style={{ color: isDarkMode ? '#fff' : '#000', marginRight: '5px' }}
+                            >
+                                Select Count:
+                            </label>
+
+                            <input
+                                id="selectCountInput"
+                                type="number"
+                                min={5}
+                                step={5}
+                                value={selectCount}
+                                onChange={(e) => {
+                                    // Make sure we parse the value as a number
+                                    const newVal = parseInt(e.target.value, 10);
+                                    if (!isNaN(newVal)) {
+                                        setSelectCount(newVal);
+                                    }
+                                }}
+                                style={{
+                                    width: '100px',
+                                    padding: '5px',
+                                    borderRadius: '4px',
+                                    border: '1px solid #ccc',
+                                    backgroundColor: isDarkMode ? '#555' : '#fff',
+                                    color: isDarkMode ? '#fff' : '#000',
+                                }}
+                            />
+                        </div>
+
+                        {/* "Select First N" Button */}
                         <Button
-                            variant={displayMode === 'table' ? 'primary' : 'secondary'}
-                            onClick={() => setDisplayMode('table')}
-                        >
-                            Table Mode
-                        </Button>
-                        <Button
-                            variant={displayMode === 'bigCard' ? 'primary' : 'secondary'}
-                            onClick={() => setDisplayMode('bigCard')}
-                        >
-                            Big Card Mode
-                        </Button>
-                        <Button
-                            variant={displayMode === 'smallCard' ? 'primary' : 'secondary'}
-                            onClick={() => setDisplayMode('smallCard')}
-                        >
-                            Small Card Mode
-                        </Button>
-                        {/* Modify Mode Toggle Button */}
-                        <Button
-                            onClick={toggleModifyMode}
+                            onClick={handleSelectFirstN}
                             style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                padding: '8px',
-                                borderRadius: '4px',
-                                border: 'none',
-                                backgroundColor: isModifyMode ? '#dc3545' : '#17a2b8',
-                                cursor: 'pointer',
-                                marginLeft: '10px',
+                                ...downloadButtonStyle,
+                                backgroundColor: '#007bff',
                                 color: '#fff',
                             }}
-                            aria-label="Toggle Modify Mode"
                         >
-                            {isModifyMode ? 'Exit Modify Mode' : 'Enter Modify Mode'}
+                            Select First {selectCount}
                         </Button>
-                        {/* Theme Toggle Button */}
+
                         <Button
-                            onClick={toggleTheme}
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                padding: '8px',
-                                borderRadius: '4px',
-                                border: 'none',
-                                backgroundColor: 'transparent',
-                                cursor: 'pointer',
-                                marginLeft: '10px',
-                            }}
-                            aria-label="Toggle Theme"
+                            onClick={handlePauseToggle}
+                            disabled={selectedIds.size === 0 || isLoading === false /* or any other condition */}
                         >
-                            {isDarkMode ? <FaSun color="#FFA500" /> : <FaMoon color="#4B0082" />}
+                            {isPaused ? "Resume" : "Pause"}
                         </Button>
-                    </div>
-                </div>
 
-                {/**Categories List Selector */}
-                <CategoriesListSelector />
-
-                {/**Folder Lists Option */}
-                <DownloadFilePathOptionPanel setIsHandleRefresh={setIsHandleRefresh} isHandleRefresh={isHandleRefresh} />
-
-                {/* **New: Display Remaining Cooldown Time** */}
-                {delayTime > 0 && (
-                    <div style={{
-                        marginBottom: '20px',
-                        fontWeight: 'bold',
-                        color: isDarkMode ? '#fff' : '#000',
-                        backgroundColor: isDarkMode ? '#555' : '#f8f9fa',
-                        padding: '10px',
-                        borderRadius: '4px',
-                        textAlign: 'center'
-                    }}>
-                        Cooldown Active: Please wait {delayTime} second{delayTime !== 1 ? 's' : ''} before initiating more downloads.
-                    </div>
-                )}
-
-                {/* Filter Section */}
-                <div style={filterContainerStyle}>
-                    <input
-                        type="text"
-                        placeholder="Filter..."
-                        value={filterText}
-                        onChange={(e) => setFilterText(e.target.value)}
-                        style={{
-                            ...filterInputStyle,
-                            backgroundColor: isDarkMode ? '#555' : '#fff',
-                            color: isDarkMode ? '#fff' : '#000',
-                            border: '1px solid',
-                            borderColor: isDarkMode ? '#777' : '#ccc',
-                        }}
-                    />
-                    <select
-                        value={filterCondition}
-                        onChange={(e) => setFilterCondition(e.target.value as any)}
-                        style={{
-                            ...filterSelectStyle,
-                            backgroundColor: isDarkMode ? '#555' : '#fff',
-                            color: isDarkMode ? '#fff' : '#000',
-                            border: '1px solid',
-                            borderColor: isDarkMode ? '#777' : '#ccc',
-                        }}
-                    >
-                        <option value="contains">Contains</option>
-                        <option value="does not contain">Does not contain</option>
-                        <option value="equals">Equals</option>
-                        <option value="does not equal">Does not equal</option>
-                        <option value="begins with">Begins with</option>
-                        <option value="ends with">Ends with</option>
-                    </select>
-                    <Button
-                        onClick={handleDownloadNow}
-                        style={selectedIds.size > 0 ? downloadButtonStyle : downloadButtonDisabledStyle}
-                        disabled={selectedIds.size === 0 || isLoading || isModifyMode || delayTime > 0}
-                    >
-                        {isLoading ? (
-                            <>
-                                <Spinner
-                                    as="span"
-                                    animation="border"
-                                    size="sm"
-                                    role="status"
-                                    aria-hidden="true"
-                                    style={{ marginRight: '5px' }}
-                                />
-                                Downloading...
-                            </>
-                        ) : delayTime > 0 ? (
-                            'Download Disabled'
-                        ) : (
-                            'Download Now'
-                        )}
-                    </Button>
-
-                    {/* Select Count UI */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <label
-                            htmlFor="selectCountInput"
-                            style={{ color: isDarkMode ? '#fff' : '#000', marginRight: '5px' }}
+                        <Button
+                            onClick={handleCancelDownload}
+                            disabled={!isLoading || !isPaused} // Only enable if downloads are in progress *and* paused
                         >
-                            Select Count:
-                        </label>
+                            Cancel
+                        </Button>
 
-                        <input
-                            id="selectCountInput"
-                            type="number"
-                            min={5}
-                            step={5}
-                            value={selectCount}
-                            onChange={(e) => {
-                                // Make sure we parse the value as a number
-                                const newVal = parseInt(e.target.value, 10);
-                                if (!isNaN(newVal)) {
-                                    setSelectCount(newVal);
-                                }
-                            }}
-                            style={{
-                                width: '100px',
-                                padding: '5px',
-                                borderRadius: '4px',
-                                border: '1px solid #ccc',
-                                backgroundColor: isDarkMode ? '#555' : '#fff',
-                                color: isDarkMode ? '#fff' : '#000',
-                            }}
-                        />
-                    </div>
-
-                    {/* "Select First N" Button */}
-                    <Button
-                        onClick={handleSelectFirstN}
-                        style={{
-                            ...downloadButtonStyle,
-                            backgroundColor: '#007bff',
-                            color: '#fff',
-                        }}
-                    >
-                        Select First {selectCount}
-                    </Button>
-
-                    <Button
-                        onClick={handlePauseToggle}
-                        disabled={selectedIds.size === 0 || isLoading === false /* or any other condition */}
-                    >
-                        {isPaused ? "Resume" : "Pause"}
-                    </Button>
-
-                    <Button
-                        onClick={handleCancelDownload}
-                        disabled={!isLoading || !isPaused} // Only enable if downloads are in progress *and* paused
-                    >
-                        Cancel
-                    </Button>
-
-                    {/* Action Button for Modify Mode */}
-                    {isModifyMode && (
-                        <>
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: '20px',
+                            flexWrap: 'wrap', // Ensures responsiveness on smaller screens
+                            gap: '10px', // Adds spacing between elements
+                        }}>
+                            {/* Select All Button */}
                             <Button
-                                onClick={handleProcessSelected}
+                                onClick={handleSelectAll}
                                 style={{
-                                    ...downloadButtonStyle,
-                                    backgroundColor: '#ffc107',
-                                    color: '#000',
-                                }}
-                                disabled={selectedIds.size === 0}
-                            >
-                                Process Selected
-                            </Button>
-
-                            {/* New Remove button */}
-                            <Button
-                                onClick={handleRemoveSelected}
-                                style={{
-                                    ...downloadButtonStyle,
-                                    backgroundColor: '#dc3545',
+                                    padding: '10px 20px',
+                                    borderRadius: '4px',
+                                    backgroundColor: '#007bff',
                                     color: '#fff',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
                                 }}
-                                disabled={selectedIds.size === 0}
+                                aria-label={isAllSelected ? 'Deselect All' : 'Select All'}
                             >
-                                Remove Selected
+                                {isAllSelected ? 'Deselect All' : 'Select All'}
                             </Button>
-                        </>
+
+                            {/* Selection Count Display */}
+                            <div style={{
+                                padding: '8px 12px',
+                                borderRadius: '4px',
+                                backgroundColor: isDarkMode ? '#444' : '#e0e0e0',
+                                color: isDarkMode ? '#fff' : '#000',
+                                fontWeight: 'bold',
+                                minWidth: '150px',
+                                textAlign: 'center',
+                            }}>
+                                {selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'} selected
+                            </div>
+                        </div>
+
+                        {/* Action Button for Modify Mode */}
+                        {isModifyMode && (
+                            <>
+                                <Button
+                                    onClick={handleProcessSelected}
+                                    style={{
+                                        ...downloadButtonStyle,
+                                        backgroundColor: '#ffc107',
+                                        color: '#000',
+                                    }}
+                                    disabled={selectedIds.size === 0}
+                                >
+                                    Process Selected
+                                </Button>
+
+                                {/* New Remove button */}
+                                <Button
+                                    onClick={handleRemoveSelected}
+                                    style={{
+                                        ...downloadButtonStyle,
+                                        backgroundColor: '#dc3545',
+                                        color: '#fff',
+                                    }}
+                                    disabled={selectedIds.size === 0}
+                                >
+                                    Remove Selected
+                                </Button>
+                            </>
+                        )}
+                    </div>
+
+                    {/* Download or Modify Progress Indicators */}
+                    {isLoading && (
+                        <div style={{
+                            marginBottom: '20px',
+                            fontWeight: 'bold',
+                            color: isDarkMode ? '#fff' : '#000',
+                            backgroundColor: isDarkMode ? '#555' : '#f8f9fa',
+                            padding: '10px',
+                            borderRadius: '4px',
+                            textAlign: 'center'
+                        }}>
+                            {isModifyMode ? (
+                                <>
+                                    Modifying downloads... ({selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'})
+                                </>
+                            ) : (
+                                <>
+                                    Initiating downloads... ({downloadProgress.completed}/{downloadProgress.total})
+                                </>
+                            )}
+                        </div>
                     )}
+
                 </div>
-
-                {/* Download Progress Indicators */}
-                {isLoading && (
-                    <div style={{
-                        marginBottom: '20px',
-                        fontWeight: 'bold',
-                        color: isDarkMode ? '#fff' : '#000',
-                        backgroundColor: isDarkMode ? '#555' : '#f8f9fa',
-                        padding: '10px',
-                        borderRadius: '4px',
-                        textAlign: 'center'
-                    }}>
-                        Initiating downloads... ({downloadProgress.completed}/{downloadProgress.total})
-                    </div>
-                )}
-
-                {/* Failed Downloads */}
-                {failedEntries.length > 0 && (
-                    <div style={{ color: '#dc3545', marginTop: '20px' }}>
-                        <h4>Failed Downloads:</h4>
-                        <ul>
-                            {failedEntries.map((entry, index) => (
-                                <li key={index}>{entry.civitaiFileName}</li>
-                            ))}
-                        </ul>
-                        {/* Optionally, add a retry button */}
-                    </div>
-                )}
 
                 {/* Main Content */}
                 {isLoading && offlineDownloadList.length === 0 ? (
@@ -1805,7 +2374,7 @@ const OfflineWindow: React.FC = () => {
                                     columnDefs={columnDefs}
                                     defaultColDef={defaultColDef}
                                     pagination={true}
-                                    // paginationPageSize={10}
+                                    paginationPageSize={itemsPerPage}
                                     getRowStyle={getRowStyle}
                                     onRowClicked={(params: any) => {
                                         if (isModifyMode && params.event.ctrlKey) {
@@ -1817,29 +2386,110 @@ const OfflineWindow: React.FC = () => {
                             </div>
                         )}
 
-
                         {displayMode === 'bigCard' && (
                             <BigCardMode
-                                filteredDownloadList={filteredDownloadList}
+                                filteredDownloadList={paginatedDownloadList}
                                 isDarkMode={isDarkMode}
                                 isModifyMode={isModifyMode}
                                 selectedIds={selectedIds}
                                 toggleSelect={toggleSelect}
+                                handleSelectAll={handleSelectAll}
                             />
                         )}
 
                         {displayMode === 'smallCard' && (
                             <SmallCardMode
-                                filteredDownloadList={filteredDownloadList}
+                                filteredDownloadList={paginatedDownloadList}
                                 isDarkMode={isDarkMode}
                                 isModifyMode={isModifyMode}
                                 selectedIds={selectedIds}
                                 toggleSelect={toggleSelect}
+                                handleSelectAll={handleSelectAll}
                             />
                         )}
+
+                        {displayMode === 'failedCard' && (
+                            <FailedCardMode
+                                failedEntries={failedEntries}
+                                isDarkMode={isDarkMode}
+                                selectedIds={selectedIds}
+                                toggleSelect={toggleSelect}
+                                isModifyMode={isModifyMode}
+                            />
+                        )}
+
+                        {displayMode === 'errorCard' && (
+                            <ErrorCardMode
+                                modify_downloadFilePath={modify_downloadFilePath}
+                                modify_selectedCategory={modify_selectedCategory}
+                                isDarkMode={isDarkMode} />
+                        )}
+
                     </>
                 )}
             </div>
+
+            {/* Fixed Pagination Footer for BigCard and SmallCard Modes */}
+            {(displayMode === 'bigCard' || displayMode === 'smallCard') && totalPages > 1 && (
+                <div style={footerStyle}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                        {/* Range Display */}
+                        <div style={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>
+                            Showing {startItem} - {endItem} of {totalItems} items
+                        </div>
+
+                        {/* Pagination Controls */}
+                        <Pagination>
+                            <Pagination.First onClick={() => setCurrentPage(1)} disabled={currentPage === 1} aria-label="First Page" >
+                                <FaAngleDoubleLeft />
+                            </Pagination.First>
+                            <Pagination.Prev onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} aria-label="Previous Page" >
+                                <FaAngleLeft />
+                            </Pagination.Prev>
+
+                            {/* Display a range of page numbers */}
+                            {Array.from({ length: totalPages }, (_, index) => index + 1)
+                                .slice(Math.max(currentPage - 3, 0), currentPage + 2)
+                                .map(page => (
+                                    <Pagination.Item
+                                        key={page}
+                                        active={page === currentPage}
+                                        onClick={() => setCurrentPage(page)}
+                                        aria-label={`Page ${page}`}
+                                    >
+                                        {page}
+                                    </Pagination.Item>
+                                ))}
+
+                            <Pagination.Next onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} aria-label="Next Page" >
+                                <FaAngleRight />
+                            </Pagination.Next>
+                            <Pagination.Last onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} aria-label="Last Page">
+                                <FaAngleDoubleRight />
+                            </Pagination.Last>
+                        </Pagination>
+
+                        {/* Items Per Page Selector */}
+                        <Form.Select
+                            value={itemsPerPage}
+                            onChange={(e) => setItemsPerPage(parseInt(e.target.value, 10))}
+                            style={{
+                                width: '150px',
+                                padding: '5px',
+                                borderRadius: '4px',
+                                border: '1px solid #ccc',
+                                backgroundColor: isDarkMode ? '#555' : '#fff',
+                                color: isDarkMode ? '#fff' : '#000',
+                            }}
+                            aria-label="Items Per Page"
+                        >
+                            <option value={50}>50 items per page</option>
+                            <option value={100}>100 items per page</option>
+                            <option value={200}>200 items per page</option>
+                        </Form.Select>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

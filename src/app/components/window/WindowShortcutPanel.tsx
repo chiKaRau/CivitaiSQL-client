@@ -9,7 +9,7 @@ import { GoChecklist } from "react-icons/go";
 import { OverlayTrigger, Tooltip } from 'react-bootstrap';
 
 import { IoIosRefresh } from "react-icons/io";
-import { MdAddCircle } from "react-icons/md";
+import { MdAddCircle, MdLibraryAdd, MdRemove } from "react-icons/md";
 
 
 interface Version {
@@ -28,11 +28,12 @@ interface Model {
 
 interface PanelProps {
     url: string;
+    setSelectedUrl: (selectedUrl: string) => void;
     setUrlList: (updater: (prevUrlList: string[]) => string[]) => void; // Callback to update the URL list
     urlList: string[]; // Pass the list of URLs to check for duplicates
 }
 
-const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList }) => {
+const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, setSelectedUrl }) => {
     const dispatch = useDispatch();
 
     const [modelData, setModelData] = useState<Model | null>(null);
@@ -150,6 +151,46 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList })
 
     };
 
+    // Handle Add All Button Click
+    const handleAddAll = () => {
+        if (!modelData) return;
+
+        const modelVersions = modelData.modelVersions;
+        const newUrls: string[] = [];
+
+        modelVersions.forEach((version) => {
+            const formattedUrl =
+                (version.id === modelData.modelVersions[0].id &&
+                    !(new URL(url).searchParams.has('modelVersionId')))
+                    ? url
+                    : `https://civitai.com/models/${modelId}?modelVersionId=${version.id}`;
+
+            if (!urlList.includes(formattedUrl)) {
+                newUrls.push(formattedUrl);
+            }
+        });
+
+        if (newUrls.length === 0) {
+            setMessage({ text: 'All URLs are already in the list.', type: 'error' });
+            return;
+        }
+
+        setUrlList(prevUrlList => {
+            const updatedList = [...prevUrlList, ...newUrls];
+            return updatedList;
+        });
+
+        setMessage({ text: `${newUrls.length} URL(s) added successfully!`, type: 'success' });
+
+        newUrls.forEach((formattedUrl) => {
+            chrome.storage.local.get('originalTabId', (result) => {
+                if (result.originalTabId) {
+                    chrome.tabs.sendMessage(result.originalTabId, { action: "check-url", url: formattedUrl });
+                }
+            });
+        });
+    };
+
     const forceRerender = () => {
         setRenderKey((prevKey) => prevKey + 1); // Increment renderKey to force a re-render
     };
@@ -261,6 +302,28 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList })
                             </button>
                         )}
 
+                        {/* Icon Button for Add All to Download List */}
+                        {selectedVersion && modelData && modelData.modelVersions.length > 0 && (
+                            <button
+                                onClick={handleAddAll}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    fontSize: '20px',
+                                    width: '24px',
+                                    height: '24px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                }}
+                                title="Add All to Download List"
+                                aria-label="Add All to Download List"
+                            >
+                                <MdLibraryAdd />
+                            </button>
+                        )}
+
                         {/* Message Icons */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                             {/* Database Icon with Tooltip */}
@@ -306,6 +369,34 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList })
                                     </span>
                                 </OverlayTrigger>
                             )}
+
+                            <OverlayTrigger
+                                placement="top"
+                                overlay={
+                                    <Tooltip id={`tooltip-checklist`}>
+                                        Remove selectedUrl
+                                    </Tooltip>
+                                }
+                            >
+                                <button
+                                    onClick={() => setSelectedUrl("")}
+                                    style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        fontSize: '20px',
+                                        width: '24px',
+                                        height: '24px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                    }}
+                                    title="Remove selectedUrl"
+                                    aria-label="Remove selectedUrl"
+                                >
+                                    <MdRemove />
+                                </button>
+                            </OverlayTrigger>
                         </div>
                     </div>
 

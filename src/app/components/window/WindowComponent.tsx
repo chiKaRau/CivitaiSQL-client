@@ -410,8 +410,8 @@ const WindowComponent: React.FC = () => {
 
         if (downloadMethod === "server") {
             //If download Method is server, the server will download the file into server's folder
-            await fetchDownloadFilesByServer_v2(modelObject, dispatch);
-
+            const isDownloadSuccessful = await fetchDownloadFilesByServer_v2(modelObject, dispatch);
+            return isDownloadSuccessful;
         } else {
             //if download Method is browser, the chrome browser will download the file into server's folder
             await fetchDownloadFilesByBrowser_v2(civitaiUrl, downloadFilePath, dispatch);
@@ -426,6 +426,7 @@ const WindowComponent: React.FC = () => {
                     }
                 });
             }
+            return true;
         }
 
     };
@@ -574,6 +575,8 @@ const WindowComponent: React.FC = () => {
                     //the fileList would contains the urls of all files such as safetensor, training data, ...
                     let civitaiModelFileList = retrieveCivitaiFilesList(data, civitaiVersionID)
 
+                    let civitaiTags = data?.tags;
+
                     //Check for null or empty
                     if (
                         civitaiUrl === null || civitaiUrl === "" ||
@@ -582,16 +585,17 @@ const WindowComponent: React.FC = () => {
                         civitaiVersionID === null || civitaiVersionID === "" ||
                         downloadFilePath === null || downloadFilePath === "" ||
                         selectedCategory === null || selectedCategory === "" ||
-                        civitaiModelFileList === null || !civitaiModelFileList.length
+                        civitaiModelFileList === null || !civitaiModelFileList.length ||
+                        civitaiTags === null
                     ) {
-                        console.log("fail")
+                        console.log("fail in handleAddOfflineDownloadFileintoOfflineDownloadList()")
                         return;
                     }
 
                     let modelObject = {
                         downloadFilePath, civitaiFileName, civitaiModelID,
                         civitaiVersionID, civitaiModelFileList, civitaiUrl,
-                        selectedCategory
+                        selectedCategory, civitaiTags
                     }
 
                     await fetchAddOfflineDownloadFileIntoOfflineDownloadList(modelObject, false, dispatch);
@@ -661,22 +665,24 @@ const WindowComponent: React.FC = () => {
                         continue;
                     }
 
-                    handleDownloadMultipleFile_v2(data, url, modelId, versionIndex);
+                    const isDownloadSuccessful = await handleDownloadMultipleFile_v2(data, url, modelId, versionIndex);
 
-                    //Add to database
-                    handleAddModeltoDatabase(url);
+                    if (isDownloadSuccessful) {
+                        //Add to database
+                        handleAddModeltoDatabase(url);
 
-                    //Bookmark this url
-                    bookmarkThisUrl(data.type, url, `${data.name} - ${data.id} | Stable Diffusion LoRA | Civitai`)
+                        //Bookmark this url
+                        bookmarkThisUrl(data.type, url, `${data.name} - ${data.id} | Stable Diffusion LoRA | Civitai`)
 
-                    // Remove the processed URL from the urlList
-                    setUrlList(currentUrls => currentUrls.filter(currentUrl => currentUrl !== url));
+                        // Remove the processed URL from the urlList
+                        setUrlList(currentUrls => currentUrls.filter(currentUrl => currentUrl !== url));
 
-                    chrome.storage.local.get('originalTabId', (result) => {
-                        if (result.originalTabId) {
-                            chrome.tabs.sendMessage(result.originalTabId, { action: "uncheck-url", url: url });
-                        }
-                    });
+                        chrome.storage.local.get('originalTabId', (result) => {
+                            if (result.originalTabId) {
+                                chrome.tabs.sendMessage(result.originalTabId, { action: "uncheck-url", url: url });
+                            }
+                        });
+                    }
 
                 }
 
@@ -689,6 +695,7 @@ const WindowComponent: React.FC = () => {
             await delay(2000);
         }
         setWorkingModelID("")
+        setSelectedUrl("");
         setIsLoading(false)
         setResetMode(true)
     };
@@ -1017,11 +1024,14 @@ const WindowComponent: React.FC = () => {
                             handleFunctionCall={() => toggleFullInfoModelPanel()}
                         />
 
-                        <WindowShortcutPanel
-                            url={selectedUrl}
-                            urlList={urlList}
-                            setUrlList={setUrlList}
-                        />
+                        {
+                            selectedUrl && <WindowShortcutPanel
+                                url={selectedUrl}
+                                setSelectedUrl={setSelectedUrl}
+                                urlList={urlList}
+                                setUrlList={setUrlList}
+                            />
+                        }
 
                     </div>
                 }
