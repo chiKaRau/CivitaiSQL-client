@@ -10,7 +10,7 @@ import { AiFillFolderOpen } from "react-icons/ai";
 import { BsDownload } from 'react-icons/bs';
 import { TbDatabaseSearch, TbDatabasePlus, TbDatabaseMinus } from "react-icons/tb";
 import { PiPlusMinusFill } from "react-icons/pi";
-import { FaMagnifyingGlass, FaMagnifyingGlassPlus, FaSun, FaMoon } from "react-icons/fa6"; // Added FaSun and FaMoon
+import { FaMagnifyingGlass, FaMagnifyingGlassPlus, FaSun, FaMoon, FaArrowRight } from "react-icons/fa6"; // Added FaSun and FaMoon
 import { MdOutlineApps, MdOutlineTipsAndUpdates, MdOutlineDownloadForOffline, MdOutlineDownload } from "react-icons/md";
 import { FcGenericSortingAsc, FcGenericSortingDesc } from "react-icons/fc";
 import { PiTabsFill } from "react-icons/pi";
@@ -250,6 +250,49 @@ const OfflineWindow: React.FC = () => {
 
     const modify_downloadFilePath = chromeData.downloadFilePath;
     const modify_selectedCategory = chromeData.selectedCategory;
+
+
+    const [mostFrequentPendingTags, setMostFrequentPendingTags] = useState<string[]>([]);
+
+    // 1) Keep your excluded tags in lowercase
+    const EXCLUDED_TAGS = ["character", "game", "anime character", "girl", "manga",
+        "lora", "checkpoint", "boy", "anime", "woman", "girls", "game character", "sexy",
+        "video game"];
+
+    const computeTopTagsFromPending = (data: OfflineDownloadEntry[]): string[] => {
+        const pendingEntries = data.filter(
+            (entry) =>
+                entry.downloadFilePath === "/@scan@/ACG/Pending" ||
+                entry.downloadFilePath === "/@scan@/ACG/Pending/"
+        );
+
+        const freqMap = new Map<string, number>();
+
+        pendingEntries.forEach((entry) => {
+            if (Array.isArray(entry.civitaiTags)) {
+                entry.civitaiTags.forEach((rawTag) => {
+                    // 2) Convert to lowercase before checking
+                    const tag = rawTag.toLowerCase();
+
+                    // Skip if in excluded list
+                    if (!EXCLUDED_TAGS.includes(tag)) {
+                        freqMap.set(tag, (freqMap.get(tag) || 0) + 1);
+                    }
+                });
+            }
+        });
+
+        // Sort by frequency descending
+        const sorted = [...freqMap.entries()].sort((a, b) => b[1] - a[1]);
+
+        // Return top 30
+        return sorted.slice(0, 30).map(([tag]) => tag);
+    };
+
+    // Whenever offlineDownloadList changes, recompute the frequent tags
+    useEffect(() => {
+        setMostFrequentPendingTags(computeTopTagsFromPending(offlineDownloadList));
+    }, [offlineDownloadList]);
 
     // Additional states for progress and failed downloads
     const [downloadProgress, setDownloadProgress] = useState<{ completed: number; total: number }>({ completed: 0, total: 0 });
@@ -1182,6 +1225,10 @@ const OfflineWindow: React.FC = () => {
             await sleep(500);
         }
         console.log("All batches processed or cancelled.");
+
+        // **Clear currentBatchRange after all batches are done**
+        setCurrentBatchRange(null);
+
     };
 
 
@@ -2096,7 +2143,7 @@ const OfflineWindow: React.FC = () => {
                     {(batchCooldown !== null && batchCooldown > 0) || currentBatchRange ? (
                         <div
                             style={{
-                                marginBottom: '20px',
+                                marginBottom: '5px',
                                 fontWeight: 'bold',
                                 color: '#FFA500',
                                 backgroundColor: isDarkMode ? '#555' : '#f8f9fa',
@@ -2124,7 +2171,7 @@ const OfflineWindow: React.FC = () => {
 
                     {initiationDelay !== null && initiationDelay > 0 && (
                         <div style={{
-                            marginBottom: '20px',
+                            marginBottom: '5px',
                             fontWeight: 'bold',
                             color: '#FFA500', // Orange color for visibility
                             backgroundColor: isDarkMode ? '#555' : '#f8f9fa',
@@ -2184,7 +2231,38 @@ const OfflineWindow: React.FC = () => {
                             <option value="begins with">Begins with</option>
                             <option value="ends with">Ends with</option>
                         </select>
-                        <Button
+
+                        <Form.Select
+                            style={{
+                                width: '240px',
+                                marginLeft: '10px',
+                                backgroundColor: isDarkMode ? '#555' : '#fff',
+                                color: isDarkMode ? '#fff' : '#000',
+                            }}
+                            onChange={(e) => {
+                                const chosenTag = e.target.value;
+
+                                if (!chosenTag) {
+                                    // The default option means "do nothing", so just clear the filter or do nothing
+                                    setFilterText('');
+                                } else {
+                                    // We’ll make the filter say “contains chosenTag”
+                                    setFilterCondition('contains');
+                                    setFilterText(chosenTag);
+                                }
+                            }}
+                        >
+                            <option value="">
+                                -- Top Pending Tags (choose one) --
+                            </option>
+                            {mostFrequentPendingTags.map((tag) => (
+                                <option key={tag} value={tag}>
+                                    {tag}
+                                </option>
+                            ))}
+                        </Form.Select>
+
+                        {!isModifyMode && <Button
                             onClick={handleDownloadNow}
                             style={selectedIds.size > 0 ? downloadButtonStyle : downloadButtonDisabledStyle}
                             disabled={selectedIds.size === 0 || isLoading || isModifyMode}
@@ -2204,17 +2282,22 @@ const OfflineWindow: React.FC = () => {
                             ) : (
                                 'Download Now'
                             )}
+                        </Button>}
+
+                        {/* "Select First N" Button */}
+                        <Button
+                            onClick={handleSelectFirstN}
+                            style={{
+                                ...downloadButtonStyle,
+                                backgroundColor: '#007bff',
+                                color: '#fff',
+                            }}
+                        >
+                            Select First
                         </Button>
 
                         {/* Select Count UI */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            <label
-                                htmlFor="selectCountInput"
-                                style={{ color: isDarkMode ? '#fff' : '#000', marginRight: '5px' }}
-                            >
-                                Select Count:
-                            </label>
-
                             <input
                                 id="selectCountInput"
                                 type="number"
@@ -2239,17 +2322,6 @@ const OfflineWindow: React.FC = () => {
                             />
                         </div>
 
-                        {/* "Select First N" Button */}
-                        <Button
-                            onClick={handleSelectFirstN}
-                            style={{
-                                ...downloadButtonStyle,
-                                backgroundColor: '#007bff',
-                                color: '#fff',
-                            }}
-                        >
-                            Select First {selectCount}
-                        </Button>
 
                         <Button
                             onClick={handlePauseToggle}
@@ -2265,14 +2337,15 @@ const OfflineWindow: React.FC = () => {
                             Cancel
                         </Button>
 
-                        <div style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            marginBottom: '20px',
-                            flexWrap: 'wrap', // Ensures responsiveness on smaller screens
-                            gap: '10px', // Adds spacing between elements
-                        }}>
+                        <div
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                marginBottom: '5px',
+                                gap: '10px',
+                                width: '100%',
+                            }}
+                        >
                             {/* Select All Button */}
                             <Button
                                 onClick={handleSelectAll}
@@ -2293,18 +2366,42 @@ const OfflineWindow: React.FC = () => {
                             </Button>
 
                             {/* Selection Count Display */}
-                            <div style={{
-                                padding: '8px 12px',
-                                borderRadius: '4px',
-                                backgroundColor: isDarkMode ? '#444' : '#e0e0e0',
-                                color: isDarkMode ? '#fff' : '#000',
-                                fontWeight: 'bold',
-                                minWidth: '150px',
-                                textAlign: 'center',
-                            }}>
-                                {selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'} selected
+                            <div
+                                style={{
+                                    flex: 1, // <--- This makes it stretch across the remaining width
+                                    padding: '8px 12px',
+                                    borderRadius: '4px',
+                                    backgroundColor: isDarkMode ? '#444' : '#e0e0e0',
+                                    color: isDarkMode ? '#fff' : '#000',
+                                    fontWeight: 'bold',
+                                    textAlign: 'center',
+                                }}
+                            >
+                                {(isModifyMode || (displayMode === 'errorCard')) ? (
+                                    <>
+                                        {selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'} selected <FaArrowRight />
+                                        "<span
+                                            style={{
+                                                display: 'inline-block',
+                                                // maxWidth: '100%',         // Adjust as needed
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                                verticalAlign: 'middle',   // Helps align icon & text nicely
+                                            }}
+                                            title={modify_downloadFilePath} // When hovered, show full text
+                                        >
+                                            {modify_downloadFilePath}
+                                        </span>"
+                                    </>
+                                ) : (
+                                    <>
+                                        {selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'} selected
+                                    </>
+                                )}
                             </div>
                         </div>
+
 
                         {/* Action Button for Modify Mode */}
                         {isModifyMode && (
@@ -2337,6 +2434,18 @@ const OfflineWindow: React.FC = () => {
                         )}
                     </div>
 
+                    <div style={{
+                        marginBottom: '5px',
+                        fontWeight: 'bold',
+                        color: '#FFFFFF', // White text for high contrast
+                        backgroundColor: isDarkMode ? '#0056b3' : '#007BFF', // Darker blue for dark mode, standard blue for light mode
+                        padding: '10px',
+                        borderRadius: '4px',
+                        textAlign: 'center'
+                    }}>
+                        {isModifyMode ? "Modify Mode" : `Download Mode (${displayMode})`}
+                    </div>
+
                     {/* Download or Modify Progress Indicators */}
                     {isLoading && (
                         <div style={{
@@ -2350,11 +2459,11 @@ const OfflineWindow: React.FC = () => {
                         }}>
                             {isModifyMode ? (
                                 <>
-                                    Modifying downloads... ({selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'})
+                                    Modifying entries... ({selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'})
                                 </>
                             ) : (
                                 <>
-                                    Initiating downloads... ({downloadProgress.completed}/{downloadProgress.total})
+                                    Processing downloads... ({downloadProgress.completed}/{downloadProgress.total})
                                 </>
                             )}
                         </div>

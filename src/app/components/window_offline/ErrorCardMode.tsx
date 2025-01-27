@@ -1,7 +1,7 @@
 // ErrorCardMode.tsx
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Card, Spinner, Button, Badge, ButtonGroup, Tooltip, Dropdown, OverlayTrigger } from 'react-bootstrap';
+import { Card, Spinner, Button, Badge, ButtonGroup, Tooltip, Dropdown, OverlayTrigger, Form } from 'react-bootstrap';
 import { useDispatch, useSelector } from 'react-redux';
 import {
     fetchGetErrorModelList,
@@ -16,6 +16,8 @@ import DownloadFilePathOptionPanel from '../DownloadFilePathOptionPanel';
 import CategoriesListSelector from '../CategoriesListSelector';
 import { BsCloudDownloadFill } from 'react-icons/bs';
 import { FcDownload } from 'react-icons/fc';
+import { IoLibrary } from "react-icons/io5";
+
 
 interface ErrorCardModeProps {
     isDarkMode: boolean;
@@ -48,7 +50,19 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({ isDarkMode, modify_downlo
 
     const [downloadMethod, setDownloadMethod] = useState("browser")
 
+    const [shouldAddRecordAndBookmark, setShouldAddRecordAndBookmark] = useState<Record<string, boolean>>({});
 
+
+    // Called when user toggles the checkbox
+    const handleCheckboxChange = useCallback(
+        (versionID: string, checked: boolean) => {
+            setShouldAddRecordAndBookmark((prev) => ({
+                ...prev,
+                [versionID]: checked,
+            }));
+        },
+        []
+    );
 
     // ----------------------------------
     // Fetch error list ONCE when mounted
@@ -216,6 +230,10 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({ isDarkMode, modify_downlo
             return;
         }
 
+        // Decide whether to add record & bookmark based on our checkbox state
+        // If the key doesn't exist, default to true
+        const doAddRecordAndBookmark = shouldAddRecordAndBookmark[versionID] ?? true;
+
         // Debug log for model object
         console.log({
             downloadFilePath,
@@ -224,7 +242,8 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({ isDarkMode, modify_downlo
             civitaiVersionID,
             civitaiModelFileList,
             civitaiUrl,
-            modify_selectedCategory
+            modify_selectedCategory,
+            doAddRecordAndBookmark
         });
 
         const modelObject = {
@@ -253,7 +272,7 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({ isDarkMode, modify_downlo
                 );
 
                 // If download is successful, do the DB insert and bookmark
-                if (isDownloadSuccessful) {
+                if (isDownloadSuccessful && doAddRecordAndBookmark) {
                     await fetchAddRecordToDatabase(modify_selectedCategory, civitaiUrl, dispatch);
                     bookmarkThisUrl(
                         modelVersionObject?.model?.type ?? "N/A",
@@ -275,12 +294,15 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({ isDarkMode, modify_downlo
                 } else {
                     throw new Error("Failed to fetch model information");
                 }
-                await fetchAddRecordToDatabase(modify_selectedCategory, civitaiUrl, dispatch);
-                bookmarkThisUrl(
-                    modelVersionObject?.model?.type ?? "N/A",
-                    civitaiUrl,
-                    `${modelVersionObject?.model?.name ?? "N/A"} - ${civitaiModelID} | Stable Diffusion LoRA | Civitai`
-                );
+
+                if (doAddRecordAndBookmark) {
+                    await fetchAddRecordToDatabase(modify_selectedCategory, civitaiUrl, dispatch);
+                    bookmarkThisUrl(
+                        modelVersionObject?.model?.type ?? "N/A",
+                        civitaiUrl,
+                        `${modelVersionObject?.model?.name ?? "N/A"} - ${civitaiModelID} | Stable Diffusion LoRA | Civitai`
+                    );
+                }
             }
             console.log("Model download initiated.");
         } catch (error) {
@@ -378,6 +400,9 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({ isDarkMode, modify_downlo
                     const baseModel = fetched?.modelData?.baseModel || "N/A";
                     const earlyAccessEndsAt = fetched?.modelData?.earlyAccessEndsAt || null;
 
+                    // Get checkbox state or default to true if not yet set
+                    const isChecked = shouldAddRecordAndBookmark[versionID] ?? true;
+
                     return (
                         <div
                             key={index}
@@ -467,24 +492,22 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({ isDarkMode, modify_downlo
                                 </div>
                                 <div>ModelID: {modelID}</div>
                                 <div>VersionID: {versionID}</div>
+                                <p style={{ margin: '4px 0' }}>
+                                    <strong>URL:</strong>{' '}
+                                    <a
+                                        href={`https://civitai.com/models/${modelID}?modelVersionId=${versionID}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        style={{ color: isDarkMode ? '#1e90ff' : '#007bff' }}
+                                    >
+                                        Visit Model
+                                    </a>
+                                </p>
                             </div>
 
                             {/* Download and Delete Buttons */}
 
                             <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'space-between' }}>
-                                {/* {fetched && (
-                                    <Button
-                                        variant="success"
-                                        size="sm"
-                                        onClick={(e) => {
-                                            e.stopPropagation(); // Prevent triggering card click
-                                            handleDownload(modelID, versionID, fetched?.modelData);
-                                        }}
-                                    >
-                                        Download
-                                    </Button>
-                                )} */}
-
                                 {fetched && (
                                     <OverlayTrigger placement={"top"}
                                         overlay={<Tooltip id="tooltip">{`Download By ${downloadMethod === "server" ? "server" : "browser"}`}</Tooltip>}>
@@ -509,6 +532,19 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({ isDarkMode, modify_downlo
                                         </Dropdown>
                                     </OverlayTrigger>
                                 )}
+
+                                {fetched && (<>
+                                    <Form.Check
+                                        type="checkbox"
+                                        id={`addRecordBookmark-${versionID}`}
+                                        label={<IoLibrary size={16} />}
+                                        checked={isChecked}
+                                        onChange={(e) => {
+                                            e.stopPropagation();
+                                            handleCheckboxChange(versionID, e.target.checked);
+                                        }}
+                                    />
+                                </>)}
 
                                 <Button
                                     variant="danger"

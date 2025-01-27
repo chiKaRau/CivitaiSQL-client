@@ -72,125 +72,176 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
 chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   if (message.action === "browser-download_v2") {
     console.log("browser-download_v2");
-    const { downloadFilePath, civitaiFileName, civitaiModelID,
-      civitaiVersionID, civitaiModelFileList, civitaiUrl, modelVersionObject } = message.data;
 
-    let baseModel = modelVersionObject?.baseModel;
+    const {
+      downloadFilePath,
+      civitaiFileName,
+      civitaiModelID,
+      civitaiVersionID,
+      civitaiModelFileList,
+      civitaiUrl,
+      modelVersionObject
+    } = message.data;
 
-    // Normalize downloadFilePath to remove leading/trailing slashes
-    const normalizedDownloadFilePath = downloadFilePath.replace(/^\/+|\/+$/g, '');
+    const baseModel = modelVersionObject?.baseModel || "unknown";
 
-    let fname = civitaiFileName.replace(".safetensors", "");
+    // 1) Clean up the path (remove leading/trailing slashes)
+    const normalizedDownloadFilePath = (downloadFilePath || "").replace(/^\/+|\/+$/g, '');
+
+    // 2) If civitaiFileName is "model.safetensors", remove ".safetensors"
+    const mainNameNoExt = civitaiFileName.replace(".safetensors", "");
+    const modelName = `${civitaiModelID}_${civitaiVersionID}_${baseModel}_${mainNameNoExt}`;
 
     try {
-      const zip = new JSZip();
-      const promises = [];
-
-      // Download all model files
-      for (const { name, downloadUrl } of civitaiModelFileList) {
-        const promise = fetch(downloadUrl)
-          .then((response) => response.arrayBuffer())
-          .then((data) => {
-
-            const fileName = `${civitaiModelID}_${civitaiVersionID}_${baseModel}_${name}`;
-            const filePath = `${normalizedDownloadFilePath}/${fileName}`;
-            const parts = filePath.split('/');
-            let folder = zip;
-
-            for (const part of parts.slice(0, -1)) {
-              const nextFolder = folder.folder(part);
-              if (nextFolder) {
-                folder = nextFolder;
-              } else {
-                console.error('JSZip instance is null');
-                break;
-              }
+      //=================================================
+      // (A) Create the "innerZip"
+      //     This holds all .safetensors, .civitai.info,
+      //     and optionally .preview.png
+      //=================================================
+      const innerZip = new JSZip();
+      // A1) Download each file from civitaiModelFileList and add to innerZip
+      const filePromises = civitaiModelFileList.map(({ name, downloadUrl }: { name: string, downloadUrl: string }) =>
+        fetch(downloadUrl)
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error(`HTTP error ${response.status} - ${response.statusText}`);
             }
+            return response.arrayBuffer();
+          })
+          .then((data) => {
+            const fileName = `${civitaiModelID}_${civitaiVersionID}_${baseModel}_${name}`;
+            innerZip.file(fileName, data);
+          })
+          .catch((error) => {
+            console.error(`Error downloading ${name}:`, error);
+          })
+      );
+      await Promise.all(filePromises);
 
-            folder.file(parts[parts.length - 1], data);
-          }).catch((error) => console.error(`Error downloading ${name}: ${error}`));
-        promises.push(promise);
-      }
-
-      // Wait for all promises to complete
-      await Promise.all(promises);
-
-      // Add .info file to the zip
-      const infoFileName = `${civitaiModelID}_${civitaiVersionID}_${baseModel}_${fname}.civitai.info`;
-      const infoFilePath = `${normalizedDownloadFilePath}/${infoFileName}`;
+      // A2) Add the .civitai.info file
+      const infoFileName = `${modelName}.civitai.info`;
       const infoContent = JSON.stringify(modelVersionObject, null, 2);
-      zip.file(infoFilePath, infoContent);
+      innerZip.file(infoFileName, infoContent);
 
-      // Handle preview image
-      // Extract image URLs in a single line
+      // A3) Fetch a preview image or placeholder
       const imageUrlsArray = [
-        ...(modelVersionObject.resources || []).filter((r: any) => r.type === 'image' && r.url).map((r: any) => r.url),
-        ...(modelVersionObject.images || []).filter((i: any) => i.url).map((i: any) => i.url)
+        ...(modelVersionObject.resources || [])
+          .filter((r: any) => r.type === 'image' && r.url)
+          .map((r: any) => r.url),
+        ...(modelVersionObject.images || [])
+          .filter((i: any) => i.url)
+          .map((i: any) => i.url)
       ];
 
-      let previewImageAdded = false;
-
+      let previewBlob = null;
       for (const imageUrl of imageUrlsArray) {
         try {
-          const imageResponse = await fetch(imageUrl);
-          if (imageResponse.ok) {
-            const imageBlob = await imageResponse.blob();
-            const imageFileName = `${civitaiModelID}_${civitaiVersionID}_${baseModel}_${fname}.preview.png`;
-            const imageFilePath = `${normalizedDownloadFilePath}/${imageFileName}`;
-
-            zip.file(imageFilePath, imageBlob);
-            previewImageAdded = true;
-            break; // Stop after adding the first valid image
+          const resp = await fetch(imageUrl);
+          if (resp.ok) {
+            previewBlob = await resp.blob();
+            break; // Found a valid image
           }
-        } catch (error) {
-          console.error(`Failed to download image from ${imageUrl}: ${error}`);
+        } catch (e) {
+          console.error(`Failed to download preview image ${imageUrl}: `, e);
         }
       }
 
-      // If no valid image was found, use a placeholder
-      if (!previewImageAdded) {
+      if (!previewBlob) {
+        // If no valid images found, use a placeholder
         try {
           const placeholderUrl = "https://placehold.co/350x450.png";
-          const placeholderResponse = await fetch(placeholderUrl);
-          if (placeholderResponse.ok) {
-            const placeholderBlob = await placeholderResponse.blob();
-            const placeholderFileName = `${civitaiModelID}_${civitaiVersionID}_${baseModel}_${fname}.preview.png`;
-            const placeholderFilePath = `${normalizedDownloadFilePath}/${placeholderFileName}`;
-
-            zip.file(placeholderFilePath, placeholderBlob);
+          const placeholderResp = await fetch(placeholderUrl);
+          if (placeholderResp.ok) {
+            previewBlob = await placeholderResp.blob();
           } else {
-            console.error("Failed to download the placeholder image.");
+            console.error("Failed to download placeholder image.");
           }
-        } catch (error) {
-          console.error("Failed to download the placeholder image.");
+        } catch (e) {
+          console.error("Failed to fetch placeholder image:", e);
         }
       }
 
-      // Generate the zip archive
-      const zipContent = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 9 } });
+      // Add preview image INSIDE the innerZip if you want it duplicated there:
+      if (previewBlob) {
+        const previewInsideName = `${modelName}.preview.png`;
+        innerZip.file(previewInsideName, previewBlob);
+      }
 
-      // Create a download link for the zip file
-      const zipBlob = new Blob([zipContent]);
-      const zipUrl = URL.createObjectURL(zipBlob);
+      //=================================================
+      // (B) Generate the innerZip
+      //=================================================
+      const innerZipData = await innerZip.generateAsync({
+        type: 'arraybuffer', // or 'uint8array' or 'blob'
+        compression: 'DEFLATE',
+        compressionOptions: { level: 9 }
+      });
 
+      //=================================================
+      // (C) Create the "outerZip"
+      //     replicate the folder path from downloadFilePath
+      //     place `modelName.zip` and `modelName.preview.png`
+      //=================================================
+      const outerZip = new JSZip();
+
+      // C1) Create subfolders from normalizedDownloadFilePath
+      //     e.g. "abc/def/ghi/jkl"
+      let currentFolder = outerZip;
+      if (normalizedDownloadFilePath) {
+        const parts = normalizedDownloadFilePath.split('/');
+        for (const part of parts) {
+          currentFolder = currentFolder.folder(part) || currentFolder;
+        }
+      }
+
+      // Now `currentFolder` is the deepest folder (e.g. jkl/)
+
+      // C2) Put the inner zip in that folder
+      const innerZipFileName = `${modelName}.zip`;
+      currentFolder.file(innerZipFileName, innerZipData);
+
+      // C3) Also put the preview image at the same level (beside the inner zip)
+      //     So final layout is: jkl/
+      //        modelName.zip
+      //        modelName.preview.png
+      if (previewBlob) {
+        const previewOutsideName = `${modelName}.preview.png`;
+        currentFolder.file(previewOutsideName, previewBlob);
+      }
+
+      //=================================================
+      // (D) Generate the OUTER zip (the one user actually downloads)
+      //=================================================
+      const outerZipBlob = await outerZip.generateAsync({
+        type: 'blob',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 9 }
+      });
+
+      //=================================================
+      // (E) Trigger the download
+      //=================================================
+      const zipUrl = URL.createObjectURL(outerZipBlob);
       const downloadLink = document.createElement('a');
+      // You can name the final file anything you'd like
+      const finalZipFilename = `${modelName}_outer.zip`;
+
       downloadLink.href = zipUrl;
-      downloadLink.download = `${civitaiModelID}_${civitaiVersionID}_${baseModel}_${civitaiFileName.split(".")[0]}.zip`;
+      downloadLink.download = finalZipFilename;
       downloadLink.style.display = 'none';
 
       document.body.appendChild(downloadLink);
       downloadLink.click();
       document.body.removeChild(downloadLink);
 
-      // Clean up the URL object
+      // Clean up the Blob URL
       URL.revokeObjectURL(zipUrl);
 
     } catch (e) {
-      console.log("error", e);
+      console.error("Error:", e);
     }
-
   }
 });
+
 
 
 //outer zip with inner zip and png
