@@ -11,7 +11,7 @@ import { BsDownload } from 'react-icons/bs';
 import { TbDatabaseSearch, TbDatabasePlus, TbDatabaseMinus } from "react-icons/tb";
 import { PiPlusMinusFill } from "react-icons/pi";
 import { FaMagnifyingGlass, FaMagnifyingGlassPlus, FaSun, FaMoon, FaArrowRight } from "react-icons/fa6"; // Added FaSun and FaMoon
-import { MdOutlineApps, MdOutlineTipsAndUpdates, MdOutlineDownloadForOffline, MdOutlineDownload } from "react-icons/md";
+import { MdOutlineApps, MdOutlineTipsAndUpdates, MdOutlineDownloadForOffline, MdOutlineDownload, MdOutlinePendingActions } from "react-icons/md";
 import { FcGenericSortingAsc, FcGenericSortingDesc } from "react-icons/fc";
 import { PiTabsFill } from "react-icons/pi";
 import { LuPanelLeftOpen, LuPanelRightOpen } from "react-icons/lu";
@@ -315,6 +315,10 @@ const OfflineWindow: React.FC = () => {
     // Add this alongside your existing useState hooks
     const [initiationDelay, setInitiationDelay] = useState<number | null>(null);
 
+    // Add this in your component's top-level state:
+    const [onlyPendingPaths, setOnlyPendingPaths] = useState(false);
+
+
     const handlePauseToggle = () => {
         setIsPaused((prev) => !prev);
     };
@@ -338,7 +342,17 @@ const OfflineWindow: React.FC = () => {
     };
 
     const toggleModifyMode = () => {
-        setIsModifyMode(prevMode => !prevMode);
+        setIsModifyMode((prevMode) => {
+            const nextMode = !prevMode;
+            // If we're enabling modify mode, set onlyPendingPaths = true
+            if (nextMode) {
+                setOnlyPendingPaths(true);
+            } else {
+                // If we're disabling modify mode, set onlyPendingPaths = false
+                setOnlyPendingPaths(false);
+            }
+            return nextMode;
+        });
         setSelectedIds(new Set()); // Clear selections when toggling modify mode
     };
 
@@ -506,9 +520,20 @@ const OfflineWindow: React.FC = () => {
     // Memoized filtered list based on filterText and filterCondition
     const filteredDownloadList = useMemo(() => {
         // Apply filtering based on filterText and filterCondition
-        const filtered = filterText.trim() === ''
+        let filtered = filterText.trim() === ''
             ? offlineDownloadList
             : offlineDownloadList.filter(entry => doesEntryMatch(entry));
+
+        // If the user has checked "Only Pending Paths," keep only those
+        if (onlyPendingPaths) {
+            filtered = filtered.filter(entry => {
+                const path = entry.downloadFilePath ?? "";
+                return (
+                    path === "/@scan@/ACG/Pending" ||
+                    path === "/@scan@/ACG/Pending/"
+                );
+            });
+        }
 
         // Only sort if modify mode is off
         if (!isModifyMode) {
@@ -522,7 +547,7 @@ const OfflineWindow: React.FC = () => {
 
         // If modify mode is on, return the filtered list without sorting
         return filtered;
-    }, [offlineDownloadList, filterText, filterCondition, selectedIds, isModifyMode]);
+    }, [offlineDownloadList, filterText, filterCondition, selectedIds, isModifyMode, onlyPendingPaths]);
 
     // **Add Pagination State and Logic**
     const [currentPage, setCurrentPage] = useState(1);
@@ -811,15 +836,37 @@ const OfflineWindow: React.FC = () => {
 
     // Inline styles
     const containerStyle: React.CSSProperties = {
-        width: '100%',
-        height: '100vh', // Use full viewport height
         display: 'flex',
-        flexDirection: 'column',
-        padding: '20px',
-        boxSizing: 'border-box',
+        flexDirection: 'row',
+        width: '100%',
+        height: '100vh',         // full viewport height
         fontFamily: 'Arial, sans-serif',
         backgroundColor: currentTheme.gridBackgroundColor,
         transition: 'background-color 0.3s ease',
+    };
+
+    const leftPanelStyle: React.CSSProperties = {
+        position: 'sticky',
+        top: 0,
+        alignSelf: 'flex-start',
+        width: '500px',
+        height: '100vh',
+        overflowY: 'auto',      // <--- enable vertical scrolling if content is tall
+        backgroundColor: isDarkMode ? '#333' : '#fff',
+        borderRight: isDarkMode ? '1px solid #777' : '1px solid #ccc',
+        zIndex: 1000,
+        padding: '20px',
+        boxSizing: 'border-box',
+    };
+
+
+    const rightContentStyle: React.CSSProperties = {
+        flex: 1,                     // Fills the remaining horizontal space
+        display: 'flex',            // Enables flex layout
+        flexDirection: 'column',    // Stacks children vertically
+        padding: '20px',
+        boxSizing: 'border-box',
+        height: '100vh',            // Ensures the right panel takes full viewport height
     };
 
     const contentStyle: React.CSSProperties = {
@@ -829,16 +876,13 @@ const OfflineWindow: React.FC = () => {
     };
 
     const footerStyle: React.CSSProperties = {
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        width: '100%',
-        backgroundColor: isDarkMode ? '#333' : '#f8f9fa', // Match theme
+        backgroundColor: isDarkMode ? '#333' : '#f8f9fa',
         padding: '10px 20px',
         boxShadow: '0 -2px 4px rgba(0, 0, 0, 0.1)',
-        zIndex: 1000, // Ensure it stays above other elements
+        zIndex: 1000,
+        width: '100%', // Ensures the footer spans the entire width of the right panel
+        // Removed position: 'fixed', bottom: 0, left: 0
     };
-
 
 
     // Define styles for the selection count display
@@ -855,16 +899,31 @@ const OfflineWindow: React.FC = () => {
 
     const headerStyleContainer: React.CSSProperties = {
         display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+        flexDirection: 'column', // Change from default 'row' to 'column'
+        alignItems: 'flex-start', // Align items to the start for better wrapping
         marginBottom: '20px',
-        flexWrap: 'wrap',
     };
+
 
     const buttonGroupStyle: React.CSSProperties = {
         display: 'flex',
         gap: '10px',
-        marginTop: '10px'
+        marginTop: '10px',
+        flexWrap: 'wrap', // Allow buttons to wrap to the next line
+        width: '100%', // Ensure the button group takes full width for better wrapping
+    };
+
+    // Example Button Style Adjustments
+    const responsiveButtonStyle: React.CSSProperties = {
+        flex: '1 1 auto', // Allow buttons to grow and shrink as needed
+        minWidth: '100px', // Set a minimum width to maintain readability
+        padding: '8px 12px', // Adjust padding for better fit
+        borderRadius: '4px',
+        border: 'none',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
     };
 
     const agGridStyle: React.CSSProperties = {
@@ -1971,23 +2030,17 @@ const OfflineWindow: React.FC = () => {
     return (
         <div style={containerStyle}>
             {/* Scrollable Content Area */}
-            <div style={contentStyle}>
-                <div style={{
-                    position: 'sticky',
-                    top: 0,
-                    width: '100%',
-                    backgroundColor: 'white', // Adjust as needed
-                    padding: '20px',
-                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)', // Optional: Adds a subtle shadow
-                    zIndex: 1000, // Ensure it stays above other elements
-                }}>
+            <>
+                <div style={leftPanelStyle}>
                     <div style={headerStyleContainer}>
-                        <h2 style={{ color: isDarkMode ? '#fff' : '#000' }}>Offline Download List</h2>
+                        <h3 style={{ color: isDarkMode ? '#fff' : '#000' }}>Offline Download List</h3>
+
                         <div style={buttonGroupStyle}>
                             {/* Refresh List Button */}
                             <Button
                                 onClick={handleRefreshList}
                                 style={{
+                                    ...responsiveButtonStyle,
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
@@ -2021,18 +2074,27 @@ const OfflineWindow: React.FC = () => {
 
                             {/* Existing Display Mode Buttons */}
                             <Button
+                                style={{
+                                    ...responsiveButtonStyle
+                                }}
                                 variant={displayMode === 'table' ? 'primary' : 'secondary'}
                                 onClick={() => setDisplayMode('table')}
                             >
                                 Table Mode
                             </Button>
                             <Button
+                                style={{
+                                    ...responsiveButtonStyle
+                                }}
                                 variant={displayMode === 'bigCard' ? 'primary' : 'secondary'}
                                 onClick={() => setDisplayMode('bigCard')}
                             >
                                 Big Card Mode
                             </Button>
                             <Button
+                                style={{
+                                    ...responsiveButtonStyle
+                                }}
                                 variant={displayMode === 'smallCard' ? 'primary' : 'secondary'}
                                 onClick={() => setDisplayMode('smallCard')}
                             >
@@ -2043,7 +2105,9 @@ const OfflineWindow: React.FC = () => {
                             <Button
                                 variant={displayMode === 'failedCard' ? 'primary' : 'secondary'}
                                 onClick={() => setDisplayMode('failedCard')}
-                                style={{ position: 'relative' }}
+                                style={{
+                                    ...responsiveButtonStyle
+                                }}
                             >
                                 Failed Card Mode
                                 {failedEntries.length > 0 && (
@@ -2067,6 +2131,9 @@ const OfflineWindow: React.FC = () => {
                             <Button
                                 variant={displayMode === 'errorCard' ? 'primary' : 'secondary'}
                                 onClick={() => setDisplayMode('errorCard')}
+                                style={{
+                                    ...responsiveButtonStyle
+                                }}
                             >
                                 Error Card Mode
                             </Button>
@@ -2075,6 +2142,7 @@ const OfflineWindow: React.FC = () => {
                             <Button
                                 onClick={toggleModifyMode}
                                 style={{
+                                    ...responsiveButtonStyle,
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
@@ -2094,6 +2162,7 @@ const OfflineWindow: React.FC = () => {
                             <Button
                                 onClick={toggleTheme}
                                 style={{
+                                    ...responsiveButtonStyle,
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
@@ -2117,28 +2186,24 @@ const OfflineWindow: React.FC = () => {
                             <CategoriesListSelector />
 
                             {/** Folder Lists Option */}
-                            <DownloadFilePathOptionPanel
-                                setIsHandleRefresh={setIsHandleRefresh}
-                                isHandleRefresh={isHandleRefresh}
-                            />
+                            <div
+                                style={{
+                                    backgroundColor: '#ffffff', // White background
+                                    padding: '15px',
+                                    borderRadius: '8px',
+                                    boxShadow: isDarkMode
+                                        ? '0 2px 8px rgba(255, 255, 255, 0.1)'
+                                        : '0 2px 8px rgba(0, 0, 0, 0.1)',
+                                    margin: '10px', // Optional: add spacing as needed
+                                }}
+                            >
+                                <DownloadFilePathOptionPanel
+                                    setIsHandleRefresh={setIsHandleRefresh}
+                                    isHandleRefresh={isHandleRefresh}
+                                />
+                            </div>
                         </>
                     )}
-
-
-                    {/* **New: Display Remaining Cooldown Time** */}
-                    {/* {delayTime > 0 && (
-                        <div style={{
-                            marginBottom: '20px',
-                            fontWeight: 'bold',
-                            color: isDarkMode ? '#fff' : '#000',
-                            backgroundColor: isDarkMode ? '#555' : '#f8f9fa',
-                            padding: '10px',
-                            borderRadius: '4px',
-                            textAlign: 'center'
-                        }}>
-                            Cooldown Active: Please wait {delayTime} second{delayTime !== 1 ? 's' : ''} before initiating more downloads.
-                        </div>
-                    )} */}
 
                     {(batchCooldown !== null && batchCooldown > 0) || currentBatchRange ? (
                         <div
@@ -2213,6 +2278,7 @@ const OfflineWindow: React.FC = () => {
                                 </Button>
                             )}
                         </InputGroup>
+
                         <select
                             value={filterCondition}
                             onChange={(e) => setFilterCondition(e.target.value as any)}
@@ -2231,6 +2297,17 @@ const OfflineWindow: React.FC = () => {
                             <option value="begins with">Begins with</option>
                             <option value="ends with">Ends with</option>
                         </select>
+
+                        <Form.Check
+                            type="checkbox"
+                            id="only-pending-checkbox"
+                            label={<MdOutlinePendingActions size={24} color={isDarkMode ? '#fff' : '#000'} />}
+                            checked={onlyPendingPaths}
+                            onChange={(e) => setOnlyPendingPaths(e.target.checked)}
+                            style={{ marginLeft: '10px', fontWeight: 'bold' }}
+                            title="Only Pending"
+                        />
+
 
                         <Form.Select
                             style={{
@@ -2434,18 +2511,6 @@ const OfflineWindow: React.FC = () => {
                         )}
                     </div>
 
-                    <div style={{
-                        marginBottom: '5px',
-                        fontWeight: 'bold',
-                        color: '#FFFFFF', // White text for high contrast
-                        backgroundColor: isDarkMode ? '#0056b3' : '#007BFF', // Darker blue for dark mode, standard blue for light mode
-                        padding: '10px',
-                        borderRadius: '4px',
-                        textAlign: 'center'
-                    }}>
-                        {isModifyMode ? "Modify Mode" : `Download Mode (${displayMode})`}
-                    </div>
-
                     {/* Download or Modify Progress Indicators */}
                     {isLoading && (
                         <div style={{
@@ -2472,133 +2537,154 @@ const OfflineWindow: React.FC = () => {
                 </div>
 
                 {/* Main Content */}
-                {isLoading && offlineDownloadList.length === 0 ? (
-                    <div style={{ color: isDarkMode ? '#fff' : '#000' }}>Loading...</div>
-                ) : (
-                    <>
-                        {displayMode === 'table' && (
-                            <div className="ag-theme-alpine" style={agGridStyle}>
-                                <AgGridReact
-                                    rowData={rowData}
-                                    columnDefs={columnDefs}
-                                    defaultColDef={defaultColDef}
-                                    pagination={true}
-                                    paginationPageSize={itemsPerPage}
-                                    getRowStyle={getRowStyle}
-                                    onRowClicked={(params: any) => {
-                                        if (isModifyMode && params.event.ctrlKey) {
-                                            toggleSelect(params.data.versionid);
-                                        }
-                                    }}
-                                    headerHeight={40}
-                                />
-                            </div>
-                        )}
-
-                        {displayMode === 'bigCard' && (
-                            <BigCardMode
-                                filteredDownloadList={paginatedDownloadList}
-                                isDarkMode={isDarkMode}
-                                isModifyMode={isModifyMode}
-                                selectedIds={selectedIds}
-                                toggleSelect={toggleSelect}
-                                handleSelectAll={handleSelectAll}
-                            />
-                        )}
-
-                        {displayMode === 'smallCard' && (
-                            <SmallCardMode
-                                filteredDownloadList={paginatedDownloadList}
-                                isDarkMode={isDarkMode}
-                                isModifyMode={isModifyMode}
-                                selectedIds={selectedIds}
-                                toggleSelect={toggleSelect}
-                                handleSelectAll={handleSelectAll}
-                            />
-                        )}
-
-                        {displayMode === 'failedCard' && (
-                            <FailedCardMode
-                                failedEntries={failedEntries}
-                                isDarkMode={isDarkMode}
-                                selectedIds={selectedIds}
-                                toggleSelect={toggleSelect}
-                                isModifyMode={isModifyMode}
-                            />
-                        )}
-
-                        {displayMode === 'errorCard' && (
-                            <ErrorCardMode
-                                modify_downloadFilePath={modify_downloadFilePath}
-                                modify_selectedCategory={modify_selectedCategory}
-                                isDarkMode={isDarkMode} />
-                        )}
-
-                    </>
-                )}
-            </div>
-
-            {/* Fixed Pagination Footer for BigCard and SmallCard Modes */}
-            {(displayMode === 'bigCard' || displayMode === 'smallCard') && totalPages > 1 && (
-                <div style={footerStyle}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-                        {/* Range Display */}
-                        <div style={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>
-                            Showing {startItem} - {endItem} of {totalItems} items
-                        </div>
-
-                        {/* Pagination Controls */}
-                        <Pagination>
-                            <Pagination.First onClick={() => setCurrentPage(1)} disabled={currentPage === 1} aria-label="First Page" >
-                                <FaAngleDoubleLeft />
-                            </Pagination.First>
-                            <Pagination.Prev onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} aria-label="Previous Page" >
-                                <FaAngleLeft />
-                            </Pagination.Prev>
-
-                            {/* Display a range of page numbers */}
-                            {Array.from({ length: totalPages }, (_, index) => index + 1)
-                                .slice(Math.max(currentPage - 3, 0), currentPage + 2)
-                                .map(page => (
-                                    <Pagination.Item
-                                        key={page}
-                                        active={page === currentPage}
-                                        onClick={() => setCurrentPage(page)}
-                                        aria-label={`Page ${page}`}
-                                    >
-                                        {page}
-                                    </Pagination.Item>
-                                ))}
-
-                            <Pagination.Next onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} aria-label="Next Page" >
-                                <FaAngleRight />
-                            </Pagination.Next>
-                            <Pagination.Last onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} aria-label="Last Page">
-                                <FaAngleDoubleRight />
-                            </Pagination.Last>
-                        </Pagination>
-
-                        {/* Items Per Page Selector */}
-                        <Form.Select
-                            value={itemsPerPage}
-                            onChange={(e) => setItemsPerPage(parseInt(e.target.value, 10))}
-                            style={{
-                                width: '150px',
-                                padding: '5px',
-                                borderRadius: '4px',
-                                border: '1px solid #ccc',
-                                backgroundColor: isDarkMode ? '#555' : '#fff',
-                                color: isDarkMode ? '#fff' : '#000',
-                            }}
-                            aria-label="Items Per Page"
-                        >
-                            <option value={50}>50 items per page</option>
-                            <option value={100}>100 items per page</option>
-                            <option value={200}>200 items per page</option>
-                        </Form.Select>
+                <div style={rightContentStyle}>
+                    {/* Header within Right Panel */}
+                    <div style={{
+                        marginBottom: '5px',
+                        fontWeight: 'bold',
+                        color: '#FFFFFF', // White text for high contrast
+                        backgroundColor: isDarkMode ? '#0056b3' : '#007BFF', // Darker blue for dark mode, standard blue for light mode
+                        padding: '10px',
+                        borderRadius: '4px',
+                        textAlign: 'center'
+                    }}>
+                        {isModifyMode ? "Modify Mode" : `Download Mode (${displayMode})`}
                     </div>
+
+                    {/* Main Content Area */}
+                    <div style={{ flex: 1, overflowY: 'auto' }}>
+                        {isLoading && offlineDownloadList.length === 0 ? (
+                            <div style={{ color: isDarkMode ? '#fff' : '#000' }}>Loading...</div>
+                        ) : (
+                            <>
+                                {displayMode === 'table' && (
+                                    <div className="ag-theme-alpine" style={agGridStyle}>
+                                        <AgGridReact
+                                            rowData={rowData}
+                                            columnDefs={columnDefs}
+                                            defaultColDef={defaultColDef}
+                                            pagination={true}
+                                            paginationPageSize={itemsPerPage}
+                                            getRowStyle={getRowStyle}
+                                            onRowClicked={(params: any) => {
+                                                if (isModifyMode && params.event.ctrlKey) {
+                                                    toggleSelect(params.data.versionid);
+                                                }
+                                            }}
+                                            headerHeight={40}
+                                        />
+                                    </div>
+                                )}
+
+                                {displayMode === 'bigCard' && (
+                                    <BigCardMode
+                                        filteredDownloadList={paginatedDownloadList}
+                                        isDarkMode={isDarkMode}
+                                        isModifyMode={isModifyMode}
+                                        selectedIds={selectedIds}
+                                        toggleSelect={toggleSelect}
+                                        handleSelectAll={handleSelectAll}
+                                    />
+                                )}
+
+                                {displayMode === 'smallCard' && (
+                                    <SmallCardMode
+                                        filteredDownloadList={paginatedDownloadList}
+                                        isDarkMode={isDarkMode}
+                                        isModifyMode={isModifyMode}
+                                        selectedIds={selectedIds}
+                                        toggleSelect={toggleSelect}
+                                        handleSelectAll={handleSelectAll}
+                                    />
+                                )}
+
+                                {displayMode === 'failedCard' && (
+                                    <FailedCardMode
+                                        failedEntries={failedEntries}
+                                        isDarkMode={isDarkMode}
+                                        selectedIds={selectedIds}
+                                        toggleSelect={toggleSelect}
+                                        isModifyMode={isModifyMode}
+                                    />
+                                )}
+
+                                {displayMode === 'errorCard' && (
+                                    <ErrorCardMode
+                                        modify_downloadFilePath={modify_downloadFilePath}
+                                        modify_selectedCategory={modify_selectedCategory}
+                                        isDarkMode={isDarkMode} />
+                                )}
+
+                            </>
+                        )}
+                    </div>
+
+                    {/* Footer Area */}
+                    {(displayMode === 'bigCard' || displayMode === 'smallCard') && totalPages > 1 && (
+                        <div style={footerStyle}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                                {/* Range Display */}
+                                <div style={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>
+                                    Showing {startItem} - {endItem} of {totalItems} items
+                                </div>
+
+                                {/* Pagination Controls */}
+                                <Pagination>
+                                    <Pagination.First onClick={() => setCurrentPage(1)} disabled={currentPage === 1} aria-label="First Page" >
+                                        <FaAngleDoubleLeft />
+                                    </Pagination.First>
+                                    <Pagination.Prev onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} aria-label="Previous Page" >
+                                        <FaAngleLeft />
+                                    </Pagination.Prev>
+
+                                    {/* Display a range of page numbers */}
+                                    {Array.from({ length: totalPages }, (_, index) => index + 1)
+                                        .slice(Math.max(currentPage - 3, 0), currentPage + 2)
+                                        .map(page => (
+                                            <Pagination.Item
+                                                key={page}
+                                                active={page === currentPage}
+                                                onClick={() => setCurrentPage(page)}
+                                                aria-label={`Page ${page}`}
+                                            >
+                                                {page}
+                                            </Pagination.Item>
+                                        ))}
+
+                                    <Pagination.Next onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} aria-label="Next Page" >
+                                        <FaAngleRight />
+                                    </Pagination.Next>
+                                    <Pagination.Last onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} aria-label="Last Page">
+                                        <FaAngleDoubleRight />
+                                    </Pagination.Last>
+                                </Pagination>
+
+                                {/* Items Per Page Selector */}
+                                <Form.Select
+                                    value={itemsPerPage}
+                                    onChange={(e) => setItemsPerPage(parseInt(e.target.value, 10))}
+                                    style={{
+                                        width: '150px',
+                                        padding: '5px',
+                                        borderRadius: '4px',
+                                        border: '1px solid #ccc',
+                                        backgroundColor: isDarkMode ? '#555' : '#fff',
+                                        color: isDarkMode ? '#fff' : '#000',
+                                    }}
+                                    aria-label="Items Per Page"
+                                >
+                                    <option value={50}>50 items per page</option>
+                                    <option value={100}>100 items per page</option>
+                                    <option value={200}>200 items per page</option>
+                                </Form.Select>
+                            </div>
+                        </div>
+                    )}
                 </div>
-            )}
+
+            </>
+
+
         </div>
     );
 };
