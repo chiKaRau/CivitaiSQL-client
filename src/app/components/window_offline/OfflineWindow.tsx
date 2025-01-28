@@ -229,7 +229,7 @@ const OfflineWindow: React.FC = () => {
     const [offlineDownloadList, setOfflineDownloadList] = useState<OfflineDownloadEntry[]>([]);
     const [displayMode, setDisplayMode] = useState<
         'table' | 'bigCard' | 'smallCard' | 'failedCard' | 'errorCard'
-    >('table');
+    >('bigCard');
 
     // States for filtering
     const [filterText, setFilterText] = useState('');
@@ -927,7 +927,7 @@ const OfflineWindow: React.FC = () => {
     };
 
     const agGridStyle: React.CSSProperties = {
-        height: '600px',
+        height: '1000px',
         width: '100%',
         transition: 'background-color 0.3s ease, color 0.3s ease',
         paddingBottom: '60px', // Space for the fixed pagination if needed
@@ -2205,161 +2205,108 @@ const OfflineWindow: React.FC = () => {
                         </>
                     )}
 
-                    {(batchCooldown !== null && batchCooldown > 0) || currentBatchRange ? (
-                        <div
-                            style={{
-                                marginBottom: '5px',
-                                fontWeight: 'bold',
-                                color: '#FFA500',
-                                backgroundColor: isDarkMode ? '#555' : '#f8f9fa',
-                                padding: '10px',
-                                borderRadius: '4px',
-                                textAlign: 'center'
-                            }}
-                        >
-                            {/* Render the cooldown message if it’s active */}
-                            {batchCooldown !== null && batchCooldown > 0 && (
-                                <p style={{ margin: 0 }}>
-                                    Cooling down: {batchCooldown} second
-                                    {batchCooldown !== 1 ? 's' : ''} left before the next batch...
-                                </p>
-                            )}
+                    <Form.Select
+                        style={{
+                            width: '100%', // Make the select take full width
+                            margin: '10px', // Optional: add top margin for spacing
+                            backgroundColor: isDarkMode ? '#555' : '#fff',
+                            color: isDarkMode ? '#fff' : '#000',
+                        }}
+                        onChange={(e) => {
+                            const chosenTag = e.target.value;
 
-                            {/* Render the current batch range if defined */}
-                            {currentBatchRange && (
-                                <p style={{ margin: 0 }}>
-                                    {currentBatchRange}
-                                </p>
-                            )}
-                        </div>
-                    ) : null}
+                            if (!chosenTag) {
+                                // The default option means "do nothing", so just clear the filter or do nothing
+                                setFilterText('');
+                            } else {
+                                // We’ll make the filter say “contains chosenTag”
+                                setFilterCondition('contains');
+                                setFilterText(chosenTag);
+                            }
+                        }}
+                    >
+                        <option value="">
+                            -- Top Pending Tags (choose one) --
+                        </option>
+                        {mostFrequentPendingTags.map((tag) => (
+                            <option key={tag} value={tag}>
+                                {tag}
+                            </option>
+                        ))}
+                    </Form.Select>
 
-                    {initiationDelay !== null && initiationDelay > 0 && (
-                        <div style={{
-                            marginBottom: '5px',
-                            fontWeight: 'bold',
-                            color: '#FFA500', // Orange color for visibility
-                            backgroundColor: isDarkMode ? '#555' : '#f8f9fa',
-                            padding: '10px',
-                            borderRadius: '4px',
-                            textAlign: 'center'
-                        }}>
-                            Next download will start in {initiationDelay} second{initiationDelay !== 1 ? 's' : ''}.
-                        </div>
-                    )}
 
                     {/* Filter Section */}
                     <div style={filterContainerStyle}>
-                        {/* Filter Text Input with Clear Button */}
-                        <InputGroup style={{ flex: '1', minWidth: '200px' }}>
-                            <FormControl
-                                placeholder="Filter..."
-                                value={filterText}
-                                onChange={(e) => setFilterText(e.target.value)}
+
+                        <div
+                            style={{
+                                width: '100%',
+                                margin: '10px',
+                                display: 'flex',               // Enable Flexbox
+                                alignItems: 'center',         // Vertically center the items
+                                gap: '10px',                   // Space between items
+                                flexWrap: 'wrap',             // Allow wrapping on smaller screens
+                            }}
+                        >
+                            {/* Filter Text Input with Clear Button */}
+                            < InputGroup style={{ flex: '1', minWidth: '200px' }}>
+                                <FormControl
+                                    placeholder="Filter..."
+                                    value={filterText}
+                                    onChange={(e) => setFilterText(e.target.value)}
+                                    style={{
+                                        backgroundColor: isDarkMode ? '#555' : '#fff',
+                                        color: isDarkMode ? '#fff' : '#000',
+                                        border: '1px solid',
+                                        borderColor: isDarkMode ? '#777' : '#ccc',
+                                    }}
+                                />
+                                {filterText && (
+                                    <Button
+                                        variant="outline-secondary"
+                                        onClick={() => setFilterText('')}
+                                        aria-label="Clear filter"
+                                        style={{
+                                            border: 'none',
+                                            backgroundColor: 'transparent',
+                                            padding: '0 5px',
+                                        }}
+                                    >
+                                        <FaTimes size={12} /> {/* Adjust the size as needed */}
+                                    </Button>
+                                )}
+                            </InputGroup>
+
+                            <select
+                                value={filterCondition}
+                                onChange={(e) => setFilterCondition(e.target.value as any)}
                                 style={{
+                                    ...filterSelectStyle,
                                     backgroundColor: isDarkMode ? '#555' : '#fff',
                                     color: isDarkMode ? '#fff' : '#000',
                                     border: '1px solid',
                                     borderColor: isDarkMode ? '#777' : '#ccc',
                                 }}
+                            >
+                                <option value="contains">Contains</option>
+                                <option value="does not contain">Does not contain</option>
+                                <option value="equals">Equals</option>
+                                <option value="does not equal">Does not equal</option>
+                                <option value="begins with">Begins with</option>
+                                <option value="ends with">Ends with</option>
+                            </select>
+
+                            <Form.Check
+                                type="checkbox"
+                                id="only-pending-checkbox"
+                                label={<MdOutlinePendingActions size={24} color={isDarkMode ? '#fff' : '#000'} />}
+                                checked={onlyPendingPaths}
+                                onChange={(e) => setOnlyPendingPaths(e.target.checked)}
+                                style={{ marginLeft: '10px', fontWeight: 'bold' }}
+                                title="Only Pending"
                             />
-                            {filterText && (
-                                <Button
-                                    variant="outline-secondary"
-                                    onClick={() => setFilterText('')}
-                                    aria-label="Clear filter"
-                                    style={{
-                                        border: 'none',
-                                        backgroundColor: 'transparent',
-                                        padding: '0 5px',
-                                    }}
-                                >
-                                    <FaTimes size={12} /> {/* Adjust the size as needed */}
-                                </Button>
-                            )}
-                        </InputGroup>
-
-                        <select
-                            value={filterCondition}
-                            onChange={(e) => setFilterCondition(e.target.value as any)}
-                            style={{
-                                ...filterSelectStyle,
-                                backgroundColor: isDarkMode ? '#555' : '#fff',
-                                color: isDarkMode ? '#fff' : '#000',
-                                border: '1px solid',
-                                borderColor: isDarkMode ? '#777' : '#ccc',
-                            }}
-                        >
-                            <option value="contains">Contains</option>
-                            <option value="does not contain">Does not contain</option>
-                            <option value="equals">Equals</option>
-                            <option value="does not equal">Does not equal</option>
-                            <option value="begins with">Begins with</option>
-                            <option value="ends with">Ends with</option>
-                        </select>
-
-                        <Form.Check
-                            type="checkbox"
-                            id="only-pending-checkbox"
-                            label={<MdOutlinePendingActions size={24} color={isDarkMode ? '#fff' : '#000'} />}
-                            checked={onlyPendingPaths}
-                            onChange={(e) => setOnlyPendingPaths(e.target.checked)}
-                            style={{ marginLeft: '10px', fontWeight: 'bold' }}
-                            title="Only Pending"
-                        />
-
-
-                        <Form.Select
-                            style={{
-                                width: '240px',
-                                marginLeft: '10px',
-                                backgroundColor: isDarkMode ? '#555' : '#fff',
-                                color: isDarkMode ? '#fff' : '#000',
-                            }}
-                            onChange={(e) => {
-                                const chosenTag = e.target.value;
-
-                                if (!chosenTag) {
-                                    // The default option means "do nothing", so just clear the filter or do nothing
-                                    setFilterText('');
-                                } else {
-                                    // We’ll make the filter say “contains chosenTag”
-                                    setFilterCondition('contains');
-                                    setFilterText(chosenTag);
-                                }
-                            }}
-                        >
-                            <option value="">
-                                -- Top Pending Tags (choose one) --
-                            </option>
-                            {mostFrequentPendingTags.map((tag) => (
-                                <option key={tag} value={tag}>
-                                    {tag}
-                                </option>
-                            ))}
-                        </Form.Select>
-
-                        {!isModifyMode && <Button
-                            onClick={handleDownloadNow}
-                            style={selectedIds.size > 0 ? downloadButtonStyle : downloadButtonDisabledStyle}
-                            disabled={selectedIds.size === 0 || isLoading || isModifyMode}
-                        >
-                            {isLoading ? (
-                                <>
-                                    <Spinner
-                                        as="span"
-                                        animation="border"
-                                        size="sm"
-                                        role="status"
-                                        aria-hidden="true"
-                                        style={{ marginRight: '5px' }}
-                                    />
-                                    Downloading...
-                                </>
-                            ) : (
-                                'Download Now'
-                            )}
-                        </Button>}
+                        </div>
 
                         {/* "Select First N" Button */}
                         <Button
@@ -2398,21 +2345,6 @@ const OfflineWindow: React.FC = () => {
                                 }}
                             />
                         </div>
-
-
-                        <Button
-                            onClick={handlePauseToggle}
-                            disabled={selectedIds.size === 0 || isLoading === false /* or any other condition */}
-                        >
-                            {isPaused ? "Resume" : "Pause"}
-                        </Button>
-
-                        <Button
-                            onClick={handleCancelDownload}
-                            disabled={!isLoading || !isPaused} // Only enable if downloads are in progress *and* paused
-                        >
-                            Cancel
-                        </Button>
 
                         <div
                             style={{
@@ -2479,7 +2411,6 @@ const OfflineWindow: React.FC = () => {
                             </div>
                         </div>
 
-
                         {/* Action Button for Modify Mode */}
                         {isModifyMode && (
                             <>
@@ -2510,6 +2441,100 @@ const OfflineWindow: React.FC = () => {
                             </>
                         )}
                     </div>
+
+                    {!isModifyMode &&
+                        <div
+                            style={{
+                                width: '100%',
+                                margin: '10px',
+                                display: 'flex',               // Enable Flexbox
+                                alignItems: 'center',         // Vertically center the items
+                                gap: '10px',                   // Space between items
+                                flexWrap: 'wrap',             // Allow wrapping on smaller screens
+                            }}>
+                            <Button
+                                onClick={handleDownloadNow}
+                                style={selectedIds.size > 0 ? downloadButtonStyle : downloadButtonDisabledStyle}
+                                disabled={selectedIds.size === 0 || isLoading || isModifyMode}
+                            >
+                                {isLoading ? (
+                                    <>
+                                        <Spinner
+                                            as="span"
+                                            animation="border"
+                                            size="sm"
+                                            role="status"
+                                            aria-hidden="true"
+                                            style={{ marginRight: '5px' }}
+                                        />
+                                        Downloading...
+                                    </>
+                                ) : (
+                                    'Download Now'
+                                )}
+                            </Button>
+
+                            <Button
+                                onClick={handlePauseToggle}
+                                disabled={selectedIds.size === 0 || isLoading === false /* or any other condition */}
+                            >
+                                {isPaused ? "Resume" : "Pause"}
+                            </Button>
+
+                            <Button
+                                onClick={handleCancelDownload}
+                                disabled={!isLoading || !isPaused} // Only enable if downloads are in progress *and* paused
+                            >
+                                Cancel
+                            </Button>
+
+                        </div>
+                    }
+
+                    {(batchCooldown !== null && batchCooldown > 0) || currentBatchRange ? (
+                        <div
+                            style={{
+                                marginBottom: '5px',
+                                fontWeight: 'bold',
+                                color: '#FFA500',
+                                backgroundColor: isDarkMode ? '#555' : '#f8f9fa',
+                                padding: '10px',
+                                borderRadius: '4px',
+                                textAlign: 'center'
+                            }}
+                        >
+                            {/* Render the cooldown message if it’s active */}
+                            {batchCooldown !== null && batchCooldown > 0 && (
+                                <p style={{ margin: 0 }}>
+                                    Cooling down: {batchCooldown} second
+                                    {batchCooldown !== 1 ? 's' : ''} left before the next batch...
+                                </p>
+                            )}
+
+                            {/* Render the current batch range if defined */}
+                            {currentBatchRange && (
+                                <p style={{ margin: 0 }}>
+                                    {currentBatchRange}
+                                </p>
+                            )}
+                        </div>
+                    ) : null}
+
+                    {initiationDelay !== null && initiationDelay > 0 && (
+                        <div style={{
+                            marginBottom: '5px',
+                            fontWeight: 'bold',
+                            color: '#FFA500', // Orange color for visibility
+                            backgroundColor: isDarkMode ? '#555' : '#f8f9fa',
+                            padding: '10px',
+                            borderRadius: '4px',
+                            textAlign: 'center'
+                        }}>
+                            Next download will start in {initiationDelay} second{initiationDelay !== 1 ? 's' : ''}.
+                        </div>
+                    )}
+
+
 
                     {/* Download or Modify Progress Indicators */}
                     {isLoading && (
@@ -2572,6 +2597,9 @@ const OfflineWindow: React.FC = () => {
                                                 }
                                             }}
                                             headerHeight={40}
+                                            onGridReady={(params) => {
+                                                params.api.sizeColumnsToFit(); // Automatically size columns to fit the grid width
+                                            }}
                                         />
                                     </div>
                                 )}
@@ -2620,7 +2648,7 @@ const OfflineWindow: React.FC = () => {
                     </div>
 
                     {/* Footer Area */}
-                    {(displayMode === 'bigCard' || displayMode === 'smallCard') && totalPages > 1 && (
+                    {(displayMode === 'bigCard' || displayMode === 'smallCard') && (
                         <div style={footerStyle}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
                                 {/* Range Display */}
@@ -2685,7 +2713,7 @@ const OfflineWindow: React.FC = () => {
             </>
 
 
-        </div>
+        </div >
     );
 };
 
