@@ -1,21 +1,25 @@
-import React, { useEffect, useState, version } from 'react';
+import React, { useEffect, useRef, useState, version } from 'react';
 
 //Store
 import { useSelector, useDispatch } from 'react-redux';
 import { AppState } from '../../store/configureStore';
+import { updateDownloadFilePath } from "../../store/actions/chromeActions"
 
 //Icons Components
 import { AiFillFolderOpen } from "react-icons/ai"
-import { BsDownload } from 'react-icons/bs';
+import { BsDownload, BsPencilFill } from 'react-icons/bs';
 import { TbDatabaseSearch, TbDatabasePlus, TbDatabaseMinus } from "react-icons/tb";
 import { PiPlusMinusFill } from "react-icons/pi";
-import { FaMagnifyingGlass, FaMagnifyingGlassPlus } from "react-icons/fa6";
-import { MdOutlineApps, MdOutlineTipsAndUpdates } from "react-icons/md";
+import { FaLeftLong, FaMagnifyingGlass, FaMagnifyingGlassPlus } from "react-icons/fa6";
+import { MdOutlineApps, MdOutlineTipsAndUpdates, MdSkipNext, MdSkipPrevious } from "react-icons/md";
 import { FcGenericSortingAsc, FcGenericSortingDesc } from "react-icons/fc";
 import { PiTabsFill } from "react-icons/pi";
 import { LuPanelLeftOpen, LuPanelRightOpen } from "react-icons/lu";
 import { MdOutlineDownloadForOffline, MdOutlineDownload } from "react-icons/md";
 import { BsReverseLayoutTextWindowReverse } from "react-icons/bs";
+import { PiTabs } from "react-icons/pi";
+import { IoCloseOutline, IoNavigate, IoReloadOutline } from "react-icons/io5";
+import { WiCloudRefresh } from "react-icons/wi";
 
 //components
 import CategoriesListSelector from '../CategoriesListSelector';
@@ -26,6 +30,10 @@ import ButtonWrap from "../buttons/ButtonWrap";
 import { Button, OverlayTrigger, Tooltip, Form, Dropdown, ButtonGroup } from 'react-bootstrap';
 import ErrorAlert from '../ErrorAlert';
 import URLGrid from './URLGrid';
+import Autocomplete from '@mui/material/Autocomplete';
+import TextField from '@mui/material/TextField';
+import FilesPathSettingPanel from '../FilesPathSettingPanel';
+
 
 interface updateAvaliable {
     url: string;
@@ -50,18 +58,29 @@ import {
     fetchCheckIfModelUpdateAvaliable,
     fetchCivitaiModelInfoFromCivitaiByVersionID,
     fetchAddOfflineDownloadFileIntoOfflineDownloadList,
-    fetchCheckQuantityOfOfflinedownloadList
+    fetchCheckQuantityOfOfflinedownloadList,
+    fetchUpdateCreatorUrlList,
+    fetchGetCreatorUrlList,
+    fetchGetFoldersList,
+    fetchRemoveFromCreatorUrlList
 } from "../../api/civitaiSQL_api"
 
 //utils
-import { bookmarkThisUrl, updateDownloadMethodIntoChromeStorage, callChromeBrowserDownload, removeBookmarkByUrl, updateOfflineModeIntoChromeStorage } from "../../utils/chromeUtils"
+import { bookmarkThisUrl, updateDownloadMethodIntoChromeStorage, callChromeBrowserDownload, removeBookmarkByUrl, updateOfflineModeIntoChromeStorage, updateSelectedCategoryIntoChromeStorage, updateDownloadFilePathIntoChromeStorage } from "../../utils/chromeUtils"
 import { retrieveCivitaiFileName, retrieveCivitaiFilesList } from "../../utils/objectUtils"
 import { BiSolidBarChartSquare, BiSolidHdd } from 'react-icons/bi';
 import WindowFullInfoModelPanel from './WindowFullInfoModelPanel';
 import SetOriginalTabButton from './SetOriginalTabButton';
 import WindowShortcutPanel from './WindowShortcutPanel';
 
+interface CreatorUrlItem {
+    creatorUrl: string;
+    lastChecked: boolean;
+    status: string;
+}
+
 const WindowComponent: React.FC = () => {
+    const inputRef = useRef<HTMLInputElement>(null);
 
     const dispatch = useDispatch();
     const [isLoading, setIsLoading] = useState(false)
@@ -81,7 +100,10 @@ const WindowComponent: React.FC = () => {
     const [workingModelID, setWorkingModelID] = useState("");
 
     const chromeData = useSelector((state: AppState) => state.chrome);
-    const { downloadMethod, downloadFilePath, selectedCategory, offlineMode } = chromeData;
+    const { downloadMethod, downloadFilePath, selectedCategory, offlineMode, selectedFilteredCategoriesList } = chromeData;
+
+    const [sortedandFilteredfoldersList, setSortedandFilteredfoldersList] = useState<string[]>([]);
+    const [foldersList, setFoldersList] = useState([])
 
     const [startModelName, setStartModelName] = useState("");
     const [processingModelName, setProcessingModelName] = useState("");
@@ -99,7 +121,8 @@ const WindowComponent: React.FC = () => {
         checkDatabaseButton: false,
         bookmarkButton: false, // Initial value to help TypeScript infer the types
         downloadButton: false, // You can add more initial panels as needed
-        utilsButtons: false
+        utilsButton: false,
+        tabsButton: false
     });
 
     const [updateCount, setUpdateCount] = useState(10);
@@ -150,6 +173,8 @@ const WindowComponent: React.FC = () => {
                 // Update checkedUrlList to include both the previous and new URLs
                 setCheckedUrlList(prevCheckedUrlList => [...prevCheckedUrlList, ...message.newUrlList]);
 
+                addCreatorUrlButton()
+
             } else if (message.action === "checkifmodelAvaliable") {
                 // Process the new URLs (e.g., check them in the database)
                 checkIfModelUpdateAvaliable(message.newUrlList)
@@ -158,6 +183,9 @@ const WindowComponent: React.FC = () => {
 
                 //setLastUpdateProcessedIndex(message.lastUpdateProcessedIndex)
 
+            } else if (message.action === "addCreator") {
+                handleUpdateCreatorUrlList(message.creator, sendResponse)
+                return true;
             }
         };
         chrome.runtime.onMessage.addListener(messageListener);
@@ -165,6 +193,63 @@ const WindowComponent: React.FC = () => {
             chrome.runtime.onMessage.removeListener(messageListener);
         };
     }, []);
+
+    const [creatorUrlList, setCreatorUrlList] = useState<CreatorUrlItem[]>([]);
+
+    useEffect(() => {
+        fetchCreatorUrlList();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    async function fetchCreatorUrlList() {
+        const list = await fetchGetCreatorUrlList(dispatch);
+        if (list && Array.isArray(list)) {
+            setCreatorUrlList(list);
+        }
+    }
+
+    const [selectedCreatorUrlText, setSelectedCreatorUrlText] = useState("");
+
+
+    // Handler when a creator URL is selected from the dropdown
+    const handleSelectCreatorUrl = (item: CreatorUrlItem) => {
+        // Get the clicked item's index
+        const newIndex = creatorUrlList.findIndex(
+            (i) => i.creatorUrl === item.creatorUrl
+        );
+
+        // If found, update the current index
+        if (newIndex !== -1) {
+            setCurrentCreatorUrlIndex(newIndex);
+        }
+
+        // Also update the displayed text
+        setSelectedCreatorUrlText(item.creatorUrl.split("/")[4]);
+        console.log("Selected:", item);
+    };
+
+
+    const handleUpdateCreatorUrlList = async (creator: any, sendResponse: any) => {
+
+        let result = null;
+        if (creator !== null || creator !== "") {
+
+            let creatorUrl = `https://civitai.com/user/${creator}/models`
+
+            result = await fetchUpdateCreatorUrlList(creatorUrl, "new", false, dispatch);
+        }
+        sendResponse(result || { status: "failure" })
+    }
+
+    // -- NEW Buttons: Refresh List & Refresh Page -----------------------
+    const handleRefreshList = async () => {
+        try {
+            // Re-fetch the list from server / API
+            await fetchCreatorUrlList();
+        } catch (error) {
+            console.error("Error refreshing list:", error);
+        }
+    };
 
     const handleCheckSavedDatabase = () => {
         chrome.storage.local.get('originalTabId', (result) => {
@@ -248,6 +333,14 @@ const WindowComponent: React.FC = () => {
                 }
             });
         }
+    };
+
+    const addCreatorUrlButton = async () => {
+        chrome.storage.local.get('originalTabId', (result) => {
+            if (result.originalTabId) {
+                chrome.tabs.sendMessage(result.originalTabId, { action: "display-creator-button" })
+            }
+        });
     };
 
     const checkIfModelUpdateAvaliable = async (newUrlList: any) => {
@@ -720,6 +813,128 @@ const WindowComponent: React.FC = () => {
         setIsFullInfoModelPanelVisible(!isFullInfoModelPanelVisible);
     };
 
+    const [currentCreatorUrlIndex, setCurrentCreatorUrlIndex] = useState<number | null>(null);
+
+    // On mount, optionally pick the first "new" item
+    useEffect(() => {
+        // Only set initial index if none is selected yet
+        if (currentCreatorUrlIndex === null && creatorUrlList.length > 0) {
+            const firstNewIndex = creatorUrlList.findIndex(item => item.status === "new");
+            if (firstNewIndex !== -1) {
+                setCurrentCreatorUrlIndex(firstNewIndex);
+                setSelectedCreatorUrlText(creatorUrlList[firstNewIndex].creatorUrl.split('/')[4]);
+            }
+        }
+    }, [creatorUrlList, currentCreatorUrlIndex]);
+
+
+
+    // A helper to update the tab to the new URL
+    const goToUrlInBrowserTab = async (url: string) => {
+        try {
+            // If you are storing the "originalTabId" in local storage:
+            const { originalTabId } = await chrome.storage.local.get('originalTabId');
+            if (originalTabId) {
+                // Update that specific tab
+                await chrome.tabs.update(originalTabId, { url });
+            } else {
+                // Fallback: update the active tab in the normal window
+                const windows = await chrome.windows.getAll({ populate: false });
+                const normalWindow = windows.find(win => win.type === 'normal');
+                if (!normalWindow) return;
+                const [activeTab] = await chrome.tabs.query({ active: true, windowId: normalWindow.id });
+                if (!activeTab || !activeTab.id) return;
+                await chrome.tabs.update(activeTab.id, { url });
+            }
+            await fetchUpdateCreatorUrlList(url, "checked", true, dispatch)
+            handleRefreshList();
+            handleSetOriginalTab()
+        } catch (error) {
+            console.error("Error updating tab:", error);
+        }
+    };
+
+    // Go button: Just re-navigate to the currentIndex's URL
+    const handleGo = () => {
+        if (currentCreatorUrlIndex == null) return;
+        const url = creatorUrlList[currentCreatorUrlIndex].creatorUrl;
+        setSelectedCreatorUrlText(url.split('/')[4]);
+        goToUrlInBrowserTab(url);
+    };
+
+    // Find the *previous* index with "new"
+    const handlePrevious = () => {
+        if (currentCreatorUrlIndex == null) return;
+
+        let newIndex = currentCreatorUrlIndex - 1;
+        while (newIndex >= 0) {
+            if (creatorUrlList[newIndex].status === "new") {
+                setCurrentCreatorUrlIndex(newIndex);
+                setSelectedCreatorUrlText(creatorUrlList[newIndex].creatorUrl.split('/')[4]);
+                goToUrlInBrowserTab(creatorUrlList[newIndex].creatorUrl);
+                return; // stop after setting first previous "new"
+            }
+            newIndex--;
+        }
+        // If no previous "new" was found, do nothing (or show a message)
+    };
+
+    // Find the *next* index with "new"
+    const handleNext = () => {
+        if (currentCreatorUrlIndex == null) return;
+
+        let newIndex = currentCreatorUrlIndex + 1;
+        while (newIndex < creatorUrlList.length) {
+            if (creatorUrlList[newIndex].status === "new") {
+                setCurrentCreatorUrlIndex(newIndex);
+                setSelectedCreatorUrlText(creatorUrlList[newIndex].creatorUrl.split('/')[4]);
+                goToUrlInBrowserTab(creatorUrlList[newIndex].creatorUrl);
+                return;
+            }
+            newIndex++;
+        }
+        // If no next "new" was found, do nothing (or show a message)
+    };
+
+    // Conditionally disable buttons if no prev/next
+    // That’s optional convenience
+    const hasPrevNew = () => {
+        if (currentCreatorUrlIndex == null) return false;
+        for (let i = currentCreatorUrlIndex - 1; i >= 0; i--) {
+            if (creatorUrlList[i].status === "new") return true;
+        }
+        return false;
+    };
+
+    const hasNextNew = () => {
+        if (currentCreatorUrlIndex == null) return false;
+        for (let i = currentCreatorUrlIndex + 1; i < creatorUrlList.length; i++) {
+            if (creatorUrlList[i].status === "new") return true;
+        }
+        return false;
+    };
+
+    const handleRefreshPage = async () => {
+        // Reload the original tab if present, otherwise reload the currently active tab
+        try {
+            const { originalTabId } = await chrome.storage.local.get("originalTabId");
+            if (originalTabId) {
+                await chrome.tabs.reload(originalTabId);
+            } else {
+                // Fallback: reload the active tab in the normal window
+                const windows = await chrome.windows.getAll({ populate: false });
+                const normalWindow = windows.find(win => win.type === "normal");
+                if (!normalWindow) return;
+                const [activeTab] = await chrome.tabs.query({ active: true, windowId: normalWindow.id });
+                if (!activeTab?.id) return;
+                chrome.tabs.reload(activeTab.id);
+            }
+        } catch (error) {
+            console.error("Error refreshing page:", error);
+        }
+    };
+
+
     const handleSetOriginalTab = async () => {
         try {
             // Step 1: Retrieve all windows
@@ -748,6 +963,7 @@ const WindowComponent: React.FC = () => {
                 setIsHandleRefresh(true);
                 setCheckedUpdateList([]);
                 setUpdateCount(10);
+                setUrlList([]);
                 setLastUpdateProcessedIndex(0);
                 chrome.storage.local.get('originalTabId', (result) => {
                     if (result.originalTabId) {
@@ -768,198 +984,336 @@ const WindowComponent: React.FC = () => {
         }
     };
 
-    // Define the height of the fixed header (adjust as needed)
-    const fixedHeaderHeight = 300; // in pixels
+    useEffect(() => {
+        // Update FoldersList
+        handleGetFoldersList()
+    }, []);
+
+    useEffect(() => {
+        // Update FoldersList
+        if (isHandleRefresh) {
+            handleGetFoldersList()
+        }
+    }, [isHandleRefresh]);
+
+
+    useEffect(() => {
+        if (selectedFilteredCategoriesList) {
+            handleAddFilterIntoFoldersList(JSON.parse(selectedFilteredCategoriesList))
+        }
+    }, [selectedFilteredCategoriesList, foldersList])
+
+
+    const handleAddFilterIntoFoldersList = (selectedFilteredCategoriesList: any) => {
+
+        const filteredFolderList = (foldersList as any[]).filter(folder => {
+            const isIncluded = (selectedFilteredCategoriesList as any[]).some(item => {
+                return item.display && folder.toLowerCase().includes(item.category.value.toLowerCase());
+            });
+
+            if (!isIncluded) {
+                return false;
+            }
+
+            // Additional checks for specific exceptions
+            const isCharactersSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "Characters" && item.display);
+            const isRealSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "Real" && item.display);
+            const isPosesSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "Poses" && item.display);
+            const isMalesSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "Males" && item.display);
+            const isSFWSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "SFW" && item.display);
+            const isNSFWSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "NSFW" && item.display);
+            const isEXSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "EX" && item.display);
+
+            // Check exceptions
+            if (isCharactersSelected && !isMalesSelected && folder.toLowerCase().includes("(males)")) {
+                return false;
+            }
+
+            if (isPosesSelected && !isNSFWSelected && folder.toLowerCase().includes("/nsfw/")) {
+                return false;
+            }
+
+            if (isPosesSelected && !isSFWSelected && folder.toLowerCase().includes("/sfw/")) {
+                return false;
+            }
+
+            if (isPosesSelected && !isRealSelected && folder.toLowerCase().includes("/real/")) {
+                return false;
+            }
+
+            if (isPosesSelected && !isRealSelected && folder.toLowerCase().includes("/real/")) {
+                return false;
+            }
+
+            if (isSFWSelected && !isNSFWSelected && folder.toLowerCase().includes("/nsfw/")) {
+                return false;
+            }
+
+
+            if (!isEXSelected && folder.toLowerCase().includes("/ex/")) {
+                return false;
+            }
+
+
+
+            return true;
+        }).sort((a: string, b: string) => {
+            // Extract the first character of each string to compare
+            const firstCharA = a.charAt(0).toUpperCase();
+            const firstCharB = b.charAt(0).toUpperCase();
+
+            // Check if both characters are digits or not
+            const isDigitA = /\d/.test(firstCharA);
+            const isDigitB = /\d/.test(firstCharB);
+
+            if (isDigitA && !isDigitB) {
+                // If A is a digit and B is not, A should come after B
+                return 1;
+            } else if (!isDigitA && isDigitB) {
+                // If B is a digit and A is not, A should come before B
+                return -1;
+            }
+            // If both are digits or both are not digits, compare alphabetically/numerically
+            return a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' });
+        });
+
+        setSortedandFilteredfoldersList(filteredFolderList);
+
+    }
+
+    const handleGetFoldersList = async () => {
+        setIsLoading(true)
+        const data = await fetchGetFoldersList(dispatch);
+        setFoldersList(data)
+        setIsLoading(false)
+    }
+
+    const handleRemoveCreatorUrl = async (url: string) => {
+
+        const userConfirmed = window.confirm("Are you sure you want to remove the selected Creator Url?");
+        if (!userConfirmed) {
+            console.log("User canceled the removal operation.");
+            return; // Exit the function if the user cancels
+        }
+
+        await fetchRemoveFromCreatorUrlList(url, dispatch)
+        handleRefreshList();
+    }
+
+    const handleFoldersListOnChange = (event: any, newValue: string | null) => {
+        const disallowedRegex = /[<>:"\\\|?*]/g;
+        dispatch(updateDownloadFilePath(newValue?.replace(disallowedRegex, '') || ""))
+
+    }
+
+    // Handler for blur event
+    const handleAutocompleteBlur = () => {
+        // If downloadFilePath is empty
+        if (!downloadFilePath) {
+            dispatch(updateDownloadFilePath('/@scan@/ErrorPath/'))
+        }
+    };
 
     return (
-        <div className="container" style={{ width: '100%', position: 'relative' }}>
+        <>
 
-            {/* Sticky Header */}
-            <div
-                style={{
-                    position: 'sticky',
-                    top: 0,
-                    width: '100%',
-                    backgroundColor: 'white', // Adjust as needed
-                    padding: '20px',
-                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)', // Optional: Adds a subtle shadow
-                    zIndex: 1000, // Ensure it stays above other elements
-                }}
-            >
-                <ErrorAlert />
+            {/* Header and Buttons */}
+            <ErrorAlert />
 
-                <center><h1>Model List Mode</h1></center>
+            <center>
+                <h1>Model List Mode</h1>
+            </center>
 
-                <Form>
-                    <Form.Check
-                        type="switch"
-                        id="custom-switch"
-                        label="Download Mode"
-                        checked={checkboxMode}
-                        onChange={handleToggleCheckBoxMode}
-                    />
-                </Form>
+            {/* Main Content: Left & Right Panels */}
+            <div style={{ display: 'flex' }}>
 
-                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                {/* LEFT PANEL */}
+                <div style={{
+                    flex: 1, width: '50%', margin: '1%',
+                }}>
 
-                    <WindowCollapseButton
-                        panelId="checkDatabaseButton"
-                        isPanelOpen={collapseButtonStates['checkDatabaseButton']}
-                        handleTogglePanel={handleToggleCollapseButton}
-                        icons={<TbDatabaseSearch />}
-                        buttons={
-                            <div>
-                                {/**Checked Saved Button for User page*/}
-                                <ButtonWrap buttonConfig={{
-                                    placement: "top",
-                                    tooltip: "Check if database has this model (User Page prefer)",
-                                    variant: "primary",
-                                    buttonIcon: <FaMagnifyingGlass />,
-                                    disable: urlList.length === 0 || !(checkboxMode),
-                                }}
-                                    handleFunctionCall={() => {
-                                        setResetMode(true)
-                                    }} />
+                    {/* Sticky Header/Buttons inside Left Panel */}
+                    <div
+                        style={{
+                            position: 'sticky',
+                            top: 0,
+                            background: 'white',
+                            zIndex: 1000,
+                            padding: '20px',
+                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                        }}
+                    >
 
-                                {/**Checked Saved Button*/}
-                                <OverlayTrigger placement={"top"}
-                                    overlay={<Tooltip id="tooltip">{`Check if database has this model`}</Tooltip>}>
-                                    <Dropdown as={ButtonGroup}>
-                                        <Button variant="success"
-                                            onClick={handleCheckSavedDatabase} >
-                                            <FaMagnifyingGlassPlus />
-                                        </Button>
-                                        <Dropdown.Toggle split variant="success" id="dropdown-split-basic" />
-                                        <Dropdown.Menu>
-                                            <Dropdown.Item
-                                                onClick={resetCheckedUrlList} >
-                                                Reset
-                                            </Dropdown.Item>
-                                        </Dropdown.Menu>
-                                    </Dropdown>
-                                </OverlayTrigger>
-                            </div>
-                        }
-                    />
+                        <Form>
+                            <Form.Check
+                                type="switch"
+                                id="custom-switch"
+                                label="Download Mode"
+                                checked={checkboxMode}
+                                onChange={handleToggleCheckBoxMode}
+                            />
+                        </Form>
 
-                    <WindowCollapseButton
-                        panelId="downloadButton"
-                        isPanelOpen={collapseButtonStates['downloadButton']}
-                        handleTogglePanel={handleToggleCollapseButton}
-                        icons={<BsDownload />}
-                        buttons={
-                            <div>
-                                {/**Switch Download Method Button*/}
-                                <WindowDownloadFileButton />
+                        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                            {/* Example: WindowCollapseButton for Database Check */}
+                            <WindowCollapseButton
+                                panelId="checkDatabaseButton"
+                                isPanelOpen={collapseButtonStates['checkDatabaseButton']}
+                                handleTogglePanel={handleToggleCollapseButton}
+                                icons={<TbDatabaseSearch />}
+                                buttons={
+                                    <div>
+                                        {/**Checked Saved Button for User page*/}
+                                        <ButtonWrap buttonConfig={{
+                                            placement: "top",
+                                            tooltip: "Check if database has this model (User Page prefer)",
+                                            variant: "primary",
+                                            buttonIcon: <FaMagnifyingGlass />,
+                                            disable: urlList.length === 0 || !(checkboxMode),
+                                        }}
+                                            handleFunctionCall={() => {
+                                                setResetMode(true)
+                                            }} />
 
-                                {/**Open Download Button */}
-                                <ButtonWrap buttonConfig={{
-                                    placement: "top",
-                                    tooltip: "Open Download Directory",
-                                    variant: "primary",
-                                    buttonIcon: <AiFillFolderOpen />,
-                                    disabled: false,
-                                }}
-                                    handleFunctionCall={() => fetchOpenDownloadDirectory(dispatch)} />
+                                        {/**Checked Saved Button*/}
+                                        <OverlayTrigger placement={"top"}
+                                            overlay={<Tooltip id="tooltip">{`Check if database has this model`}</Tooltip>}>
+                                            <Dropdown as={ButtonGroup}>
+                                                <Button variant="success"
+                                                    onClick={handleCheckSavedDatabase} >
+                                                    <FaMagnifyingGlassPlus />
+                                                </Button>
+                                                <Dropdown.Toggle split variant="success" id="dropdown-split-basic" />
+                                                <Dropdown.Menu>
+                                                    <Dropdown.Item
+                                                        onClick={resetCheckedUrlList} >
+                                                        Reset
+                                                    </Dropdown.Item>
+                                                </Dropdown.Menu>
+                                            </Dropdown>
+                                        </OverlayTrigger>
+                                    </div>
+                                }
+                            />
 
-                                {/**offline mode button */}
-                                <ButtonWrap buttonConfig={{
-                                    placement: "bottom",
-                                    tooltip: offlineMode ? "offline" : "online",
-                                    variant: offlineMode ? "success" : "primary",
-                                    buttonIcon: offlineMode ? <MdOutlineDownloadForOffline /> : <MdOutlineDownload />,
-                                    disabled: false,
-                                }}
-                                    handleFunctionCall={() => updateOfflineModeIntoChromeStorage(!offlineMode, dispatch)} />
+                            <WindowCollapseButton
+                                panelId="downloadButton"
+                                isPanelOpen={collapseButtonStates['downloadButton']}
+                                handleTogglePanel={handleToggleCollapseButton}
+                                icons={<BsDownload />}
+                                buttons={
+                                    <div>
+                                        {/**Switch Download Method Button*/}
+                                        <WindowDownloadFileButton />
 
-                                {/**Open Offline Window */}
-                                <ButtonWrap buttonConfig={{
-                                    placement: "top",
-                                    tooltip: "Open Offline Window",
-                                    variant: "primary",
-                                    buttonIcon: <BsReverseLayoutTextWindowReverse />
-                                    ,
-                                    disabled: false,
-                                }}
-                                    handleFunctionCall={() => handleOpenOfflineWindow()} />
-                            </div>
-                        }
-                    />
+                                        {/**Open Download Button */}
+                                        <ButtonWrap buttonConfig={{
+                                            placement: "top",
+                                            tooltip: "Open Download Directory",
+                                            variant: "primary",
+                                            buttonIcon: <AiFillFolderOpen />,
+                                            disabled: false,
+                                        }}
+                                            handleFunctionCall={() => fetchOpenDownloadDirectory(dispatch)} />
 
-                    <WindowCollapseButton
-                        panelId="bookmarkButton"
-                        isPanelOpen={collapseButtonStates['bookmarkButton']}
-                        handleTogglePanel={handleToggleCollapseButton}
-                        icons={<PiPlusMinusFill />}
-                        buttons={
-                            <div>
-                                {/**Bookmark and add to database Button*/}
-                                <ButtonWrap buttonConfig={{
-                                    placement: "top",
-                                    tooltip: "Bookmark and add to database",
-                                    variant: "primary",
-                                    buttonIcon: <TbDatabasePlus />,
-                                    disabled: (urlList.length === 0 || !checkboxMode),
-                                }}
-                                    handleFunctionCall={() => handleMultipleBookmarkAndAddtoDatabase()} />
+                                        {/**offline mode button */}
+                                        <ButtonWrap buttonConfig={{
+                                            placement: "bottom",
+                                            tooltip: offlineMode ? "offline" : "online",
+                                            variant: offlineMode ? "success" : "primary",
+                                            buttonIcon: offlineMode ? <MdOutlineDownloadForOffline /> : <MdOutlineDownload />,
+                                            disabled: false,
+                                        }}
+                                            handleFunctionCall={() => updateOfflineModeIntoChromeStorage(!offlineMode, dispatch)} />
 
-                                {/**Remove bookmarks */}
-                                <ButtonWrap buttonConfig={{
-                                    placement: "top",
-                                    tooltip: "Remove all Bookmark and database from that Model",
-                                    variant: "primary",
-                                    buttonIcon: <TbDatabaseMinus />,
-                                    disabled: (urlList.length === 0 || !checkboxMode),
-                                }}
-                                    handleFunctionCall={() => handleRemoveBookmarks()} />
+                                        {/**Open Offline Window */}
+                                        <ButtonWrap buttonConfig={{
+                                            placement: "top",
+                                            tooltip: "Open Offline Window",
+                                            variant: "primary",
+                                            buttonIcon: <BsReverseLayoutTextWindowReverse />
+                                            ,
+                                            disabled: false,
+                                        }}
+                                            handleFunctionCall={() => handleOpenOfflineWindow()} />
+                                    </div>
+                                }
+                            />
 
-                            </div>
-                        }
-                    />
+                            <WindowCollapseButton
+                                panelId="bookmarkButton"
+                                isPanelOpen={collapseButtonStates['bookmarkButton']}
+                                handleTogglePanel={handleToggleCollapseButton}
+                                icons={<PiPlusMinusFill />}
+                                buttons={
+                                    <div>
+                                        {/**Bookmark and add to database Button*/}
+                                        <ButtonWrap buttonConfig={{
+                                            placement: "top",
+                                            tooltip: "Bookmark and add to database",
+                                            variant: "primary",
+                                            buttonIcon: <TbDatabasePlus />,
+                                            disabled: (urlList.length === 0 || !checkboxMode),
+                                        }}
+                                            handleFunctionCall={() => handleMultipleBookmarkAndAddtoDatabase()} />
 
-                    <WindowCollapseButton
-                        panelId="utilsButton"
-                        isPanelOpen={collapseButtonStates['utilsButton']}
-                        handleTogglePanel={handleToggleCollapseButton}
-                        icons={<MdOutlineApps />}
-                        buttons={
-                            <div>
+                                        {/**Remove bookmarks */}
+                                        <ButtonWrap buttonConfig={{
+                                            placement: "top",
+                                            tooltip: "Remove all Bookmark and database from that Model",
+                                            variant: "primary",
+                                            buttonIcon: <TbDatabaseMinus />,
+                                            disabled: (urlList.length === 0 || !checkboxMode),
+                                        }}
+                                            handleFunctionCall={() => handleRemoveBookmarks()} />
 
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    {counting && (
-                                        <b style={{
-                                            whiteSpace: 'nowrap',
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis',
-                                            fontSize: '10px' // Adjust font size as needed
-                                        }}>
-                                            Checking Model Available: {counter} / {checkingListSize}
-                                        </b>
-                                    )}
-                                </div>
+                                    </div>
+                                }
+                            />
 
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    {/**Checked If update available Button for User page*/}
+                            <WindowCollapseButton
+                                panelId="utilsButton"
+                                isPanelOpen={collapseButtonStates['utilsButton']}
+                                handleTogglePanel={handleToggleCollapseButton}
+                                icons={<MdOutlineApps />}
+                                buttons={
+                                    <div>
 
-                                    {/**Checked Saved Button*/}
-                                    <OverlayTrigger placement={"top"}
-                                        overlay={<Tooltip id="tooltip">{`check if update available or early access`}</Tooltip>}>
-                                        <Dropdown as={ButtonGroup}>
-                                            <Button variant="primary"
-                                                onClick={handleCheckUpdateAvaliable} >
-                                                <MdOutlineTipsAndUpdates />
-                                            </Button>
-                                            <Dropdown.Toggle split variant="primary" id="dropdown-split-basic" />
-                                            <Dropdown.Menu>
-                                                <Dropdown.Item
-                                                    onClick={resetCheckedUpdateList} >
-                                                    Reset
-                                                </Dropdown.Item>
-                                            </Dropdown.Menu>
-                                        </Dropdown>
-                                    </OverlayTrigger>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            {counting && (
+                                                <b style={{
+                                                    whiteSpace: 'nowrap',
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis',
+                                                    fontSize: '10px' // Adjust font size as needed
+                                                }}>
+                                                    Checking Model Available: {counter} / {checkingListSize}
+                                                </b>
+                                            )}
+                                        </div>
 
-                                    {/* <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            {/**Checked If update available Button for User page*/}
+
+                                            {/**Checked Saved Button*/}
+                                            <OverlayTrigger placement={"top"}
+                                                overlay={<Tooltip id="tooltip">{`check if update available or early access`}</Tooltip>}>
+                                                <Dropdown as={ButtonGroup}>
+                                                    <Button variant="primary"
+                                                        onClick={handleCheckUpdateAvaliable} >
+                                                        <MdOutlineTipsAndUpdates />
+                                                    </Button>
+                                                    <Dropdown.Toggle split variant="primary" id="dropdown-split-basic" />
+                                                    <Dropdown.Menu>
+                                                        <Dropdown.Item
+                                                            onClick={resetCheckedUpdateList} >
+                                                            Reset
+                                                        </Dropdown.Item>
+                                                    </Dropdown.Menu>
+                                                </Dropdown>
+                                            </OverlayTrigger>
+
+                                            {/* <div>
                                         <input
                                             type="number"
                                             value={updateCount}
@@ -970,146 +1324,307 @@ const WindowComponent: React.FC = () => {
                                         />
                                     </div> */}
 
-                                    {/**Checked If update available Button for User page*/}
-                                    <ButtonWrap buttonConfig={{
+                                            {/**Checked If update available Button for User page*/}
+                                            <ButtonWrap buttonConfig={{
+                                                placement: "top",
+                                                tooltip: "handling Sorting",
+                                                variant: "primary",
+                                                buttonIcon: isSorted ? <FcGenericSortingAsc /> : <FcGenericSortingDesc />,
+                                                disable: counting,
+                                            }}
+                                                handleFunctionCall={() => handleSorting()} />
+
+                                        </div>
+
+                                    </div>
+                                }
+                            />
+
+                            <WindowCollapseButton
+                                panelId="tabsButton"
+                                isPanelOpen={collapseButtonStates['tabsButton']}
+                                handleTogglePanel={handleToggleCollapseButton}
+                                icons={<PiTabs />}
+                                buttons={
+                                    <div>
+                                        {/* Put everything in one row (Flex Container) */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+
+                                            <OverlayTrigger
+                                                placement={"top"}
+                                                overlay={<Tooltip id="tooltip">Refresh Creator Url List</Tooltip>}
+                                            >
+                                                <Button variant="success" onClick={handleRefreshList}>
+                                                    <IoReloadOutline />
+                                                </Button>
+                                            </OverlayTrigger>
+                                            <Dropdown>
+                                                <Dropdown.Toggle variant="secondary">
+                                                    {selectedCreatorUrlText || "-- Creator URL List (choose one) --"}
+                                                </Dropdown.Toggle>
+                                                <Dropdown.Menu style={{ maxHeight: "400px", overflowY: "auto" }}>
+                                                    {creatorUrlList.map((item) => (
+                                                        <Dropdown.Item
+                                                            as="div"
+                                                            key={item.creatorUrl}
+                                                            onClick={() => handleSelectCreatorUrl(item)}
+                                                            style={{
+                                                                display: "flex",
+                                                                justifyContent: "space-between",
+                                                                alignItems: "center",
+                                                                cursor: "pointer",
+                                                            }}
+                                                        >
+                                                            {/* Left side: creatorUrl and lastChecked */}
+                                                            <span>
+                                                                {item.creatorUrl.split('/')[4]} {item.lastChecked && <FaLeftLong />}
+                                                            </span>
+
+                                                            {/* Right side: item.status and remove button side by side */}
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                                <span>({item.status})</span>
+                                                                <Button
+                                                                    variant="link"
+                                                                    style={{ color: "red", textDecoration: "none" }}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleRemoveCreatorUrl(item.creatorUrl);
+                                                                    }}
+                                                                >
+                                                                    <IoCloseOutline />
+                                                                </Button>
+                                                            </div>
+                                                        </Dropdown.Item>
+
+                                                    ))}
+                                                </Dropdown.Menu>
+                                            </Dropdown>
+                                            <OverlayTrigger
+                                                placement={"top"}
+                                                overlay={<Tooltip id="tooltip">Go to {selectedCreatorUrlText}</Tooltip>}
+                                            >
+                                                <Button variant="primary" onClick={handleGo} disabled={currentCreatorUrlIndex == null}>
+                                                    <IoNavigate />
+                                                </Button>
+                                            </OverlayTrigger>
+
+                                            <OverlayTrigger
+                                                placement={"top"}
+                                                overlay={<Tooltip id="tooltip">Previous Page</Tooltip>}
+                                            >
+                                                <Button variant="danger" onClick={handlePrevious} disabled={!hasPrevNew()}>
+                                                    <MdSkipPrevious />
+                                                </Button>
+                                            </OverlayTrigger>
+
+                                            <OverlayTrigger
+                                                placement={"top"}
+                                                overlay={<Tooltip id="tooltip">Next Page</Tooltip>}
+                                            >
+                                                <Button variant="danger" onClick={handleNext} disabled={!hasNextNew()}>
+                                                    <MdSkipNext />
+                                                </Button>
+                                            </OverlayTrigger>
+
+                                            <OverlayTrigger
+                                                placement={"top"}
+                                                overlay={<Tooltip id="tooltip">Refresh Page</Tooltip>}
+                                            >
+                                                <Button variant="warning" onClick={handleRefreshPage}>
+                                                    <WiCloudRefresh />
+                                                </Button>
+                                            </OverlayTrigger>
+
+                                            <ButtonWrap buttonConfig={{
+                                                placement: "top",
+                                                tooltip: `Set to Current Tabs: ${tabCreator}`,
+                                                variant: "primary",
+                                                buttonIcon: <PiTabsFill />,
+                                                disable: counting,
+                                            }}
+                                                handleFunctionCall={() => {
+                                                    handleSetOriginalTab()
+                                                }} />
+
+                                        </div>
+                                    </div>
+                                }
+                            />
+
+                        </div>
+
+                        {selectedUrl !== "" && (
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '15px',
+                                    border: '2px solid #007bff',
+                                    borderRadius: '8px',
+                                    padding: '10px 15px',
+                                    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                                    backgroundColor: '#f8f9fa',
+                                    marginTop: '20px',
+                                }}
+                            >
+                                <ButtonWrap
+                                    buttonConfig={{
                                         placement: "top",
-                                        tooltip: "handling Sorting",
+                                        tooltip: "Full Info Panel",
                                         variant: "primary",
-                                        buttonIcon: isSorted ? <FcGenericSortingAsc /> : <FcGenericSortingDesc />,
+                                        buttonIcon: isFullInfoModelPanelVisible ? <LuPanelLeftOpen /> : <LuPanelRightOpen />,
                                         disable: counting,
                                     }}
-                                        handleFunctionCall={() => handleSorting()} />
+                                    handleFunctionCall={toggleFullInfoModelPanel}
+                                />
 
-                                    {/**Checked If update available Button for User page*/}
-                                    <ButtonWrap buttonConfig={{
-                                        placement: "top",
-                                        tooltip: `Set to Current Tabs: ${tabCreator}`,
-                                        variant: "primary",
-                                        buttonIcon: <PiTabsFill />,
-                                        disable: counting,
-                                    }}
-                                        handleFunctionCall={() => {
-                                            handleSetOriginalTab()
-                                        }} />
-                                </div>
-
+                                {selectedUrl && (
+                                    <WindowShortcutPanel
+                                        url={selectedUrl}
+                                        setSelectedUrl={setSelectedUrl}
+                                        urlList={urlList}
+                                        setUrlList={setUrlList}
+                                    />
+                                )}
                             </div>
+                        )}
+                    </div>
+
+                    <div style={{ margin: "20px" }}>
+                        <div className="autocomplete-container">
+                            <div className="autocomplete-container-row">
+                                <Autocomplete
+                                    value={downloadFilePath}
+                                    onChange={handleFoldersListOnChange}
+                                    inputValue={downloadFilePath}
+                                    onInputChange={handleFoldersListOnChange}
+                                    key="1"
+                                    id="controllable-states-demo"
+                                    options={sortedandFilteredfoldersList}
+                                    sx={{ width: 350 }}
+                                    renderInput={(params) => (
+                                        <TextField
+                                            {...params}
+                                            inputRef={inputRef}
+                                            helperText={`Folder name can't contain '"<>:/\\|?*'`}
+                                            label="Folder path"
+                                            onBlur={handleAutocompleteBlur}
+                                            onFocus={() => {
+                                                if (inputRef.current) {
+                                                    inputRef.current.scrollLeft =
+                                                        inputRef.current.scrollWidth - inputRef.current.offsetWidth + 100;
+                                                }
+                                            }}
+                                        />
+                                    )}
+                                />
+
+                                <div style={{ padding: "5px" }} />
+
+                                <OverlayTrigger
+                                    placement="bottom"
+                                    overlay={<Tooltip id="tooltip">Save this download file path.</Tooltip>}
+                                >
+                                    <Button
+                                        variant="light"
+                                        disabled={isLoading}
+                                        className="tooltip-button"
+                                        onClick={() => {
+                                            updateDownloadFilePathIntoChromeStorage(downloadFilePath);
+                                            updateSelectedCategoryIntoChromeStorage(selectedCategory);
+                                        }}
+                                    >
+                                        <BsPencilFill />
+                                    </Button>
+                                </OverlayTrigger>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* URLGrid (Scrolls independently of the sticky header/buttons) */}
+                    <div>
+
+                        {workingModelID !== "" && <p>Processing Model Name: {processingModelName}</p>}
+                        {countdown > 0 && <p>Next request in: {countdown} seconds</p>}
+
+                        <URLGrid
+                            urlList={urlList}
+                            setUrlList={setUrlList}
+                            selectedUrl={selectedUrl}
+                            onUrlSelect={setSelectedUrl}
+                        />
+                    </div>
+
+                    <div>
+                        {
+                            offlineMode ? (
+                                <OverlayTrigger
+                                    placement={"top"}
+                                    overlay={<Tooltip id="tooltip">Add file into offline download list</Tooltip>}
+                                >
+                                    <Button
+                                        variant={"success"}
+                                        onClick={handleAddOfflineDownloadFileintoOfflineDownloadList}
+                                        disabled={isLoading || urlList.length === 0 || !checkboxMode}
+                                        className="btn btn-primary btn-lg w-100"
+                                    >
+                                        Offline Download {isLoading && <span className="button-state-complete">✓</span>}
+                                    </Button>
+                                </OverlayTrigger>
+                            ) : (
+                                <OverlayTrigger
+                                    placement={"top"}
+                                    overlay={<Tooltip id="tooltip">Download | Bookmark | Add Record</Tooltip>}
+                                >
+                                    <Button
+                                        variant={"primary"}
+                                        onClick={handleMultipleBundle_v2}
+                                        disabled={isLoading || urlList.length === 0 || !checkboxMode}
+                                        className="btn btn-primary btn-lg w-100"
+                                    >
+                                        Bundle Action {isLoading && <span className="button-state-complete">✓</span>}
+                                    </Button>
+                                </OverlayTrigger>
+                            )
                         }
-                    />
+                    </div>
                 </div>
 
-                {selectedUrl !== "" &&
-                    <div
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '15px', // Space between the components
-                            border: '2px solid #007bff', // Border color matching Bootstrap's primary color
-                            borderRadius: '8px', // Rounded corners
-                            padding: '10px 15px', // Inner spacing
-                            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)', // Subtle shadow for depth
-                            backgroundColor: '#f8f9fa', // Light background color
-                            marginTop: '20px' // Optional: Space above the container
-                        }}
-                    >
-
-                        <ButtonWrap
-                            buttonConfig={{
-                                placement: "top",
-                                tooltip: "Set to Current Tabs",
-                                variant: "primary",
-                                buttonIcon: isFullInfoModelPanelVisible ? <LuPanelLeftOpen /> : <LuPanelRightOpen />,
-                                disable: counting,
-                            }}
-                            handleFunctionCall={() => toggleFullInfoModelPanel()}
-                        />
-
-                        {
-                            selectedUrl && <WindowShortcutPanel
-                                url={selectedUrl}
-                                setSelectedUrl={setSelectedUrl}
-                                urlList={urlList}
-                                setUrlList={setUrlList}
-                            />
-                        }
-
-                    </div>
-                }
-
-            </div>
-
-
-            {/* Main Content */}
-            <div
-                className="main-content"
-                style={{
-                    padding: '20px',
-                }}
-            >
-                {/**Categories List Selector */}
-                < CategoriesListSelector />
-
-                {/**Folder Lists Option */}
-                < DownloadFilePathOptionPanel setIsHandleRefresh={setIsHandleRefresh} isHandleRefresh={isHandleRefresh} />
-
-
-                {workingModelID !== "" && <p>Processing Model Name: {processingModelName}</p>}
-                {countdown > 0 && <p>Next request in: {countdown} seconds</p>}
-
-                {/* Display URLs in a text area */}
-                <URLGrid urlList={urlList} setUrlList={setUrlList} selectedUrl={selectedUrl} onUrlSelect={setSelectedUrl} />
-
-
-                {/*
-            <OverlayTrigger placement={"top"}
-                overlay={<Tooltip id="tooltip">Download | Bookmark | Add Record</Tooltip>}>
-                <Button
-                    variant={"primary"}
-                    onClick={handleMultipleBundle}
-                    disabled={isLoading || urlList.length === 0 || !checkboxMode}
-                    className="btn btn-primary btn-lg w-100"
+                {/* RIGHT PANEL: Sticky Sidebar */}
+                <div
+                    style={{
+                        width: '50%',
+                        position: 'sticky',
+                        top: 0,
+                        padding: '20px',
+                        background: 'white',
+                        boxShadow: '-2px 0 4px rgba(0,0,0,0.1)',
+                        zIndex: 1000,
+                    }}
                 >
-                    Bundle Action
-                    {isLoading && <span className="button-state-complete">✓</span>}
-                </Button>
-            </OverlayTrigger>
-            */}
+                    <CategoriesListSelector />
+                    <FilesPathSettingPanel setIsHandleRefresh={setIsHandleRefresh} isHandleRefresh={isHandleRefresh} />
 
-                {offlineMode ?
-                    <OverlayTrigger placement={"top"}
-                        overlay={<Tooltip id="tooltip">Add file into offline download list</Tooltip>}>
-                        <Button
-                            variant={"success"}
-                            onClick={handleAddOfflineDownloadFileintoOfflineDownloadList}
-                            disabled={isLoading || urlList.length === 0 || !checkboxMode}
-                            className="btn btn-primary btn-lg w-100"
-                        >
-                            Offline Download
-                            {isLoading && <span className="button-state-complete">✓</span>}
-                        </Button>
-                    </OverlayTrigger>
-                    :
-                    <OverlayTrigger placement={"top"}
-                        overlay={<Tooltip id="tooltip">Download | Bookmark | Add Record</Tooltip>}>
-                        <Button
-                            variant={"primary"}
-                            onClick={handleMultipleBundle_v2}
-                            disabled={isLoading || urlList.length === 0 || !checkboxMode}
-                            className="btn btn-primary btn-lg w-100"
-                        >
-                            Bundle Action
-                            {isLoading && <span className="button-state-complete">✓</span>}
-                        </Button>
-                    </OverlayTrigger>
+                </div>
+            </div >
+
+            {/* POP OUT SECTION: These elements are rendered separately */}
+            <>
+                {
+                    selectedUrl !== "" && isFullInfoModelPanelVisible && (
+                        <WindowFullInfoModelPanel
+                            url={selectedUrl}
+                            urlList={urlList}
+                            setUrlList={setUrlList}
+                            setIsFullInfoModelPanelVisible={setIsFullInfoModelPanelVisible}
+                            onClose={toggleFullInfoModelPanel}
+                        />
+                    )
                 }
+            </>
+        </>
 
-                {selectedUrl !== "" && (isFullInfoModelPanelVisible &&
-                    <WindowFullInfoModelPanel url={selectedUrl} urlList={urlList} setUrlList={setUrlList} setIsFullInfoModelPanelVisible={setIsFullInfoModelPanelVisible}
-                        onClose={toggleFullInfoModelPanel} />)}
-
-            </div>
-        </div>
-    );
+    )
 };
 
 export default WindowComponent;

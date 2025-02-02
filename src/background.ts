@@ -16,8 +16,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     chrome.windows.create({
       url: chrome.runtime.getURL('window.html'),
       type: 'popup',
-      width: 600,
-      height: 700,
+      width: 1000,
+      height: 750,
       left: 1450
     });
   }

@@ -18,8 +18,7 @@ import { LuPanelLeftOpen, LuPanelRightOpen } from "react-icons/lu";
 import { BsReverseLayoutTextWindowReverse } from "react-icons/bs";
 import { FaTimes } from 'react-icons/fa'; // Import the '×' icon
 import { FaAngleDoubleLeft, FaAngleLeft, FaAngleRight, FaAngleDoubleRight } from 'react-icons/fa';
-
-
+import { IoCloseOutline } from "react-icons/io5";
 
 // Components
 import CategoriesListSelector from '../CategoriesListSelector';
@@ -36,7 +35,9 @@ import {
     fetchDownloadFilesByServer_v2,
     fetchAddOfflineDownloadFileIntoOfflineDownloadList,
     fetchRemoveOfflineDownloadFileIntoOfflineDownloadList,
-    fetchBackupOfflineDownloadList
+    fetchBackupOfflineDownloadList,
+    fetchGetPendingRemoveTagsList,
+    fetchAddPendingRemoveTag
 } from "../../api/civitaiSQL_api"
 
 import {
@@ -228,7 +229,7 @@ const OfflineWindow: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [offlineDownloadList, setOfflineDownloadList] = useState<OfflineDownloadEntry[]>([]);
     const [displayMode, setDisplayMode] = useState<
-        'table' | 'bigCard' | 'smallCard' | 'failedCard' | 'errorCard'
+        'table' | 'bigCard' | 'smallCard' | 'failedCard' | 'errorCard' | 'updateCard'
     >('bigCard');
 
     // States for filtering
@@ -251,15 +252,30 @@ const OfflineWindow: React.FC = () => {
     const modify_downloadFilePath = chromeData.downloadFilePath;
     const modify_selectedCategory = chromeData.selectedCategory;
 
+    // 1) On mount, fetch the initial list of excluded tags from the server
+    useEffect(() => {
+        fetchExcludedTags();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    async function fetchExcludedTags() {
+        const serverTags = await fetchGetPendingRemoveTagsList(dispatch);
+        if (serverTags && Array.isArray(serverTags)) {
+            setExcludedTags(serverTags);
+        }
+    }
+
+    const [excludedTags, setExcludedTags] = useState<string[]>([]);
+
 
     const [mostFrequentPendingTags, setMostFrequentPendingTags] = useState<string[]>([]);
 
     // 1) Keep your excluded tags in lowercase
-    const EXCLUDED_TAGS = ["character", "game", "anime character", "girl", "manga",
-        "lora", "checkpoint", "boy", "anime", "woman", "girls", "game character", "sexy",
-        "video game"];
 
-    const computeTopTagsFromPending = (data: OfflineDownloadEntry[]): string[] => {
+    const computeTopTagsFromPending = (
+        data: OfflineDownloadEntry[],
+        excluded: string[]
+    ): string[] => {
         const pendingEntries = data.filter(
             (entry) =>
                 entry.downloadFilePath === "/@scan@/ACG/Pending" ||
@@ -268,31 +284,74 @@ const OfflineWindow: React.FC = () => {
 
         const freqMap = new Map<string, number>();
 
-        pendingEntries.forEach((entry) => {
-            if (Array.isArray(entry.civitaiTags)) {
-                entry.civitaiTags.forEach((rawTag) => {
-                    // 2) Convert to lowercase before checking
-                    const tag = rawTag.toLowerCase();
+        // Helper to split strings by special chars, but allow Unicode letters/numbers.
+        const splitBySpecialChars = (input: string): string[] =>
+            input.split(/[^\p{L}\p{N}]+/u).filter((token) => token.length > 0);
 
-                    // Skip if in excluded list
-                    if (!EXCLUDED_TAGS.includes(tag)) {
-                        freqMap.set(tag, (freqMap.get(tag) || 0) + 1);
-                    }
-                });
+        pendingEntries.forEach((entry) => {
+            const potentialTags: string[] = [];
+
+            // 1. civitaiTags
+            if (Array.isArray(entry.civitaiTags)) {
+                potentialTags.push(...entry.civitaiTags);
             }
+
+            // 2. civitaiFileName
+            if (entry.civitaiFileName) {
+                potentialTags.push(...splitBySpecialChars(entry.civitaiFileName));
+            }
+
+            // 3. modelVersionObject?.model?.name
+            if (entry.modelVersionObject?.model?.name) {
+                potentialTags.push(
+                    ...splitBySpecialChars(entry.modelVersionObject.model.name)
+                );
+            }
+
+            // Update frequency, skipping all excluded tags
+            potentialTags.forEach((rawTag) => {
+                const tag = rawTag.toLowerCase();
+
+                // If tag is in our excluded array, skip it
+                if (excluded.includes(tag)) return;
+
+                // Otherwise, increment frequency
+                freqMap.set(tag, (freqMap.get(tag) || 0) + 1);
+            });
         });
 
         // Sort by frequency descending
-        const sorted = [...freqMap.entries()].sort((a, b) => b[1] - a[1]);
+        // Then filter out tags < 3 chars OR only digits
+        const sorted = [...freqMap.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .filter(([tag]) => tag.length >= 3 && !/^\d+$/.test(tag));
 
-        // Return top 30
-        return sorted.slice(0, 30).map(([tag]) => tag);
+        // Return top 100
+        return sorted.slice(0, 100).map(([tag]) => tag);
     };
 
-    // Whenever offlineDownloadList changes, recompute the frequent tags
+    // Remove a tag by adding it to the backend and excludedTags
+    const handleRemoveTag = async (tag: string) => {
+        try {
+            // Call your API to add this tag to the "pending_remove_tags" in the backend
+            await fetchAddPendingRemoveTag(tag, dispatch);
+            // Then update local excludedTags, so it doesn't appear in subsequent rendering
+            setExcludedTags((prev) => [...prev, tag]);
+        } catch (error) {
+            console.error("Failed to remove tag:", error);
+        }
+    };
+    const handleSelectTag = (tag: string) => {
+        setFilterCondition("contains");
+        setFilterText(tag);
+    };
+
+    // Recompute the frequent tags whenever our data or excluded tags change
     useEffect(() => {
-        setMostFrequentPendingTags(computeTopTagsFromPending(offlineDownloadList));
-    }, [offlineDownloadList]);
+        const computed = computeTopTagsFromPending(offlineDownloadList, excludedTags);
+        setMostFrequentPendingTags(computed);
+    }, [offlineDownloadList, excludedTags]);
+
 
     // Additional states for progress and failed downloads
     const [downloadProgress, setDownloadProgress] = useState<{ completed: number; total: number }>({ completed: 0, total: 0 });
@@ -535,6 +594,24 @@ const OfflineWindow: React.FC = () => {
             });
         }
 
+        // Use .includes() to filter update entries
+        if (displayMode === 'updateCard') {
+            // Keep only entries whose downloadFilePath contains "/@scan@/Update/"
+            filtered = filtered.filter(entry => {
+                const path = entry.downloadFilePath ?? "";
+                return path.includes("/@scan@/Update/");
+            });
+        } else if (
+            displayMode === 'table' ||
+            displayMode === 'bigCard' ||
+            displayMode === 'smallCard'
+        ) {
+            // Exclude entries that have "/@scan@/Update/" in their downloadFilePath
+            filtered = filtered.filter(entry => {
+                const path = entry.downloadFilePath ?? "";
+                return !path.includes("/@scan@/Update/");
+            });
+        }
         // Only sort if modify mode is off
         if (!isModifyMode) {
             // Sort the filtered list so that selected entries come first
@@ -547,7 +624,7 @@ const OfflineWindow: React.FC = () => {
 
         // If modify mode is on, return the filtered list without sorting
         return filtered;
-    }, [offlineDownloadList, filterText, filterCondition, selectedIds, isModifyMode, onlyPendingPaths]);
+    }, [offlineDownloadList, filterText, filterCondition, selectedIds, isModifyMode, onlyPendingPaths, displayMode]);
 
     // **Add Pagination State and Logic**
     const [currentPage, setCurrentPage] = useState(1);
@@ -1024,6 +1101,16 @@ const OfflineWindow: React.FC = () => {
             setIsLoading(false);
             console.log("isLoading set to false");
         }
+
+        try {
+            fetchExcludedTags();
+        } catch (error: any) {
+            console.error("Failed to refresh pending remove tag list:", error.message);
+            // Optionally, display a toast notification or alert to inform the user
+            alert("Failed to refresh the pending remove tag  list. Please try again later.");
+            // Optionally, dispatch an error to the Redux store
+            // dispatch(setError({ hasError: true, errorMessage: error.message }));
+        }
     };
 
     // Function to handle "Download Now" button click
@@ -1227,7 +1314,9 @@ const OfflineWindow: React.FC = () => {
 
                         // If download is successful, do the DB insert and bookmark
                         if (isDownloadSuccessful) {
-                            await fetchAddRecordToDatabase(selectedCategory, civitaiUrl, dispatch);
+                            if (!entry.downloadFilePath.includes("/@scan@/Update/")) {
+                                await fetchAddRecordToDatabase(selectedCategory, civitaiUrl, dispatch);
+                            }
                             bookmarkThisUrl(
                                 modelVersionObject?.model?.type ?? "N/A",
                                 civitaiUrl,
@@ -2002,6 +2091,290 @@ const OfflineWindow: React.FC = () => {
 
     // Inside your OfflineWindow component
 
+    // **UpdateCardMode Component Implementation**
+    const UpdateCardMode: React.FC<{
+        filteredDownloadList: OfflineDownloadEntry[];
+        isDarkMode: boolean;
+        isModifyMode: boolean;
+        selectedIds: Set<string>;
+        toggleSelect: (id: string) => void;
+        handleSelectAll: () => void;
+    }> = ({
+        filteredDownloadList,
+        isDarkMode,
+        isModifyMode,
+        selectedIds,
+        toggleSelect,
+        handleSelectAll
+    }) => {
+            if (filteredDownloadList.length === 0) {
+                return (
+                    <div style={{ color: isDarkMode ? '#fff' : '#000' }}>
+                        No update downloads available.
+                    </div>
+                );
+            }
+
+            return (
+                <div>
+                    <div
+                        style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: '20px',
+                            justifyContent: 'center'
+                        }}
+                    >
+                        {filteredDownloadList.map((entry, index) => {
+                            const isSelected = selectedIds.has(entry.civitaiVersionID);
+                            const earlyEnds = entry.modelVersionObject?.earlyAccessEndsAt;
+                            return (
+                                <Card
+                                    key={index}
+                                    style={{
+                                        width: '100%',
+                                        maxWidth: '380px',
+                                        border: '1px solid',
+                                        borderColor: isDarkMode ? '#555' : '#ccc',
+                                        borderRadius: '8px',
+                                        boxShadow: isDarkMode
+                                            ? '2px 2px 8px rgba(255,255,255,0.1)'
+                                            : '2px 2px 8px rgba(0,0,0,0.1)',
+                                        backgroundColor: isDarkMode ? '#333' : '#fff',
+                                        color: isDarkMode ? '#fff' : '#000',
+                                        position: 'relative',
+                                        cursor: isModifyMode ? 'pointer' : 'default',
+                                        opacity: isModifyMode && !isSelected ? 0.8 : 1,
+                                        transition:
+                                            'background-color 0.3s ease, color 0.3s ease, opacity 0.3s ease',
+                                        overflow: 'hidden',
+                                        margin: '0 auto',
+                                        padding: '10px'
+                                    }}
+                                    onClick={(e) => {
+                                        if (isModifyMode && e.ctrlKey) {
+                                            toggleSelect(entry.civitaiVersionID);
+                                        }
+                                    }}
+                                >
+                                    {/* Early Access badge at the top-right */}
+                                    {earlyEnds && (
+                                        <div
+                                            style={{
+                                                position: 'absolute',
+                                                top: '5px',
+                                                right: '5px',
+                                                color: 'red',
+                                                fontWeight: 'bold',
+                                                fontSize: '0.8rem',
+                                                backgroundColor: isDarkMode ? '#444' : '#fff',
+                                                padding: '2px 4px',
+                                                borderRadius: '4px',
+                                                border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
+                                            }}
+                                        >
+                                            Ends: {new Date(earlyEnds).toLocaleString()}
+                                        </div>
+                                    )}
+
+                                    {/* Selection Checkbox at the top-left */}
+                                    <Form.Check
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={(e) => {
+                                            e.stopPropagation();
+                                            toggleSelect(entry.civitaiVersionID);
+                                        }}
+                                        style={{
+                                            position: 'absolute',
+                                            top: '10px',
+                                            left: '10px',
+                                            transform: 'scale(1.2)',
+                                            cursor: isModifyMode ? 'pointer' : 'not-allowed',
+                                            accentColor: isDarkMode ? '#fff' : '#000',
+                                        }}
+                                    />
+
+                                    {/* ---- 1) BaseModel badge + Title ---- */}
+                                    <div
+                                        style={{
+                                            marginTop: '40px', // push down below the checkbox row
+                                            marginBottom: '5px',
+                                            textAlign: 'center',
+                                            borderBottom: `1px solid ${isDarkMode ? '#555' : '#ccc'}`,
+                                            paddingBottom: '5px',
+                                            whiteSpace: 'nowrap',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                        }}
+                                    >
+                                        {/* BaseModel as a badge, only if present */}
+                                        {entry.modelVersionObject?.baseModel && (
+                                            <span
+                                                style={{
+                                                    display: 'inline-block',
+                                                    fontSize: '0.7rem',
+                                                    fontWeight: 'bold',
+                                                    backgroundColor: '#007bff',
+                                                    color: '#fff',
+                                                    padding: '2px 6px',
+                                                    borderRadius: '4px',
+                                                    marginRight: '6px',
+                                                }}
+                                            >
+                                                {entry.modelVersionObject.baseModel}
+                                            </span>
+                                        )}
+                                        {/* Model title */}
+                                        <span
+                                            style={{
+                                                fontSize: '0.9rem',
+                                                fontWeight: 'bold',
+                                            }}
+                                            title={entry?.modelVersionObject?.model?.name ?? 'N/A'}
+                                        >
+                                            {entry?.modelVersionObject?.model?.name ?? 'N/A'}
+                                        </span>
+                                    </div>
+
+                                    {/* Carousel for Images */}
+                                    {entry.imageUrlsArray && entry.imageUrlsArray.length > 0 ? (
+                                        <Carousel
+                                            variant={isDarkMode ? 'dark' : 'light'}
+                                            indicators={entry.imageUrlsArray.length > 1}
+                                            controls={entry.imageUrlsArray.length > 1}
+                                            interval={null}
+                                            style={{
+                                                marginBottom: 0, // Remove extra space under the carousel
+                                            }}
+                                        >
+                                            {entry.imageUrlsArray.map((imgUrl, imgIndex) => (
+                                                <Carousel.Item key={imgIndex}>
+                                                    <img
+                                                        className="d-block w-100"
+                                                        src={imgUrl}
+                                                        alt={`Slide ${imgIndex + 1}`}
+                                                        style={{
+                                                            maxHeight: '300px',
+                                                            objectFit: 'contain',
+                                                            margin: '0 auto',
+                                                        }}
+                                                    />
+                                                </Carousel.Item>
+                                            ))}
+                                        </Carousel>
+                                    ) : (
+                                        <div
+                                            style={{
+                                                height: '200px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                backgroundColor: isDarkMode ? '#555' : '#f0f0f0',
+                                                marginBottom: 0, // Keep the same no extra margin
+                                                borderRadius: '4px',
+                                            }}
+                                        >
+                                            <span>No Images Available</span>
+                                        </div>
+                                    )}
+
+                                    {/* 3) Smaller text under the carousel */}
+                                    <div
+                                        style={{
+                                            marginTop: '5px',
+                                            fontSize: '0.8rem', // smaller text
+                                            lineHeight: 1.3,
+                                            padding: '0 5px',
+                                        }}
+                                    >
+                                        {/* Version Name */}
+                                        <div
+                                            style={{
+                                                textAlign: 'center',
+                                                wordWrap: 'break-word',
+                                                whiteSpace: 'nowrap',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                            }}
+                                            title={entry.modelVersionObject?.name ?? 'N/A'}
+                                        >
+                                            <strong>Version:</strong> {entry.modelVersionObject?.name ?? 'N/A'}
+                                        </div>
+
+                                        {/* File Name */}
+                                        <p
+                                            style={{
+                                                margin: '4px 0',
+                                                whiteSpace: 'nowrap',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                            }}
+                                            title={entry.civitaiFileName ?? 'N/A'}
+                                        >
+                                            <strong>File Name:</strong> {entry.civitaiFileName ?? 'N/A'}
+                                        </p>
+
+                                        {/* Show full download path with line wrapping */}
+                                        <p
+                                            style={{
+                                                margin: '4px 0',
+                                                whiteSpace: 'normal',     // allow multi-line
+                                                wordWrap: 'break-word',   // wrap long paths
+                                            }}
+                                        >
+                                            <strong>Download Path:</strong> {entry.downloadFilePath ?? 'N/A'}
+                                        </p>
+
+                                        {/* Category */}
+                                        <p style={{ margin: '4px 0' }}>
+                                            <strong>Category:</strong> {entry.selectedCategory ?? 'N/A'}
+                                        </p>
+
+                                        <p style={{ margin: '4px 0' }}>
+                                            <strong>Version ID:</strong> {entry.modelVersionObject?.id ?? 'N/A'}
+                                        </p>
+                                        <p style={{ margin: '4px 0' }}>
+                                            <strong>Model ID:</strong> {entry.modelVersionObject?.modelId ?? 'N/A'}
+                                        </p>
+                                        <p style={{ margin: '4px 0' }}>
+                                            <strong>URL:</strong>{' '}
+                                            {entry.civitaiUrl ? (
+                                                <a
+                                                    href={entry.civitaiUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    style={{ color: isDarkMode ? '#1e90ff' : '#007bff' }}
+                                                >
+                                                    Visit Model
+                                                </a>
+                                            ) : (
+                                                'N/A'
+                                            )}
+                                        </p>
+                                        <p style={{ margin: '4px 0' }}>
+                                            <strong>File Size:</strong>{' '}
+                                            {(() => {
+                                                const safetensorFile =
+                                                    entry.modelVersionObject?.files?.find(file =>
+                                                        file.name.endsWith('.safetensors')
+                                                    );
+                                                return safetensorFile
+                                                    ? `${(safetensorFile.sizeKB / 1024).toFixed(2)} MB`
+                                                    : 'N/A';
+                                            })()}
+                                        </p>
+                                    </div>
+                                </Card>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        };
+
+
+
     const handleSelectAll = () => {
         if (selectedIds.size === getSelectableEntries().length) {
             // All selectable entries are selected; deselect all
@@ -2099,6 +2472,13 @@ const OfflineWindow: React.FC = () => {
                                 onClick={() => setDisplayMode('smallCard')}
                             >
                                 Small Card Mode
+                            </Button>
+                            <Button
+                                style={responsiveButtonStyle}
+                                variant={displayMode === 'updateCard' ? 'primary' : 'secondary'}
+                                onClick={() => setDisplayMode('updateCard')}
+                            >
+                                Update Card Mode
                             </Button>
 
                             {/* New: Failed Card Mode Button with Badge */}
@@ -2205,36 +2585,53 @@ const OfflineWindow: React.FC = () => {
                         </>
                     )}
 
-                    <Form.Select
-                        style={{
-                            width: '100%', // Make the select take full width
-                            margin: '10px', // Optional: add top margin for spacing
-                            backgroundColor: isDarkMode ? '#555' : '#fff',
-                            color: isDarkMode ? '#fff' : '#000',
-                        }}
-                        onChange={(e) => {
-                            const chosenTag = e.target.value;
+                    <div style={{ margin: "20px" }}>
+                        <Dropdown style={{ width: "100%" }}>
+                            {/* Full-width toggle */}
+                            <Dropdown.Toggle variant="secondary" style={{ width: "100%" }}>
+                                {filterText || "-- Top Pending Tags (choose one) --"}
+                            </Dropdown.Toggle>
 
-                            if (!chosenTag) {
-                                // The default option means "do nothing", so just clear the filter or do nothing
-                                setFilterText('');
-                            } else {
-                                // We’ll make the filter say “contains chosenTag”
-                                setFilterCondition('contains');
-                                setFilterText(chosenTag);
-                            }
-                        }}
-                    >
-                        <option value="">
-                            -- Top Pending Tags (choose one) --
-                        </option>
-                        {mostFrequentPendingTags.map((tag) => (
-                            <option key={tag} value={tag}>
-                                {tag}
-                            </option>
-                        ))}
-                    </Form.Select>
+                            <Dropdown.Menu
+                                style={{
+                                    width: "100%",      // Match toggle width
+                                    maxHeight: "400px", // Fixed height
+                                    overflowY: "auto",  // Scroll if beyond 200px
+                                }}
+                            >
+                                {mostFrequentPendingTags.map((tag) => (
+                                    // `as="div"` so we can fully control the layout inside
+                                    <Dropdown.Item
+                                        as="div"
+                                        key={tag}
+                                        // Clicking anywhere on the line (except "X") selects the tag
+                                        onClick={() => handleSelectTag(tag)}
+                                        style={{
+                                            display: "flex",
+                                            justifyContent: "space-between",
+                                            alignItems: "center",
+                                            cursor: "pointer",
+                                        }}
+                                    >
+                                        {/* Tag label */}
+                                        <span>{tag}</span>
 
+                                        {/* The "X" button (stop click from also selecting the tag) */}
+                                        <Button
+                                            variant="link"
+                                            style={{ color: "red", textDecoration: "none" }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleRemoveTag(tag);
+                                            }}
+                                        >
+                                            <IoCloseOutline />
+                                        </Button>
+                                    </Dropdown.Item>
+                                ))}
+                            </Dropdown.Menu>
+                        </Dropdown>
+                    </div>
 
                     {/* Filter Section */}
                     <div style={filterContainerStyle}>
@@ -2308,108 +2705,46 @@ const OfflineWindow: React.FC = () => {
                             />
                         </div>
 
-                        {/* "Select First N" Button */}
-                        <Button
-                            onClick={handleSelectFirstN}
-                            style={{
-                                ...downloadButtonStyle,
-                                backgroundColor: '#007bff',
-                                color: '#fff',
-                            }}
-                        >
-                            Select First
-                        </Button>
 
-                        {/* Select Count UI */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            <input
-                                id="selectCountInput"
-                                type="number"
-                                min={5}
-                                step={5}
-                                value={selectCount}
-                                onChange={(e) => {
-                                    // Make sure we parse the value as a number
-                                    const newVal = parseInt(e.target.value, 10);
-                                    if (!isNaN(newVal)) {
-                                        setSelectCount(newVal);
-                                    }
-                                }}
-                                style={{
-                                    width: '100px',
-                                    padding: '5px',
-                                    borderRadius: '4px',
-                                    border: '1px solid #ccc',
-                                    backgroundColor: isDarkMode ? '#555' : '#fff',
-                                    color: isDarkMode ? '#fff' : '#000',
-                                }}
-                            />
-                        </div>
-
-                        <div
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                marginBottom: '5px',
-                                gap: '10px',
-                                width: '100%',
-                            }}
-                        >
-                            {/* Select All Button */}
+                        {(!isModifyMode && displayMode !== 'errorCard') && <>
+                            {/* "Select First N" Button */}
                             <Button
-                                onClick={handleSelectAll}
+                                onClick={handleSelectFirstN}
                                 style={{
-                                    padding: '10px 20px',
-                                    borderRadius: '4px',
+                                    ...downloadButtonStyle,
                                     backgroundColor: '#007bff',
                                     color: '#fff',
-                                    border: 'none',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '5px',
                                 }}
-                                aria-label={isAllSelected ? 'Deselect All' : 'Select All'}
                             >
-                                {isAllSelected ? 'Deselect All' : 'Select All'}
+                                Select First
                             </Button>
 
-                            {/* Selection Count Display */}
-                            <div
-                                style={{
-                                    flex: 1, // <--- This makes it stretch across the remaining width
-                                    padding: '8px 12px',
-                                    borderRadius: '4px',
-                                    backgroundColor: isDarkMode ? '#444' : '#e0e0e0',
-                                    color: isDarkMode ? '#fff' : '#000',
-                                    fontWeight: 'bold',
-                                    textAlign: 'center',
-                                }}
-                            >
-                                {(isModifyMode || (displayMode === 'errorCard')) ? (
-                                    <>
-                                        {selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'} selected <FaArrowRight />
-                                        "<span
-                                            style={{
-                                                display: 'inline-block',
-                                                // maxWidth: '100%',         // Adjust as needed
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                                whiteSpace: 'nowrap',
-                                                verticalAlign: 'middle',   // Helps align icon & text nicely
-                                            }}
-                                            title={modify_downloadFilePath} // When hovered, show full text
-                                        >
-                                            {modify_downloadFilePath}
-                                        </span>"
-                                    </>
-                                ) : (
-                                    <>
-                                        {selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'} selected
-                                    </>
-                                )}
+                            {/* Select Count UI */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                <input
+                                    id="selectCountInput"
+                                    type="number"
+                                    min={5}
+                                    step={5}
+                                    value={selectCount}
+                                    onChange={(e) => {
+                                        // Make sure we parse the value as a number
+                                        const newVal = parseInt(e.target.value, 10);
+                                        if (!isNaN(newVal)) {
+                                            setSelectCount(newVal);
+                                        }
+                                    }}
+                                    style={{
+                                        width: '100px',
+                                        padding: '5px',
+                                        borderRadius: '4px',
+                                        border: '1px solid #ccc',
+                                        backgroundColor: isDarkMode ? '#555' : '#fff',
+                                        color: isDarkMode ? '#fff' : '#000',
+                                    }}
+                                />
                             </div>
-                        </div>
+                        </>}
 
                         {/* Action Button for Modify Mode */}
                         {isModifyMode && (
@@ -2491,6 +2826,29 @@ const OfflineWindow: React.FC = () => {
                         </div>
                     }
 
+                    {/* Download or Modify Progress Indicators */}
+                    {isLoading && (
+                        <div style={{
+                            marginBottom: '20px',
+                            fontWeight: 'bold',
+                            color: isDarkMode ? '#fff' : '#000',
+                            backgroundColor: isDarkMode ? '#555' : '#f8f9fa',
+                            padding: '10px',
+                            borderRadius: '4px',
+                            textAlign: 'center'
+                        }}>
+                            {isModifyMode ? (
+                                <>
+                                    Modifying entries... ({selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'})
+                                </>
+                            ) : (
+                                <>
+                                    Processing downloads... ({downloadProgress.completed}/{downloadProgress.total})
+                                </>
+                            )}
+                        </div>
+                    )}
+
                     {(batchCooldown !== null && batchCooldown > 0) || currentBatchRange ? (
                         <div
                             style={{
@@ -2535,31 +2893,8 @@ const OfflineWindow: React.FC = () => {
                     )}
 
 
-
-                    {/* Download or Modify Progress Indicators */}
-                    {isLoading && (
-                        <div style={{
-                            marginBottom: '20px',
-                            fontWeight: 'bold',
-                            color: isDarkMode ? '#fff' : '#000',
-                            backgroundColor: isDarkMode ? '#555' : '#f8f9fa',
-                            padding: '10px',
-                            borderRadius: '4px',
-                            textAlign: 'center'
-                        }}>
-                            {isModifyMode ? (
-                                <>
-                                    Modifying entries... ({selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'})
-                                </>
-                            ) : (
-                                <>
-                                    Processing downloads... ({downloadProgress.completed}/{downloadProgress.total})
-                                </>
-                            )}
-                        </div>
-                    )}
-
                 </div>
+
 
                 {/* Main Content */}
                 <div style={rightContentStyle}>
@@ -2567,6 +2902,7 @@ const OfflineWindow: React.FC = () => {
                     <div style={{
                         marginBottom: '5px',
                         fontWeight: 'bold',
+                        fontSize: '24px',
                         color: '#FFFFFF', // White text for high contrast
                         backgroundColor: isDarkMode ? '#0056b3' : '#007BFF', // Darker blue for dark mode, standard blue for light mode
                         padding: '10px',
@@ -2574,6 +2910,71 @@ const OfflineWindow: React.FC = () => {
                         textAlign: 'center'
                     }}>
                         {isModifyMode ? "Modify Mode" : `Download Mode (${displayMode})`}
+                    </div>
+
+                    <div
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            marginBottom: '5px',
+                            gap: '10px',
+                            width: '100%',
+                        }}
+                    >
+                        {/* Select All Button */}
+                        <Button
+                            onClick={handleSelectAll}
+                            style={{
+                                padding: '10px 20px',
+                                borderRadius: '4px',
+                                backgroundColor: '#007bff',
+                                color: '#fff',
+                                border: 'none',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                            }}
+                            aria-label={isAllSelected ? 'Deselect All' : 'Select All'}
+                        >
+                            {isAllSelected ? 'Deselect All' : 'Select All'}
+                        </Button>
+
+                        {/* Selection Count Display */}
+                        <div
+                            style={{
+                                flex: 1, // <--- This makes it stretch across the remaining width
+                                padding: '8px 12px',
+                                borderRadius: '4px',
+                                backgroundColor: isDarkMode ? '#444' : '#e0e0e0',
+                                color: isDarkMode ? '#fff' : '#000',
+                                fontWeight: 'bold',
+                                textAlign: 'center',
+                            }}
+                        >
+                            {(isModifyMode || (displayMode === 'errorCard')) ? (
+                                <>
+                                    {selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'} selected <FaArrowRight />
+                                    "<span
+                                        style={{
+                                            display: 'inline-block',
+                                            // maxWidth: '100%',         // Adjust as needed
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap',
+                                            verticalAlign: 'middle',   // Helps align icon & text nicely
+                                        }}
+                                        title={modify_downloadFilePath} // When hovered, show full text
+                                    >
+                                        {modify_downloadFilePath}
+                                    </span>"
+                                </>
+                            ) : (
+                                <>
+                                    {selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'} selected
+                                </>
+                            )}
+                        </div>
                     </div>
 
                     {/* Main Content Area */}
@@ -2618,6 +3019,17 @@ const OfflineWindow: React.FC = () => {
                                 {displayMode === 'smallCard' && (
                                     <SmallCardMode
                                         filteredDownloadList={paginatedDownloadList}
+                                        isDarkMode={isDarkMode}
+                                        isModifyMode={isModifyMode}
+                                        selectedIds={selectedIds}
+                                        toggleSelect={toggleSelect}
+                                        handleSelectAll={handleSelectAll}
+                                    />
+                                )}
+
+                                {displayMode === 'updateCard' && (
+                                    <UpdateCardMode
+                                        filteredDownloadList={paginatedDownloadList} // or your full filtered list if preferred
                                         isDarkMode={isDarkMode}
                                         isModifyMode={isModifyMode}
                                         selectedIds={selectedIds}

@@ -240,6 +240,68 @@ export const fetchUpdateRecordAtDatabase = async (id: number, url: string, selec
     }
 }
 
+export const fetchUpdateCreatorUrlList = async (creatorUrl: string, status: string, lastChecked: boolean, dispatch: any) => {
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+        const response = await axios.post(`${config.domain}/api/update_creator_url_list`,
+            { creatorUrl, status, lastChecked });
+
+        const responseData = response.data;
+
+        if (!(response.status >= 200 && response.status < 300)) {
+            // Handle the case when response is false
+            return { status: "failure" }
+            throw new Error("Failed updating record into Database.");
+        }
+
+        if (!responseData.success) {
+            return { status: "failure" }
+            // Handle the case when success is false
+            throw new Error("Failed updating record into Database.");
+        }
+
+        return { status: "success" }
+
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Civitai Info retrieval:", error.message);
+        // Optionally, you can throw an error or return a specific value
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}
+
+export const fetchRemoveFromCreatorUrlList = async (creatorUrl: string, dispatch: any) => {
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+        const response = await axios.post(`${config.domain}/api/remove_from_creator_url_list`,
+            { creatorUrl });
+
+        const responseData = response.data;
+
+        if (!(response.status >= 200 && response.status < 300)) {
+            // Handle the case when response is false
+            return { status: "failure" }
+            throw new Error("Failed updating record into Database.");
+        }
+
+        if (!responseData.success) {
+            return { status: "failure" }
+            // Handle the case when success is false
+            throw new Error("Failed updating record into Database.");
+        }
+
+        return { status: "success" }
+
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Civitai Info retrieval:", error.message);
+        // Optionally, you can throw an error or return a specific value
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}
+
 
 export const fetchGetCategoriesList = async (dispatch: any) => {
     try {
@@ -274,6 +336,63 @@ export const fetchGetFoldersList = async (dispatch: any) => {
         } else {
             // Handle the case when response is false
             throw new Error("Retriving Folders List from Database failed.");
+        }
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Civitai Info retrieval:", error.message);
+        // Optionally, you can throw an error or return a specific value
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}
+
+export const fetchGetPendingRemoveTagsList = async (dispatch: any) => {
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+        const response = await axios.get(`${config.domain}/api/get_pending_remove_tags_list`);
+        if (response.status >= 200 && response.status < 300) {
+            return response.data.payload.pendingRemoveTagsList;
+        } else {
+            // Handle the case when response is false
+            throw new Error("Retriving Pending Remove Tags List from Database failed.");
+        }
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Civitai Info retrieval:", error.message);
+        // Optionally, you can throw an error or return a specific value
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}
+
+export const fetchGetCreatorUrlList = async (dispatch: any) => {
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+        const response = await axios.get(`${config.domain}/api/get_creator_url_list`);
+        if (response.status >= 200 && response.status < 300) {
+            return response.data.payload.creatorUrlList;
+        } else {
+            // Handle the case when response is false
+            throw new Error("Retriving Creator Url List from Database failed.");
+        }
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Civitai Info retrieval:", error.message);
+        // Optionally, you can throw an error or return a specific value
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}
+
+export const fetchAddPendingRemoveTag = async (pendingRemoveTag: string, dispatch: any) => {
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+        const response = await axios.post(`${config.domain}/api/add_pending_remove_tag`, {
+            pendingRemoveTag: pendingRemoveTag
+        });
+        if (!(response.status >= 200 && response.status < 300)) {
+            // Handle the case when response is false
+            throw new Error("Failed opening download directory.");
         }
     } catch (error: any) {
         // Handle other types of errors, e.g., network issues

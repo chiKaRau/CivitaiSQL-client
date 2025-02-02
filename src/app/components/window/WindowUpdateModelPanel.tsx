@@ -8,7 +8,7 @@ import { CiWarning } from "react-icons/ci";
 
 //utils
 import { bookmarkThisModel, initializeDatafromChromeStorage, updateDownloadFilePathIntoChromeStorage, updateSelectedCategoryIntoChromeStorage, callChromeBrowserDownload_v2 } from "../../utils/chromeUtils"
-import { fetchCheckCartList, fetchCivitaiModelInfoFromCivitaiByVersionID, fetchDatabaseModelInfoByModelID, fetchDownloadFilesByBrowser_v2, fetchDownloadFilesByServer_v2, fetchGetCategoriesList, fetchGetCategoriesPrefixsList, fetchGetFilePathCategoriesList, fetchGetFoldersList, fetchGetTagsList, fetchUpdateRecordAtDatabase } from '../../api/civitaiSQL_api';
+import { fetchAddOfflineDownloadFileIntoOfflineDownloadList, fetchCheckCartList, fetchCivitaiModelInfoFromCivitaiByModelID, fetchCivitaiModelInfoFromCivitaiByVersionID, fetchDatabaseModelInfoByModelID, fetchDownloadFilesByBrowser_v2, fetchDownloadFilesByServer_v2, fetchGetCategoriesList, fetchGetCategoriesPrefixsList, fetchGetFilePathCategoriesList, fetchGetFoldersList, fetchGetTagsList, fetchUpdateRecordAtDatabase } from '../../api/civitaiSQL_api';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppState } from '../../store/configureStore';
 import TextField from '@mui/material/TextField';
@@ -683,7 +683,7 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
     const dispatch = useDispatch();
 
     const chrome = useSelector((state: AppState) => state.chrome);
-    const { downloadMethod } = chrome;
+    const { downloadMethod, offlineMode } = chrome;
 
     const [originalModelsList, setOriginalModelsList] = useState<{ name: string; url: string; id: number; baseModel: string; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
     const [modelsList, setModelsList] = useState<{ name: string; url: string; id: number; baseModel: string; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
@@ -774,10 +774,14 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
 
     useEffect(() => {
         if (hasUpdateCompleted) {
-            // Perform the necessary actions
-            handleDownload_v2();
-            bookmarkThisModel(props.selectedVersion.baseModel, dispatch);
 
+            if (offlineMode) {
+                handleAddOfflineDownloadFileintoOfflineDownloadList();
+            } else {
+                // Perform the necessary actions
+                handleDownload_v2();
+                bookmarkThisModel(props.selectedVersion.baseModel, dispatch);
+            }
             // Reset states with a slight delay
             setTimeout(() => {
                 setHasUpdateCompleted(false);
@@ -920,6 +924,69 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
         setIsSorted(!isSorted)
     }
 
+    const handleAddOfflineDownloadFileintoOfflineDownloadList = async () => {
+
+        setIsLoading(true)
+        // Utility function to delay execution
+
+        //Fetch Civitai ModelInfo
+        const modelId = civitaiUrl.match(/\/models\/(\d+)/)?.[1] || '';
+        // Fetch data with error handling
+        try {
+            const data = await fetchCivitaiModelInfoFromCivitaiByModelID(modelId, dispatch);
+            if (data) {
+
+                let versionIndex = 0;
+                const uri = new URL(civitaiUrl);
+
+                if (uri.searchParams.has('modelVersionId')) {
+                    let modelVersionId = uri.searchParams.get('modelVersionId');
+                    versionIndex = data.modelVersions.findIndex((version: any) => {
+                        return version.id == modelVersionId
+                    });
+                }
+
+                let civitaiVersionID = data?.modelVersions[versionIndex]?.id.toString();
+                let civitaiModelID = modelId;
+
+                let civitaiFileName = retrieveCivitaiFileName(data, civitaiVersionID);
+                //the fileList would contains the urls of all files such as safetensor, training data, ...
+                let civitaiModelFileList = retrieveCivitaiFilesList(data, civitaiVersionID)
+
+                let civitaiTags = data?.tags;
+
+                //Check for null or empty
+                if (
+                    civitaiUrl === null || civitaiUrl === "" ||
+                    civitaiFileName === null || civitaiFileName === "" ||
+                    civitaiModelID === null || civitaiModelID === "" ||
+                    civitaiVersionID === null || civitaiVersionID === "" ||
+                    downloadFilePath === null || downloadFilePath === "" ||
+                    selectedCategory === null || selectedCategory === "" ||
+                    civitaiModelFileList === null || !civitaiModelFileList.length ||
+                    civitaiTags === null
+                ) {
+                    console.log("fail in handleAddOfflineDownloadFileintoOfflineDownloadList()")
+                    return;
+                }
+
+                let modelObject = {
+                    downloadFilePath, civitaiFileName, civitaiModelID,
+                    civitaiVersionID, civitaiModelFileList, civitaiUrl,
+                    selectedCategory, civitaiTags
+                }
+
+                await fetchAddOfflineDownloadFileIntoOfflineDownloadList(modelObject, false, dispatch);
+
+            }
+
+        } catch (error) {
+            console.error(error);
+        }
+
+        setIsLoading(false)
+    };
+
     return (
         <>
             <div className="buttonGroup" style={{ padding: "5px", display: "flex", justifyContent: "flex-start", alignItems: "flex-start" }}>
@@ -1042,9 +1109,10 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                                         </div>
 
                                         {/**Update button */}
+
                                         <div className="panel-update-button-container">
                                             <Button
-                                                variant={"primary"}
+                                                variant={offlineMode ? "success" : "primary"}
                                                 disabled={isLoading}
                                                 onClick={() => handleUpdateModel(model?.id)}
                                                 className="btn btn-primary btn-lg w-100"

@@ -1147,6 +1147,39 @@ chrome.runtime.onMessage.addListener(
   }
 );
 
+chrome.runtime.onMessage.addListener(
+  async (
+    message: {
+      action: string;
+    },
+    sender: chrome.runtime.MessageSender,
+    sendResponse: (response?: any) => void
+  ) => {
+    const parentContainer: HTMLElement | null = document.querySelector('.mantine-1ofgurw');
+
+    if (!parentContainer) {
+      console.warn("Container with class 'mantine-1ofgurw' not found.");
+      return;
+    }
+
+    // Select only the direct child divs of the parent container
+    const cardElements: NodeListOf<HTMLDivElement> = parentContainer.querySelectorAll(':scope > div');
+
+    if (message.action === "display-creator-button") {
+      // Loop through each card element and add the creator button.
+      cardElements.forEach((card: HTMLDivElement) => {
+        addCreatorButton(card);
+      });
+      console.log("Creator URL buttons added to all cards.");
+      sendResponse({ status: "success", message: "Creator URL buttons added." });
+    }
+
+    // Indicate that the response is handled asynchronously
+    return true;
+  }
+);
+
+
 function displayUpdateLabels(): void {
   const parentContainer: HTMLElement | null = document.querySelector('.mantine-1ofgurw');
 
@@ -1344,6 +1377,104 @@ function waitForElement(selector: string, timeout = 10000): Promise<HTMLElement>
   });
 }
 
+// Inject custom CSS for the creator button if it hasn't been injected already
+function injectButtonStyles() {
+  if (document.getElementById("creator-button-styles")) {
+    return;
+  }
+  const style = document.createElement("style");
+  style.id = "creator-button-styles";
+  style.innerHTML = `
+    .add-creator-button {
+      margin-left: 10px;
+      padding: 5px 10px;
+      height: 40px;
+      font-size: 14px;
+      border: none;
+      border-radius: 4px;
+      background-color: #1976d2;
+      color: #fff;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      transition: background-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .add-creator-button:hover {
+      background-color: #115293;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+// Helper function to send an action to React (or your background page)
+// This wraps chrome.runtime.sendMessage in a Promise.
+function sendActionToReact(message: any): Promise<any> {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(message, (response) => {
+      if (chrome.runtime.lastError) {
+        reject(chrome.runtime.lastError);
+      } else {
+        resolve(response);
+      }
+    });
+  });
+}
+
+// Helper function to display a temporary message on the button
+function displayTemporaryMessage(button: HTMLButtonElement, message: string, originalText: string) {
+  button.textContent = message;
+  setTimeout(() => {
+    button.textContent = originalText;
+  }, 1000);
+}
+
+// Helper function to add a button to a card that sends an action to React
+function addCreatorButton(card: HTMLElement) {
+  // Check if the card already contains a button with the class "add-creator-button"
+  if (card.querySelector('.add-creator-button')) {
+    return;
+  }
+
+  // Find the element that holds the creator name (by its class)
+  const creatorElement = card.querySelector('.UserAvatarSimple_username__1HunV');
+  if (creatorElement) {
+    const creatorName = creatorElement.textContent?.trim() || 'Unknown';
+
+    // Create the button element
+    const button = document.createElement('button');
+    button.classList.add('add-creator-button');
+    const originalText = `Add ${creatorName} to list`;
+    button.textContent = originalText;
+
+    // Set up the click event handler:
+    // When clicked, send an action to React. Based on the response, show a temporary success/fail message.
+    button.addEventListener('click', async () => {
+      button.textContent = "Processing...";
+      try {
+        // Send the action (you can adjust the message structure as needed)
+        const response = await sendActionToReact({ action: "addCreator", creator: creatorName });
+
+        if (response && response.status === "success") {
+          displayTemporaryMessage(button, "Success", originalText);
+        } else {
+          displayTemporaryMessage(button, "Failed", originalText);
+        }
+      } catch (error) {
+        displayTemporaryMessage(button, "Failed", originalText);
+      }
+    });
+
+    // Insert the button into the card.
+    // This example attempts to insert the button near the creator name.
+    const parentOfCreator = creatorElement.parentElement;
+    if (parentOfCreator && parentOfCreator.parentElement) {
+      parentOfCreator.parentElement.insertAdjacentElement('beforeend', button);
+    } else {
+      card.appendChild(button);
+    }
+  }
+}
+
 // Function to initialize the MutationObserver
 function initMutationObserver(parentContainer: HTMLElement) {
   // console.log("Initializing MutationObserver on parent container:", parentContainer);
@@ -1388,6 +1519,9 @@ function initMutationObserver(parentContainer: HTMLElement) {
                     if (updateInfoMap.has(processedUrl)) {
                       handleNewCard(divParent);
                     }
+
+                    // Add the creator button to the card
+                    addCreatorButton(divParent);
 
                   }
 
@@ -1479,6 +1613,9 @@ function observeCardItem(cardItem: HTMLElement) {
                   handleNewCard(divParent);
                 }
 
+                // Add the creator button to the card
+                addCreatorButton(divParent);
+
               }
             }
           }
@@ -1513,11 +1650,16 @@ function processExistingCards(parentContainer: HTMLElement) {
     // console.log("Existing card item:", item);
     // Optionally, process each card item (e.g., extract URLs, apply labels)
     observeCardItem(item as HTMLElement);
+
   });
 }
 
 // Main function to initialize the content script
 async function main() {
+
+  // Inject the custom button styles before anything else
+  injectButtonStyles();
+
   const parentContainerSelector = '[class^="mantine-1ofgurw"]'; // Adjust this selector as needed
 
   try {

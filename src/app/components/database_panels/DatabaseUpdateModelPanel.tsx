@@ -23,7 +23,9 @@ import {
     fetchCheckCartList,
     fetchDownloadFilesByServer_v2,
     fetchDownloadFilesByBrowser_v2,
-    fetchCivitaiModelInfoFromCivitaiByVersionID
+    fetchCivitaiModelInfoFromCivitaiByVersionID,
+    fetchAddOfflineDownloadFileIntoOfflineDownloadList,
+    fetchCivitaiModelInfoFromCivitaiByModelID
 } from "../../api/civitaiSQL_api"
 
 //utils
@@ -49,7 +51,7 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
     const databaseModelsList = databaseData;
 
     const chrome = useSelector((state: AppState) => state.chrome);
-    const { selectedCategory, downloadMethod, downloadFilePath } = chrome;
+    const { selectedCategory, downloadMethod, downloadFilePath, offlineMode } = chrome;
 
     const [originalModelsList, setOriginalModelsList] = useState<{ name: string; url: string; id: number; baseModel: string; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
     const [modelsList, setModelsList] = useState<{ name: string; url: string; id: number; baseModel: string; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
@@ -137,13 +139,81 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
 
     useEffect(() => {
         if (hasUpdateCompleted) {
-            //handleDownload();
-            handleDownload_v2();
-            bookmarkThisModel(civitaiData?.type, dispatch)
-            setHasUpdateCompleted(false)
-            props.toggleDatabaseUpdateModelPanelOpen()
+
+            if (offlineMode) {
+                handleAddOfflineDownloadFileintoOfflineDownloadList();
+            } else {
+                //handleDownload();
+                handleDownload_v2();
+                bookmarkThisModel(civitaiData?.type, dispatch)
+                setHasUpdateCompleted(false)
+                props.toggleDatabaseUpdateModelPanelOpen()
+            }
         }
     }, [hasUpdateCompleted])
+
+    const handleAddOfflineDownloadFileintoOfflineDownloadList = async () => {
+
+        setIsLoading(true)
+        // Utility function to delay execution
+
+        //Fetch Civitai ModelInfo
+        const modelId = civitaiUrl.match(/\/models\/(\d+)/)?.[1] || '';
+        // Fetch data with error handling
+        try {
+            const data = await fetchCivitaiModelInfoFromCivitaiByModelID(modelId, dispatch);
+            if (data) {
+
+                let versionIndex = 0;
+                const uri = new URL(civitaiUrl);
+
+                if (uri.searchParams.has('modelVersionId')) {
+                    let modelVersionId = uri.searchParams.get('modelVersionId');
+                    versionIndex = data.modelVersions.findIndex((version: any) => {
+                        return version.id == modelVersionId
+                    });
+                }
+
+                let civitaiVersionID = data?.modelVersions[versionIndex]?.id.toString();
+                let civitaiModelID = modelId;
+
+                let civitaiFileName = retrieveCivitaiFileName(data, civitaiVersionID);
+                //the fileList would contains the urls of all files such as safetensor, training data, ...
+                let civitaiModelFileList = retrieveCivitaiFilesList(data, civitaiVersionID)
+
+                let civitaiTags = data?.tags;
+
+                //Check for null or empty
+                if (
+                    civitaiUrl === null || civitaiUrl === "" ||
+                    civitaiFileName === null || civitaiFileName === "" ||
+                    civitaiModelID === null || civitaiModelID === "" ||
+                    civitaiVersionID === null || civitaiVersionID === "" ||
+                    downloadFilePath === null || downloadFilePath === "" ||
+                    selectedCategory === null || selectedCategory === "" ||
+                    civitaiModelFileList === null || !civitaiModelFileList.length ||
+                    civitaiTags === null
+                ) {
+                    console.log("fail in handleAddOfflineDownloadFileintoOfflineDownloadList()")
+                    return;
+                }
+
+                let modelObject = {
+                    downloadFilePath, civitaiFileName, civitaiModelID,
+                    civitaiVersionID, civitaiModelFileList, civitaiUrl,
+                    selectedCategory, civitaiTags
+                }
+
+                await fetchAddOfflineDownloadFileIntoOfflineDownloadList(modelObject, false, dispatch);
+
+            }
+
+        } catch (error) {
+            console.error(error);
+        }
+
+        setIsLoading(false)
+    };
 
     const handleDownload = async () => {
 
@@ -447,7 +517,7 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                                             {/**Update button */}
                                             <div className="panel-update-button-container">
                                                 <Button
-                                                    variant={"primary"}
+                                                    variant={offlineMode ? "success" : "primary"}
                                                     disabled={isLoading}
                                                     onClick={() => handleUpdateModel(model?.id)}
                                                     className="btn btn-primary btn-lg w-100"
