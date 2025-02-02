@@ -862,38 +862,38 @@ const WindowComponent: React.FC = () => {
         goToUrlInBrowserTab(url);
     };
 
-    // Find the *previous* index with "new"
     const handlePrevious = () => {
-        if (currentCreatorUrlIndex == null) return;
+        if (currentCreatorUrlIndex === null) return;
 
-        let newIndex = currentCreatorUrlIndex - 1;
-        while (newIndex >= 0) {
+        // Start from the current index and loop through the whole list
+        let newIndex = currentCreatorUrlIndex;
+        for (let i = 0; i < creatorUrlList.length; i++) {
+            // Decrement index and wrap around using modulo arithmetic
+            newIndex = (newIndex - 1 + creatorUrlList.length) % creatorUrlList.length;
             if (creatorUrlList[newIndex].status === "new") {
                 setCurrentCreatorUrlIndex(newIndex);
                 setSelectedCreatorUrlText(creatorUrlList[newIndex].creatorUrl.split('/')[4]);
                 goToUrlInBrowserTab(creatorUrlList[newIndex].creatorUrl);
-                return; // stop after setting first previous "new"
+                return; // Stop once the first new item is found
             }
-            newIndex--;
         }
-        // If no previous "new" was found, do nothing (or show a message)
     };
 
-    // Find the *next* index with "new"
     const handleNext = () => {
-        if (currentCreatorUrlIndex == null) return;
+        if (currentCreatorUrlIndex === null) return;
 
-        let newIndex = currentCreatorUrlIndex + 1;
-        while (newIndex < creatorUrlList.length) {
+        // Start from the current index and loop through the whole list
+        let newIndex = currentCreatorUrlIndex;
+        for (let i = 0; i < creatorUrlList.length; i++) {
+            // Increment index and wrap around using modulo arithmetic
+            newIndex = (newIndex + 1) % creatorUrlList.length;
             if (creatorUrlList[newIndex].status === "new") {
                 setCurrentCreatorUrlIndex(newIndex);
                 setSelectedCreatorUrlText(creatorUrlList[newIndex].creatorUrl.split('/')[4]);
                 goToUrlInBrowserTab(creatorUrlList[newIndex].creatorUrl);
-                return;
+                return; // Stop once the first new item is found
             }
-            newIndex++;
         }
-        // If no next "new" was found, do nothing (or show a message)
     };
 
     // Conditionally disable buttons if no prev/next
@@ -913,6 +913,9 @@ const WindowComponent: React.FC = () => {
         }
         return false;
     };
+
+    const hasNewItems = creatorUrlList.some(item => item.status === "new");
+
 
     const handleRefreshPage = async () => {
         // Reload the original tab if present, otherwise reload the currently active tab
@@ -1348,16 +1351,7 @@ const WindowComponent: React.FC = () => {
                                 buttons={
                                     <div>
                                         {/* Put everything in one row (Flex Container) */}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-
-                                            <OverlayTrigger
-                                                placement={"top"}
-                                                overlay={<Tooltip id="tooltip">Refresh Creator Url List</Tooltip>}
-                                            >
-                                                <Button variant="success" onClick={handleRefreshList}>
-                                                    <IoReloadOutline />
-                                                </Button>
-                                            </OverlayTrigger>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '3px', margin: '5px' }}>
                                             <Dropdown>
                                                 <Dropdown.Toggle variant="secondary">
                                                     {selectedCreatorUrlText || "-- Creator URL List (choose one) --"}
@@ -1412,7 +1406,7 @@ const WindowComponent: React.FC = () => {
                                                 placement={"top"}
                                                 overlay={<Tooltip id="tooltip">Previous Page</Tooltip>}
                                             >
-                                                <Button variant="danger" onClick={handlePrevious} disabled={!hasPrevNew()}>
+                                                <Button variant="success" onClick={handlePrevious} disabled={!hasNewItems}>
                                                     <MdSkipPrevious />
                                                 </Button>
                                             </OverlayTrigger>
@@ -1421,7 +1415,7 @@ const WindowComponent: React.FC = () => {
                                                 placement={"top"}
                                                 overlay={<Tooltip id="tooltip">Next Page</Tooltip>}
                                             >
-                                                <Button variant="danger" onClick={handleNext} disabled={!hasNextNew()}>
+                                                <Button variant="success" onClick={handleNext} disabled={!hasNewItems}>
                                                     <MdSkipNext />
                                                 </Button>
                                             </OverlayTrigger>
@@ -1435,6 +1429,29 @@ const WindowComponent: React.FC = () => {
                                                 </Button>
                                             </OverlayTrigger>
 
+                                            <OverlayTrigger
+                                                placement={"top"}
+                                                overlay={<Tooltip id="tooltip">Remove Selected Creator Url</Tooltip>}
+                                            >
+                                                <Button variant="danger" onClick={() => handleRemoveCreatorUrl(`https://civitai.com/user/${selectedCreatorUrlText}/models`)}>
+                                                    <IoCloseOutline />
+                                                </Button>
+                                            </OverlayTrigger>
+
+
+                                        </div>
+
+
+                                        <div style={{ display: 'flex', alignItems: 'end', gap: '3px', margin: '5px', justifyContent: 'flex-end' }}>
+                                            <OverlayTrigger
+                                                placement={"top"}
+                                                overlay={<Tooltip id="tooltip">Refresh Creator Url List</Tooltip>}
+                                            >
+                                                <Button variant="info" onClick={handleRefreshList}>
+                                                    <IoReloadOutline />
+                                                </Button>
+                                            </OverlayTrigger>
+
                                             <ButtonWrap buttonConfig={{
                                                 placement: "top",
                                                 tooltip: `Set to Current Tabs: ${tabCreator}`,
@@ -1445,8 +1462,8 @@ const WindowComponent: React.FC = () => {
                                                 handleFunctionCall={() => {
                                                     handleSetOriginalTab()
                                                 }} />
-
                                         </div>
+
                                     </div>
                                 }
                             />

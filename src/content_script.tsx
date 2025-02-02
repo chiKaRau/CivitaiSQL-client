@@ -1396,11 +1396,17 @@ function injectButtonStyles() {
       color: #fff;
       cursor: pointer;
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-      transition: background-color 0.2s ease, box-shadow 0.2s ease;
+      transition: background-color 0.5s ease, box-shadow 0.5s ease;
     }
     .add-creator-button:hover {
       background-color: #115293;
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+    .add-creator-button.success {
+      background-color: #4caf50; /* green for success */
+    }
+    .add-creator-button.failed {
+      background-color: #f44336; /* red for failure */
     }
   `;
   document.head.appendChild(style);
@@ -1423,8 +1429,19 @@ function sendActionToReact(message: any): Promise<any> {
 // Helper function to display a temporary message on the button
 function displayTemporaryMessage(button: HTMLButtonElement, message: string, originalText: string) {
   button.textContent = message;
+
+  // Add a temporary CSS class to update the background color
+  if (message === "Success") {
+    button.classList.add('success');
+  } else if (message === "Failed") {
+    button.classList.add('failed');
+  }
+
+  // After 1 second, revert to the original text and remove the temporary styling
   setTimeout(() => {
     button.textContent = originalText;
+    button.classList.remove('success');
+    button.classList.remove('failed');
   }, 1000);
 }
 
