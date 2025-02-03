@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import WindowUpdateModelPanel from './WindowUpdateModelPanel';
-import { fetchFindVersionNumbersForModel } from '../../api/civitaiSQL_api';
+import { fetchBackupOfflineDownloadList, fetchFindVersionNumbersForModel, fetchRemoveOfflineDownloadFileIntoOfflineDownloadList } from '../../api/civitaiSQL_api';
 import { useDispatch } from 'react-redux';
 import { FaAngleLeft, FaAngleRight } from "react-icons/fa6";
 import { BsDatabaseFillExclamation } from "react-icons/bs";
@@ -195,6 +195,41 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
         setRenderKey((prevKey) => prevKey + 1); // Increment renderKey to force a re-render
     };
 
+    const handleRemovefromOfflineList = async (civitaiModelID: string, civitaiVersionID: string) => {
+
+        const userConfirmed = window.confirm(`Are you sure you want to remove the ${civitaiModelID}_${civitaiVersionID} ?`);
+        if (!userConfirmed) {
+            console.log("User canceled the removal operation.");
+            return; // Exit the function if the user cancels
+        }
+
+        const isBackupSuccessful = await fetchBackupOfflineDownloadList(dispatch);
+        if (!isBackupSuccessful) {
+            alert("Backup failed. Cannot proceed with the download.");
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+
+
+            await fetchRemoveOfflineDownloadFileIntoOfflineDownloadList(
+                {
+                    civitaiModelID,
+                    civitaiVersionID,
+                },
+                dispatch
+            );
+
+
+        } catch (error: any) {
+            console.error("Failed to remove selected entries:", error.message);
+        } finally {
+            setSelectedUrl("")
+            setIsLoading(false);
+        }
+    };
+
     const toggleUpdateModelPanel = () => {
         setIsUpdatePanelVisible(!isUpdatePanelVisible);
     };
@@ -354,7 +389,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
                                     placement="top"
                                     overlay={
                                         <Tooltip id={`tooltip-checklist`}>
-                                            This URL is already in the list.
+                                            This URL is already in the offlinelist.
                                         </Tooltip>
                                     }
                                 >
@@ -364,6 +399,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
                                             color: 'red',
                                             cursor: 'pointer', // Changed to 'pointer' to indicate interactivity
                                         }}
+                                        onClick={() => handleRemovefromOfflineList(modelId, selectedVersion?.id?.toString() || '')}
                                     >
                                         <GoChecklist />
                                     </span>

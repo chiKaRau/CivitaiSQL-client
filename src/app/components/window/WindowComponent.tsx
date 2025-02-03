@@ -1425,7 +1425,7 @@ const WindowComponent: React.FC = () => {
                                                 overlay={<Tooltip id="tooltip">Refresh Page</Tooltip>}
                                             >
                                                 <Button variant="warning" onClick={handleRefreshPage}>
-                                                    <WiCloudRefresh />
+                                                    <IoReloadOutline />
                                                 </Button>
                                             </OverlayTrigger>
 
@@ -1448,7 +1448,7 @@ const WindowComponent: React.FC = () => {
                                                 overlay={<Tooltip id="tooltip">Refresh Creator Url List</Tooltip>}
                                             >
                                                 <Button variant="info" onClick={handleRefreshList}>
-                                                    <IoReloadOutline />
+                                                    <WiCloudRefresh />
                                                 </Button>
                                             </OverlayTrigger>
 

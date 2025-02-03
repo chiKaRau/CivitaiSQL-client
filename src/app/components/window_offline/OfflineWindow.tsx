@@ -271,10 +271,11 @@ const OfflineWindow: React.FC = () => {
     const [mostFrequentPendingTags, setMostFrequentPendingTags] = useState<string[]>([]);
 
     // 1) Keep your excluded tags in lowercase
-
+    // Updated computeTopTagsFromPending: now accepts a third parameter "source"
     const computeTopTagsFromPending = (
         data: OfflineDownloadEntry[],
-        excluded: string[]
+        excluded: string[],
+        source: 'all' | 'tags' | 'fileName' | 'titles'
     ): string[] => {
         const pendingEntries = data.filter(
             (entry) =>
@@ -284,51 +285,59 @@ const OfflineWindow: React.FC = () => {
 
         const freqMap = new Map<string, number>();
 
-        // Helper to split strings by special chars, but allow Unicode letters/numbers.
+        // Helper: split strings by special chars (supports Unicode)
         const splitBySpecialChars = (input: string): string[] =>
             input.split(/[^\p{L}\p{N}]+/u).filter((token) => token.length > 0);
 
         pendingEntries.forEach((entry) => {
-            const potentialTags: string[] = [];
+            let potentialTags: string[] = [];
 
-            // 1. civitaiTags
-            if (Array.isArray(entry.civitaiTags)) {
-                potentialTags.push(...entry.civitaiTags);
+            // If source is 'all' or 'tags', include civitaiTags
+            if (source === 'all' || source === 'tags') {
+                if (Array.isArray(entry.civitaiTags)) {
+                    potentialTags.push(...entry.civitaiTags);
+                }
             }
 
-            // 2. civitaiFileName
-            if (entry.civitaiFileName) {
-                potentialTags.push(...splitBySpecialChars(entry.civitaiFileName));
+            // If source is 'all' or 'fileName', include tags from the file name
+            if (source === 'all' || source === 'fileName') {
+                if (entry.civitaiFileName) {
+                    potentialTags.push(...splitBySpecialChars(entry.civitaiFileName));
+                }
             }
 
-            // 3. modelVersionObject?.model?.name
-            if (entry.modelVersionObject?.model?.name) {
-                potentialTags.push(
-                    ...splitBySpecialChars(entry.modelVersionObject.model.name)
-                );
+            // If source is 'all' or 'titles', include tags from the model title
+            if (source === 'all' || source === 'titles') {
+                if (entry.modelVersionObject?.model?.name) {
+                    potentialTags.push(...splitBySpecialChars(entry.modelVersionObject.model.name));
+                }
             }
 
-            // Update frequency, skipping all excluded tags
+            // Update the frequency map, skipping excluded tags
             potentialTags.forEach((rawTag) => {
                 const tag = rawTag.toLowerCase();
-
-                // If tag is in our excluded array, skip it
                 if (excluded.includes(tag)) return;
-
-                // Otherwise, increment frequency
                 freqMap.set(tag, (freqMap.get(tag) || 0) + 1);
             });
         });
 
-        // Sort by frequency descending
-        // Then filter out tags < 3 chars OR only digits
+        // Sort by frequency descending; then filter out short or digit-only tags
         const sorted = [...freqMap.entries()]
             .sort((a, b) => b[1] - a[1])
             .filter(([tag]) => tag.length >= 3 && !/^\d+$/.test(tag));
 
-        // Return top 100
+        // Return only the top 100 tags
         return sorted.slice(0, 100).map(([tag]) => tag);
     };
+
+    // New state for selecting the tag source (defaulting to 'all')
+    const [tagSource, setTagSource] = useState<'all' | 'tags' | 'fileName' | 'titles'>('all');
+
+    // Recompute mostFrequentPendingTags when offlineDownloadList, excludedTags, or tagSource changes
+    useEffect(() => {
+        const computed = computeTopTagsFromPending(offlineDownloadList, excludedTags, tagSource);
+        setMostFrequentPendingTags(computed);
+    }, [offlineDownloadList, excludedTags, tagSource]);
 
     // Remove a tag by adding it to the backend and excludedTags
     const handleRemoveTag = async (tag: string) => {
@@ -345,13 +354,6 @@ const OfflineWindow: React.FC = () => {
         setFilterCondition("contains");
         setFilterText(tag);
     };
-
-    // Recompute the frequent tags whenever our data or excluded tags change
-    useEffect(() => {
-        const computed = computeTopTagsFromPending(offlineDownloadList, excludedTags);
-        setMostFrequentPendingTags(computed);
-    }, [offlineDownloadList, excludedTags]);
-
 
     // Additional states for progress and failed downloads
     const [downloadProgress, setDownloadProgress] = useState<{ completed: number; total: number }>({ completed: 0, total: 0 });
@@ -1575,6 +1577,37 @@ const OfflineWindow: React.FC = () => {
         // setDelayTime(0);
     };
 
+    // Checks if an entry has a pending downloadFilePath
+    const isPendingEntry = (entry: OfflineDownloadEntry): boolean => {
+        const path = entry.downloadFilePath || "";
+        return path === "/@scan@/ACG/Pending" || path === "/@scan@/ACG/Pending/";
+    };
+
+    // Similar to doesEntryMatch(), but using the provided tag (always with 'contains' logic)
+    const doesEntryMatchWithTag = (entry: OfflineDownloadEntry, tag: string): boolean => {
+        const lowerTag = tag.toLowerCase();
+        const fieldsToCheck = [
+            entry.civitaiFileName,
+            entry.modelVersionObject?.name,        // version name
+            entry.civitaiUrl,
+            entry.modelVersionObject?.model?.name,   // model title
+            entry.civitaiTags,
+            entry.civitaiModelID,
+            entry.civitaiVersionID,
+        ];
+
+        return fieldsToCheck.some((field) => {
+            if (!field) return false;
+            if (Array.isArray(field)) {
+                return field.some((item) => item.toLowerCase().includes(lowerTag));
+            }
+            if (typeof field === "string") {
+                return field.toLowerCase().includes(lowerTag);
+            }
+            return false;
+        });
+    };
+
     // **BigCardMode Component Implementation**
     const BigCardMode: React.FC<{
         filteredDownloadList: OfflineDownloadEntry[];
@@ -2585,53 +2618,82 @@ const OfflineWindow: React.FC = () => {
                         </>
                     )}
 
-                    <div style={{ margin: "20px" }}>
-                        <Dropdown style={{ width: "100%" }}>
-                            {/* Full-width toggle */}
-                            <Dropdown.Toggle variant="secondary" style={{ width: "100%" }}>
+                    <div style={{ display: 'flex', gap: '10px', margin: '20px' }}>
+                        {/* Dropdown for selecting from the computed top tags */}
+                        <Dropdown style={{ width: '70%' }}>
+                            <Dropdown.Toggle variant="secondary" style={{ width: '100%' }}>
                                 {filterText || "-- Top Pending Tags (choose one) --"}
                             </Dropdown.Toggle>
-
                             <Dropdown.Menu
                                 style={{
-                                    width: "100%",      // Match toggle width
-                                    maxHeight: "400px", // Fixed height
-                                    overflowY: "auto",  // Scroll if beyond 200px
+                                    width: '100%',
+                                    maxHeight: '400px',
+                                    overflowY: 'auto',
                                 }}
                             >
                                 {mostFrequentPendingTags.map((tag) => (
-                                    // `as="div"` so we can fully control the layout inside
                                     <Dropdown.Item
                                         as="div"
                                         key={tag}
-                                        // Clicking anywhere on the line (except "X") selects the tag
+                                        // Clicking the item selects the tag (using your existing handler)
                                         onClick={() => handleSelectTag(tag)}
                                         style={{
-                                            display: "flex",
-                                            justifyContent: "space-between",
-                                            alignItems: "center",
-                                            cursor: "pointer",
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            cursor: 'pointer',
                                         }}
                                     >
-                                        {/* Tag label */}
                                         <span>{tag}</span>
-
-                                        {/* The "X" button (stop click from also selecting the tag) */}
-                                        <Button
-                                            variant="link"
-                                            style={{ color: "red", textDecoration: "none" }}
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleRemoveTag(tag);
-                                            }}
-                                        >
-                                            <IoCloseOutline />
-                                        </Button>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                            <span>
+                                                <b>
+                                                    {
+                                                        offlineDownloadList.filter(
+                                                            (entry) =>
+                                                                (entry.downloadFilePath === "/@scan@/ACG/Pending" ||
+                                                                    entry.downloadFilePath === "/@scan@/ACG/Pending/") &&
+                                                                doesEntryMatchWithTag(entry, tag)
+                                                        ).length
+                                                    }
+                                                </b>
+                                            </span>
+                                            <Button
+                                                variant="link"
+                                                style={{ color: 'red', textDecoration: 'none' }}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleRemoveTag(tag);
+                                                }}
+                                            >
+                                                <IoCloseOutline />
+                                            </Button>
+                                        </div>
                                     </Dropdown.Item>
                                 ))}
                             </Dropdown.Menu>
                         </Dropdown>
+
+                        {/* New Dropdown for selecting the source of tags */}
+                        <Dropdown style={{ width: '30%' }}>
+                            <Dropdown.Toggle variant="secondary" style={{ width: '100%' }}>
+                                {tagSource === 'all'
+                                    ? 'All'
+                                    : tagSource === 'tags'
+                                        ? 'Tags'
+                                        : tagSource === 'fileName'
+                                            ? 'File Name'
+                                            : 'Titles'}
+                            </Dropdown.Toggle>
+                            <Dropdown.Menu style={{ width: '100%' }}>
+                                <Dropdown.Item onClick={() => setTagSource('all')}>All</Dropdown.Item>
+                                <Dropdown.Item onClick={() => setTagSource('tags')}>Tags</Dropdown.Item>
+                                <Dropdown.Item onClick={() => setTagSource('fileName')}>File Name</Dropdown.Item>
+                                <Dropdown.Item onClick={() => setTagSource('titles')}>Titles</Dropdown.Item>
+                            </Dropdown.Menu>
+                        </Dropdown>
                     </div>
+
 
                     {/* Filter Section */}
                     <div style={filterContainerStyle}>
