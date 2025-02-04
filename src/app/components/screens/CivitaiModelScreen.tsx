@@ -20,6 +20,7 @@ import DatabaseCustomModelPanel from '../database_panels/DatabaseCustomModelPane
 import DownloadFilePathOptionPanel from '../DownloadFilePathOptionPanel';
 import BundleButton from '../buttons/BundleButton';
 import ModelInfoPanel from '../ModelInfoPanel';
+import FolderDropdown from "../FolderDropdown"
 
 //Model Page
 const CivitaiModelScreen: React.FC = () => {
@@ -63,6 +64,8 @@ const CivitaiModelScreen: React.FC = () => {
 
             {/**Folder Lists Option */}
             < DownloadFilePathOptionPanel setIsHandleRefresh={setIsHandleRefresh} isHandleRefresh={isHandleRefresh} />
+
+            <FolderDropdown />
 
             {/**Model Info Panel */}
             <ModelInfoPanel />

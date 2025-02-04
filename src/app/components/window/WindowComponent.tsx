@@ -33,7 +33,7 @@ import URLGrid from './URLGrid';
 import Autocomplete from '@mui/material/Autocomplete';
 import TextField from '@mui/material/TextField';
 import FilesPathSettingPanel from '../FilesPathSettingPanel';
-
+import FolderDropdown from "../FolderDropdown"
 
 interface updateAvaliable {
     url: string;
@@ -622,6 +622,11 @@ const WindowComponent: React.FC = () => {
     };
 
     const handleAddOfflineDownloadFileintoOfflineDownloadList = async () => {
+
+        if (["/@scan@/ACG/Pending", "/@scan@/ACG/Pending/", "/@scan@/ErrorPath/"].includes(downloadFilePath)) {
+            alert("Invalid DownloadFilePath");
+            return;
+        }
 
         setStartModelName(urlList[0].split('/').pop() || "");
         setProcessingModelName("");
@@ -1557,6 +1562,8 @@ const WindowComponent: React.FC = () => {
                             </div>
                         </div>
                     </div>
+
+                    <FolderDropdown />
 
                     {/* URLGrid (Scrolls independently of the sticky header/buttons) */}
                     <div>

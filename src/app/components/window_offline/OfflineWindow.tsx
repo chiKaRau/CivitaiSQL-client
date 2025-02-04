@@ -4,6 +4,7 @@ import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 
 // Store
 import { useDispatch, useSelector } from 'react-redux';
+import { updateDownloadFilePath } from '../../store/actions/chromeActions';
 
 // Icons Components
 import { AiFillFolderOpen } from "react-icons/ai";
@@ -26,6 +27,7 @@ import DownloadFilePathOptionPanel from '../DownloadFilePathOptionPanel';
 import ButtonWrap from "../buttons/ButtonWrap";
 import { InputGroup, FormControl, Button, Spinner, OverlayTrigger, Tooltip, Form, Dropdown, ButtonGroup, Carousel, Card, Pagination } from 'react-bootstrap';
 import ErrorAlert from '../ErrorAlert';
+import FolderDropdown from "../FolderDropdown"
 
 // APIs
 import {
@@ -267,6 +269,9 @@ const OfflineWindow: React.FC = () => {
 
     const [excludedTags, setExcludedTags] = useState<string[]>([]);
 
+    // In your component’s state declarations:
+    const [isEditingTopTag, setIsEditingTopTag] = useState(false);
+    const [topTagInputValue, setTopTagInputValue] = useState(filterText || "");
 
     const [mostFrequentPendingTags, setMostFrequentPendingTags] = useState<string[]>([]);
 
@@ -275,45 +280,67 @@ const OfflineWindow: React.FC = () => {
     const computeTopTagsFromPending = (
         data: OfflineDownloadEntry[],
         excluded: string[],
-        source: 'all' | 'tags' | 'fileName' | 'titles'
+        source: 'all' | 'tags' | 'fileName' | 'titles' | 'other'
     ): string[] => {
-        const pendingEntries = data.filter(
-            (entry) =>
-                entry.downloadFilePath === "/@scan@/ACG/Pending" ||
-                entry.downloadFilePath === "/@scan@/ACG/Pending/"
-        );
+        // If the source is 'other' (or "Entries"), use the passed-in data as is
+        // Otherwise, filter for pending entries only.
+        const entriesForTag =
+            source === 'other'
+                ? data
+                : data.filter(
+                    (entry) =>
+                        entry.downloadFilePath === "/@scan@/ACG/Pending" ||
+                        entry.downloadFilePath === "/@scan@/ACG/Pending/"
+                );
 
         const freqMap = new Map<string, number>();
 
-        // Helper: split strings by special chars (supports Unicode)
+        // Helper: split strings by special characters (supports Unicode)
         const splitBySpecialChars = (input: string): string[] =>
             input.split(/[^\p{L}\p{N}]+/u).filter((token) => token.length > 0);
 
-        pendingEntries.forEach((entry) => {
+        entriesForTag.forEach((entry) => {
             let potentialTags: string[] = [];
 
-            // If source is 'all' or 'tags', include civitaiTags
-            if (source === 'all' || source === 'tags') {
+            if (source === 'all') {
+                // 'all' collects from civitaiTags, fileName, and model title
+                if (Array.isArray(entry.civitaiTags)) {
+                    potentialTags.push(...entry.civitaiTags);
+                }
+                if (entry.civitaiFileName) {
+                    potentialTags.push(...splitBySpecialChars(entry.civitaiFileName));
+                }
+                if (entry.modelVersionObject?.model?.name) {
+                    potentialTags.push(...splitBySpecialChars(entry.modelVersionObject.model.name));
+                }
+            } else if (source === 'tags') {
+                if (Array.isArray(entry.civitaiTags)) {
+                    potentialTags.push(...entry.civitaiTags);
+                }
+            } else if (source === 'fileName') {
+                if (entry.civitaiFileName) {
+                    potentialTags.push(...splitBySpecialChars(entry.civitaiFileName));
+                }
+            } else if (source === 'titles') {
+                if (entry.modelVersionObject?.model?.name) {
+                    potentialTags.push(...splitBySpecialChars(entry.modelVersionObject.model.name));
+                }
+            } else if (source === 'other') {
+                // "Other" collects from all four fields:
+                if (entry.civitaiFileName) {
+                    potentialTags.push(...splitBySpecialChars(entry.civitaiFileName));
+                }
+                if (entry.modelVersionObject?.name) {
+                    potentialTags.push(...splitBySpecialChars(entry.modelVersionObject.name));
+                }
+                if (entry.modelVersionObject?.model?.name) {
+                    potentialTags.push(...splitBySpecialChars(entry.modelVersionObject.model.name));
+                }
                 if (Array.isArray(entry.civitaiTags)) {
                     potentialTags.push(...entry.civitaiTags);
                 }
             }
 
-            // If source is 'all' or 'fileName', include tags from the file name
-            if (source === 'all' || source === 'fileName') {
-                if (entry.civitaiFileName) {
-                    potentialTags.push(...splitBySpecialChars(entry.civitaiFileName));
-                }
-            }
-
-            // If source is 'all' or 'titles', include tags from the model title
-            if (source === 'all' || source === 'titles') {
-                if (entry.modelVersionObject?.model?.name) {
-                    potentialTags.push(...splitBySpecialChars(entry.modelVersionObject.model.name));
-                }
-            }
-
-            // Update the frequency map, skipping excluded tags
             potentialTags.forEach((rawTag) => {
                 const tag = rawTag.toLowerCase();
                 if (excluded.includes(tag)) return;
@@ -321,23 +348,16 @@ const OfflineWindow: React.FC = () => {
             });
         });
 
-        // Sort by frequency descending; then filter out short or digit-only tags
         const sorted = [...freqMap.entries()]
             .sort((a, b) => b[1] - a[1])
             .filter(([tag]) => tag.length >= 3 && !/^\d+$/.test(tag));
 
-        // Return only the top 100 tags
         return sorted.slice(0, 100).map(([tag]) => tag);
     };
 
-    // New state for selecting the tag source (defaulting to 'all')
-    const [tagSource, setTagSource] = useState<'all' | 'tags' | 'fileName' | 'titles'>('all');
 
-    // Recompute mostFrequentPendingTags when offlineDownloadList, excludedTags, or tagSource changes
-    useEffect(() => {
-        const computed = computeTopTagsFromPending(offlineDownloadList, excludedTags, tagSource);
-        setMostFrequentPendingTags(computed);
-    }, [offlineDownloadList, excludedTags, tagSource]);
+
+
 
     // Remove a tag by adding it to the backend and excludedTags
     const handleRemoveTag = async (tag: string) => {
@@ -415,6 +435,7 @@ const OfflineWindow: React.FC = () => {
             return nextMode;
         });
         setSelectedIds(new Set()); // Clear selections when toggling modify mode
+        setFilterText("")
     };
 
     // Utility function to pause execution for a given number of milliseconds
@@ -627,6 +648,17 @@ const OfflineWindow: React.FC = () => {
         // If modify mode is on, return the filtered list without sorting
         return filtered;
     }, [offlineDownloadList, filterText, filterCondition, selectedIds, isModifyMode, onlyPendingPaths, displayMode]);
+
+    // New state for selecting the tag source (defaulting to 'all')
+    const [tagSource, setTagSource] = useState<'all' | 'tags' | 'fileName' | 'titles' | 'other'>('all');
+
+
+    // Recompute mostFrequentPendingTags when offlineDownloadList, excludedTags, or tagSource changes
+    useEffect(() => {
+        const dataForTags = tagSource === 'other' ? filteredDownloadList : offlineDownloadList;
+        const computed = computeTopTagsFromPending(dataForTags, excludedTags, tagSource);
+        setMostFrequentPendingTags(computed);
+    }, [offlineDownloadList, excludedTags, tagSource, filteredDownloadList]);
 
     // **Add Pagination State and Logic**
     const [currentPage, setCurrentPage] = useState(1);
@@ -1384,6 +1416,11 @@ const OfflineWindow: React.FC = () => {
 
     const handleProcessSelected = async () => {
 
+        if (["/@scan@/ACG/Pending", "/@scan@/ACG/Pending/", "/@scan@/ErrorPath/"].includes(modify_downloadFilePath)) {
+            alert("Invalid DownloadFilePath");
+            return;
+        }
+
         const isBackupSuccessful = await fetchBackupOfflineDownloadList(dispatch);
         if (!isBackupSuccessful) {
             alert("Backup failed. Cannot proceed with the download.");
@@ -1458,6 +1495,7 @@ const OfflineWindow: React.FC = () => {
             // Optionally, dispatch a global error to the Redux store
             // dispatch(setError({ hasError: true, errorMessage: error.message }));
         } finally {
+            dispatch(updateDownloadFilePath("/@scan@/ACG/Pending/"));
             setIsLoading(false);
         }
     };
@@ -2615,64 +2653,96 @@ const OfflineWindow: React.FC = () => {
                                     isHandleRefresh={isHandleRefresh}
                                 />
                             </div>
+
+                            <FolderDropdown filterText={filterText} />
                         </>
                     )}
 
                     <div style={{ display: 'flex', gap: '10px', margin: '20px' }}>
-                        {/* Dropdown for selecting from the computed top tags */}
-                        <Dropdown style={{ width: '70%' }}>
-                            <Dropdown.Toggle variant="secondary" style={{ width: '100%' }}>
-                                {filterText || "-- Top Pending Tags (choose one) --"}
-                            </Dropdown.Toggle>
-                            <Dropdown.Menu
-                                style={{
-                                    width: '100%',
-                                    maxHeight: '400px',
-                                    overflowY: 'auto',
+                        {isEditingTopTag ? (
+                            // Render an input field for editing the top tag text
+                            <FormControl
+                                type="text"
+                                value={topTagInputValue}
+                                onChange={(e) => setTopTagInputValue(e.target.value)}
+                                onBlur={() => {
+                                    // On blur, update the filterText and revert to non-edit mode
+                                    setFilterText(topTagInputValue);
+                                    setIsEditingTopTag(false);
                                 }}
-                            >
-                                {mostFrequentPendingTags.map((tag) => (
-                                    <Dropdown.Item
-                                        as="div"
-                                        key={tag}
-                                        // Clicking the item selects the tag (using your existing handler)
-                                        onClick={() => handleSelectTag(tag)}
-                                        style={{
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center',
-                                            cursor: 'pointer',
-                                        }}
-                                    >
-                                        <span>{tag}</span>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-                                            <span>
-                                                <b>
-                                                    {
-                                                        offlineDownloadList.filter(
-                                                            (entry) =>
-                                                                (entry.downloadFilePath === "/@scan@/ACG/Pending" ||
-                                                                    entry.downloadFilePath === "/@scan@/ACG/Pending/") &&
-                                                                doesEntryMatchWithTag(entry, tag)
-                                                        ).length
-                                                    }
-                                                </b>
-                                            </span>
-                                            <Button
-                                                variant="link"
-                                                style={{ color: 'red', textDecoration: 'none' }}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleRemoveTag(tag);
-                                                }}
-                                            >
-                                                <IoCloseOutline />
-                                            </Button>
-                                        </div>
-                                    </Dropdown.Item>
-                                ))}
-                            </Dropdown.Menu>
-                        </Dropdown>
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        // On Enter, update the filterText and revert to non-edit mode
+                                        setFilterText(topTagInputValue);
+                                        setIsEditingTopTag(false);
+                                    }
+                                }}
+                                autoFocus
+                                style={{ width: '70%' }}
+                            />
+                        ) : (
+                            // Render the dropdown as usual when not editing.
+                            <Dropdown style={{ width: '70%' }}>
+                                <Dropdown.Toggle
+                                    variant="secondary"
+                                    style={{ width: '100%' }}
+                                    onDoubleClick={() => {
+                                        // When the user double-clicks, switch to edit mode.
+                                        setTopTagInputValue(filterText);
+                                        setIsEditingTopTag(true);
+                                    }}
+                                >
+                                    {filterText || "-- Top Pending Tags (choose one) --"}
+                                </Dropdown.Toggle>
+                                <Dropdown.Menu
+                                    style={{
+                                        width: '100%',
+                                        maxHeight: '400px',
+                                        overflowY: 'auto',
+                                    }}
+                                >
+                                    {mostFrequentPendingTags.map((tag) => (
+                                        <Dropdown.Item
+                                            as="div"
+                                            key={tag}
+                                            onClick={() => handleSelectTag(tag)}
+                                            style={{
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                cursor: 'pointer',
+                                            }}
+                                        >
+                                            <span>{tag}</span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                <span>
+                                                    <b>
+                                                        {
+                                                            offlineDownloadList.filter(
+                                                                (entry) =>
+                                                                    (entry.downloadFilePath === "/@scan@/ACG/Pending" ||
+                                                                        entry.downloadFilePath === "/@scan@/ACG/Pending/") &&
+                                                                    doesEntryMatchWithTag(entry, tag)
+                                                            ).length
+                                                        }
+                                                    </b>
+                                                </span>
+                                                <Button
+                                                    variant="link"
+                                                    style={{ color: 'red', textDecoration: 'none' }}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleRemoveTag(tag);
+                                                    }}
+                                                >
+                                                    <IoCloseOutline />
+                                                </Button>
+                                            </div>
+                                        </Dropdown.Item>
+                                    ))}
+                                </Dropdown.Menu>
+                            </Dropdown>
+                        )}
 
                         {/* New Dropdown for selecting the source of tags */}
                         <Dropdown style={{ width: '30%' }}>
@@ -2683,15 +2753,21 @@ const OfflineWindow: React.FC = () => {
                                         ? 'Tags'
                                         : tagSource === 'fileName'
                                             ? 'File Name'
-                                            : 'Titles'}
+                                            : tagSource === 'titles'
+                                                ? 'Titles'
+                                                : tagSource === 'other'
+                                                    ? 'Other'
+                                                    : ''}
                             </Dropdown.Toggle>
                             <Dropdown.Menu style={{ width: '100%' }}>
                                 <Dropdown.Item onClick={() => setTagSource('all')}>All</Dropdown.Item>
                                 <Dropdown.Item onClick={() => setTagSource('tags')}>Tags</Dropdown.Item>
                                 <Dropdown.Item onClick={() => setTagSource('fileName')}>File Name</Dropdown.Item>
                                 <Dropdown.Item onClick={() => setTagSource('titles')}>Titles</Dropdown.Item>
+                                <Dropdown.Item onClick={() => setTagSource('other')}>Entries</Dropdown.Item>
                             </Dropdown.Menu>
                         </Dropdown>
+
                     </div>
 
 
@@ -2888,29 +2964,6 @@ const OfflineWindow: React.FC = () => {
                         </div>
                     }
 
-                    {/* Download or Modify Progress Indicators */}
-                    {isLoading && (
-                        <div style={{
-                            marginBottom: '20px',
-                            fontWeight: 'bold',
-                            color: isDarkMode ? '#fff' : '#000',
-                            backgroundColor: isDarkMode ? '#555' : '#f8f9fa',
-                            padding: '10px',
-                            borderRadius: '4px',
-                            textAlign: 'center'
-                        }}>
-                            {isModifyMode ? (
-                                <>
-                                    Modifying entries... ({selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'})
-                                </>
-                            ) : (
-                                <>
-                                    Processing downloads... ({downloadProgress.completed}/{downloadProgress.total})
-                                </>
-                            )}
-                        </div>
-                    )}
-
                     {(batchCooldown !== null && batchCooldown > 0) || currentBatchRange ? (
                         <div
                             style={{
@@ -3038,6 +3091,29 @@ const OfflineWindow: React.FC = () => {
                             )}
                         </div>
                     </div>
+
+                    {/* Download or Modify Progress Indicators */}
+                    {isLoading && (
+                        <div style={{
+                            marginBottom: '20px',
+                            fontWeight: 'bold',
+                            color: isDarkMode ? '#fff' : '#000',
+                            backgroundColor: isDarkMode ? '#555' : '#f8f9fa',
+                            padding: '10px',
+                            borderRadius: '4px',
+                            textAlign: 'center'
+                        }}>
+                            {isModifyMode ? (
+                                <>
+                                    Modifying entries... ({selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'})
+                                </>
+                            ) : (
+                                <>
+                                    Processing downloads... ({downloadProgress.completed}/{downloadProgress.total})
+                                </>
+                            )}
+                        </div>
+                    )}
 
                     {/* Main Content Area */}
                     <div style={{ flex: 1, overflowY: 'auto' }}>

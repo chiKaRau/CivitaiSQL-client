@@ -168,6 +168,12 @@ const BundleButton: React.FC = (props: any) => {
 
     // Function to handle the API call and update the button state
     const handleAddOfflineDownloadFileintoOfflineDownloadList = async () => {
+
+        if (["/@scan@/ACG/Pending", "/@scan@/ACG/Pending/", "/@scan@/ErrorPath/"].includes(downloadFilePath)) {
+            alert("Invalid DownloadFilePath");
+            return;
+        }
+
         setIsLoading(true);
         dispatch(clearError());
 
