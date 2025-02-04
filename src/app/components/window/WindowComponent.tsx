@@ -623,7 +623,7 @@ const WindowComponent: React.FC = () => {
 
     const handleAddOfflineDownloadFileintoOfflineDownloadList = async () => {
 
-        if (["/@scan@/ACG/Pending", "/@scan@/ACG/Pending/", "/@scan@/ErrorPath/"].includes(downloadFilePath)) {
+        if (["/@scan@/ErrorPath/"].includes(downloadFilePath)) {
             alert("Invalid DownloadFilePath");
             return;
         }
@@ -719,6 +719,7 @@ const WindowComponent: React.FC = () => {
         }
         setWorkingModelID("")
         setIsLoading(false)
+        dispatch(updateDownloadFilePath("/@scan@/ACG/Pending/"));
         setResetMode(true)
     };
 

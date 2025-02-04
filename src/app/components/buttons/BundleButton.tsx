@@ -4,6 +4,7 @@ import React, { useState, useRef, CSSProperties, useEffect } from "react";
 import { useSelector, useDispatch } from 'react-redux';
 import { AppState } from '../../store/configureStore';
 import { setError, clearError } from '../../store/actions/errorsActions';
+import { updateDownloadFilePath } from "../../store/actions/chromeActions"
 
 //Components
 import { Button, OverlayTrigger, Tooltip, Dropdown, ButtonGroup } from 'react-bootstrap';
@@ -169,7 +170,7 @@ const BundleButton: React.FC = (props: any) => {
     // Function to handle the API call and update the button state
     const handleAddOfflineDownloadFileintoOfflineDownloadList = async () => {
 
-        if (["/@scan@/ACG/Pending", "/@scan@/ACG/Pending/", "/@scan@/ErrorPath/"].includes(downloadFilePath)) {
+        if (["/@scan@/ErrorPath/"].includes(downloadFilePath)) {
             alert("Invalid DownloadFilePath");
             return;
         }
@@ -206,7 +207,7 @@ const BundleButton: React.FC = (props: any) => {
 
         //If download Method is server, the server will download the file into server's folder
         await fetchAddOfflineDownloadFileIntoOfflineDownloadList(modelObject, false, dispatch);
-
+        dispatch(updateDownloadFilePath("/@scan@/ACG/Pending/"));
         setIsLoading(false);
     };
 
