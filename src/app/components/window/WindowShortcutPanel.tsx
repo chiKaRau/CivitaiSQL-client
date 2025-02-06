@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import WindowUpdateModelPanel from './WindowUpdateModelPanel';
-import { fetchBackupOfflineDownloadList, fetchFindVersionNumbersForModel, fetchRemoveOfflineDownloadFileIntoOfflineDownloadList } from '../../api/civitaiSQL_api';
+import { fetchBackupOfflineDownloadList, fetchFindVersionNumbersForModel, fetchFindVersionNumbersForOfflineDownloadList, fetchRemoveOfflineDownloadFileIntoOfflineDownloadList } from '../../api/civitaiSQL_api';
 import { useDispatch } from 'react-redux';
 import { FaAngleLeft, FaAngleRight } from "react-icons/fa6";
 import { BsDatabaseFillExclamation } from "react-icons/bs";
 import { GoChecklist } from "react-icons/go";
 import { OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { PiListDashesFill } from "react-icons/pi";
 
 import { IoIosRefresh } from "react-icons/io";
 import { MdAddCircle, MdLibraryAdd, MdRemove } from "react-icons/md";
@@ -41,6 +42,8 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
     const [isLoading, setIsLoading] = useState(false);
     const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
     const [existingVersions, setExistingVersions] = useState<any[]>([]);
+    const [existingOfflineVersions, setExistingOfflineVersions] = useState<string[]>([]);
+
     const [renderKey, setRenderKey] = useState(0); // State to manage re-renders
     const [hasUpdated, setHasUpdated] = useState(false);
     const [showCarousel, setShowCarousel] = useState(false);
@@ -91,6 +94,9 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
                     setMessage(null);
                 }
             }
+
+            const offlineSet = await fetchFindVersionNumbersForOfflineDownloadList(modelId, versionIds, dispatch);
+            setExistingOfflineVersions(Array.from(offlineSet || []) as string[]);
 
         } catch (error) {
             console.error('Error fetching model info:', error);
@@ -290,6 +296,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
                                     <option key={version.id} value={version.id}>
                                         {version.id}_{version.name}
                                         {existingVersions.includes(version.id.toString()) ? ' *' : ''}
+                                        {existingOfflineVersions.includes(version.id.toString()) ? ' ^' : ''}
                                     </option>
                                 ))}
                             </select>
@@ -383,13 +390,35 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
                                 </OverlayTrigger>
                             )}
 
+                            {selectedVersion && existingOfflineVersions.includes(selectedVersion.id.toString()) && (
+                                <OverlayTrigger
+                                    placement="top"
+                                    overlay={
+                                        <Tooltip id={`tooltip-db`}>
+                                            This version already exists in the Offline List.
+                                        </Tooltip>
+                                    }
+                                >
+                                    <span
+                                        style={{
+                                            fontSize: '24px',
+                                            color: 'blue',
+                                            cursor: 'pointer', // Changed to 'pointer' to indicate interactivity
+                                        }}
+                                        onClick={() => handleRemovefromOfflineList(modelId, selectedVersion?.id?.toString() || '')}
+                                    >
+                                        <PiListDashesFill />
+                                    </span>
+                                </OverlayTrigger>
+                            )}
+
                             {/* Checklist Icon with Tooltip */}
                             {message && message.type === 'error' && (
                                 <OverlayTrigger
                                     placement="top"
                                     overlay={
                                         <Tooltip id={`tooltip-checklist`}>
-                                            This URL is already in the offlinelist.
+                                            This URL is already in the checkbox list.
                                         </Tooltip>
                                     }
                                 >
@@ -399,7 +428,6 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
                                             color: 'red',
                                             cursor: 'pointer', // Changed to 'pointer' to indicate interactivity
                                         }}
-                                        onClick={() => handleRemovefromOfflineList(modelId, selectedVersion?.id?.toString() || '')}
                                     >
                                         <GoChecklist />
                                     </span>

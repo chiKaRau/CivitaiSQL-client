@@ -823,6 +823,33 @@ export const fetchCheckIfUrlExistInDatabase = async (url: string, dispatch: any)
     }
 }
 
+export const fetchFindVersionNumbersForOfflineDownloadList = async (modelNumber: string, versionNumbers: string[], dispatch: any) => {
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+        const response = await axios.post(`${config.domain}/api/find-version-numbers-for-offlinedownloadlist-tampermonkey`, { modelNumber, versionNumbers });
+        const responseData = response.data;
+
+        if (response.status >= 200 && response.status < 300) {
+            if (responseData.success) {
+                const existedOfflineVersions = responseData.payload.existedVersionsList || [];
+                // Convert each version to string
+                const versionSet = new Set(existedOfflineVersions.map(String));
+                return versionSet;
+            } else {
+                return new Set();
+            }
+        } else {
+            throw new Error("Retrieving related model info from Database failed.");
+        }
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Civitai Info retrieval:", error.message);
+        // Optionally, you can throw an error or return a specific value
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}
+
 export const fetchCheckQuantityOfOfflinedownloadList = async (url: string, dispatch: any) => {
     try {
         // Clear any previous errors
@@ -845,6 +872,7 @@ export const fetchCheckQuantityOfOfflinedownloadList = async (url: string, dispa
         dispatch(setError({ hasError: true, errorMessage: error.message }));
     }
 }
+
 
 export const fetchCheckQuantityofUrlinDatabaseByUrl = async (url: string, dispatch: any) => {
     try {

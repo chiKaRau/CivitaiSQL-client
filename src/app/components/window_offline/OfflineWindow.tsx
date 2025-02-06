@@ -1410,7 +1410,18 @@ const OfflineWindow: React.FC = () => {
 
         // **Clear currentBatchRange after all batches are done**
         setCurrentBatchRange(null);
-
+        // After processing all entries, fetch the updated download list once
+        const updatedData = await fetchOfflineDownloadList(dispatch);
+        if (Array.isArray(updatedData)) {
+            setOfflineDownloadList(updatedData);
+            // const allIds = updatedData.map((entry: OfflineDownloadEntry) => entry.civitaiVersionID);
+            // setSelectedIds(new Set(allIds));
+            setSelectedIds(new Set());
+        } else {
+            console.warn("fetchOfflineDownloadList returned non-array data:", updatedData);
+            setOfflineDownloadList([]);
+            setSelectedIds(new Set());
+        }
     };
 
 

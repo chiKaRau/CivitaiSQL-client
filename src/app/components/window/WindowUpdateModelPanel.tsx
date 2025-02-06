@@ -5,6 +5,7 @@ import axios from 'axios';
 import { Badge, Col, Carousel, Collapse, Form, OverlayTrigger, Toast, Tooltip, Spinner, Button } from 'react-bootstrap';
 import { BiCategory } from "react-icons/bi";
 import { CiWarning } from "react-icons/ci";
+import FolderDropdown from "../FolderDropdown"
 
 //utils
 import { bookmarkThisModel, initializeDatafromChromeStorage, updateDownloadFilePathIntoChromeStorage, updateSelectedCategoryIntoChromeStorage, callChromeBrowserDownload_v2 } from "../../utils/chromeUtils"
@@ -48,6 +49,39 @@ const updateModelPanel: React.FC<PanelProps> = ({ selectedVersion, modelId, mode
     const [downloadFilePath, setDownloadFilePath] = useState(chrome.downloadFilePath || "")
     const [isHandleRefresh, setIsHandleRefresh] = useState(false);
 
+    // Inline styles
+    const panelContainerStyle = {
+        position: 'relative',
+        display: 'flex',        // enables side-by-side layout
+        width: '100%',
+        height: '100%',
+        backgroundColor: '#fff',
+        border: '1px solid #ccc',
+    };
+
+    const closeButtonStyle = {
+        position: 'absolute',
+        top: '8px',
+        right: '8px',
+        background: 'transparent',
+        border: 'none',
+        fontSize: '18px',
+        cursor: 'pointer',
+    };
+
+    const panelLeftStyle = {
+        flex: 1,
+        padding: '16px',
+        overflowY: 'auto',
+        backgroundColor: '#f9f9f9', // Example color
+    };
+
+    const panelRightStyle = {
+        flex: 1,
+        padding: '16px',
+        overflowY: 'auto',
+        backgroundColor: '#fafafa', // Example color
+    };
 
     useEffect(() => {
         console.log("test-window-selectedVersion");
@@ -60,27 +94,46 @@ const updateModelPanel: React.FC<PanelProps> = ({ selectedVersion, modelId, mode
         setSelectCategory(chrome.selectedCategory)
     }, [chrome])
 
-
     return (
         <div className="panel-container">
             <div className="panel-container-content">
-                <button className="panel-close-button" onClick={onClose}>
-                    &#x2715;
-                </button>
+                <div style={{ ...panelContainerStyle, position: 'relative' as 'relative' }}>
+                    <button className="panel-close-button" onClick={onClose}>
+                        &#x2715;
+                    </button>
+                    {/* Left panel */}
+                    <div style={{ ...panelLeftStyle, overflowY: 'scroll' }}>
+                        <DatabaseUpdateModelPanel
+                            modelID={modelId}
+                            url={modelURL}
+                            modelData={modelData}
+                            selectedVersion={selectedVersion}
+                            selectedCategory={selectedCategory}
+                            downloadFilePath={downloadFilePath}
+                            setDownloadFilePath={setDownloadFilePath}
+                            setHasUpdated={setHasUpdated}
+                            closePanel={onClose}
+                        />
+                    </div>
+                    {/* Right panel */}
+                    <div style={{ ...panelRightStyle, overflowY: 'scroll' }}>
+                        <CategoriesListSelector
+                            downloadFilePath={downloadFilePath}
+                            selectedCategory={selectedCategory}
+                            setSelectCategory={setSelectCategory}
+                        />
 
-                <CategoriesListSelector downloadFilePath={downloadFilePath} selectedCategory={selectedCategory} setSelectCategory={setSelectCategory} />
+                        <DownloadFilePathOptionPanel
+                            downloadFilePath={downloadFilePath}
+                            setDownloadFilePath={setDownloadFilePath}
+                            selectedCategory={selectedCategory}
+                        />
 
-                <DownloadFilePathOptionPanel downloadFilePath={downloadFilePath} setDownloadFilePath={setDownloadFilePath} selectedCategory={selectedCategory} />
+                        <FolderDropdown />
+                    </div>
 
-                <DatabaseUpdateModelPanel modelID={modelId} url={modelURL} modelData={modelData} selectedVersion={selectedVersion}
-                    selectedCategory={selectedCategory}
-                    downloadFilePath={downloadFilePath} setDownloadFilePath={setDownloadFilePath}
-                    setHasUpdated={setHasUpdated}
-                    closePanel={onClose}
-                />
-
-                {/* <FilesPathSettingPanel downloadFilePath={downloadFilePath} setDownloadFilePath={setDownloadFilePath} /> */}
-
+                    {/* <FilesPathSettingPanel downloadFilePath={downloadFilePath} setDownloadFilePath={setDownloadFilePath} /> */}
+                </div>
             </div>
         </div>
     );
