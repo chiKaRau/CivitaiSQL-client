@@ -1463,14 +1463,11 @@ function addCreatorButton(card: HTMLElement) {
     const originalText = `Add ${creatorName} to list`;
     button.textContent = originalText;
 
-    // Set up the click event handler:
-    // When clicked, send an action to React. Based on the response, show a temporary success/fail message.
+    // Set up the click event handler
     button.addEventListener('click', async () => {
       button.textContent = "Processing...";
       try {
-        // Send the action (you can adjust the message structure as needed)
         const response = await sendActionToReact({ action: "addCreator", creator: creatorName });
-
         if (response && response.status === "success") {
           displayTemporaryMessage(button, "Success", originalText);
         } else {
@@ -1481,13 +1478,21 @@ function addCreatorButton(card: HTMLElement) {
       }
     });
 
-    // Insert the button into the card.
-    // This example attempts to insert the button near the creator name.
-    const parentOfCreator = creatorElement.parentElement;
-    if (parentOfCreator && parentOfCreator.parentElement) {
-      parentOfCreator.parentElement.insertAdjacentElement('beforeend', button);
-    } else {
-      card.appendChild(button);
+    // 5) Append inside the footer at the bottom
+    const footer = card.querySelector('.AspectRatioImageCard_footer__FOU7a');
+    if (footer) {
+      // Often there's a nested div like .flex.w-full.flex-col; if so, append to that:
+      const footerContent = footer.querySelector('div.flex.w-full.flex-col.items-start.gap-1');
+      if (footerContent) {
+        footerContent.appendChild(button);
+      } else {
+        // Fallback: just append to the footer
+        footer.appendChild(button);
+      }
+
+      // Style tweaks so it appears nicely at the bottom
+      button.style.display = 'block';
+      button.style.marginTop = '10px';
     }
   }
 }

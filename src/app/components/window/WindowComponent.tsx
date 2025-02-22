@@ -1123,6 +1123,24 @@ const WindowComponent: React.FC = () => {
         }
     };
 
+    // For switching between dropdown and edit mode
+    const [isEditingCreatorUrl, setIsEditingCreatorUrl] = useState(false);
+    const [creatorUrlInputValue, setCreatorUrlInputValue] = useState("");
+
+    // Ref to the dropdown item that has lastChecked true
+    const scrollItemRef = useRef<HTMLDivElement>(null);
+
+    const handleCreatorDropdownToggle = (isOpen: boolean) => {
+        if (isOpen) {
+            setTimeout(() => {
+                if (scrollItemRef.current) {
+                    scrollItemRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 100); // delay for 100ms, adjust as needed
+        }
+    };
+
+
     return (
         <>
 
@@ -1358,47 +1376,106 @@ const WindowComponent: React.FC = () => {
                                     <div>
                                         {/* Put everything in one row (Flex Container) */}
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '3px', margin: '5px' }}>
-                                            <Dropdown>
-                                                <Dropdown.Toggle variant="secondary">
-                                                    {selectedCreatorUrlText || "-- Creator URL List (choose one) --"}
-                                                </Dropdown.Toggle>
-                                                <Dropdown.Menu style={{ maxHeight: "400px", overflowY: "auto" }}>
-                                                    {creatorUrlList.map((item) => (
-                                                        <Dropdown.Item
-                                                            as="div"
-                                                            key={item.creatorUrl}
-                                                            onClick={() => handleSelectCreatorUrl(item)}
-                                                            style={{
-                                                                display: "flex",
-                                                                justifyContent: "space-between",
-                                                                alignItems: "center",
-                                                                cursor: "pointer",
+                                            {isEditingCreatorUrl ? (
+                                                // Edit mode: show an Autocomplete component for creator URLs.
+                                                <Autocomplete
+                                                    freeSolo
+                                                    fullWidth
+                                                    style={{ width: '150px' }} // Ensure the container is 70% width.
+                                                    options={creatorUrlList.map((item) => item.creatorUrl.split('/')[4])}
+                                                    inputValue={creatorUrlInputValue}
+                                                    onInputChange={(event, newInputValue) => {
+                                                        setCreatorUrlInputValue(newInputValue);
+                                                    }}
+                                                    onChange={(event, newValue) => {
+                                                        if (newValue) {
+                                                            const found = creatorUrlList.find(
+                                                                (item) => item.creatorUrl.split('/')[4] === newValue
+                                                            );
+                                                            if (found) {
+                                                                handleSelectCreatorUrl(found);
+                                                            } else {
+                                                                setSelectedCreatorUrlText(newValue);
+                                                            }
+                                                            setIsEditingCreatorUrl(false);
+                                                        }
+                                                    }}
+                                                    renderInput={(params) => (
+                                                        <TextField
+                                                            {...params}
+                                                            fullWidth
+                                                            onBlur={() => {
+                                                                setSelectedCreatorUrlText(creatorUrlInputValue);
+                                                                setIsEditingCreatorUrl(false);
                                                             }}
-                                                        >
-                                                            {/* Left side: creatorUrl and lastChecked */}
-                                                            <span>
-                                                                {item.creatorUrl.split('/')[4]} {item.lastChecked && <FaLeftLong />}
-                                                            </span>
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter') {
+                                                                    setSelectedCreatorUrlText(creatorUrlInputValue);
+                                                                    setIsEditingCreatorUrl(false);
+                                                                }
+                                                            }}
+                                                            autoFocus
+                                                        />
+                                                    )}
+                                                />
+                                            ) : (
+                                                // Normal mode: show the dropdown.
+                                                <Dropdown onToggle={handleCreatorDropdownToggle} style={{ width: '70%' }}>
+                                                    <Dropdown.Toggle
+                                                        variant="secondary"
+                                                        style={{ width: '100%' }}
+                                                        onDoubleClick={() => {
+                                                            // Switch to edit mode on double-click.
+                                                            setCreatorUrlInputValue(selectedCreatorUrlText);
+                                                            setIsEditingCreatorUrl(true);
+                                                        }}
+                                                    >
+                                                        {selectedCreatorUrlText || "-- Creator URL List (choose one) --"}
+                                                    </Dropdown.Toggle>
+                                                    <Dropdown.Menu style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                                                        {creatorUrlList.map((item) => (
+                                                            <Dropdown.Item
+                                                                as="div"
+                                                                key={item.creatorUrl}
+                                                                // Attach the scroll ref if this is the lastChecked item.
+                                                                ref={item.lastChecked ? scrollItemRef : null}
+                                                                onClick={() => handleSelectCreatorUrl(item)}
+                                                                style={{
+                                                                    display: 'flex',
+                                                                    justifyContent: 'space-between',
+                                                                    alignItems: 'center',
+                                                                    cursor: 'pointer',
+                                                                }}
+                                                            >
+                                                                <span>
+                                                                    {!item.lastChecked
+                                                                        ? item.creatorUrl.split('/')[4]
+                                                                        : (
+                                                                            <b>
+                                                                                {item.creatorUrl.split('/')[4]} <FaLeftLong />
+                                                                            </b>
+                                                                        )
+                                                                    }
+                                                                </span>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                                    <span>({item.status})</span>
+                                                                    <Button
+                                                                        variant="link"
+                                                                        style={{ color: 'red', textDecoration: 'none' }}
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleRemoveCreatorUrl(item.creatorUrl);
+                                                                        }}
+                                                                    >
+                                                                        <IoCloseOutline />
+                                                                    </Button>
+                                                                </div>
+                                                            </Dropdown.Item>
+                                                        ))}
+                                                    </Dropdown.Menu>
+                                                </Dropdown>
+                                            )}
 
-                                                            {/* Right side: item.status and remove button side by side */}
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-                                                                <span>({item.status})</span>
-                                                                <Button
-                                                                    variant="link"
-                                                                    style={{ color: "red", textDecoration: "none" }}
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleRemoveCreatorUrl(item.creatorUrl);
-                                                                    }}
-                                                                >
-                                                                    <IoCloseOutline />
-                                                                </Button>
-                                                            </div>
-                                                        </Dropdown.Item>
-
-                                                    ))}
-                                                </Dropdown.Menu>
-                                            </Dropdown>
                                             <OverlayTrigger
                                                 placement={"top"}
                                                 overlay={<Tooltip id="tooltip">Go to {selectedCreatorUrlText}</Tooltip>}
