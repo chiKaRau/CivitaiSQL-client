@@ -44,7 +44,7 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) =>
     const databaseModelsList = databaseData;
 
     const chrome = useSelector((state: AppState) => state.chrome);
-    const { selectedCategory, bookmarkID } = chrome;
+    const { selectedCategory, bookmarkID, downloadFilePath } = chrome;
 
     const [originalModelsList, setOriginalModelsList] = useState<{ name: string; url: string; id: number; baseModel: string; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
     const [modelsList, setModelsList] = useState<{ name: string; url: string; id: number; baseModel: string; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
@@ -136,7 +136,7 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) =>
             return;
         }
 
-        fetchAddRecordToDatabase(selectedCategory, civitaiUrl, dispatch);
+        fetchAddRecordToDatabase(selectedCategory, civitaiUrl, "", dispatch);
         bookmarkThisModel(civitaiData?.type, dispatch)
         props.toggleDatabaseModelInfoPanelOpen()
         setIsLoading(false)

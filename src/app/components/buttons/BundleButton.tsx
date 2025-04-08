@@ -75,7 +75,7 @@ const BundleButton: React.FC = (props: any) => {
             return;
         }
 
-        fetchAddRecordToDatabase(selectedCategory, civitaiUrl, dispatch);
+        fetchAddRecordToDatabase(selectedCategory, civitaiUrl, downloadFilePath, dispatch);
         setIsLoading(false)
     }
 

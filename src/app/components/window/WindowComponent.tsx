@@ -395,7 +395,7 @@ const WindowComponent: React.FC = () => {
     };
 
     const handleAddModeltoDatabase = (url: string) => {
-        fetchAddRecordToDatabase(selectedCategory, url, dispatch);
+        fetchAddRecordToDatabase(selectedCategory, url, downloadFilePath, dispatch);
     }
 
     const handleRemoveBookmarks = async () => {

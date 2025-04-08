@@ -159,12 +159,12 @@ export const fetchDatabaseLatestAddedModelsPanel = async (dispatch: any) => {
 }
 
 
-export const fetchAddRecordToDatabase = async (selectedCategory: string, url: string, dispatch: any) => {
+export const fetchAddRecordToDatabase = async (selectedCategory: string, url: string, downloadFilePath: string, dispatch: any) => {
     try {
         // Clear any previous errors
         dispatch(clearError());
         const response = await axios.post(`${config.domain}/api/create-record-to-all-tables`,
-            { category: selectedCategory, url: url });
+            { category: selectedCategory, url: url, downloadFilePath: downloadFilePath });
 
         const responseData = response.data;
 

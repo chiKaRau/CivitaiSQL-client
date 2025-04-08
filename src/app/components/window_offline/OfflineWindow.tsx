@@ -1349,7 +1349,7 @@ const OfflineWindow: React.FC = () => {
                         // If download is successful, do the DB insert and bookmark
                         if (isDownloadSuccessful) {
                             if (!entry.downloadFilePath.includes("/@scan@/Update/")) {
-                                await fetchAddRecordToDatabase(selectedCategory, civitaiUrl, dispatch);
+                                await fetchAddRecordToDatabase(selectedCategory, civitaiUrl, downloadFilePath, dispatch);
                             }
                             bookmarkThisUrl(
                                 modelVersionObject?.model?.type ?? "N/A",

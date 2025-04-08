@@ -273,7 +273,7 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({ isDarkMode, modify_downlo
 
                 // If download is successful, do the DB insert and bookmark
                 if (isDownloadSuccessful && doAddRecordAndBookmark) {
-                    await fetchAddRecordToDatabase(modify_selectedCategory, civitaiUrl, dispatch);
+                    await fetchAddRecordToDatabase(modify_selectedCategory, civitaiUrl, downloadFilePath, dispatch);
                     bookmarkThisUrl(
                         modelVersionObject?.model?.type ?? "N/A",
                         civitaiUrl,
@@ -296,7 +296,7 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({ isDarkMode, modify_downlo
                 }
 
                 if (doAddRecordAndBookmark) {
-                    await fetchAddRecordToDatabase(modify_selectedCategory, civitaiUrl, dispatch);
+                    await fetchAddRecordToDatabase(modify_selectedCategory, civitaiUrl, downloadFilePath, dispatch);
                     bookmarkThisUrl(
                         modelVersionObject?.model?.type ?? "N/A",
                         civitaiUrl,
