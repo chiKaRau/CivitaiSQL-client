@@ -3199,9 +3199,12 @@ const OfflineWindow: React.FC = () => {
 
                                 {displayMode === 'errorCard' && (
                                     <ErrorCardMode
+                                        isDarkMode={isDarkMode}
                                         modify_downloadFilePath={modify_downloadFilePath}
                                         modify_selectedCategory={modify_selectedCategory}
-                                        isDarkMode={isDarkMode} />
+                                        offlineDownloadList={offlineDownloadList}
+                                        handleRefreshList={handleRefreshList}  // NEW PROP
+                                    />
                                 )}
 
                             </>

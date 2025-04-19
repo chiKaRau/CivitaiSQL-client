@@ -9,7 +9,10 @@ import {
     fetchRemoveFromErrorModelList,
     fetchAddRecordToDatabase,
     fetchDownloadFilesByServer_v2,
+    fetchRemoveOfflineDownloadFileIntoOfflineDownloadList,
 } from '../../api/civitaiSQL_api';
+import axios from 'axios';
+
 import { bookmarkThisUrl, callChromeBrowserDownload_v2 } from '../../utils/chromeUtils';
 import { AppState } from '../../store/configureStore';
 import DownloadFilePathOptionPanel from '../DownloadFilePathOptionPanel';
@@ -17,40 +20,56 @@ import CategoriesListSelector from '../CategoriesListSelector';
 import { BsCloudDownloadFill } from 'react-icons/bs';
 import { FcDownload } from 'react-icons/fc';
 import { IoLibrary } from "react-icons/io5";
+import { MdOutlineFontDownload, MdFontDownload } from "react-icons/md";
 
+
+
+interface OfflineDownloadEntry {
+    civitaiModelID: string;
+    civitaiVersionID: string;
+    imageUrlsArray: string[];
+    downloadFilePath: string;   // ← add this line
+    // ...other properties as defined in your app
+}
 
 interface ErrorCardModeProps {
     isDarkMode: boolean;
     modify_downloadFilePath: string;
     modify_selectedCategory: string;
+    offlineDownloadList?: OfflineDownloadEntry[];
+    handleRefreshList?: () => void;  // NEW PROP
 }
+
 
 interface FetchedModelInfo {
     previewImage: string;
     modelData: any; // Replace with a more precise type if available
     currentImageIndex: number;
+    usingOfflineFallback?: boolean; // flag to mark fallback usage
 }
 
-const ErrorCardMode: React.FC<ErrorCardModeProps> = ({ isDarkMode, modify_downloadFilePath, modify_selectedCategory }) => {
+const ErrorCardMode: React.FC<ErrorCardModeProps> = ({
+    isDarkMode,
+    modify_downloadFilePath,
+    modify_selectedCategory,
+    offlineDownloadList,
+    handleRefreshList
+}) => {
     const dispatch = useDispatch();
 
     // 1) The raw list of error strings from your server
     const [errorList, setErrorList] = useState<string[]>([]);
-
     // 2) Local loading flag for fetching the error list initially
     const [isLoadingList, setIsLoadingList] = useState<boolean>(false);
-
-    // 3) A dictionary of `versionID -> FetchedModelInfo` so we only fetch once per versionID
+    // 3) A dictionary of versionID -> FetchedModelInfo so we only fetch once per versionID
     const [fetchedInfos, setFetchedInfos] = useState<Record<string, FetchedModelInfo>>({});
-
-    // 4) If you want a loading state *per card*, keep track in a local set
+    // 4) If you want a loading state per card, keep track in a local set
     const [loadingVersionIDs, setLoadingVersionIDs] = useState<Set<string>>(new Set());
-
-    const [isHandleRefresh, setIsHandleRefresh] = useState(false);
-
-    const [downloadMethod, setDownloadMethod] = useState("browser")
-
+    const [downloadMethod, setDownloadMethod] = useState("browser");
     const [shouldAddRecordAndBookmark, setShouldAddRecordAndBookmark] = useState<Record<string, boolean>>({});
+
+    // track, per-versionID, whether we force using modify_downloadFilePath
+    const [useModifyPath, setUseModifyPath] = useState<Record<string, boolean>>({});
 
 
     // Called when user toggles the checkbox
@@ -69,12 +88,11 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({ isDarkMode, modify_downlo
     // ----------------------------------
     useEffect(() => {
         let isMounted = true;
-
         const fetchErrorStrings = async () => {
             setIsLoadingList(true);
             try {
                 const data = await fetchGetErrorModelList(dispatch);
-                // data should be an array of strings like "618112_1228199_Illustrious_MaxineDE_IL_v6"
+                // Data should be an array of strings like "618112_1228199_Illustrious_MaxineDE_IL_v6"
                 if (isMounted && Array.isArray(data)) {
                     setErrorList(data);
                 }
@@ -86,24 +104,17 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({ isDarkMode, modify_downlo
                 }
             }
         };
-
         fetchErrorStrings();
-
-        return () => {
-            isMounted = false;
-        };
+        return () => { isMounted = false; };
     }, [dispatch]);
 
     // ----------------------------------
     // Extract versionID from "modelID_versionID_name"
     // e.g. "618112_1228199_Illustrious_MaxineDE_IL_v6"
-    // versionID is the 2nd part if we do .split('_')
     // ----------------------------------
     const getVersionIDFromErrorItem = (errorItem: string) => {
-        // e.g. "618112_1228199_Illustrious_MaxineDE_IL_v6"
         const parts = errorItem.split('_');
-        if (parts.length < 2) return null;
-        return parts[1]; // the second part is versionID
+        return parts.length < 2 ? null : parts[1];
     };
 
     // ----------------------------------
@@ -116,50 +127,91 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({ isDarkMode, modify_downlo
                 console.warn("Could not parse versionID from:", errorItem);
                 return;
             }
-
-            // If we've already fetched this versionID, don't fetch again
             if (fetchedInfos[versionID]) {
                 console.log("Already fetched info for versionID:", versionID);
                 return;
             }
+            setLoadingVersionIDs((prev) => new Set(prev).add(versionID));
+
+            let modelData: any = null;
+            let offlineFallbackUsed = false;
 
             try {
-                // Indicate loading for this particular versionID
-                setLoadingVersionIDs((prev) => new Set(prev).add(versionID));
-
-                // Call your API function
-                const modelData = await fetchCivitaiModelInfoFromCivitaiByVersionID(versionID, dispatch);
-
-                // Since modelData is directly the model, use it directly
-                if (modelData) {
-                    const images = modelData.images || [];
-                    const previewImage = images[0]?.url || "";
-
-                    setFetchedInfos((prev) => ({
-                        ...prev,
-                        [versionID]: {
-                            previewImage,
-                            modelData: modelData, // Directly using modelData
-                            currentImageIndex: 0,
-                        },
-                    }));
-
-                    console.log("Fetched info for versionID:", versionID, modelData);
+                // Call the new API endpoint.
+                const response = await axios.get(`https://civitai.com/api/v1/model-versions/${versionID}`);
+                modelData = response.data;
+            } catch (error: any) {
+                if (error.response && (error.response.status === 400 || error.response.status === 404)) {
+                    console.warn(`API returned ${error.response.status} for versionID: ${versionID}. Searching offlineDownloadList for fallback.`);
+                    if (offlineDownloadList && offlineDownloadList.length > 0) {
+                        const fallbackEntry = offlineDownloadList.find(
+                            (entry: OfflineDownloadEntry) => entry.civitaiVersionID === versionID
+                        );
+                        if (fallbackEntry && fallbackEntry.imageUrlsArray?.length > 0) {
+                            modelData = {
+                                images: fallbackEntry.imageUrlsArray.map((url: string) => ({ url })),
+                            };
+                            offlineFallbackUsed = true;
+                        }
+                    }
                 } else {
-                    console.warn("No valid model info returned for versionID:", versionID);
+                    console.error("Error fetching model version info:", error.message);
                 }
-            } catch (error) {
-                console.error("Error fetching model info for versionID:", versionID, error);
-            } finally {
-                // Remove from loadingVersionIDs
+            }
+            // Final fallback if modelData is still null.
+            if (!modelData && offlineDownloadList && offlineDownloadList.length > 0) {
+                const fallbackEntry = offlineDownloadList.find(
+                    (entry: OfflineDownloadEntry) => entry.civitaiVersionID === versionID
+                );
+                if (fallbackEntry && fallbackEntry.imageUrlsArray?.length > 0) {
+                    modelData = {
+                        images: fallbackEntry.imageUrlsArray.map((url: string) => ({ url })),
+                    };
+                    offlineFallbackUsed = true;
+                }
+            }
+            if (!modelData) {
+                console.warn("No model data available for versionID:", versionID);
                 setLoadingVersionIDs((prev) => {
                     const copy = new Set(prev);
                     copy.delete(versionID);
                     return copy;
                 });
+                return;
             }
+            const images = modelData.images || [];
+            let previewImage = images[0]?.url || "";
+            if (!previewImage && offlineDownloadList && offlineDownloadList.length > 0) {
+                const parts = errorItem.split('_');
+                if (parts.length >= 2) {
+                    const modelID = parts[0];
+                    const fallbackEntry = offlineDownloadList.find(
+                        (entry: OfflineDownloadEntry) =>
+                            entry.civitaiModelID === modelID && entry.civitaiVersionID === versionID
+                    );
+                    if (fallbackEntry && fallbackEntry.imageUrlsArray?.length > 0) {
+                        previewImage = fallbackEntry.imageUrlsArray[0];
+                    }
+                }
+            }
+            // Update state with fetched info including our fallback flag.
+            setFetchedInfos((prev) => ({
+                ...prev,
+                [versionID]: {
+                    previewImage,
+                    modelData,
+                    currentImageIndex: 0,
+                    usingOfflineFallback: offlineFallbackUsed,
+                },
+            }));
+            console.log("Fetched info for versionID:", versionID, modelData);
+            setLoadingVersionIDs((prev) => {
+                const copy = new Set(prev);
+                copy.delete(versionID);
+                return copy;
+            });
         },
-        [dispatch, fetchedInfos]
+        [dispatch, fetchedInfos, offlineDownloadList]
     );
 
     // ----------------------------------
@@ -170,7 +222,6 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({ isDarkMode, modify_downlo
             setFetchedInfos((prev) => {
                 const info = prev[versionID];
                 if (!info) return prev;
-
                 const nextIndex = info.currentImageIndex + 1;
                 if (nextIndex < (info.modelData.images?.length || 0)) {
                     return {
@@ -182,12 +233,11 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({ isDarkMode, modify_downlo
                         },
                     };
                 } else {
-                    // No more images to show; you might set a default placeholder
                     return {
                         ...prev,
                         [versionID]: {
                             ...info,
-                            previewImage: "", // Could set to a default image URL if desired
+                            previewImage: "",
                             currentImageIndex: nextIndex,
                         },
                     };
@@ -214,8 +264,27 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({ isDarkMode, modify_downlo
             downloadUrl: file.downloadUrl,
         })) || [];
 
-        // Example of modifying the download file path - customize as needed
-        const downloadFilePath = modify_downloadFilePath;
+        const offlineEntry = offlineDownloadList?.find(
+            (e) => e.civitaiModelID === modelID && e.civitaiVersionID === versionID
+        );
+        // only treat offlineEntry.downloadFilePath as valid if offlineEntry exists
+        const offlinePath =
+            offlineEntry?.downloadFilePath && offlineEntry.downloadFilePath !== 'N/A'
+                ? offlineEntry.downloadFilePath
+                : '';
+
+        // decide which path to actually use (we’ll wire the toggle in the UI next)
+        const downloadFilePath = (!offlinePath || useModifyPath[versionID])
+            ? modify_downloadFilePath
+            : offlinePath;
+
+        // **NEW**: block pending
+        if (downloadFilePath === '/@scan@/ACG/Pending/') {
+            alert('Invalid download path: Pending entries cannot be downloaded');
+            return;
+        }
+
+
 
         // Check for null or empty
         if (
@@ -311,6 +380,53 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({ isDarkMode, modify_downlo
         }
     }
 
+    const handleRemoveBoth = useCallback(async (modelID: string, versionID: string) => {
+        const userConfirmed = window.confirm("Are you sure you want to remove both error and offline download entries for this model?");
+        if (!userConfirmed) {
+            console.log("User canceled the removal operation.");
+            return;
+        }
+
+        console.log(`Remove Both clicked for VersionID: ${versionID}`);
+
+        // Prepare the model object (same as Delete)
+        const modelObject = {
+            civitaiModelID: modelID,
+            civitaiVersionID: versionID,
+        };
+
+        try {
+            // Remove from the error model list first
+            await fetchRemoveFromErrorModelList(modelObject, dispatch);
+            // Then remove from the offline download list
+            await fetchRemoveOfflineDownloadFileIntoOfflineDownloadList(modelObject, dispatch);
+
+            // Upon successful deletion, update the UI: remove the error item from errorList
+            setErrorList((prev) =>
+                prev.filter((item) => {
+                    const parts = item.split('_');
+                    return !(parts[0] === modelID && parts[1] === versionID);
+                })
+            );
+
+            // Also remove from fetchedInfos
+            setFetchedInfos((prev) => {
+                const newFetched = { ...prev };
+                delete newFetched[versionID];
+                return newFetched;
+            });
+
+            console.log(`Successfully removed both entries for VersionID: ${versionID}`);
+            // Call the refresh handler to update the list
+            handleRefreshList && handleRefreshList();
+
+        } catch (error: any) {
+            console.error(`Failed to remove both entries for VersionID: ${versionID}:`, error.message);
+            // Optionally, you can show a user-facing error notification here
+        }
+    }, [dispatch]);
+
+
     const handleDelete = useCallback(async (modelID: string, versionID: string) => {
 
         const userConfirmed = window.confirm("Are you sure you want to delete this error model?");
@@ -351,11 +467,8 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({ isDarkMode, modify_downlo
         }
     }, [dispatch]);
 
-    // ---------------
-    // RENDER
-    // ---------------
+    // --------------- RENDER ---------------
     if (isLoadingList) {
-        // Still fetching the error list
         return (
             <div style={{ textAlign: 'center', marginTop: '20px', color: isDarkMode ? '#fff' : '#000' }}>
                 <Spinner animation="border" role="status" />
@@ -363,7 +476,6 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({ isDarkMode, modify_downlo
             </div>
         );
     }
-
     if (!errorList || errorList.length === 0) {
         return (
             <div style={{ color: isDarkMode ? '#fff' : '#000', textAlign: 'center' }}>
@@ -374,33 +486,17 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({ isDarkMode, modify_downlo
 
     return (
         <>
-            <div
-                style={{
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: '20px',
-                    justifyContent: 'center',
-                }}
-            >
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', justifyContent: 'center' }}>
                 {errorList.map((errorItem, index) => {
                     const versionID = getVersionIDFromErrorItem(errorItem) || "unknown";
                     const fetched = fetchedInfos[versionID];
                     const isCardLoading = loadingVersionIDs.has(versionID);
-
-                    // If we have fetched info, show the current preview image
                     const previewImage = fetched?.previewImage || "";
-
-                    // Parse out the modelID and name from the item just for display
-                    // e.g. "618112_1228199_Illustrious_MaxineDE_IL_v6"
                     const parts = errorItem.split('_');
                     const modelID = parts[0] || "unknown";
-                    const restName = parts.slice(2).join('_'); // everything after versionID
-
-                    // Extract baseModel and earlyAccessEndsAt if available
+                    const restName = parts.slice(2).join('_');
                     const baseModel = fetched?.modelData?.baseModel || "N/A";
                     const earlyAccessEndsAt = fetched?.modelData?.earlyAccessEndsAt || null;
-
-                    // Get checkbox state or default to true if not yet set
                     const isChecked = shouldAddRecordAndBookmark[versionID] ?? true;
 
                     return (
@@ -412,58 +508,35 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({ isDarkMode, modify_downlo
                                 borderRadius: '6px',
                                 backgroundColor: isDarkMode ? '#333' : '#fff',
                                 color: isDarkMode ? '#fff' : '#000',
-                                boxShadow: isDarkMode
-                                    ? '2px 2px 8px rgba(255,255,255,0.1)'
-                                    : '2px 2px 8px rgba(0,0,0,0.1)',
+                                boxShadow: isDarkMode ? '2px 2px 8px rgba(255,255,255,0.1)' : '2px 2px 8px rgba(0,0,0,0.1)',
                                 cursor: 'pointer',
                                 padding: '10px',
                                 position: 'relative',
                             }}
-                            // Click card to fetch info (if not fetched yet)
                             onClick={() => handleCardClick(errorItem)}
                         >
-                            {/* BaseModel Badge on Top-Left */}
                             {fetched && baseModel !== "N/A" && (
                                 <Badge
                                     bg="primary"
-                                    style={{
-                                        position: 'absolute',
-                                        top: '10px',
-                                        left: '10px',
-                                        fontSize: '0.75rem',
-                                    }}
+                                    style={{ position: 'absolute', top: '10px', left: '10px', fontSize: '0.75rem' }}
                                 >
                                     {baseModel}
                                 </Badge>
                             )}
-
-                            {/* Early Access Badge on Top-Right */}
                             {fetched && earlyAccessEndsAt && (
                                 <Badge
                                     bg="warning"
                                     text="dark"
-                                    style={{
-                                        position: 'absolute',
-                                        top: '10px',
-                                        right: '10px',
-                                        fontSize: '0.75rem',
-                                    }}
+                                    style={{ position: 'absolute', top: '10px', right: '10px', fontSize: '0.75rem' }}
                                 >
                                     {new Date(earlyAccessEndsAt).toLocaleDateString()}
                                 </Badge>
                             )}
-
-                            {/* If no preview yet, show a placeholder, else show the image */}
                             {previewImage ? (
                                 <img
                                     src={previewImage}
                                     alt="preview"
-                                    style={{
-                                        width: '100%',
-                                        maxHeight: '200px',
-                                        objectFit: 'cover',
-                                        borderRadius: '4px',
-                                    }}
+                                    style={{ width: '100%', maxHeight: '200px', objectFit: 'cover', borderRadius: '4px' }}
                                     onError={() => handleImageError(versionID)}
                                 />
                             ) : (
@@ -478,11 +551,14 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({ isDarkMode, modify_downlo
                                         borderRadius: '4px',
                                     }}
                                 >
-                                    {isCardLoading ? (
-                                        <Spinner animation="border" role="status" />
-                                    ) : (
-                                        <span>No preview yet (click to fetch)</span>
-                                    )}
+                                    {isCardLoading ? <Spinner animation="border" role="status" /> : <span>No preview yet (click to fetch)</span>}
+                                </div>
+                            )}
+
+                            {/* Fallback warning text */}
+                            {fetched?.usingOfflineFallback && (
+                                <div style={{ textAlign: 'center', color: 'red', fontSize: '0.8rem', marginTop: '5px' }}>
+                                    Fetch failed – loaded from offline list
                                 </div>
                             )}
 
@@ -503,61 +579,98 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({ isDarkMode, modify_downlo
                                         Visit Model
                                     </a>
                                 </p>
+
+                                {(() => {
+                                    const entry = offlineDownloadList?.find(
+                                        e => e.civitaiModelID === modelID && e.civitaiVersionID === versionID
+                                    );
+                                    const offlinePath = entry?.downloadFilePath && entry.downloadFilePath !== 'N/A'
+                                        ? entry.downloadFilePath
+                                        : '';
+                                    const isUsingModify = useModifyPath[versionID];
+                                    const displayPath = (!offlinePath || isUsingModify)
+                                        ? modify_downloadFilePath
+                                        : offlinePath;
+
+                                    return (
+                                        <p style={{ margin: '4px 0', fontStyle: 'italic', fontSize: '0.9rem', display: 'flex', alignItems: 'center' }}>
+                                            <strong>Download Path:</strong> {displayPath}
+                                            <span
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setUseModifyPath(prev => ({
+                                                        ...prev,
+                                                        [versionID]: !prev[versionID]
+                                                    }));
+                                                }}
+                                                style={{ cursor: 'pointer', marginLeft: '6px' }}
+                                                title="Click to toggle between offline and modify paths"
+                                            >
+                                                {useModifyPath[versionID]
+                                                    ? <MdOutlineFontDownload />
+                                                    : <MdFontDownload />
+                                                }
+                                            </span>
+
+                                        </p>
+                                    );
+                                })()}
+
+
                             </div>
 
-                            {/* Download and Delete Buttons */}
-
-                            <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'space-between' }}>
+                            {/* Group download, delete and remove buttons on the same line */}
+                            <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                 {fetched && (
-                                    <OverlayTrigger placement={"top"}
-                                        overlay={<Tooltip id="tooltip">{`Download By ${downloadMethod === "server" ? "server" : "browser"}`}</Tooltip>}>
+                                    <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip">{`Download By ${downloadMethod === "server" ? "server" : "browser"}`}</Tooltip>}>
                                         <Dropdown as={ButtonGroup}>
-                                            <Button variant="success"
-                                                onClick={() => handleDownload(modelID, versionID, fetched?.modelData)} >
+                                            <Button variant="success" onClick={() => handleDownload(modelID, versionID, fetched?.modelData)}>
                                                 {downloadMethod === "server" ? <BsCloudDownloadFill /> : <FcDownload />}
                                             </Button>
                                             <Dropdown.Toggle split variant="success" id="dropdown-split-basic" />
                                             <Dropdown.Menu>
-                                                <Dropdown.Item
-                                                    active={downloadMethod === "server"}
-                                                    onClick={() => setDownloadMethod("server")} >
+                                                <Dropdown.Item active={downloadMethod === "server"} onClick={() => setDownloadMethod("server")}>
                                                     server
                                                 </Dropdown.Item>
-                                                <Dropdown.Item
-                                                    active={downloadMethod === "browser"}
-                                                    onClick={() => setDownloadMethod("browser")} >
+                                                <Dropdown.Item active={downloadMethod === "browser"} onClick={() => setDownloadMethod("browser")}>
                                                     browser
                                                 </Dropdown.Item>
                                             </Dropdown.Menu>
                                         </Dropdown>
                                     </OverlayTrigger>
                                 )}
+                                {fetched && (
+                                    <OverlayTrigger
+                                        placement="top"
+                                        overlay={
+                                            <Tooltip id={`tooltip-add-${versionID}`}>
+                                                Add record to database and bookmark it
+                                            </Tooltip>
+                                        }
+                                    >
+                                        <Form.Check
+                                            type="checkbox"
+                                            id={`addRecordBookmark-${versionID}`}
+                                            label={<IoLibrary size={16} />}
+                                            checked={isChecked}
+                                            onChange={(e) => {
+                                                e.stopPropagation();
+                                                handleCheckboxChange(versionID, e.target.checked);
+                                            }}
+                                            style={{ cursor: 'pointer' }}
+                                        />
+                                    </OverlayTrigger>
+                                )}
 
-                                {fetched && (<>
-                                    <Form.Check
-                                        type="checkbox"
-                                        id={`addRecordBookmark-${versionID}`}
-                                        label={<IoLibrary size={16} />}
-                                        checked={isChecked}
-                                        onChange={(e) => {
-                                            e.stopPropagation();
-                                            handleCheckboxChange(versionID, e.target.checked);
-                                        }}
-                                    />
-                                </>)}
-
-                                <Button
-                                    variant="danger"
-                                    size="sm"
-                                    onClick={(e) => {
-                                        e.stopPropagation(); // Prevent triggering card click
-                                        handleDelete(modelID, versionID);
-                                    }}
-                                >
-                                    Delete
-                                </Button>
+                                <div style={{ display: 'flex', gap: '5px' }}>
+                                    <Button variant="danger" size="sm" onClick={(e) => { e.stopPropagation(); handleDelete(modelID, versionID); }}>
+                                        Delete
+                                    </Button>
+                                    <Button variant="warning" size="sm" onClick={(e) => { e.stopPropagation(); handleRemoveBoth(modelID, versionID); }}>
+                                        Remove Both
+                                    </Button>
+                                </div>
                             </div>
-
                         </div>
                     );
                 })}
