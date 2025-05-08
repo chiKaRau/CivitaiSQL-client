@@ -28,6 +28,7 @@
     "bootstrap": "^5.3.2",
     "chrome-extension-typescript-starter": "file:",
     "downshift": "^9.0.8",
+    "fuse.js": "^7.1.0",
     "install": "^0.13.0",
     "jszip": "^3.10.1",
     "npm": "^10.2.5",

@@ -5,6 +5,9 @@ import { useDispatch } from 'react-redux';
 import { FaClipboard } from 'react-icons/fa';
 import { fetchGetFoldersList } from "../api/civitaiSQL_api";
 import { updateDownloadFilePath } from '../store/actions/chromeActions';
+import { InputGroup, FormControl } from 'react-bootstrap';
+
+import Fuse from 'fuse.js';
 
 interface FolderDropdownProps {
     filterText?: string;
@@ -19,6 +22,9 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText }) => {
     const [clipboardText, setClipboardText] = useState<string>('');
     const [filteredFolders, setFilteredFolders] = useState<string[]>([]);
     const [selectedFolder, setSelectedFolder] = useState<string>('');
+
+    const [threshold, setThreshold] = useState<number>(0.35);
+
 
     // Always keep our default folder constant in one place
     const DEFAULT_FOLDER = '/@scan@/ACG/Pending/';
@@ -59,20 +65,23 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText }) => {
 
     // Whenever folders list or the filter text changes, we re-filter
     useEffect(() => {
-        if (effectiveFilterText.trim().length > 0) {
-            // Filter everything except the default
-            const filtered = foldersList.filter(folder =>
-                folder !== DEFAULT_FOLDER &&
-                folder.toLowerCase().includes(effectiveFilterText.toLowerCase())
-            );
-            // Always prepend the default folder
-            filtered.unshift(DEFAULT_FOLDER);
-            setFilteredFolders(filtered);
-        } else {
-            // If there's no filter text, just show everything plus the default at the front
+        const term = effectiveFilterText.trim();
+        if (!term) {
             setFilteredFolders([]);
+            return;
         }
-    }, [foldersList, effectiveFilterText]);
+
+        const fuse = new Fuse(foldersList, {
+            threshold,        // ← use the dynamic state here
+            ignoreLocation: true,
+        });
+
+        const results = fuse.search(term).map(r => r.item);
+        const finalList = [DEFAULT_FOLDER, ...results.filter(f => f !== DEFAULT_FOLDER)];
+        setFilteredFolders(finalList);
+    }, [foldersList, effectiveFilterText, threshold]); // ← include threshold
+
+
 
 
     const handleSelectFolder = (folder: string) => {
@@ -137,6 +146,18 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText }) => {
                         ))}
                     </Dropdown.Menu>
                 </Dropdown>
+
+                <FormControl
+                    type="number"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={threshold}
+                    onChange={e => setThreshold(Number(e.target.value))}
+                    style={{ width: '80px' }}
+                    aria-label="Fuzzy threshold"
+                    title="0 = exact match, 1 = very fuzzy"
+                />
 
                 <OverlayTrigger
                     placement="top"
