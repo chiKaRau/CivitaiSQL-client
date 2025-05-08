@@ -2741,6 +2741,36 @@ const OfflineWindow: React.FC = () => {
                                         overflowY: 'auto',
                                     }}
                                 >
+
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        padding: '0 8px'
+                                    }}>
+                                        <Button
+                                            size="sm"
+                                            disabled={tagPage === 0}
+                                            onClick={e => { e.stopPropagation(); setTagPage(p => p - 1); }}
+                                        >
+                                            Prev
+                                        </Button>
+
+                                        <span style={{ lineHeight: '32px' }}>
+                                            {tagPage + 1} / {totalTagPages}
+                                        </span>
+
+                                        <Button
+                                            size="sm"
+                                            disabled={tagPage + 1 >= totalTagPages}
+                                            onClick={e => { e.stopPropagation(); setTagPage(p => p + 1); }}
+                                        >
+                                            Next
+                                        </Button>
+                                    </div>
+
+                                    <Dropdown.Divider />
+
                                     {paginatedTags.map((tag) => (
                                         <Dropdown.Item
                                             as="div"
