@@ -254,6 +254,15 @@ const OfflineWindow: React.FC = () => {
     const modify_downloadFilePath = chromeData.downloadFilePath;
     const modify_selectedCategory = chromeData.selectedCategory;
 
+
+    // how many *entries* per page of tags:
+    const TAG_ENTRIES_PER_PAGE = 100;
+
+    // how many tags per page
+    const TAGS_PER_PAGE = 100;
+    // current page index, 0-based
+    const [tagPage, setTagPage] = useState(0);
+
     // 1) On mount, fetch the initial list of excluded tags from the server
     useEffect(() => {
         fetchExcludedTags();
@@ -352,7 +361,7 @@ const OfflineWindow: React.FC = () => {
             .sort((a, b) => b[1] - a[1])
             .filter(([tag]) => tag.length >= 3 && !/^\d+$/.test(tag));
 
-        return sorted.slice(0, 100).map(([tag]) => tag);
+        return sorted.map(([tag]) => tag);
     };
 
 
@@ -654,11 +663,18 @@ const OfflineWindow: React.FC = () => {
 
 
     // Recompute mostFrequentPendingTags when offlineDownloadList, excludedTags, or tagSource changes
+    const [allTags, setAllTags] = useState<string[]>([]);
     useEffect(() => {
-        const dataForTags = tagSource === 'other' ? filteredDownloadList : offlineDownloadList;
-        const computed = computeTopTagsFromPending(dataForTags, excludedTags, tagSource);
-        setMostFrequentPendingTags(computed);
-    }, [offlineDownloadList, excludedTags, tagSource, filteredDownloadList]);
+        const data = tagSource === 'other'
+            ? filteredDownloadList
+            : offlineDownloadList;
+
+        const tags = computeTopTagsFromPending(data, excludedTags, tagSource);
+        setAllTags(tags);
+        setTagPage(0);  // reset to page 1 on source change
+    }, [offlineDownloadList, filteredDownloadList, excludedTags, tagSource]);
+
+
 
     // **Add Pagination State and Logic**
     const [currentPage, setCurrentPage] = useState(1);
@@ -1656,6 +1672,19 @@ const OfflineWindow: React.FC = () => {
             return false;
         });
     };
+
+
+    useEffect(() => {
+        setTagPage(0);
+    }, [tagSource, filteredDownloadList]);
+
+    const paginatedTags = allTags.slice(
+        tagPage * TAGS_PER_PAGE,
+        (tagPage + 1) * TAGS_PER_PAGE
+    );
+
+    const totalTagPages = Math.max(1, Math.ceil(allTags.length / TAGS_PER_PAGE));
+
 
     // **BigCardMode Component Implementation**
     const BigCardMode: React.FC<{
@@ -2712,7 +2741,7 @@ const OfflineWindow: React.FC = () => {
                                         overflowY: 'auto',
                                     }}
                                 >
-                                    {mostFrequentPendingTags.map((tag) => (
+                                    {paginatedTags.map((tag) => (
                                         <Dropdown.Item
                                             as="div"
                                             key={tag}
@@ -2751,6 +2780,35 @@ const OfflineWindow: React.FC = () => {
                                             </div>
                                         </Dropdown.Item>
                                     ))}
+
+                                    <Dropdown.Divider />
+
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        padding: '0 8px'
+                                    }}>
+                                        <Button
+                                            size="sm"
+                                            disabled={tagPage === 0}
+                                            onClick={e => { e.stopPropagation(); setTagPage(p => p - 1); }}
+                                        >
+                                            Prev
+                                        </Button>
+
+                                        <span style={{ lineHeight: '32px' }}>
+                                            {tagPage + 1} / {totalTagPages}
+                                        </span>
+
+                                        <Button
+                                            size="sm"
+                                            disabled={tagPage + 1 >= totalTagPages}
+                                            onClick={e => { e.stopPropagation(); setTagPage(p => p + 1); }}
+                                        >
+                                            Next
+                                        </Button>
+                                    </div>
                                 </Dropdown.Menu>
                             </Dropdown>
                         )}
