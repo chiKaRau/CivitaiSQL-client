@@ -1140,6 +1140,10 @@ const WindowComponent: React.FC = () => {
         }
     };
 
+    // inside WindowComponent, before return(...)
+    const totalCreators = creatorUrlList.length;
+    const newCreatorsCount = creatorUrlList.filter(item => item.status === "new").length;
+
 
     return (
         <>
@@ -1374,6 +1378,13 @@ const WindowComponent: React.FC = () => {
                                 icons={<PiTabs />}
                                 buttons={
                                     <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '8px' }}>
+                                            <span style={{ fontWeight: 'bold' }}>Total:</span>
+                                            <span>{totalCreators}</span>
+                                            <span style={{ fontWeight: 'bold' }}>New:</span>
+                                            <span>{newCreatorsCount}</span>
+                                        </div>
+
                                         {/* Put everything in one row (Flex Container) */}
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '3px', margin: '5px' }}>
                                             {isEditingCreatorUrl ? (
