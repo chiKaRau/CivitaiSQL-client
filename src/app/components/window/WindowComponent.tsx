@@ -930,7 +930,7 @@ const WindowComponent: React.FC = () => {
                 if (!activeTab || !activeTab.id) return;
                 await chrome.tabs.update(activeTab.id, { url });
             }
-            await fetchUpdateCreatorUrlList(url, "checked", true, selectedRating, dispatch)
+            await fetchUpdateCreatorUrlList(url, "checked", true, "N/A", dispatch)
             handleRefreshList();
             handleSetOriginalTab()
         } catch (error) {
@@ -946,38 +946,59 @@ const WindowComponent: React.FC = () => {
         goToUrlInBrowserTab(url);
     };
 
+    // 2) Previous “new” in filtered list
     const handlePrevious = () => {
-        if (currentCreatorUrlIndex === null) return;
+        if (currentCreatorUrlIndex == null) return;
 
-        // Start from the current index and loop through the whole list
-        let newIndex = currentCreatorUrlIndex;
-        for (let i = 0; i < creatorUrlList.length; i++) {
-            // Decrement index and wrap around using modulo arithmetic
-            newIndex = (newIndex - 1 + creatorUrlList.length) % creatorUrlList.length;
-            if (creatorUrlList[newIndex].status === "new") {
-                setCurrentCreatorUrlIndex(newIndex);
-                setSelectedCreatorUrlText(creatorUrlList[newIndex].creatorUrl.split('/')[4]);
-                goToUrlInBrowserTab(creatorUrlList[newIndex].creatorUrl);
-                return; // Stop once the first new item is found
-            }
+        // Build only the rating-filtered + status==="new" list
+        const navigable = filteredCreatorUrlList.filter(item => item.status === "new");
+        if (navigable.length === 0) return;
+
+        // What URL are we currently on?
+        const currentUrl = creatorUrlList[currentCreatorUrlIndex].creatorUrl;
+
+        // Find its position in the navigable array
+        let idx = navigable.findIndex(item => item.creatorUrl === currentUrl);
+
+        // If it isn't in there (it got filtered out), jump to the last one
+        if (idx === -1) {
+            idx = navigable.length - 1;
         }
+
+        // Step backward (wrap)
+        const prevItem = idx > 0
+            ? navigable[idx - 1]
+            : navigable[navigable.length - 1];
+
+        // Map it back into the full list index
+        const newIndex = creatorUrlList.findIndex(item => item.creatorUrl === prevItem.creatorUrl);
+        setCurrentCreatorUrlIndex(newIndex);
+        setSelectedCreatorUrlText(prevItem.creatorUrl.split('/')[4]);
+        goToUrlInBrowserTab(prevItem.creatorUrl);
     };
 
+    // 3) Next “new” in filtered list
     const handleNext = () => {
-        if (currentCreatorUrlIndex === null) return;
+        if (currentCreatorUrlIndex == null) return;
 
-        // Start from the current index and loop through the whole list
-        let newIndex = currentCreatorUrlIndex;
-        for (let i = 0; i < creatorUrlList.length; i++) {
-            // Increment index and wrap around using modulo arithmetic
-            newIndex = (newIndex + 1) % creatorUrlList.length;
-            if (creatorUrlList[newIndex].status === "new") {
-                setCurrentCreatorUrlIndex(newIndex);
-                setSelectedCreatorUrlText(creatorUrlList[newIndex].creatorUrl.split('/')[4]);
-                goToUrlInBrowserTab(creatorUrlList[newIndex].creatorUrl);
-                return; // Stop once the first new item is found
-            }
+        const navigable = filteredCreatorUrlList.filter(item => item.status === "new");
+        if (navigable.length === 0) return;
+
+        const currentUrl = creatorUrlList[currentCreatorUrlIndex].creatorUrl;
+        let idx = navigable.findIndex(item => item.creatorUrl === currentUrl);
+
+        // If filtered out, start from before the first (so +1 → first)
+        if (idx === -1) {
+            idx = -1;
         }
+
+        // Step forward (wrap)
+        const nextItem = navigable[(idx + 1) % navigable.length];
+
+        const newIndex = creatorUrlList.findIndex(item => item.creatorUrl === nextItem.creatorUrl);
+        setCurrentCreatorUrlIndex(newIndex);
+        setSelectedCreatorUrlText(nextItem.creatorUrl.split('/')[4]);
+        goToUrlInBrowserTab(nextItem.creatorUrl);
     };
 
     // Conditionally disable buttons if no prev/next
@@ -1237,6 +1258,9 @@ const WindowComponent: React.FC = () => {
         return counts;
     }, [creatorUrlList, ratingOrder]);
 
+    const navigableCreators = filteredCreatorUrlList.filter(item => item.status === "new");
+
+    const hasFilteredNewItems = filteredCreatorUrlList.some(item => item.status === "new");
 
     return (
         <>
@@ -1594,7 +1618,7 @@ const WindowComponent: React.FC = () => {
                                                 placement={"top"}
                                                 overlay={<Tooltip id="tooltip">Previous Page</Tooltip>}
                                             >
-                                                <Button variant="success" onClick={handlePrevious} disabled={!hasNewItems}>
+                                                <Button variant="success" onClick={handlePrevious} disabled={!hasFilteredNewItems}>
                                                     <MdSkipPrevious />
                                                 </Button>
                                             </OverlayTrigger>
@@ -1603,7 +1627,7 @@ const WindowComponent: React.FC = () => {
                                                 placement={"top"}
                                                 overlay={<Tooltip id="tooltip">Next Page</Tooltip>}
                                             >
-                                                <Button variant="success" onClick={handleNext} disabled={!hasNewItems}>
+                                                <Button variant="success" onClick={handleNext} disabled={!hasFilteredNewItems}>
                                                     <MdSkipNext />
                                                 </Button>
                                             </OverlayTrigger>
