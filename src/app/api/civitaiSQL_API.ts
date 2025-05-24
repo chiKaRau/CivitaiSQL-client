@@ -240,12 +240,14 @@ export const fetchUpdateRecordAtDatabase = async (id: number, url: string, selec
     }
 }
 
-export const fetchUpdateCreatorUrlList = async (creatorUrl: string, status: string, lastChecked: boolean, dispatch: any) => {
+export const fetchUpdateCreatorUrlList = async (creatorUrl: string, status: string,
+    lastChecked: boolean, selectedRating: string, dispatch: any) => {
+
     try {
         // Clear any previous errors
         dispatch(clearError());
         const response = await axios.post(`${config.domain}/api/update_creator_url_list`,
-            { creatorUrl, status, lastChecked });
+            { creatorUrl, status, lastChecked, rating: selectedRating });
 
         const responseData = response.data;
 

@@ -6,7 +6,7 @@ import { AppState } from '../../store/configureStore';
 import { updateDownloadFilePath } from "../../store/actions/chromeActions"
 
 //Icons Components
-import { AiFillFolderOpen } from "react-icons/ai"
+import { AiFillFolderOpen, AiOutlineArrowUp, AiOutlineArrowDown } from "react-icons/ai"
 import { BsDownload, BsPencilFill } from 'react-icons/bs';
 import { TbDatabaseSearch, TbDatabasePlus, TbDatabaseMinus } from "react-icons/tb";
 import { PiPlusMinusFill } from "react-icons/pi";
@@ -77,6 +77,7 @@ interface CreatorUrlItem {
     creatorUrl: string;
     lastChecked: boolean;
     status: string;
+    rating: string;
 }
 
 const WindowComponent: React.FC = () => {
@@ -130,6 +131,23 @@ const WindowComponent: React.FC = () => {
     const [lastUpdateProcessedIndex, setLastUpdateProcessedIndex] = useState(0);
 
     const [isHandleRefresh, setIsHandleRefresh] = useState(false);
+
+    // at the top of your component
+    const ratingOrder = ["EX", "SSS", "SS", "S", "A", "B", "C", "D", "E", "F", "N/A"];
+    const [selectedRating, setSelectedRating] = useState<string>("N/A");
+
+    // after const [selectedRating,…]
+    const [ratingFilters, setRatingFilters] = useState<Record<string, boolean>>(
+        () => ratingOrder.reduce((acc, r) => ({ ...acc, [r]: true }), {})
+    );
+
+    const allSelected = ratingOrder.every(r => ratingFilters[r]);
+
+    // Helper to toggle all on/off
+    const toggleAllRatings = () => {
+        const newVal = !allSelected;
+        setRatingFilters(ratingOrder.reduce((acc, r) => ({ ...acc, [r]: newVal }), {}));
+    };
 
     useEffect(() => {
         resetCheckedUrlList();
@@ -203,10 +221,16 @@ const WindowComponent: React.FC = () => {
 
     async function fetchCreatorUrlList() {
         const list = await fetchGetCreatorUrlList(dispatch);
-        if (list && Array.isArray(list)) {
-            setCreatorUrlList(list);
+        if (Array.isArray(list)) {
+            setCreatorUrlList(
+                list.map(item => ({
+                    ...item,
+                    rating: item.rating ?? "N/A"
+                }))
+            );
         }
     }
+
 
     const [selectedCreatorUrlText, setSelectedCreatorUrlText] = useState("");
 
@@ -236,7 +260,7 @@ const WindowComponent: React.FC = () => {
 
             let creatorUrl = `https://civitai.com/user/${creator}/models`
 
-            result = await fetchUpdateCreatorUrlList(creatorUrl, "new", false, dispatch);
+            result = await fetchUpdateCreatorUrlList(creatorUrl, "new", false, "N/A", dispatch);
         }
         sendResponse(result || { status: "failure" })
     }
@@ -833,6 +857,60 @@ const WindowComponent: React.FC = () => {
         }
     }, [creatorUrlList, currentCreatorUrlIndex]);
 
+    useEffect(() => {
+        if (currentCreatorUrlIndex != null) {
+            const r = creatorUrlList[currentCreatorUrlIndex].rating;
+            setSelectedRating(r);
+        }
+    }, [currentCreatorUrlIndex, creatorUrlList]);
+
+    const handleRatingUp = () => {
+        if (currentCreatorUrlIndex == null) return;
+        const cur = selectedRating;
+        const idx = ratingOrder.indexOf(cur);
+        const next = ratingOrder[Math.max(0, idx - 1)];
+        setSelectedRating(next);
+        setCreatorUrlList(list =>
+            list.map((it, i) =>
+                i === currentCreatorUrlIndex ? { ...it, rating: next } : it
+            )
+        );
+    };
+
+    const handleRatingDown = () => {
+        if (currentCreatorUrlIndex == null) return;
+        const cur = selectedRating;
+        const idx = ratingOrder.indexOf(cur);
+        const next = ratingOrder[Math.min(ratingOrder.length - 1, idx + 1)];
+        setSelectedRating(next);
+        setCreatorUrlList(list =>
+            list.map((it, i) =>
+                i === currentCreatorUrlIndex ? { ...it, rating: next } : it
+            )
+        );
+    };
+
+    const handleApplyRating = async () => {
+        if (currentCreatorUrlIndex == null) return;
+
+        const { creatorUrl, status, lastChecked } =
+            creatorUrlList[currentCreatorUrlIndex];
+
+        // Use your updated helper:
+        const result = await fetchUpdateCreatorUrlList(
+            creatorUrl,
+            status,
+            lastChecked,
+            selectedRating,   // ← pass the rating
+            dispatch
+        );
+
+        if (result && result.status === "success") {
+            // Refresh your list so the UI shows the saved rating
+            fetchCreatorUrlList();
+        }
+    };
+
 
 
     // A helper to update the tab to the new URL
@@ -852,7 +930,7 @@ const WindowComponent: React.FC = () => {
                 if (!activeTab || !activeTab.id) return;
                 await chrome.tabs.update(activeTab.id, { url });
             }
-            await fetchUpdateCreatorUrlList(url, "checked", true, dispatch)
+            await fetchUpdateCreatorUrlList(url, "checked", true, selectedRating, dispatch)
             handleRefreshList();
             handleSetOriginalTab()
         } catch (error) {
@@ -1144,6 +1222,9 @@ const WindowComponent: React.FC = () => {
     const totalCreators = creatorUrlList.length;
     const newCreatorsCount = creatorUrlList.filter(item => item.status === "new").length;
 
+    const filteredCreatorUrlList = creatorUrlList.filter(item =>
+        ratingFilters[item.rating]
+    );
 
     return (
         <>
@@ -1393,14 +1474,14 @@ const WindowComponent: React.FC = () => {
                                                     freeSolo
                                                     fullWidth
                                                     style={{ width: '150px' }} // Ensure the container is 70% width.
-                                                    options={creatorUrlList.map((item) => item.creatorUrl.split('/')[4])}
+                                                    options={filteredCreatorUrlList.map((item) => item.creatorUrl.split('/')[4])}
                                                     inputValue={creatorUrlInputValue}
                                                     onInputChange={(event, newInputValue) => {
                                                         setCreatorUrlInputValue(newInputValue);
                                                     }}
                                                     onChange={(event, newValue) => {
                                                         if (newValue) {
-                                                            const found = creatorUrlList.find(
+                                                            const found = filteredCreatorUrlList.find(
                                                                 (item) => item.creatorUrl.split('/')[4] === newValue
                                                             );
                                                             if (found) {
@@ -1444,7 +1525,7 @@ const WindowComponent: React.FC = () => {
                                                         {selectedCreatorUrlText || "-- Creator URL List (choose one) --"}
                                                     </Dropdown.Toggle>
                                                     <Dropdown.Menu style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                                                        {creatorUrlList.map((item) => (
+                                                        {filteredCreatorUrlList.map((item) => (
                                                             <Dropdown.Item
                                                                 as="div"
                                                                 key={item.creatorUrl}
@@ -1459,14 +1540,15 @@ const WindowComponent: React.FC = () => {
                                                                 }}
                                                             >
                                                                 <span>
-                                                                    {!item.lastChecked
-                                                                        ? item.creatorUrl.split('/')[4]
-                                                                        : (
-                                                                            <b>
-                                                                                {item.creatorUrl.split('/')[4]} <FaLeftLong />
-                                                                            </b>
-                                                                        )
-                                                                    }
+                                                                    {!item.lastChecked ? (
+                                                                        <>
+                                                                            {item.creatorUrl.split('/')[4]} <em>({item.rating})</em>
+                                                                        </>
+                                                                    ) : (
+                                                                        <b>
+                                                                            {item.creatorUrl.split('/')[4]} <em>({item.rating})</em> <FaLeftLong />
+                                                                        </b>
+                                                                    )}
                                                                 </span>
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
                                                                     <span>({item.status})</span>
@@ -1557,6 +1639,52 @@ const WindowComponent: React.FC = () => {
                                                     handleSetOriginalTab()
                                                 }} />
                                         </div>
+
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                                            <AiOutlineArrowUp style={{ cursor: 'pointer' }} onClick={handleRatingUp} />
+                                            <span style={{ minWidth: '2em', textAlign: 'center' }}>{selectedRating}</span>
+                                            <AiOutlineArrowDown style={{ cursor: 'pointer' }} onClick={handleRatingDown} />
+                                            <Button
+                                                size="sm"
+                                                variant="outline-primary"
+                                                onClick={handleApplyRating}
+                                                disabled={currentCreatorUrlIndex == null}
+                                            >
+                                                Apply
+                                            </Button>
+
+                                            <Dropdown style={{ marginRight: 12 }}>
+                                                <Dropdown.Toggle size="sm" variant="outline-secondary">
+                                                    Filter Ratings
+                                                </Dropdown.Toggle>
+                                                <Dropdown.Menu style={{ padding: 8, maxHeight: 240, overflowY: 'auto' }}>
+                                                    <Form.Check
+                                                        type="checkbox"
+                                                        id="filter-all-ratings"
+                                                        label="All"
+                                                        checked={allSelected}
+                                                        onChange={toggleAllRatings}
+                                                    />
+                                                    <hr style={{ margin: '8px 0' }} />
+                                                    {ratingOrder.map(r => (
+                                                        <Form.Check
+                                                            key={r}
+                                                            type="checkbox"
+                                                            id={`filter-${r}`}
+                                                            label={r}
+                                                            checked={ratingFilters[r]}
+                                                            onChange={() =>
+                                                                setRatingFilters(prev => ({ ...prev, [r]: !prev[r] }))
+                                                            }
+                                                        />
+                                                    ))}
+                                                </Dropdown.Menu>
+                                            </Dropdown>
+
+
+
+                                        </div>
+
 
                                     </div>
                                 }
