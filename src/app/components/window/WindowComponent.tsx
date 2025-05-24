@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, version } from 'react';
+import React, { useEffect, useMemo, useRef, useState, version } from 'react';
 
 //Store
 import { useSelector, useDispatch } from 'react-redux';
@@ -1226,6 +1226,18 @@ const WindowComponent: React.FC = () => {
         ratingFilters[item.rating]
     );
 
+    const ratingCounts = useMemo(() => {
+        const counts: Record<string, number> = {};
+        ratingOrder.forEach(r => counts[r] = 0);
+        creatorUrlList.forEach(item => {
+            if (counts[item.rating] !== undefined) {
+                counts[item.rating] += 1;
+            }
+        });
+        return counts;
+    }, [creatorUrlList, ratingOrder]);
+
+
     return (
         <>
 
@@ -1619,6 +1631,63 @@ const WindowComponent: React.FC = () => {
 
 
                                         <div style={{ display: 'flex', alignItems: 'end', gap: '3px', margin: '5px', justifyContent: 'flex-end' }}>
+
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                                                <AiOutlineArrowUp style={{ cursor: 'pointer' }} onClick={handleRatingUp} />
+                                                <Form.Select
+                                                    size="sm"
+                                                    value={selectedRating}
+                                                    onChange={e => setSelectedRating(e.target.value)}
+                                                    style={{
+                                                        width: '10ch',         // or 'auto' / '3rem' if you prefer
+                                                        minWidth: '3ch',      // ensure it never shrinks to 0
+                                                        textAlign: 'center',
+                                                        textAlignLast: 'center' // for most browsers to center the selected option
+                                                    }}
+                                                >
+                                                    {ratingOrder.map(r => (
+                                                        <option key={r} value={r}>{r}</option>
+                                                    ))}
+                                                </Form.Select>
+                                                <AiOutlineArrowDown style={{ cursor: 'pointer' }} onClick={handleRatingDown} />
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline-primary"
+                                                    onClick={handleApplyRating}
+                                                    disabled={currentCreatorUrlIndex == null}
+                                                >
+                                                    Apply
+                                                </Button>
+
+                                                <Dropdown style={{ marginRight: 12 }}>
+                                                    <Dropdown.Toggle size="sm" variant="outline-secondary">
+                                                        Filter Ratings
+                                                    </Dropdown.Toggle>
+                                                    <Dropdown.Menu style={{ padding: 8, maxHeight: 240, overflowY: 'auto' }}>
+                                                        <Form.Check
+                                                            type="checkbox"
+                                                            id="filter-all-ratings"
+                                                            label={`All (${totalCreators})`}
+                                                            checked={allSelected}
+                                                            onChange={toggleAllRatings}
+                                                        />
+                                                        <hr style={{ margin: '8px 0' }} />
+                                                        {ratingOrder.map(r => (
+                                                            <Form.Check
+                                                                key={r}
+                                                                type="checkbox"
+                                                                id={`filter-${r}`}
+                                                                label={`${r} (${ratingCounts[r] || 0})`}
+                                                                checked={ratingFilters[r]}
+                                                                onChange={() =>
+                                                                    setRatingFilters(prev => ({ ...prev, [r]: !prev[r] }))
+                                                                }
+                                                            />
+                                                        ))}
+                                                    </Dropdown.Menu>
+                                                </Dropdown>
+                                            </div>
+
                                             <OverlayTrigger
                                                 placement={"top"}
                                                 overlay={<Tooltip id="tooltip">Refresh Creator Url List</Tooltip>}
@@ -1638,51 +1707,6 @@ const WindowComponent: React.FC = () => {
                                                 handleFunctionCall={() => {
                                                     handleSetOriginalTab()
                                                 }} />
-                                        </div>
-
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
-                                            <AiOutlineArrowUp style={{ cursor: 'pointer' }} onClick={handleRatingUp} />
-                                            <span style={{ minWidth: '2em', textAlign: 'center' }}>{selectedRating}</span>
-                                            <AiOutlineArrowDown style={{ cursor: 'pointer' }} onClick={handleRatingDown} />
-                                            <Button
-                                                size="sm"
-                                                variant="outline-primary"
-                                                onClick={handleApplyRating}
-                                                disabled={currentCreatorUrlIndex == null}
-                                            >
-                                                Apply
-                                            </Button>
-
-                                            <Dropdown style={{ marginRight: 12 }}>
-                                                <Dropdown.Toggle size="sm" variant="outline-secondary">
-                                                    Filter Ratings
-                                                </Dropdown.Toggle>
-                                                <Dropdown.Menu style={{ padding: 8, maxHeight: 240, overflowY: 'auto' }}>
-                                                    <Form.Check
-                                                        type="checkbox"
-                                                        id="filter-all-ratings"
-                                                        label="All"
-                                                        checked={allSelected}
-                                                        onChange={toggleAllRatings}
-                                                    />
-                                                    <hr style={{ margin: '8px 0' }} />
-                                                    {ratingOrder.map(r => (
-                                                        <Form.Check
-                                                            key={r}
-                                                            type="checkbox"
-                                                            id={`filter-${r}`}
-                                                            label={r}
-                                                            checked={ratingFilters[r]}
-                                                            onChange={() =>
-                                                                setRatingFilters(prev => ({ ...prev, [r]: !prev[r] }))
-                                                            }
-                                                        />
-                                                    ))}
-                                                </Dropdown.Menu>
-                                            </Dropdown>
-
-
-
                                         </div>
 
 
