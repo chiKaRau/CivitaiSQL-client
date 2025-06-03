@@ -10,7 +10,7 @@ import { AiFillFolderOpen, AiOutlineArrowUp, AiOutlineArrowDown } from "react-ic
 import { BsDownload, BsPencilFill } from 'react-icons/bs';
 import { TbDatabaseSearch, TbDatabasePlus, TbDatabaseMinus } from "react-icons/tb";
 import { PiPlusMinusFill } from "react-icons/pi";
-import { FaLeftLong, FaMagnifyingGlass, FaMagnifyingGlassPlus } from "react-icons/fa6";
+import { FaLeftLong, FaMagnifyingGlass, FaMagnifyingGlassPlus, FaRankingStar } from "react-icons/fa6";
 import { MdOutlineApps, MdOutlineTipsAndUpdates, MdSkipNext, MdSkipPrevious } from "react-icons/md";
 import { FcGenericSortingAsc, FcGenericSortingDesc } from "react-icons/fc";
 import { PiTabsFill } from "react-icons/pi";
@@ -946,60 +946,51 @@ const WindowComponent: React.FC = () => {
         goToUrlInBrowserTab(url);
     };
 
-    // 2) Previous “new” in filtered list
-    const handlePrevious = () => {
-        if (currentCreatorUrlIndex == null) return;
-
-        // Build only the rating-filtered + status==="new" list
-        const navigable = filteredCreatorUrlList.filter(item => item.status === "new");
-        if (navigable.length === 0) return;
-
-        // What URL are we currently on?
-        const currentUrl = creatorUrlList[currentCreatorUrlIndex].creatorUrl;
-
-        // Find its position in the navigable array
-        let idx = navigable.findIndex(item => item.creatorUrl === currentUrl);
-
-        // If it isn't in there (it got filtered out), jump to the last one
-        if (idx === -1) {
-            idx = navigable.length - 1;
-        }
-
-        // Step backward (wrap)
-        const prevItem = idx > 0
-            ? navigable[idx - 1]
-            : navigable[navigable.length - 1];
-
-        // Map it back into the full list index
-        const newIndex = creatorUrlList.findIndex(item => item.creatorUrl === prevItem.creatorUrl);
-        setCurrentCreatorUrlIndex(newIndex);
-        setSelectedCreatorUrlText(prevItem.creatorUrl.split('/')[4]);
-        goToUrlInBrowserTab(prevItem.creatorUrl);
-    };
-
-    // 3) Next “new” in filtered list
+    // New “Next” logic:
     const handleNext = () => {
         if (currentCreatorUrlIndex == null) return;
+        const total = creatorUrlList.length;
 
-        const navigable = filteredCreatorUrlList.filter(item => item.status === "new");
-        if (navigable.length === 0) return;
+        for (let step = 1; step <= total; step++) {
+            const candidateIdx = (currentCreatorUrlIndex + step) % total;
+            const candidate = creatorUrlList[candidateIdx];
 
-        const currentUrl = creatorUrlList[currentCreatorUrlIndex].creatorUrl;
-        let idx = navigable.findIndex(item => item.creatorUrl === currentUrl);
-
-        // If filtered out, start from before the first (so +1 → first)
-        if (idx === -1) {
-            idx = -1;
+            // pick only “new” items whose rating is still allowed
+            if (
+                candidate.status === "new" &&
+                ratingFilters[candidate.rating]
+            ) {
+                setCurrentCreatorUrlIndex(candidateIdx);
+                setSelectedCreatorUrlText(candidate.creatorUrl.split('/')[4]);
+                goToUrlInBrowserTab(candidate.creatorUrl);
+                return;
+            }
         }
-
-        // Step forward (wrap)
-        const nextItem = navigable[(idx + 1) % navigable.length];
-
-        const newIndex = creatorUrlList.findIndex(item => item.creatorUrl === nextItem.creatorUrl);
-        setCurrentCreatorUrlIndex(newIndex);
-        setSelectedCreatorUrlText(nextItem.creatorUrl.split('/')[4]);
-        goToUrlInBrowserTab(nextItem.creatorUrl);
+        // If none found, do nothing.
     };
+
+    // New “Previous” logic:
+    const handlePrevious = () => {
+        if (currentCreatorUrlIndex == null) return;
+        const total = creatorUrlList.length;
+
+        for (let step = 1; step <= total; step++) {
+            const candidateIdx = (currentCreatorUrlIndex - step + total) % total;
+            const candidate = creatorUrlList[candidateIdx];
+
+            if (
+                candidate.status === "new" &&
+                ratingFilters[candidate.rating]
+            ) {
+                setCurrentCreatorUrlIndex(candidateIdx);
+                setSelectedCreatorUrlText(candidate.creatorUrl.split('/')[4]);
+                goToUrlInBrowserTab(candidate.creatorUrl);
+                return;
+            }
+        }
+        // If none found, do nothing.
+    };
+
 
     // Conditionally disable buttons if no prev/next
     // That’s optional convenience
@@ -1657,7 +1648,11 @@ const WindowComponent: React.FC = () => {
                                         <div style={{ display: 'flex', alignItems: 'end', gap: '3px', margin: '5px', justifyContent: 'flex-end' }}>
 
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
-                                                <AiOutlineArrowUp style={{ cursor: 'pointer' }} onClick={handleRatingUp} />
+                                                <span>
+                                                    <FaRankingStar /> : {currentCreatorUrlIndex !== null
+                                                        ? creatorUrlList[currentCreatorUrlIndex].rating
+                                                        : 'N/A'}
+                                                </span>
                                                 <Form.Select
                                                     size="sm"
                                                     value={selectedRating}
@@ -1673,7 +1668,6 @@ const WindowComponent: React.FC = () => {
                                                         <option key={r} value={r}>{r}</option>
                                                     ))}
                                                 </Form.Select>
-                                                <AiOutlineArrowDown style={{ cursor: 'pointer' }} onClick={handleRatingDown} />
                                                 <Button
                                                     size="sm"
                                                     variant="outline-primary"
