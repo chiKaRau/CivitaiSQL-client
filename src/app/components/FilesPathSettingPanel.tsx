@@ -51,12 +51,13 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ isHandleR
     const [selectedPrefix, setSelectedPrefix] = useState("");
     const [selectedSuffix, setSelectedSuffix] = useState("");
     // Initializing state with the entire object and display property
-    const [selectedFilteredCategoriesList, setSelectedFilteredCategoriesList] = useState<{ category: { name: string, value: string }, display: boolean }[]>(
-        filePathCategoriesList.map((category) => ({
-            category: category,
-            display: true
-        }))
-    );
+
+    console.log("filePathCategoriesList")
+    console.log(filePathCategoriesList)
+
+    const [selectedFilteredCategoriesList, setSelectedFilteredCategoriesList] = useState<
+        { category: { name: string; value: string }; display: boolean }[]
+    >([]);
 
     useEffect(() => {
         const fetchPrefixsList = async () => {
@@ -86,12 +87,42 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ isHandleR
         fetchFilePathList();
     }, [dispatch]); // Include `dispatch` in the dependency array to avoid stale closures
 
+    // 1) seed from Chrome if it exists …
     useEffect(() => {
         if (chrome.selectedFilteredCategoriesList) {
-            setSelectedFilteredCategoriesList(JSON.parse(chrome.selectedFilteredCategoriesList))
+            setSelectedFilteredCategoriesList(
+                JSON.parse(chrome.selectedFilteredCategoriesList)
+            );
         }
+    }, [chrome.selectedFilteredCategoriesList]);
 
-    }, [chrome.selectedFilteredCategoriesList])
+    // 2) else, seed from the fresh fetch exactly once
+    useEffect(() => {
+        if (
+            filePathCategoriesList.length > 0 &&
+            !chrome.selectedFilteredCategoriesList // only if nothing saved
+        ) {
+            setSelectedFilteredCategoriesList(
+                filePathCategoriesList.map(category => ({
+                    category,
+                    display: true,
+                }))
+            );
+        }
+    }, [filePathCategoriesList, chrome.selectedFilteredCategoriesList]);
+
+    // 3) and now write every subsequent change
+    useEffect(() => {
+        // skip the very first run if you need to—but be careful you only skip the *seed* call
+        updateSelectedFilteredCategoriesListIntoChromeStorage(
+            selectedFilteredCategoriesList
+        );
+        dispatch(
+            updateSelectedFilteredCategoriesList(
+                JSON.stringify(selectedFilteredCategoriesList)
+            )
+        );
+    }, [selectedFilteredCategoriesList]);
 
     useEffect(() => {
         dispatch(updateDownloadFilePath(`${selectedPrefix}${selectedSuffix}`))

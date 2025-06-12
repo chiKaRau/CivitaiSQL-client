@@ -79,6 +79,9 @@ const DownloadFilePathOptionPanel: React.FC<DownloadFilePathOptionPanelProps> = 
 
     const handleAddFilterIntoFoldersList = (selectedFilteredCategoriesList: any) => {
 
+        console.log("data---folder")
+        console.log(foldersList);
+
         const filteredFolderList = (foldersList as any[]).filter(folder => {
             const isIncluded = (selectedFilteredCategoriesList as any[]).some(item => {
                 return item.display && folder.toLowerCase().includes(item.category.value.toLowerCase());
@@ -149,6 +152,9 @@ const DownloadFilePathOptionPanel: React.FC<DownloadFilePathOptionPanelProps> = 
             // If both are digits or both are not digits, compare alphabetically/numerically
             return a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' });
         });
+
+        console.log("filteredFolderList")
+        console.log(filteredFolderList)
 
         setSortedandFilteredfoldersList(filteredFolderList);
 
