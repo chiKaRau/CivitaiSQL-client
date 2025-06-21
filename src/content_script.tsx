@@ -600,11 +600,11 @@ chrome.runtime.onMessage.addListener(
     sender: chrome.runtime.MessageSender,
     sendResponse: (response?: any) => void
   ) => {
-    // Select the parent container with class 'mantine-1ofgurw'
-    const parentContainer: HTMLElement | null = document.querySelector('.mantine-1ofgurw');
+    // Select the parent container with class 'MasonryGrid_grid__6QtWa'
+    const parentContainer: HTMLElement | null = document.querySelector('.MasonryGrid_grid__6QtWa');
 
     if (!parentContainer) {
-      console.warn("Container with class 'mantine-1ofgurw' not found.");
+      console.warn("Container with class 'MasonryGrid_grid__6QtWa' not found.");
       return;
     }
 
@@ -716,8 +716,8 @@ chrome.runtime.onMessage.addListener(
     if (message.action === "checkSavedMode") {
       const newUrlList: string[] = [];
 
-      // Select the parent container with class 'mantine-1ofgurw'
-      const parentContainer: HTMLElement | null = document.querySelector('.mantine-1ofgurw');
+      // Select the parent container with class 'MasonryGrid_grid__6QtWa'
+      const parentContainer: HTMLElement | null = document.querySelector('.MasonryGrid_grid__6QtWa');
 
       if (parentContainer) {
         // Select only the direct child divs of the parent
@@ -744,7 +744,7 @@ chrome.runtime.onMessage.addListener(
           newUrlList: newUrlList,
         });
       } else {
-        console.warn("Parent container with class 'mantine-1ofgurw' not found.");
+        console.warn("Parent container with class 'MasonryGrid_grid__6QtWa' not found.");
       }
     }
 
@@ -851,9 +851,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log("Sorting mode activated");
 
     // Select the container holding the card divs
-    const container = document.querySelector('.mantine-1ofgurw') as HTMLElement | null;
+    const container = document.querySelector('.MasonryGrid_grid__6QtWa') as HTMLElement | null;
     if (!container) {
-      console.error('Card container with class "mantine-1ofgurw" not found.');
+      console.error('Card container with class "MasonryGrid_grid__6QtWa" not found.');
       return;
     }
 
@@ -868,9 +868,9 @@ initializeHrefMap();
 // Function to scan and cache hrefs from existing divs on page load
 function initializeHrefMap(): void {
   // Select the container holding the card divs
-  const container = document.querySelector('.mantine-1ofgurw') as HTMLElement | null;
+  const container = document.querySelector('.MasonryGrid_grid__6QtWa') as HTMLElement | null;
   if (!container) {
-    console.error('Card container with class "mantine-1ofgurw" not found.');
+    console.error('Card container with class "MasonryGrid_grid__6QtWa" not found.');
     return;
   }
 
@@ -898,11 +898,11 @@ chrome.runtime.onMessage.addListener(
     sendResponse: (response?: any) => void
   ) => {
     if (message.action === "display-saved" || message.action === "remove-saved") {
-      // Select the parent container with class 'mantine-1ofgurw'
-      const container: HTMLElement | null = document.querySelector('.mantine-1ofgurw');
+      // Select the parent container with class 'MasonryGrid_grid__6QtWa'
+      const container: HTMLElement | null = document.querySelector('.MasonryGrid_grid__6QtWa');
 
       if (!container) {
-        console.warn("Container with class 'mantine-1ofgurw' not found.");
+        console.warn("Container with class 'MasonryGrid_grid__6QtWa' not found.");
         return;
       }
 
@@ -1001,11 +1001,11 @@ chrome.runtime.onMessage.addListener(
     sendResponse: (response?: any) => void
   ) => {
     if (message.action === "display-offline" || message.action === "remove-offline") {
-      // Select the parent container with class 'mantine-1ofgurw'
-      const container: HTMLElement | null = document.querySelector('.mantine-1ofgurw');
+      // Select the parent container with class 'MasonryGrid_grid__6QtWa'
+      const container: HTMLElement | null = document.querySelector('.MasonryGrid_grid__6QtWa');
 
       if (!container) {
-        console.warn("Container with class 'mantine-1ofgurw' not found.");
+        console.warn("Container with class 'MasonryGrid_grid__6QtWa' not found.");
         return;
       }
 
@@ -1104,10 +1104,10 @@ chrome.runtime.onMessage.addListener(
     sender: chrome.runtime.MessageSender,
     sendResponse: (response?: any) => void
   ) => {
-    const parentContainer: HTMLElement | null = document.querySelector('.mantine-1ofgurw');
+    const parentContainer: HTMLElement | null = document.querySelector('.MasonryGrid_grid__6QtWa');
 
     if (!parentContainer) {
-      console.warn("Container with class 'mantine-1ofgurw' not found.");
+      console.warn("Container with class 'MasonryGrid_grid__6QtWa' not found.");
       return;
     }
 
@@ -1155,10 +1155,10 @@ chrome.runtime.onMessage.addListener(
     sender: chrome.runtime.MessageSender,
     sendResponse: (response?: any) => void
   ) => {
-    const parentContainer: HTMLElement | null = document.querySelector('.mantine-1ofgurw');
+    const parentContainer: HTMLElement | null = document.querySelector('.MasonryGrid_grid__6QtWa');
 
     if (!parentContainer) {
-      console.warn("Container with class 'mantine-1ofgurw' not found.");
+      console.warn("Container with class 'MasonryGrid_grid__6QtWa' not found.");
       return;
     }
 
@@ -1181,10 +1181,10 @@ chrome.runtime.onMessage.addListener(
 
 
 function displayUpdateLabels(): void {
-  const parentContainer: HTMLElement | null = document.querySelector('.mantine-1ofgurw');
+  const parentContainer: HTMLElement | null = document.querySelector('.MasonryGrid_grid__6QtWa');
 
   if (!parentContainer) {
-    console.warn("Container with class 'mantine-1ofgurw' not found.");
+    console.warn("Container with class 'MasonryGrid_grid__6QtWa' not found.");
     return;
   }
 
@@ -1259,10 +1259,10 @@ function displayUpdateLabels(): void {
 
 // 10. Function to remove update labels
 function removeUpdateLabels(): void {
-  const parentContainer: HTMLElement | null = document.querySelector('.mantine-1ofgurw');
+  const parentContainer: HTMLElement | null = document.querySelector('.MasonryGrid_grid__6QtWa');
 
   if (!parentContainer) {
-    console.warn("Container with class 'mantine-1ofgurw' not found.");
+    console.warn("Container with class 'MasonryGrid_grid__6QtWa' not found.");
     return;
   }
 
@@ -1682,7 +1682,7 @@ async function main() {
   // Inject the custom button styles before anything else
   injectButtonStyles();
 
-  const parentContainerSelector = '[class^="mantine-1ofgurw"]'; // Adjust this selector as needed
+  const parentContainerSelector = '[class^="MasonryGrid_grid__6QtWa"]'; // Adjust this selector as needed
 
   try {
     const parentContainer = await waitForElement(parentContainerSelector, 15000); // Wait up to 15 seconds
