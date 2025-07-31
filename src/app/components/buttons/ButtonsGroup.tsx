@@ -37,8 +37,8 @@ const ButtonsGroup: React.FC = () => {
     const { civitaiUrl } = civitaiModel
 
 
-    const chrome = useSelector((state: AppState) => state.chrome);
-    const { isBookmarked, bookmarkID, offlineMode } = chrome
+    const chromeData = useSelector((state: AppState) => state.chrome);
+    const { isBookmarked, bookmarkID, offlineMode } = chromeData
 
     const [collapseButtonStates, setCollapseButtonStates] = useState<{ [key: string]: boolean }>({
         utilsButtons: false
@@ -50,6 +50,17 @@ const ButtonsGroup: React.FC = () => {
             [panelId]: !prevStates[panelId],
         }));
     };
+
+    const handleOpenCustomWindow = () => {
+        console.log("open custom window")
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs: any) => {
+            // Store the original tab ID in local storage
+            // chrome.storage.local.set({ originalTabId: tabs[0].id });
+            // Then open the new window
+            chrome.runtime.sendMessage({ action: "openCustomWindow" });
+            //window.close(); // This closes the popup window
+        });
+    }
 
     const dispatch = useDispatch();
 
@@ -94,7 +105,7 @@ const ButtonsGroup: React.FC = () => {
                 buttonIcon: <TbDatabasePlus />,
                 disabled: false,
             }}
-                handleFunctionCall={() => dispatch(togglePanel("DatabaseCustomModelPanel"))} />
+                handleFunctionCall={() => handleOpenCustomWindow()} />
 
             {/**Database's LatestAddedModelsPanel Button */}
             <ButtonWrap buttonConfig={{

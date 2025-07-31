@@ -559,6 +559,17 @@ const WindowComponent: React.FC = () => {
         });
     }
 
+    const handleOpenCustomWindow = () => {
+        console.log("open custom window")
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            // Store the original tab ID in local storage
+            // chrome.storage.local.set({ originalTabId: tabs[0].id });
+            // Then open the new window
+            chrome.runtime.sendMessage({ action: "openCustomWindow" });
+            //window.close(); // This closes the popup window
+        });
+    }
+
     const handleMultipleBookmarkAndAddtoDatabase = async () => {
         for (let url of urlList) {
             //Fetch Civitai ModelInfo
@@ -1375,6 +1386,17 @@ const WindowComponent: React.FC = () => {
                                             disabled: false,
                                         }}
                                             handleFunctionCall={() => handleOpenOfflineWindow()} />
+
+                                        {/**Open Custom Window */}
+                                        <ButtonWrap buttonConfig={{
+                                            placement: "top",
+                                            tooltip: "Open Custom Window",
+                                            variant: "primary",
+                                            buttonIcon: <BsReverseLayoutTextWindowReverse />
+                                            ,
+                                            disabled: false,
+                                        }}
+                                            handleFunctionCall={() => handleOpenCustomWindow()} />
                                     </div>
                                 }
                             />
