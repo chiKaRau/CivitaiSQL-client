@@ -44,9 +44,11 @@ const CustomWindow: React.FC = () => {
     const [creatorName, setCreatorName] = useState('');
     const [nsfw, setNsfw] = useState(false);
     const [flag, setFlag] = useState(false);
-    const [urlAccessable, setUrlAccessable] = useState(false);
+    const [urlAccessable, setUrlAccessable] = useState(true);
 
     const [downloadUrlInput, setDownloadUrlInput] = useState('');
+
+    const [prevData, setPrevData] = useState<any>(null);
 
     const toArray = (s: string) =>
         s.split(',').map(x => x.trim()).filter(Boolean);
@@ -61,13 +63,68 @@ const CustomWindow: React.FC = () => {
 
     // Reset everything
     const handleClear = () => {
+        // 1) snapshot current values
+        setPrevData({
+            name,
+            mainModelName,
+            url,
+            versionNumber,
+            modelNumber,
+            type,
+            baseModel,
+            imageUrls,
+            tags,
+            localTags,
+            aliases,
+            triggerWords,
+            description,
+            stats,
+            hash,
+            usageTips,
+            creatorName,
+            nsfw,
+            flag,
+            urlAccessable,
+            downloadUrlInput,
+        });
+        // 2) then clear
         setName(''); setMainModelName(''); setUrl('');
         setVersionNumber(''); setModelNumber(''); setType(''); setBaseModel('');
         setImageUrls(['']);
         setTags(''); setLocalTags(''); setAliases(''); setTriggerWords('');
         setDescription(''); setStats(''); setHash(''); setUsageTips('');
         setCreatorName(''); setNsfw(false); setFlag(false); setUrlAccessable(false);
+        setDownloadUrlInput('');
     };
+
+    const handleUndo = () => {
+        if (!prevData) return;
+        // prevData is now `any`, so no TS errors:
+        setName(prevData.name);
+        setMainModelName(prevData.mainModelName);
+        setUrl(prevData.url);
+        setVersionNumber(prevData.versionNumber);
+        setModelNumber(prevData.modelNumber);
+        setType(prevData.type);
+        setBaseModel(prevData.baseModel);
+        setImageUrls(prevData.imageUrls);
+        setTags(prevData.tags);
+        setLocalTags(prevData.localTags);
+        setAliases(prevData.aliases);
+        setTriggerWords(prevData.triggerWords);
+        setDescription(prevData.description);
+        setStats(prevData.stats);
+        setHash(prevData.hash);
+        setUsageTips(prevData.usageTips);
+        setCreatorName(prevData.creatorName);
+        setNsfw(prevData.nsfw);
+        setFlag(prevData.flag);
+        setUrlAccessable(prevData.urlAccessable);
+        setDownloadUrlInput(prevData.downloadUrlInput);
+        // clear the snapshot so Undo only works once
+        setPrevData(null);
+    };
+
 
     // Submit handler
     const handleSubmit = async (e: React.FormEvent) => {
@@ -95,7 +152,7 @@ const CustomWindow: React.FC = () => {
             creatorName: creatorName || null,
             nsfw,
             flag,
-            urlAccessable: true,
+            urlAccessable,
         };
 
         try {
@@ -127,6 +184,7 @@ const CustomWindow: React.FC = () => {
                             <Form.Control
                                 type="text"
                                 value={name}
+                                placeholder='model file name (without safetensor)'
                                 onChange={e => setName(e.target.value)}
                                 required
                             />
@@ -138,6 +196,7 @@ const CustomWindow: React.FC = () => {
                             <Form.Control
                                 type="text"
                                 value={mainModelName}
+                                placeholder='model title'
                                 onChange={e => setMainModelName(e.target.value)}
                                 required
                             />
@@ -152,6 +211,7 @@ const CustomWindow: React.FC = () => {
                             <Form.Label>Model URL*</Form.Label>
                             <Form.Control
                                 type="url" value={url}
+                                placeholder='https://civitaiarchive.com/models/1722778?modelVersionId=1949611'
                                 onChange={e => setUrl(e.target.value)} required
                             />
                         </Form.Group>
@@ -193,6 +253,7 @@ const CustomWindow: React.FC = () => {
                             <Form.Label>Model Number*</Form.Label>
                             <Form.Control
                                 type="text"
+                                placeholder='1722778'
                                 value={modelNumber}
                                 onChange={e => setModelNumber(e.target.value)}
                                 required
@@ -204,6 +265,7 @@ const CustomWindow: React.FC = () => {
                             <Form.Label>Version Number*</Form.Label>
                             <Form.Control
                                 type="text"
+                                placeholder='1949611'
                                 value={versionNumber}
                                 onChange={e => setVersionNumber(e.target.value)}
                                 required
@@ -215,6 +277,7 @@ const CustomWindow: React.FC = () => {
                             <Form.Label>Type*</Form.Label>
                             <Form.Control
                                 type="text"
+                                placeholder='LORA'
                                 value={type}
                                 onChange={e => setType(e.target.value)}
                                 required
@@ -226,6 +289,7 @@ const CustomWindow: React.FC = () => {
                             <Form.Label>Base Model*</Form.Label>
                             <Form.Control
                                 type="text"
+                                placeholder='Illustrious'
                                 value={baseModel}
                                 onChange={e => setBaseModel(e.target.value)}
                                 required
@@ -242,6 +306,7 @@ const CustomWindow: React.FC = () => {
                             <Form.Control
                                 type="url"
                                 value={u}
+                                placeholder='https://image.civitai.com/xG1n/width=1536/84884709.jpeg'
                                 onChange={e => handleImageChange(i, e.target.value)}
                                 required
                             />
@@ -271,6 +336,7 @@ const CustomWindow: React.FC = () => {
                             <Form.Label>Tags</Form.Label>
                             <Form.Control
                                 type="text"
+                                placeholder='anime, style, woman, onimai, anime style, styles, onii-chan wa oshimai!'
                                 value={tags}
                                 onChange={e => setTags(e.target.value)}
                             />
@@ -281,6 +347,7 @@ const CustomWindow: React.FC = () => {
                             <Form.Label>Local Tags</Form.Label>
                             <Form.Control
                                 type="text"
+                                placeholder='Miki'
                                 value={localTags}
                                 onChange={e => setLocalTags(e.target.value)}
                             />
@@ -291,6 +358,7 @@ const CustomWindow: React.FC = () => {
                             <Form.Label>Aliases</Form.Label>
                             <Form.Control
                                 type="text"
+                                placeholder='Style'
                                 value={aliases}
                                 onChange={e => setAliases(e.target.value)}
                             />
@@ -304,6 +372,7 @@ const CustomWindow: React.FC = () => {
                             <Form.Label>Trigger Words</Form.Label>
                             <Form.Control
                                 type="text"
+                                placeholder='onimastyle'
                                 value={triggerWords}
                                 onChange={e => setTriggerWords(e.target.value)}
                             />
@@ -314,6 +383,7 @@ const CustomWindow: React.FC = () => {
                             <Form.Label>Stats</Form.Label>
                             <Form.Control
                                 type="text"
+                                placeholder='{"downloadCount":704,"ratingCount":1,"rating":5}'
                                 value={stats}
                                 onChange={e => setStats(e.target.value)}
                             />
@@ -341,6 +411,7 @@ const CustomWindow: React.FC = () => {
                             <Form.Label>Hash</Form.Label>
                             <Form.Control
                                 type="text"
+                                placeholder='{"SHA256":null,"CRC32":null,"AutoV1":null,"AutoV2":"253A861FE4","AutoV3":null,"BLAKE3":null}'
                                 value={hash}
                                 onChange={e => setHash(e.target.value)}
                             />
@@ -351,6 +422,7 @@ const CustomWindow: React.FC = () => {
                             <Form.Label>Usage Tips</Form.Label>
                             <Form.Control
                                 type="text"
+                                placeholder='Clip Skip: 2'
                                 value={usageTips}
                                 onChange={e => setUsageTips(e.target.value)}
                             />
@@ -364,6 +436,7 @@ const CustomWindow: React.FC = () => {
                             <Form.Label>Creator Name</Form.Label>
                             <Form.Control
                                 type="text"
+                                placeholder='ShadowxArt'
                                 value={creatorName}
                                 onChange={e => setCreatorName(e.target.value)}
                             />
@@ -492,11 +565,21 @@ const CustomWindow: React.FC = () => {
 
                 {/* Submit + Clear */}
                 <div className="d-flex justify-content-between mt-4">
+                    <div>
+                        <Button
+                            variant="outline-light"
+                            onClick={handleUndo}
+                            disabled={!prevData}
+                            className="me-2"
+                        >
+                            Undo
+                        </Button>
+                        <Button variant="outline-light" onClick={handleClear}>
+                            Clear
+                        </Button>
+                    </div>
                     <Button variant="light" type="submit">
                         Submit
-                    </Button>
-                    <Button variant="outline-light" onClick={handleClear}>
-                        Clear
                     </Button>
                 </div>
             </Form>
