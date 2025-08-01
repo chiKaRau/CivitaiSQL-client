@@ -186,6 +186,19 @@ export const fetchAddRecordToDatabase = async (selectedCategory: string, url: st
     }
 }
 
+export const fetchAddRecordToDatabaseInCustom = async (modelsDTO: any): Promise<void> => {
+    const response = await axios.post(
+        `${config.domain}/api/create-record-to-all-tables-in-custom`,
+        modelsDTO
+    );
+
+    // non-2xx or backend success=false
+    if (response.status < 200 || response.status >= 300 || !response.data.success) {
+        // include server message if available
+        throw new Error(response.data.message || 'Failed adding record into Database.');
+    }
+};
+
 export const fetchRemoveRecordFromDatabaseByID = async (id: number, dispatch: any) => {
     try {
         // Clear any previous errors
@@ -593,6 +606,29 @@ export const fetchDownloadFilesByServer_v2 = async (
         dispatch(setError({ hasError: true, errorMessage: error.message }));
     }
 }
+
+export const fetchDownloadFilesByServer_v2ForCustom = async (
+    modelObject: {
+        downloadFilePath: string;
+        civitaiFileName: string;
+        civitaiUrl: string;
+        civitaiModelID: string;
+        civitaiVersionID: string;
+        baseModel: string;
+        downloadUrl: string;
+        imageUrls: string[];
+    }
+): Promise<boolean> => {
+    const response = await axios.post(
+        `${config.domain}/api/download-file-server-v2-for-custom`,
+        { modelObject }
+    );
+
+    if (response.status >= 200 && response.status < 300 && response.data?.success) {
+        return true;
+    }
+    throw new Error(response.data?.message || 'Failed to download files by server.');
+};
 
 export const fetchOfflineDownloadList = async (dispatch: any) => {
     try {

@@ -1391,7 +1391,7 @@ const WindowComponent: React.FC = () => {
                                         <ButtonWrap buttonConfig={{
                                             placement: "top",
                                             tooltip: "Open Custom Window",
-                                            variant: "primary",
+                                            variant: "warning",
                                             buttonIcon: <BsReverseLayoutTextWindowReverse />
                                             ,
                                             disabled: false,

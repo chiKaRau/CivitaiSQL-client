@@ -101,7 +101,7 @@ const ButtonsGroup: React.FC = () => {
             <ButtonWrap buttonConfig={{
                 placement: "bottom",
                 tooltip: "Add a custom model",
-                variant: "success",
+                variant: "warning",
                 buttonIcon: <TbDatabasePlus />,
                 disabled: false,
             }}
@@ -111,7 +111,7 @@ const ButtonsGroup: React.FC = () => {
             <ButtonWrap buttonConfig={{
                 placement: "bottom",
                 tooltip: "Latest Added Models",
-                variant: "warning",
+                variant: "dark",
                 buttonIcon: <AiFillDatabase />,
                 disabled: false,
             }}
