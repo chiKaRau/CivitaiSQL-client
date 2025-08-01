@@ -95,7 +95,7 @@ const CustomWindow: React.FC = () => {
             creatorName: creatorName || null,
             nsfw,
             flag,
-            urlAccessable,
+            urlAccessable: true,
         };
 
         try {
@@ -189,23 +189,23 @@ const CustomWindow: React.FC = () => {
                 {/* Row 2: Version, Model#, Type, Base Model */}
                 <Row>
                     <Col md={3} className="mb-3">
-                        <Form.Group controlId="versionNumber">
-                            <Form.Label>Version Number*</Form.Label>
-                            <Form.Control
-                                type="text"
-                                value={versionNumber}
-                                onChange={e => setVersionNumber(e.target.value)}
-                                required
-                            />
-                        </Form.Group>
-                    </Col>
-                    <Col md={3} className="mb-3">
                         <Form.Group controlId="modelNumber">
                             <Form.Label>Model Number*</Form.Label>
                             <Form.Control
                                 type="text"
                                 value={modelNumber}
                                 onChange={e => setModelNumber(e.target.value)}
+                                required
+                            />
+                        </Form.Group>
+                    </Col>
+                    <Col md={3} className="mb-3">
+                        <Form.Group controlId="versionNumber">
+                            <Form.Label>Version Number*</Form.Label>
+                            <Form.Control
+                                type="text"
+                                value={versionNumber}
+                                onChange={e => setVersionNumber(e.target.value)}
                                 required
                             />
                         </Form.Group>
@@ -436,7 +436,7 @@ const CustomWindow: React.FC = () => {
                                                         imageUrls
                                                     }
                                                 );
-                                                setToastMsg(ok ? 'Download started' : 'Download failed');
+                                                setToastMsg(ok ? 'Download Successful' : 'Download failed');
                                                 setToastVariant(ok ? 'success' : 'danger');
                                             } catch (err: any) {
                                                 setToastMsg(err.message || 'Download failed');
