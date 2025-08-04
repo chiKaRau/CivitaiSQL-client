@@ -13,6 +13,7 @@ import {
     fetchGetCategoriesPrefixsList,
     fetchGetFilePathCategoriesList
 } from '../api/civitaiSQL_api';
+import { QuickModeControls } from './QuickModeControls';
 
 interface FilesPathSettingPanelProps {
     isHandleRefresh: boolean;
@@ -36,6 +37,20 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
     >([]);
     const [selectedPrefix, setSelectedPrefix] = useState('');
     const [selectedSuffix, setSelectedSuffix] = useState('');
+
+
+    const [quickMode, setQuickMode] = useState(false);
+    const [lockedPrefix, setLockedPrefix] = useState('');
+    const [suffixInput, setSuffixInput] = useState('');
+    const [isLocked, setIsLocked] = useState(false);
+
+    // Determine which prefix to use:
+    const currentPrefix = isLocked ? lockedPrefix : selectedPrefix;
+
+    // Handler for the Apply button:
+    const handleApply = () => {
+        dispatch(updateDownloadFilePath(`${currentPrefix}${suffixInput}`));
+    };
 
     // 1) ONE INIT EFFECT that:
     //    • checks Chrome storage → uses that if present
@@ -103,73 +118,110 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
         dispatch(updateDownloadFilePath(`${selectedPrefix}${selectedSuffix}`));
     }, [dispatch, selectedPrefix, selectedSuffix]);
 
+    const handleToggleLock = () => {
+        if (!isLocked && selectedPrefix) {
+            // we’re turning lock _on_, so remember the current selection
+            setLockedPrefix(selectedPrefix);
+        } else if (isLocked) {
+            // turning lock _off_, clear it
+            setLockedPrefix('');
+        }
+        setIsLocked(l => !l);
+    };
+
     return (
-        <div className="collapse-panel-container">
-            <div
-                className="toggle-section"
-                onClick={() => setOpen(o => !o)}
-                aria-controls="collapse-panel"
-                aria-expanded={open}
-            >
-                <center> Folder Settings </center>
-            </div>
-            <hr />
 
-            <Collapse in={open}>
-                <div id="collapse-panel">
-                    <center> Prefix Suggestions</center>
-                    <hr />
-                    {prefixsList.map((el, i) => (
-                        <OverlayTrigger key={i} placement="bottom" overlay={<Tooltip>{el.value}</Tooltip>}>
-                            <label
-                                className={`panel-tag-button ${selectedPrefix === el.value ? 'panel-tag-default' : 'panel-tag-selected'
-                                    }`}
-                                onClick={() => {
-                                    setSelectedPrefix(el.value);
-                                    dispatch(updateDownloadFilePath(`${el.value}${selectedSuffix}`));
-                                }}
-                            >
-                                {el.name}
-                            </label>
-                        </OverlayTrigger>
-                    ))}
-                    <br />
+        <>
 
-                    <center> Suffix Suggestions</center>
-                    <hr />
-                    {/* If your suffix list comes from props or state, render similarly */}
-                    {/* ... you didn’t show suffix fetch but same idea ... */}
+            {/* Quick Mode bar */}
+            <QuickModeControls
+                quickMode={quickMode}
+                onToggleQuick={() => {
+                    setQuickMode(q => !q);
+                    if (quickMode) {
+                        // reset when turning Quick Mode off
+                        setIsLocked(false);
+                        setLockedPrefix('');
+                        setSuffixInput('');
+                    }
+                }}
+                currentPrefix={currentPrefix}
+                isLocked={isLocked}
+                onToggleLock={handleToggleLock}
+                suffixInput={suffixInput}
+                onSuffixChange={setSuffixInput}
+                onApply={handleApply}
+            />
 
-                    <hr />
-                    <FilesPathTagsListSelector
-                        setIsHandleRefresh={setIsHandleRefresh}
-                        selectedPrefix={selectedPrefix}
-                        isHandleRefresh={isHandleRefresh}
-                    />
-                    <br />
-
-                    <center> Selected Categories</center>
-                    <hr />
-                    <div style={{ display: 'inline-block' }}>
-                        <label style={{ marginRight: 10 }}>
-                            <input type="checkbox" checked={areAllSelected} onChange={handleSelectAllCheckbox} />{' '}
-                            Select/Deselect All
-                        </label>
-
-                        {selectedFilteredCategoriesList.map((item, idx) => (
-                            <label key={idx} style={{ marginRight: 10 }}>
-                                <input
-                                    type="checkbox"
-                                    checked={item.display}
-                                    onChange={() => handleToggleBaseModelCheckbox(idx)}
-                                />
-                                {item.category.name}
-                            </label>
-                        ))}
-                    </div>
+            <div className="collapse-panel-container">
+                <div
+                    className="toggle-section"
+                    onClick={() => setOpen(o => !o)}
+                    aria-controls="collapse-panel"
+                    aria-expanded={open}
+                >
+                    <center> Folder Settings </center>
                 </div>
-            </Collapse>
-        </div>
+                <hr />
+
+                <Collapse in={open}>
+                    <div id="collapse-panel">
+                        <center> Prefix Suggestions</center>
+                        <hr />
+                        {prefixsList.map((el, i) => (
+                            <OverlayTrigger key={i} placement="bottom" overlay={<Tooltip>{el.value}</Tooltip>}>
+                                <label
+                                    className={`panel-tag-button ${selectedPrefix === el.value ? 'panel-tag-default' : 'panel-tag-selected'
+                                        }`}
+                                    onClick={() => {
+                                        setSelectedPrefix(el.value);
+                                        dispatch(updateDownloadFilePath(`${el.value}${selectedSuffix}`));
+                                    }}
+                                >
+                                    {el.name}
+                                </label>
+                            </OverlayTrigger>
+                        ))}
+                        <br />
+
+                        <center> Suffix Suggestions</center>
+                        <hr />
+                        {/* If your suffix list comes from props or state, render similarly */}
+                        {/* ... you didn’t show suffix fetch but same idea ... */}
+
+                        <hr />
+                        <FilesPathTagsListSelector
+                            setIsHandleRefresh={setIsHandleRefresh}
+                            selectedPrefix={selectedPrefix}
+                            isHandleRefresh={isHandleRefresh}
+                        />
+                        <br />
+
+                        <center> Selected Categories</center>
+                        <hr />
+                        <div style={{ display: 'inline-block' }}>
+                            <label style={{ marginRight: 10 }}>
+                                <input type="checkbox" checked={areAllSelected} onChange={handleSelectAllCheckbox} />{' '}
+                                Select/Deselect All
+                            </label>
+
+                            {selectedFilteredCategoriesList.map((item, idx) => (
+                                <label key={idx} style={{ marginRight: 10 }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={item.display}
+                                        onChange={() => handleToggleBaseModelCheckbox(idx)}
+                                    />
+                                    {item.category.name}
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                </Collapse>
+            </div>
+
+
+        </>
     );
 };
 
