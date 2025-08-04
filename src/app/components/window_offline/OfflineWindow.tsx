@@ -58,6 +58,7 @@ import 'ag-grid-community/styles/ag-theme-alpine.css';
 import { AppState } from '../../store/configureStore';
 import FailedCardMode from './FailedCardMode';
 import ErrorCardMode from './ErrorCardMode';
+import FileNameToggle from './FileNameToggle';
 
 // TypeScript Interfaces
 interface CivitaiModelFile {
@@ -1899,17 +1900,10 @@ const OfflineWindow: React.FC = () => {
                                         </div>
 
                                         {/* File Name */}
-                                        <p
-                                            style={{
-                                                margin: '4px 0',
-                                                whiteSpace: 'nowrap',
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                            }}
-                                            title={entry.civitaiFileName ?? 'N/A'}
-                                        >
-                                            <strong>File Name:</strong> {entry.civitaiFileName ?? 'N/A'}
-                                        </p>
+                                        <FileNameToggle
+                                            fileName={entry.civitaiFileName ?? 'N/A'}
+                                            truncateAfter={40}   // adjust to taste
+                                        />
 
                                         {/* 3) Show full download path with line wrapping */}
                                         <p
