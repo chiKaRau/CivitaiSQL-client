@@ -124,7 +124,10 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
                             <label
                                 className={`panel-tag-button ${selectedPrefix === el.value ? 'panel-tag-default' : 'panel-tag-selected'
                                     }`}
-                                onClick={() => setSelectedPrefix(el.value)}
+                                onClick={() => {
+                                    setSelectedPrefix(el.value);
+                                    dispatch(updateDownloadFilePath(`${el.value}${selectedSuffix}`));
+                                }}
                             >
                                 {el.name}
                             </label>
