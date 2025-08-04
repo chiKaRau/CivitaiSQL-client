@@ -715,6 +715,8 @@ const OfflineWindow: React.FC = () => {
         }
     }, [itemsPerPage, filteredDownloadList, currentPage]);
 
+    const [preventPendingPaths, setPreventPendingPaths] = useState(true);
+
     // Define themes
     const darkTheme = {
         headerBackgroundColor: '#333',
@@ -1446,8 +1448,15 @@ const OfflineWindow: React.FC = () => {
 
     const handleProcessSelected = async () => {
 
-        if (["/@scan@/ACG/Pending", "/@scan@/ACG/Pending/", "/@scan@/ErrorPath/"].includes(modify_downloadFilePath)) {
-            alert("Invalid DownloadFilePath");
+        if (modify_downloadFilePath === "/@scan@/ErrorPath/") {
+            alert("Invalid DownloadFilePath: ErrorPath is never allowed");
+            return;
+        }
+
+        // conditionally‐invalid:
+        const pendingPaths = ["/@scan@/ACG/Pending", "/@scan@/ACG/Pending/"];
+        if (preventPendingPaths && pendingPaths.includes(modify_downloadFilePath)) {
+            alert("Invalid DownloadFilePath: pending paths are blocked");
             return;
         }
 
@@ -2932,15 +2941,29 @@ const OfflineWindow: React.FC = () => {
                                 <option value="ends with">Ends with</option>
                             </select>
 
-                            <Form.Check
-                                type="checkbox"
-                                id="only-pending-checkbox"
-                                label={<MdOutlinePendingActions size={24} color={isDarkMode ? '#fff' : '#000'} />}
-                                checked={onlyPendingPaths}
-                                onChange={(e) => setOnlyPendingPaths(e.target.checked)}
-                                style={{ marginLeft: '10px', fontWeight: 'bold' }}
-                                title="Only Pending"
-                            />
+                            <div style={{ margin: '1rem 0', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                {/* 1st line: “Only Pending” */}
+                                <Form.Check
+                                    type="checkbox"
+                                    id="only-pending-checkbox"
+                                    label={<MdOutlinePendingActions size={24} color={isDarkMode ? '#fff' : '#000'} />}
+                                    checked={onlyPendingPaths}
+                                    onChange={e => setOnlyPendingPaths(e.target.checked)}
+                                    style={{ fontWeight: 'bold' }}
+                                    title="Only Pending"
+                                />
+
+                                {/* 2nd line: “Prevent Pending Paths” */}
+                                <Form.Check
+                                    type="checkbox"
+                                    id="prevent-pending-paths"
+                                    label={<MdOutlinePendingActions size={24} color={isDarkMode ? '#fff' : '#000'} />}
+                                    checked={preventPendingPaths}
+                                    onChange={e => setPreventPendingPaths(e.target.checked)}
+                                    title="disallow modify the downloadFilePath to be pending"
+                                />
+                            </div>
+
                         </div>
 
 
@@ -2994,7 +3017,7 @@ const OfflineWindow: React.FC = () => {
                                         backgroundColor: '#ffc107',
                                         color: '#000',
                                     }}
-                                    disabled={selectedIds.size === 0}
+                                    disabled={selectedIds.size === 0 || isLoading}
                                 >
                                     Process Selected
                                 </Button>
@@ -3007,7 +3030,7 @@ const OfflineWindow: React.FC = () => {
                                         backgroundColor: '#dc3545',
                                         color: '#fff',
                                     }}
-                                    disabled={selectedIds.size === 0}
+                                    disabled={selectedIds.size === 0 || isLoading}
                                 >
                                     Remove Selected
                                 </Button>
