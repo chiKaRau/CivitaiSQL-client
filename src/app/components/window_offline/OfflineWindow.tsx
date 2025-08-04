@@ -549,7 +549,8 @@ const OfflineWindow: React.FC = () => {
             entry.modelVersionObject?.model?.name, //This should be the title
             entry.civitaiTags,
             entry.civitaiModelID,
-            entry.civitaiVersionID
+            entry.civitaiVersionID,
+            entry.downloadFilePath
         ];
 
         // Iterate through each field using OR logic
