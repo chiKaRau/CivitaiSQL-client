@@ -25,7 +25,7 @@ import { IoCloseOutline } from "react-icons/io5";
 import CategoriesListSelector from '../CategoriesListSelector';
 import DownloadFilePathOptionPanel from '../DownloadFilePathOptionPanel';
 import ButtonWrap from "../buttons/ButtonWrap";
-import { InputGroup, FormControl, Button, Spinner, OverlayTrigger, Tooltip, Form, Dropdown, ButtonGroup, Carousel, Card, Pagination } from 'react-bootstrap';
+import { InputGroup, FormControl, Button, Spinner, OverlayTrigger, Tooltip, Form, Dropdown, ButtonGroup, Carousel, Card, Pagination, Accordion } from 'react-bootstrap';
 import ErrorAlert from '../ErrorAlert';
 import FolderDropdown from "../FolderDropdown"
 
@@ -39,7 +39,8 @@ import {
     fetchRemoveOfflineDownloadFileIntoOfflineDownloadList,
     fetchBackupOfflineDownloadList,
     fetchGetPendingRemoveTagsList,
-    fetchAddPendingRemoveTag
+    fetchAddPendingRemoveTag,
+    fetchGetCategoriesPrefixsList
 } from "../../api/civitaiSQL_api"
 
 import {
@@ -410,6 +411,35 @@ const OfflineWindow: React.FC = () => {
     // Add this in your component's top-level state:
     const [onlyPendingPaths, setOnlyPendingPaths] = useState(false);
 
+    const [categoriesPrefixsList, setCategoriesPrefixsList] = useState<{ name: string; value: string; }[]>([]);
+    const [selectedPrefixes, setSelectedPrefixes] = useState<Set<string>>(new Set());
+
+    useEffect(() => {
+        const loadPrefixes = async () => {
+            const list = await fetchGetCategoriesPrefixsList(dispatch);
+            if (Array.isArray(list)) {
+                // remove the “Default” / empty‐value entry
+                const filtered = list.filter(p => p.value !== "");
+                setCategoriesPrefixsList(filtered);
+                setSelectedPrefixes(new Set(filtered.map(p => p.value)));
+            }
+        };
+        loadPrefixes();
+    }, [dispatch]);
+
+    // At the top of your component:
+    const selectAllRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (selectAllRef.current) {
+            const total = categoriesPrefixsList.length;
+            const sel = selectedPrefixes.size;
+            // indeterminate if some but not all
+            selectAllRef.current.indeterminate = sel > 0 && sel < total;
+        }
+    }, [selectedPrefixes, categoriesPrefixsList]);
+
+
 
     const handlePauseToggle = () => {
         setIsPaused((prev) => !prev);
@@ -647,6 +677,16 @@ const OfflineWindow: React.FC = () => {
                 return !path.includes("/@scan@/Update/");
             });
         }
+
+        if (selectedPrefixes.size > 0) {
+            filtered = filtered.filter(entry => {
+                const path = entry.downloadFilePath ?? '';
+                return Array.from(selectedPrefixes).some(pref =>
+                    path.startsWith(pref)
+                );
+            });
+        }
+
         // Only sort if modify mode is off
         if (!isModifyMode) {
             // Sort the filtered list so that selected entries come first
@@ -659,7 +699,7 @@ const OfflineWindow: React.FC = () => {
 
         // If modify mode is on, return the filtered list without sorting
         return filtered;
-    }, [offlineDownloadList, filterText, filterCondition, selectedIds, isModifyMode, onlyPendingPaths, displayMode]);
+    }, [offlineDownloadList, filterText, filterCondition, selectedIds, isModifyMode, onlyPendingPaths, displayMode, selectedPrefixes]);
 
     // New state for selecting the tag source (defaulting to 'all')
     const [tagSource, setTagSource] = useState<'all' | 'tags' | 'fileName' | 'titles' | 'other'>('all');
@@ -1684,7 +1724,6 @@ const OfflineWindow: React.FC = () => {
             return false;
         });
     };
-
 
     useEffect(() => {
         setTagPage(0);
@@ -3149,6 +3188,70 @@ const OfflineWindow: React.FC = () => {
                     }}>
                         {isModifyMode ? "Modify Mode" : `Download Mode (${displayMode})`}
                     </div>
+
+                    <Accordion
+                        style={{
+                            width: '100%',
+                            margin: '10px 0',
+                            padding: '8px',
+                            backgroundColor: isDarkMode ? '#2b2b2b' : '#f8f9fa',
+                            border: `1px solid ${isDarkMode ? '#444' : '#ccc'}`,
+                            borderRadius: '4px',
+                            color: isDarkMode ? '#fff' : '#000',
+                        }}
+                    >
+                        <Accordion.Item
+                            eventKey="0"
+                            style={{ backgroundColor: 'transparent', color: isDarkMode ? '#fff' : '#000' }}
+                        >
+                            <Accordion.Header>Folder Prefixes</Accordion.Header>
+                            <Accordion.Body style={{ maxHeight: '180px', overflowY: 'auto', padding: '8px' }}>
+                                {/* ── SELECT ALL ── */}
+                                <Form.Check
+                                    type="checkbox"
+                                    id="prefix-select-all"
+                                    label="Select All"
+                                    ref={selectAllRef}
+                                    checked={selectedPrefixes.size === categoriesPrefixsList.length}
+                                    onChange={e => {
+                                        if (e.target.checked) {
+                                            setSelectedPrefixes(new Set(categoriesPrefixsList.map(p => p.value)));
+                                        } else {
+                                            setSelectedPrefixes(new Set());
+                                        }
+                                    }}
+                                    style={{
+                                        marginBottom: '8px',
+                                        fontWeight: 'bold',
+                                        color: isDarkMode ? '#fff' : '#000',
+                                    }}
+                                />
+
+                                {/* ── INDIVIDUAL PREFIXES ── */}
+                                {categoriesPrefixsList.map(prefix => (
+                                    <Form.Check
+                                        key={prefix.value}
+                                        type="checkbox"
+                                        id={`prefix-${prefix.value}`}
+                                        label={prefix.value}
+                                        checked={selectedPrefixes.has(prefix.value)}
+                                        onChange={e =>
+                                            setSelectedPrefixes(prev => {
+                                                const next = new Set(prev);
+                                                if (e.target.checked) next.add(prefix.value);
+                                                else next.delete(prefix.value);
+                                                return next;
+                                            })
+                                        }
+                                        style={{
+                                            marginBottom: '4px',
+                                            color: isDarkMode ? '#fff' : '#000',
+                                        }}
+                                    />
+                                ))}
+                            </Accordion.Body>
+                        </Accordion.Item>
+                    </Accordion>
 
                     <div
                         style={{
