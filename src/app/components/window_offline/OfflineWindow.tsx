@@ -59,6 +59,7 @@ import { AppState } from '../../store/configureStore';
 import FailedCardMode from './FailedCardMode';
 import ErrorCardMode from './ErrorCardMode';
 import FileNameToggle from './FileNameToggle';
+import TagList from './TagList';
 
 // TypeScript Interfaces
 interface CivitaiModelFile {
@@ -1904,6 +1905,11 @@ const OfflineWindow: React.FC = () => {
                                             fileName={entry.civitaiFileName ?? 'N/A'}
                                             truncateAfter={40}   // adjust to taste
                                         />
+
+                                        {/* Tags */}
+                                        {Array.isArray(entry.civitaiTags) && entry.civitaiTags.length > 0 && (
+                                            <TagList tags={entry.civitaiTags} isDarkMode={isDarkMode} />
+                                        )}
 
                                         {/* 3) Show full download path with line wrapping */}
                                         <p
