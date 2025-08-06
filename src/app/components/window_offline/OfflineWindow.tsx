@@ -1013,6 +1013,7 @@ const OfflineWindow: React.FC = () => {
         flexDirection: 'row',
         width: '100%',
         height: '100vh',         // full viewport height
+        overflowX: 'hidden',
         fontFamily: 'Arial, sans-serif',
         backgroundColor: currentTheme.gridBackgroundColor,
         transition: 'background-color 0.3s ease',
@@ -1025,6 +1026,7 @@ const OfflineWindow: React.FC = () => {
         width: '500px',
         height: '100vh',
         overflowY: 'auto',      // <--- enable vertical scrolling if content is tall
+        overflowX: 'hidden',
         backgroundColor: isDarkMode ? '#333' : '#fff',
         borderRight: isDarkMode ? '1px solid #777' : '1px solid #ccc',
         zIndex: 1000,
@@ -1034,12 +1036,15 @@ const OfflineWindow: React.FC = () => {
 
 
     const rightContentStyle: React.CSSProperties = {
-        flex: 1,                     // Fills the remaining horizontal space
-        display: 'flex',            // Enables flex layout
-        flexDirection: 'column',    // Stacks children vertically
+        flex: 1,
+        minWidth: 0,                        // <- allow this flex child to get narrower than its contents
+        display: 'flex',
+        flexDirection: 'column',
         padding: '20px',
         boxSizing: 'border-box',
-        height: '100vh',            // Ensures the right panel takes full viewport height
+        height: '100vh',
+        overflowY: 'auto',                  // vertical scroll for tall content
+        overflowX: 'auto',                  // horizontal scroll for wide content
     };
 
     const contentStyle: React.CSSProperties = {
@@ -1875,7 +1880,7 @@ const OfflineWindow: React.FC = () => {
                                         <div style={{ flex: 1, minWidth: 0 }}>
                                             <TitleNameToggle
                                                 titleName={entry?.modelVersionObject?.model?.name ?? 'N/A'}
-                                                truncateAfter={40}
+                                                truncateAfter={30}
                                             />
                                         </div>
                                     </div>
@@ -3218,6 +3223,7 @@ const OfflineWindow: React.FC = () => {
                                             setSelectedPrefixes(new Set());
                                         }
                                     }}
+                                    disabled={isLoading}
                                     style={{
                                         marginBottom: '8px',
                                         fontWeight: 'bold',
@@ -3282,13 +3288,15 @@ const OfflineWindow: React.FC = () => {
                         {/* Selection Count Display */}
                         <div
                             style={{
-                                flex: 1, // <--- This makes it stretch across the remaining width
+                                flex: 1,
+                                minWidth: 0,
                                 padding: '8px 12px',
                                 borderRadius: '4px',
                                 backgroundColor: isDarkMode ? '#444' : '#e0e0e0',
                                 color: isDarkMode ? '#fff' : '#000',
                                 fontWeight: 'bold',
                                 textAlign: 'center',
+                                whiteSpace: 'normal',    // allow wrapping onto next line
                             }}
                         >
                             {(isModifyMode || (displayMode === 'errorCard')) ? (
@@ -3297,11 +3305,9 @@ const OfflineWindow: React.FC = () => {
                                     "<span
                                         style={{
                                             display: 'inline-block',
-                                            // maxWidth: '100%',         // Adjust as needed
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis',
-                                            whiteSpace: 'nowrap',
-                                            verticalAlign: 'middle',   // Helps align icon & text nicely
+                                            maxWidth: '100%',
+                                            whiteSpace: 'normal',    // allow this span to wrap
+                                            wordBreak: 'break-all',  // break long paths anywhere
                                         }}
                                         title={modify_downloadFilePath} // When hovered, show full text
                                     >
