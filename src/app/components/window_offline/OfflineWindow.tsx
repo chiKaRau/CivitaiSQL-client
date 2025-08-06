@@ -61,6 +61,7 @@ import FailedCardMode from './FailedCardMode';
 import ErrorCardMode from './ErrorCardMode';
 import FileNameToggle from './FileNameToggle';
 import TagList from './TagList';
+import TitleNameToggle from './TitleNameToggle';
 
 // TypeScript Interfaces
 interface CivitaiModelFile {
@@ -1844,21 +1845,18 @@ const OfflineWindow: React.FC = () => {
                                     {/* ---- 1) BaseModel badge + Title ---- */}
                                     <div
                                         style={{
-                                            marginTop: '40px', // push down below the checkbox row
+                                            display: 'flex',            // <-- make this a flex container
+                                            alignItems: 'center',       // vertically center badge + title
+                                            marginTop: '40px',
                                             marginBottom: '5px',
-                                            textAlign: 'center',
                                             borderBottom: `1px solid ${isDarkMode ? '#555' : '#ccc'}`,
                                             paddingBottom: '5px',
-                                            whiteSpace: 'nowrap',
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis',
                                         }}
                                     >
                                         {/* BaseModel as a badge, only if present */}
                                         {entry.modelVersionObject?.baseModel && (
                                             <span
                                                 style={{
-                                                    display: 'inline-block',
                                                     fontSize: '0.7rem',
                                                     fontWeight: 'bold',
                                                     backgroundColor: '#007bff',
@@ -1866,22 +1864,22 @@ const OfflineWindow: React.FC = () => {
                                                     padding: '2px 6px',
                                                     borderRadius: '4px',
                                                     marginRight: '6px',
+                                                    flexShrink: 0,          // never shrink the badge
                                                 }}
                                             >
                                                 {entry.modelVersionObject.baseModel}
                                             </span>
                                         )}
-                                        {/* Model title */}
-                                        <span
-                                            style={{
-                                                fontSize: '0.9rem',
-                                                fontWeight: 'bold',
-                                            }}
-                                            title={entry?.modelVersionObject?.model?.name ?? 'N/A'}
-                                        >
-                                            {entry?.modelVersionObject?.model?.name ?? 'N/A'}
-                                        </span>
+
+                                        {/* wrap your toggle in a flex child so it can shrink & ellipsis properly */}
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <TitleNameToggle
+                                                titleName={entry?.modelVersionObject?.model?.name ?? 'N/A'}
+                                                truncateAfter={40}
+                                            />
+                                        </div>
                                     </div>
+
 
                                     {/* Carousel for Images */}
                                     {entry.imageUrlsArray && entry.imageUrlsArray.length > 0 ? (
