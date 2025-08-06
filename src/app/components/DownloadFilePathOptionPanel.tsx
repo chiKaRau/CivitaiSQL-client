@@ -1,241 +1,210 @@
-import React, { useState, useEffect, useRef } from 'react';
+// DownloadFilePathOptionPanel.tsx
 
-//Store
-import { useSelector, useDispatch } from 'react-redux';
-import { AppState } from '../store/configureStore';
-import { updateDownloadFilePath } from "../store/actions/chromeActions"
-
-//components
-import { Button, OverlayTrigger, Tooltip } from 'react-bootstrap';
-import TextField from '@mui/material/TextField';
-import Autocomplete from '@mui/material/Autocomplete';
-import { BsPencilFill } from "react-icons/bs"
-
-//api
+import React, { useState, useEffect, useMemo, useRef } from 'react'
+import { useSelector, useDispatch } from 'react-redux'
+import { AppState } from '../store/configureStore'
+import { updateDownloadFilePath } from '../store/actions/chromeActions'
+import FilesPathSettingPanel from './FilesPathSettingPanel'
+import { fetchGetFoldersList } from '../api/civitaiSQL_api'
 import {
-    fetchGetFoldersList
-} from "../api/civitaiSQL_api"
-
-//utils
-import { updateDownloadFilePathIntoChromeStorage, updateSelectedCategoryIntoChromeStorage } from "../utils/chromeUtils"
-import FilesPathSettingPanel from './FilesPathSettingPanel';
-
-//Suggestion
-//Auto Complete
+    updateDownloadFilePathIntoChromeStorage,
+    updateSelectedCategoryIntoChromeStorage
+} from '../utils/chromeUtils'
+import Autocomplete from '@mui/material/Autocomplete'
+import TextField from '@mui/material/TextField'
+import { Button, OverlayTrigger, Tooltip } from 'react-bootstrap'
+import { BsPencilFill } from 'react-icons/bs'
 
 interface DownloadFilePathOptionPanelProps {
-    isHandleRefresh: boolean;
-    setIsHandleRefresh: (isHandleRefresh: boolean) => void;
+    isHandleRefresh: boolean
+    setIsHandleRefresh: (val: boolean) => void
 }
 
-const DownloadFilePathOptionPanel: React.FC<DownloadFilePathOptionPanelProps> = ({ isHandleRefresh, setIsHandleRefresh }) => {
-    const inputRef = useRef<HTMLInputElement>(null);
-    const chrome = useSelector((state: AppState) => state.chrome);
-    const { downloadFilePath, selectedFilteredCategoriesList, selectedCategory } = chrome;
-    const dispatch = useDispatch();
-    const [sortedandFilteredfoldersList, setSortedandFilteredfoldersList] = useState<string[]>([]);
-    const [foldersList, setFoldersList] = useState([])
-    const [isLoading, setIsLoading] = useState(false)
+const DownloadFilePathOptionPanel: React.FC<DownloadFilePathOptionPanelProps> = ({
+    isHandleRefresh,
+    setIsHandleRefresh
+}) => {
+    const dispatch = useDispatch()
+    const {
+        downloadFilePath,
+        selectedFilteredCategoriesList,
+        selectedCategory
+    } = useSelector((s: AppState) => s.chrome)
 
-    const sortedFoldersList = foldersList.sort((a: string, b: string) => {
-        // Extract the first character of each string to compare
-        const firstCharA = a.charAt(0).toUpperCase();
-        const firstCharB = b.charAt(0).toUpperCase();
+    // 1) Local typing state
+    const [inputValue, setInputValue] = useState<string>(downloadFilePath)
 
-        // Check if both characters are digits or not
-        const isDigitA = /\d/.test(firstCharA);
-        const isDigitB = /\d/.test(firstCharB);
+    // 2) Folders from server
+    const [foldersList, setFoldersList] = useState<string[]>([])
+    const [isLoading, setIsLoading] = useState<boolean>(false)
+    const inputRef = useRef<HTMLInputElement>(null)
 
-        if (isDigitA && !isDigitB) {
-            // If A is a digit and B is not, A should come after B
-            return 1;
-        } else if (!isDigitA && isDigitB) {
-            // If B is a digit and A is not, A should come before B
-            return -1;
+    // Keep local input in sync if Redux changes externally
+    useEffect(() => {
+        setInputValue(downloadFilePath)
+    }, [downloadFilePath])
+
+    // Fetch function
+    const handleGetFoldersList = async () => {
+        setIsLoading(true)
+        try {
+            const data = await fetchGetFoldersList(dispatch)
+            if (Array.isArray(data)) {
+                setFoldersList(data)
+            } else {
+                console.warn('Unexpected fetchGetFoldersList result:', data)
+                setFoldersList([])
+            }
+        } catch (err) {
+            console.error('Error fetching folders list:', err)
+            setFoldersList([])
+        } finally {
+            setIsLoading(false)
         }
-        // If both are digits or both are not digits, compare alphabetically/numerically
-        return a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' });
-    });
+    }
 
+    // Initial fetch on mount
     useEffect(() => {
-        // Update FoldersList
         handleGetFoldersList()
-    }, []);
+        // eslint-disable-next-line
+    }, [])
 
+    // Refresh when parent tells us
     useEffect(() => {
-        // Update FoldersList
         if (isHandleRefresh) {
             handleGetFoldersList()
         }
-    }, [isHandleRefresh]);
+    }, [isHandleRefresh])
 
-
-    useEffect(() => {
-        if (selectedFilteredCategoriesList) {
-            handleAddFilterIntoFoldersList(JSON.parse(selectedFilteredCategoriesList))
+    // Parse categories JSON once
+    const parsedCategories = useMemo(() => {
+        try {
+            return JSON.parse(selectedFilteredCategoriesList)
+        } catch {
+            return []
         }
-    }, [selectedFilteredCategoriesList, foldersList])
+    }, [selectedFilteredCategoriesList])
 
+    // 3) Memoized sort & filter
+    const sortedAndFiltered = useMemo(() => {
+        return foldersList
+            .filter((folder) => {
+                const lower = folder.toLowerCase()
+                // match at least one displayed category
+                if (
+                    !parsedCategories.some(
+                        (item: any) =>
+                            item.display &&
+                            lower.includes(item.category.value.toLowerCase())
+                    )
+                ) {
+                    return false
+                }
+                // exception flags
+                const isChars = parsedCategories.some(
+                    (i: any) => i.category.name === 'Characters' && i.display
+                )
+                const isReal = parsedCategories.some(
+                    (i: any) => i.category.name === 'Real' && i.display
+                )
+                const isPoses = parsedCategories.some(
+                    (i: any) => i.category.name === 'Poses' && i.display
+                )
+                const isMales = parsedCategories.some(
+                    (i: any) => i.category.name === 'Males' && i.display
+                )
+                const isSFW = parsedCategories.some(
+                    (i: any) => i.category.name === 'SFW' && i.display
+                )
+                const isNSFW = parsedCategories.some(
+                    (i: any) => i.category.name === 'NSFW' && i.display
+                )
+                const isEX = parsedCategories.some(
+                    (i: any) => i.category.name === 'EX' && i.display
+                )
 
-    const handleAddFilterIntoFoldersList = (selectedFilteredCategoriesList: any) => {
+                // apply same exceptions
+                if (isChars && !isMales && lower.includes('(males)')) return false
+                if (isPoses && !isNSFW && lower.includes('/nsfw/')) return false
+                if (isPoses && !isSFW && lower.includes('/sfw/')) return false
+                if (isPoses && !isReal && lower.includes('/real/')) return false
+                if (isSFW && !isNSFW && lower.includes('/nsfw/')) return false
+                if (!isEX && lower.includes('/ex/')) return false
 
-        console.log("data---folder")
-        console.log(foldersList);
+                return true
+            })
+            .sort((a, b) => {
+                const A = a.charAt(0).toUpperCase()
+                const B = b.charAt(0).toUpperCase()
+                const dA = /\d/.test(A),
+                    dB = /\d/.test(B)
+                if (dA && !dB) return 1
+                if (!dA && dB) return -1
+                return a.localeCompare(b, 'en', {
+                    numeric: true,
+                    sensitivity: 'base'
+                })
+            })
+    }, [foldersList, parsedCategories])
 
-        const filteredFolderList = (foldersList as any[]).filter(folder => {
-            const isIncluded = (selectedFilteredCategoriesList as any[]).some(item => {
-                return item.display && folder.toLowerCase().includes(item.category.value.toLowerCase());
-            });
-
-            if (!isIncluded) {
-                return false;
-            }
-
-            // Additional checks for specific exceptions
-            const isCharactersSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "Characters" && item.display);
-            const isRealSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "Real" && item.display);
-            const isPosesSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "Poses" && item.display);
-            const isMalesSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "Males" && item.display);
-            const isSFWSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "SFW" && item.display);
-            const isNSFWSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "NSFW" && item.display);
-            const isEXSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "EX" && item.display);
-
-            // Check exceptions
-            if (isCharactersSelected && !isMalesSelected && folder.toLowerCase().includes("(males)")) {
-                return false;
-            }
-
-            if (isPosesSelected && !isNSFWSelected && folder.toLowerCase().includes("/nsfw/")) {
-                return false;
-            }
-
-            if (isPosesSelected && !isSFWSelected && folder.toLowerCase().includes("/sfw/")) {
-                return false;
-            }
-
-            if (isPosesSelected && !isRealSelected && folder.toLowerCase().includes("/real/")) {
-                return false;
-            }
-
-            if (isPosesSelected && !isRealSelected && folder.toLowerCase().includes("/real/")) {
-                return false;
-            }
-
-            if (isSFWSelected && !isNSFWSelected && folder.toLowerCase().includes("/nsfw/")) {
-                return false;
-            }
-
-
-            if (!isEXSelected && folder.toLowerCase().includes("/ex/")) {
-                return false;
-            }
-
-
-
-            return true;
-        }).sort((a: string, b: string) => {
-            // Extract the first character of each string to compare
-            const firstCharA = a.charAt(0).toUpperCase();
-            const firstCharB = b.charAt(0).toUpperCase();
-
-            // Check if both characters are digits or not
-            const isDigitA = /\d/.test(firstCharA);
-            const isDigitB = /\d/.test(firstCharB);
-
-            if (isDigitA && !isDigitB) {
-                // If A is a digit and B is not, A should come after B
-                return 1;
-            } else if (!isDigitA && isDigitB) {
-                // If B is a digit and A is not, A should come before B
-                return -1;
-            }
-            // If both are digits or both are not digits, compare alphabetically/numerically
-            return a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' });
-        });
-
-        console.log("filteredFolderList")
-        console.log(filteredFolderList)
-
-        setSortedandFilteredfoldersList(filteredFolderList);
-
+    // 4) Commit to Redux on selection or blur
+    const commit = (_: any, val: string | null) => {
+        const clean = val?.replace(/[<>:"\\|?*]/g, '') || ''
+        dispatch(updateDownloadFilePath(clean))
     }
+    const handleBlur = () => commit(null, inputValue)
 
-    const handleGetFoldersList = async () => {
-        setIsLoading(true)
-        const data = await fetchGetFoldersList(dispatch);
-        setFoldersList(data)
-        setIsLoading(false)
+    // Save to Chrome storage
+    const handleSave = () => {
+        updateDownloadFilePathIntoChromeStorage(downloadFilePath)
+        updateSelectedCategoryIntoChromeStorage(selectedCategory)
     }
-
-    const handleFoldersListOnChange = (event: any, newValue: string | null) => {
-        const disallowedRegex = /[<>:"\\\|?*]/g;
-        dispatch(updateDownloadFilePath(newValue?.replace(disallowedRegex, '') || ""))
-
-    }
-
-    // Handler for blur event
-    const handleAutocompleteBlur = () => {
-        // If downloadFilePath is empty
-        if (!downloadFilePath) {
-            dispatch(updateDownloadFilePath('/@scan@/ErrorPath/'))
-        }
-    };
 
     return (
         <>
-            <FilesPathSettingPanel setIsHandleRefresh={setIsHandleRefresh} isHandleRefresh={isHandleRefresh} />
+            <FilesPathSettingPanel
+                isHandleRefresh={isHandleRefresh}
+                setIsHandleRefresh={setIsHandleRefresh}
+            />
 
-            <div className="autocomplete-container">
-                <div className="autocomplete-container-row">
-                    <Autocomplete
-                        value={downloadFilePath}
-                        onChange={handleFoldersListOnChange}
-                        inputValue={downloadFilePath}
-                        onInputChange={handleFoldersListOnChange}
-                        key="1"
-                        id="controllable-states-demo"
-                        options={sortedandFilteredfoldersList}
-                        sx={{ width: 350 }}
-                        renderInput={(params) => (
-                            <TextField
-                                {...params}
-                                inputRef={inputRef}
-                                helperText={`Folder name can't contain '"<>:/\\|?*'`}
-                                label="Folder path"
-                                onBlur={handleAutocompleteBlur}
-                                onFocus={() => {
-                                    if (inputRef.current) {
-                                        inputRef.current.scrollLeft =
-                                            inputRef.current.scrollWidth - inputRef.current.offsetWidth + 100;
-                                    }
-                                }}
-                            />
-                        )}
-                    />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Autocomplete
+                    freeSolo
+                    options={sortedAndFiltered}
+                    loading={isLoading}
+                    inputValue={inputValue}
+                    onInputChange={(_, v) => setInputValue(v)}
+                    value={downloadFilePath}
+                    onChange={commit}
+                    sx={{ width: 350 }}
+                    renderInput={(params) => (
+                        <TextField
+                            {...params}
+                            inputRef={inputRef}
+                            label="Folder path"
+                            helperText={`Can't contain <>:"\\|?*`}
+                            onBlur={handleBlur}
+                        />
+                    )}
+                    onFocus={() => {
+                        if (inputRef.current) {
+                            inputRef.current.scrollLeft =
+                                inputRef.current.scrollWidth - inputRef.current.offsetWidth + 100;
+                        }
+                    }}
+                />
 
-                    <div style={{ padding: "5px" }} />
-
-                    <OverlayTrigger
-                        placement="bottom"
-                        overlay={<Tooltip id="tooltip">Save this download file path.</Tooltip>}
-                    >
-                        <Button
-                            variant="light"
-                            disabled={isLoading}
-                            className="tooltip-button"
-                            onClick={() => {
-                                updateDownloadFilePathIntoChromeStorage(downloadFilePath);
-                                updateSelectedCategoryIntoChromeStorage(selectedCategory);
-                            }}
-                        >
-                            <BsPencilFill />
-                        </Button>
-                    </OverlayTrigger>
-                </div>
+                <OverlayTrigger
+                    placement="bottom"
+                    overlay={<Tooltip id="tooltip">Save this download file path.</Tooltip>}
+                >
+                    <Button variant="light" disabled={isLoading} onClick={handleSave}>
+                        <BsPencilFill />
+                    </Button>
+                </OverlayTrigger>
             </div>
         </>
-    );
-};
+    )
+}
 
-export default DownloadFilePathOptionPanel;
-
+export default DownloadFilePathOptionPanel
