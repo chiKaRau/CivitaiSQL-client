@@ -205,7 +205,7 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                 }
 
                 await fetchAddOfflineDownloadFileIntoOfflineDownloadList(modelObject, false, dispatch);
-
+                props.toggleDatabaseUpdateModelPanelOpen();
             }
 
         } catch (error) {
