@@ -57,7 +57,7 @@ export const QuickModeControls: React.FC<QuickModeControlsProps> = ({
                     className="me-3"
                 />
 
-                <button className="btn btn-primary" onClick={onApply}>
+                <button type="button" className="btn btn-primary" onClick={onApply}>
                     Apply
                 </button>
             </div>

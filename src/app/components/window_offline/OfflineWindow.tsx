@@ -3247,6 +3247,7 @@ const OfflineWindow: React.FC = () => {
                                                 return next;
                                             })
                                         }
+                                        disabled={isLoading}
                                         style={{
                                             marginBottom: '4px',
                                             color: isDarkMode ? '#fff' : '#000',
