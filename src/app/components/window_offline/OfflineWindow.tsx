@@ -17,6 +17,7 @@ import { FcGenericSortingAsc, FcGenericSortingDesc } from "react-icons/fc";
 import { PiTabsFill } from "react-icons/pi";
 import { LuPanelLeftOpen, LuPanelRightOpen } from "react-icons/lu";
 import { BsReverseLayoutTextWindowReverse } from "react-icons/bs";
+import { FaArrowUp } from 'react-icons/fa';
 import { FaTimes } from 'react-icons/fa'; // Import the '×' icon
 import { FaAngleDoubleLeft, FaAngleLeft, FaAngleRight, FaAngleDoubleRight } from 'react-icons/fa';
 import { IoCloseOutline } from "react-icons/io5";
@@ -230,6 +231,11 @@ class Semaphore {
 }
 
 const OfflineWindow: React.FC = () => {
+
+    const leftPanelRef = useRef<HTMLDivElement>(null);
+    const rightContentRef = useRef<HTMLDivElement>(null);
+    const rightInnerRef = useRef<HTMLDivElement>(null);
+
 
     const dispatch = useDispatch();
     const [isLoading, setIsLoading] = useState(false);
@@ -2567,7 +2573,7 @@ const OfflineWindow: React.FC = () => {
         <div style={containerStyle}>
             {/* Scrollable Content Area */}
             <>
-                <div style={leftPanelStyle}>
+                <div style={leftPanelStyle} ref={leftPanelRef}>
                     <div style={headerStyleContainer}>
                         <h3 style={{ color: isDarkMode ? '#fff' : '#000' }}>Offline Download List</h3>
 
@@ -3347,7 +3353,7 @@ const OfflineWindow: React.FC = () => {
                     )}
 
                     {/* Main Content Area */}
-                    <div style={{ flex: 1, overflowY: 'auto' }}>
+                    <div ref={rightInnerRef} style={{ flex: 1, overflowY: 'auto' }}>
                         {isLoading && offlineDownloadList.length === 0 ? (
                             <div style={{ color: isDarkMode ? '#fff' : '#000' }}>Loading...</div>
                         ) : (
@@ -3496,6 +3502,31 @@ const OfflineWindow: React.FC = () => {
 
             </>
 
+            {/* Scroll-to-top button */}
+            <Button
+                onClick={() => {
+                    rightInnerRef.current?.scrollTo({ top: 0 });
+                }}
+                style={{
+                    position: 'fixed',
+                    bottom: '100px',
+                    right: '70px',
+                    zIndex: 2000,
+                    borderRadius: '50%',
+                    width: '40px',
+                    height: '40px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: '#007bff',
+                    color: '#fff',
+                    border: 'none',
+                    cursor: 'pointer',
+                }}
+                aria-label="Scroll to top"
+            >
+                <FaArrowUp />
+            </Button>
 
         </div >
     );
