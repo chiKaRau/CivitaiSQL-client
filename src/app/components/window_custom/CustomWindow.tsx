@@ -10,6 +10,7 @@ import { AiOutlineCheckCircle, AiOutlineCloseCircle } from 'react-icons/ai';
 
 import CategoriesListSelector from '../CategoriesListSelector';
 import DownloadFilePathOptionPanel from '../DownloadFilePathOptionPanel';
+import FolderDropdown from '../FolderDropdown';
 
 const CustomWindow: React.FC = () => {
     const dispatch = useDispatch();
@@ -184,7 +185,7 @@ const CustomWindow: React.FC = () => {
                             <Form.Control
                                 type="text"
                                 value={name}
-                                placeholder='model file name (without safetensor)'
+                                placeholder='illustrious_XL_zuihou.safetensors'
                                 onChange={e => setName(e.target.value)}
                                 required
                             />
@@ -241,6 +242,7 @@ const CustomWindow: React.FC = () => {
                                     isHandleRefresh={isHandleRefresh}
                                     setIsHandleRefresh={setIsHandleRefresh}
                                 />
+                                <FolderDropdown />
                             </div>
                         </div>
                     </Col>

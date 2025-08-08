@@ -2703,6 +2703,7 @@ const OfflineWindow: React.FC = () => {
                                     marginLeft: '10px',
                                     color: '#fff',
                                 }}
+                                disabled={isLoading}
                                 aria-label="Toggle Modify Mode"
                             >
                                 {isModifyMode ? 'Exit Modify Mode' : 'Enter Modify Mode'}
@@ -2784,6 +2785,7 @@ const OfflineWindow: React.FC = () => {
                                 <Dropdown.Toggle
                                     variant="secondary"
                                     style={{ width: '100%' }}
+                                    disabled={isLoading}
                                     onDoubleClick={() => {
                                         // When the user double-clicks, switch to edit mode.
                                         setTopTagInputValue(filterText);
@@ -2903,7 +2905,7 @@ const OfflineWindow: React.FC = () => {
 
                         {/* New Dropdown for selecting the source of tags */}
                         <Dropdown style={{ width: '30%' }}>
-                            <Dropdown.Toggle variant="secondary" style={{ width: '100%' }}>
+                            <Dropdown.Toggle disabled={isLoading} variant="secondary" style={{ width: '100%' }}>
                                 {tagSource === 'all'
                                     ? 'All'
                                     : tagSource === 'tags'
@@ -2972,6 +2974,7 @@ const OfflineWindow: React.FC = () => {
 
                             <select
                                 value={filterCondition}
+                                disabled={isLoading}
                                 onChange={(e) => setFilterCondition(e.target.value as any)}
                                 style={{
                                     ...filterSelectStyle,
@@ -2996,6 +2999,7 @@ const OfflineWindow: React.FC = () => {
                                     id="only-pending-checkbox"
                                     label={<MdOutlinePendingActions size={24} color={isDarkMode ? '#fff' : '#000'} />}
                                     checked={onlyPendingPaths}
+                                    disabled={isLoading}
                                     onChange={e => setOnlyPendingPaths(e.target.checked)}
                                     style={{ fontWeight: 'bold' }}
                                     title="Only Pending"
@@ -3005,6 +3009,7 @@ const OfflineWindow: React.FC = () => {
                                 <Form.Check
                                     type="checkbox"
                                     id="prevent-pending-paths"
+                                    disabled={isLoading}
                                     label={<MdOutlinePendingActions size={24} color={isDarkMode ? '#fff' : '#000'} />}
                                     checked={preventPendingPaths}
                                     onChange={e => setPreventPendingPaths(e.target.checked)}
@@ -3024,6 +3029,7 @@ const OfflineWindow: React.FC = () => {
                                     backgroundColor: '#007bff',
                                     color: '#fff',
                                 }}
+                                disabled={isLoading}
                             >
                                 Select First
                             </Button>

@@ -18,6 +18,7 @@ import Autocomplete from '@mui/material/Autocomplete';
 import { setError } from '../../store/actions/errorsActions';
 import { clearError } from '../../store/actions/errorsActions';
 import { retrieveCivitaiFileName, retrieveCivitaiFilesList } from '../../utils/objectUtils';
+import { updateDownloadFilePath } from '../../store/actions/chromeActions';
 
 interface Version {
     id: number;
@@ -394,7 +395,10 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
                         <OverlayTrigger placement="bottom" overlay={<Tooltip id="tooltip">{element.value}</Tooltip>}>
                             <label key={index}
                                 className={`panel-tag-button ${selectedPrefix === element.value ? 'panel-tag-default' : 'panel-tag-selected'}`}
-                                onClick={() => setSelectedPrefix(element.value)}>
+                                onClick={() => {
+                                    setSelectedPrefix(element.value)
+                                    dispatch(updateDownloadFilePath(`${element.value}${selectedSuffix}`));
+                                }}>
                                 {element.name}
                             </label>
                         </OverlayTrigger>
