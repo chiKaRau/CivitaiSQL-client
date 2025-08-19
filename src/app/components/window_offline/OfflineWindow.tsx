@@ -427,7 +427,15 @@ const OfflineWindow: React.FC = () => {
             if (Array.isArray(list)) {
                 // remove the “Default” / empty‐value entry
                 const filtered = list.filter(p => p.value !== "");
-                setCategoriesPrefixsList(filtered);
+
+                // Add a virtual “Updates” option that matches ANY path containing /@scan@/Update/
+                const enhanced = [
+                    ...filtered,
+                    { name: 'Updates (any folder)', value: '/@scan@/Update/' }
+                ];
+
+                setCategoriesPrefixsList(enhanced);
+
                 setSelectedPrefixes(new Set(filtered.map(p => p.value)));
             }
         };
@@ -663,25 +671,6 @@ const OfflineWindow: React.FC = () => {
                     path === "/@scan@/ACG/Pending" ||
                     path === "/@scan@/ACG/Pending/"
                 );
-            });
-        }
-
-        // Use .includes() to filter update entries
-        if (displayMode === 'updateCard') {
-            // Keep only entries whose downloadFilePath contains "/@scan@/Update/"
-            filtered = filtered.filter(entry => {
-                const path = entry.downloadFilePath ?? "";
-                return path.includes("/@scan@/Update/");
-            });
-        } else if (
-            displayMode === 'table' ||
-            displayMode === 'bigCard' ||
-            displayMode === 'smallCard'
-        ) {
-            // Exclude entries that have "/@scan@/Update/" in their downloadFilePath
-            filtered = filtered.filter(entry => {
-                const path = entry.downloadFilePath ?? "";
-                return !path.includes("/@scan@/Update/");
             });
         }
 
@@ -2642,13 +2631,13 @@ const OfflineWindow: React.FC = () => {
                             >
                                 Small Card Mode
                             </Button>
-                            <Button
+                            {/* <Button
                                 style={responsiveButtonStyle}
                                 variant={displayMode === 'updateCard' ? 'primary' : 'secondary'}
                                 onClick={() => setDisplayMode('updateCard')}
                             >
                                 Update Card Mode
-                            </Button>
+                            </Button> */}
 
                             {/* New: Failed Card Mode Button with Badge */}
                             <Button
@@ -3408,7 +3397,7 @@ const OfflineWindow: React.FC = () => {
                                     />
                                 )}
 
-                                {displayMode === 'updateCard' && (
+                                {/* {displayMode === 'updateCard' && (
                                     <UpdateCardMode
                                         filteredDownloadList={paginatedDownloadList} // or your full filtered list if preferred
                                         isDarkMode={isDarkMode}
@@ -3417,7 +3406,7 @@ const OfflineWindow: React.FC = () => {
                                         toggleSelect={toggleSelect}
                                         handleSelectAll={handleSelectAll}
                                     />
-                                )}
+                                )} */}
 
                                 {displayMode === 'failedCard' && (
                                     <FailedCardMode

@@ -52,7 +52,7 @@ export const QuickModeControls: React.FC<QuickModeControlsProps> = ({
                 <input
                     type="text"
                     value={suffixInput}
-                    onChange={e => onSuffixChange(e.target.value)}
+                    onChange={e => onSuffixChange(e.target.value.replace(/[<>:"\\|?*]/g, ''))}
                     placeholder="Enter suffix"
                     className="me-3"
                 />
