@@ -1737,6 +1737,15 @@ const OfflineWindow: React.FC = () => {
 
     const totalTagPages = Math.max(1, Math.ceil(allTags.length / TAGS_PER_PAGE));
 
+    const [goToPageInput, setGoToPageInput] = useState<string>('');
+
+    const handleGoToPage = () => {
+        const n = Math.floor(Number(goToPageInput));
+        if (!Number.isFinite(n)) return; // ignore non-numbers
+        // clamp to valid range (fallback to 1 if totalPages is 0)
+        const clamped = Math.min(Math.max(1, n), totalPages || 1);
+        setCurrentPage(clamped);
+    };
 
     // **BigCardMode Component Implementation**
     const BigCardMode: React.FC<{
@@ -3441,36 +3450,91 @@ const OfflineWindow: React.FC = () => {
                                     Showing {startItem} - {endItem} of {totalItems} items
                                 </div>
 
-                                {/* Pagination Controls */}
-                                <Pagination>
-                                    <Pagination.First onClick={() => setCurrentPage(1)} disabled={currentPage === 1} aria-label="First Page" >
-                                        <FaAngleDoubleLeft />
-                                    </Pagination.First>
-                                    <Pagination.Prev onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} aria-label="Previous Page" >
-                                        <FaAngleLeft />
-                                    </Pagination.Prev>
+                                {/* Pagination + Go-To (center) */}
+                                <div
+                                    style={{
+                                        flex: 1,
+                                        display: 'flex',
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        flexWrap: 'wrap',
+                                    }}
+                                >
+                                    {/* Remove bottom margin on UL */}
+                                    <Pagination className="mb-0" size="sm" style={{ marginBottom: 0 }}>
+                                        <Pagination.First
+                                            onClick={() => setCurrentPage(1)}
+                                            disabled={currentPage === 1}
+                                            aria-label="First Page"
+                                        >
+                                            <FaAngleDoubleLeft />
+                                        </Pagination.First>
+                                        <Pagination.Prev
+                                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                            disabled={currentPage === 1}
+                                            aria-label="Previous Page"
+                                        >
+                                            <FaAngleLeft />
+                                        </Pagination.Prev>
 
-                                    {/* Display a range of page numbers */}
-                                    {Array.from({ length: totalPages }, (_, index) => index + 1)
-                                        .slice(Math.max(currentPage - 3, 0), currentPage + 2)
-                                        .map(page => (
-                                            <Pagination.Item
-                                                key={page}
-                                                active={page === currentPage}
-                                                onClick={() => setCurrentPage(page)}
-                                                aria-label={`Page ${page}`}
-                                            >
-                                                {page}
-                                            </Pagination.Item>
-                                        ))}
+                                        {Array.from({ length: totalPages }, (_, index) => index + 1)
+                                            .slice(Math.max(currentPage - 3, 0), currentPage + 2)
+                                            .map(page => (
+                                                <Pagination.Item
+                                                    key={page}
+                                                    active={page === currentPage}
+                                                    onClick={() => setCurrentPage(page)}
+                                                    aria-label={`Page ${page}`}
+                                                >
+                                                    {page}
+                                                </Pagination.Item>
+                                            ))}
 
-                                    <Pagination.Next onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} aria-label="Next Page" >
-                                        <FaAngleRight />
-                                    </Pagination.Next>
-                                    <Pagination.Last onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} aria-label="Last Page">
-                                        <FaAngleDoubleRight />
-                                    </Pagination.Last>
-                                </Pagination>
+                                        <Pagination.Next
+                                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                            disabled={currentPage === totalPages}
+                                            aria-label="Next Page"
+                                        >
+                                            <FaAngleRight />
+                                        </Pagination.Next>
+                                        <Pagination.Last
+                                            onClick={() => setCurrentPage(totalPages)}
+                                            disabled={currentPage === totalPages}
+                                            aria-label="Last Page"
+                                        >
+                                            <FaAngleDoubleRight />
+                                        </Pagination.Last>
+                                    </Pagination>
+
+                                    {/* Input + Button aligned via InputGroup */}
+                                    <InputGroup style={{ width: 170 }}>
+                                        <Form.Control
+                                            type="number"
+                                            min={1}
+                                            max={totalPages || 1}
+                                            placeholder="Page #"
+                                            value={goToPageInput}
+                                            onChange={(e) => setGoToPageInput(e.target.value)}
+                                            onKeyDown={(e) => { if (e.key === 'Enter') handleGoToPage(); }}
+                                            size="sm"
+                                            aria-label="Go to page number"
+                                            disabled={totalPages <= 1}
+                                            style={{
+                                                backgroundColor: isDarkMode ? '#555' : '#fff',
+                                                color: isDarkMode ? '#fff' : '#000',
+                                            }}
+                                        />
+                                        <Button
+                                            onClick={handleGoToPage}
+                                            size="sm"
+                                            disabled={totalPages <= 1 || !goToPageInput.trim()}
+                                            aria-label="Go to page"
+                                        >
+                                            Go
+                                        </Button>
+                                    </InputGroup>
+                                </div>
 
                                 {/* Items Per Page Selector */}
                                 <Form.Select

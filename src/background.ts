@@ -29,7 +29,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     chrome.windows.create({
       url: chrome.runtime.getURL('offlinewindow.html'),
       type: 'popup',
-      width: 1400,
+      width: 1700,
       height: 1075,
       left: 1800
     });
