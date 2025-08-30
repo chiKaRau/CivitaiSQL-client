@@ -172,11 +172,94 @@ const CustomWindow: React.FC = () => {
     // Force-refresh DownloadFilePath panel when needed
     const [isHandleRefresh, setIsHandleRefresh] = useState(false);
 
+    const handleScrapEverything = async () => {
+        try {
+            // @ts-ignore
+            if (!chrome?.tabs) throw new Error('Chrome extension APIs not available');
+
+            // Step 1: normal window → active tab
+            const windows = await chrome.windows.getAll({ populate: false });
+            const normalWindow = windows.find(win => win.type === 'normal');
+            if (!normalWindow) throw new Error('No normal window found');
+
+            const [activeTab] = await chrome.tabs.query({ active: true, windowId: normalWindow.id });
+            if (!activeTab?.id) throw new Error('No active tab found');
+
+            await chrome.storage.local.set({ originalTabId: activeTab.id });
+
+            // Step 2: put the tab URL into Model URL input + extract IDs
+            if (activeTab.url) {
+                setUrl(activeTab.url);
+                try {
+                    const u = new URL(activeTab.url);
+                    const versionId = u.searchParams.get('modelVersionId'); // version number
+                    const modelIdMatch = u.pathname.match(/\/models\/(\d+)/); // model number before version
+                    if (versionId) setVersionNumber(versionId);
+                    if (modelIdMatch?.[1]) setModelNumber(modelIdMatch[1]);
+                } catch {
+                    /* ignore parse error */
+                }
+            }
+
+            // Step 3: scrape images (>50x50 preferred; fallback to any)
+            // @ts-ignore
+            if (!chrome?.scripting) throw new Error('Missing "scripting" permission in manifest');
+
+            const [{ result }] = await chrome.scripting.executeScript({
+                target: { tabId: activeTab.id },
+                func: () => {
+                    const imgs = Array.from(document.images || []);
+                    const large = imgs.filter(img => {
+                        const w = img.naturalWidth || img.width || 0;
+                        const h = img.naturalHeight || img.height || 0;
+                        return w >= 50 && h >= 50;
+                    });
+
+                    const pick = (large.length ? large : imgs)
+                        .map(img => img.currentSrc || img.src)
+                        .filter(Boolean);
+
+                    const urls = Array.from(
+                        new Set(
+                            pick.map(src => {
+                                try { return new URL(src, document.baseURI).href; } catch { return src; }
+                            })
+                        )
+                    );
+
+                    return urls.slice(0, 12);
+                },
+            });
+
+            if (Array.isArray(result) && result.length) {
+                setImageUrls(result);
+                setToastMsg(`Scraped URL + ${result.length} image(s)`);
+                setToastVariant('success');
+            } else {
+                setToastMsg('Scraped URL; no images found on page');
+                setToastVariant('success');
+            }
+        } catch (err: any) {
+            setToastMsg(err?.message || 'Scrape failed');
+            setToastVariant('danger');
+        } finally {
+            setShowToast(true);
+        }
+    };
+
+
+
+
     return (
         <Container fluid className="bg-dark text-light p-4 rounded" style={{ maxWidth: 900 }}>
             <h2 className="text-center mb-4">Adding Custom Model</h2>
 
             <Form onSubmit={handleSubmit}>
+
+                <Button variant="outline-light" onClick={handleScrapEverything}>
+                    Scrape
+                </Button>
+
                 {/* Row 1: Name, Main Model */}
                 <Row>
                     <Col md={6} className="mb-3">
@@ -302,34 +385,67 @@ const CustomWindow: React.FC = () => {
 
                 {/* Image URLs with + and – */}
                 <Form.Group className="mb-3">
-                    <Form.Label>Image URLs*</Form.Label>
+                    <div className="d-flex justify-content-between align-items-center">
+                        <Form.Label className="mb-0">Image URLs*</Form.Label>
+                    </div>
+
                     {imageUrls.map((u, i) => (
-                        <div key={i} className="d-flex align-items-center mb-2">
-                            <Form.Control
-                                type="url"
-                                value={u}
-                                placeholder='https://image.civitai.com/xG1n/width=1536/84884709.jpeg'
-                                onChange={e => handleImageChange(i, e.target.value)}
-                                required
-                            />
-                            <Button
-                                variant="outline-light"
-                                onClick={handleAddImage}
-                                className="ms-2"
-                            >
-                                +
-                            </Button>
-                            <Button
-                                variant="outline-light"
-                                onClick={handleRemoveImage}
-                                className="ms-1"
-                                disabled={imageUrls.length === 1}
-                            >
-                                -
-                            </Button>
+                        <div key={i} className="mb-2">
+                            {/* Preview above input — 50x100 box, show whole image */}
+                            {u ? (
+                                <div
+                                    style={{
+                                        width: 100,
+                                        height: 50,
+                                        border: '1px solid #666',
+                                        borderRadius: 4,
+                                        marginBottom: 6,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        background: '#111'
+                                    }}
+                                >
+                                    {/* show full image (no crop) */}
+                                    <img
+                                        src={u}
+                                        alt={`preview-${i}`}
+                                        style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                                        referrerPolicy="no-referrer"
+                                    />
+                                </div>
+                            ) : (
+                                <div style={{ height: 56 }} /> /* keep layout consistent */
+                            )}
+
+                            <div className="d-flex align-items-center">
+                                <Form.Control
+                                    type="url"
+                                    value={u}
+                                    placeholder="https://image.example.com/abc.jpg"
+                                    onChange={e => handleImageChange(i, e.target.value)}
+                                    required
+                                />
+                                <Button
+                                    variant="outline-light"
+                                    onClick={() => setImageUrls(prev => [...prev, ''])}
+                                    className="ms-2"
+                                >
+                                    +
+                                </Button>
+                                <Button
+                                    variant="outline-light"
+                                    onClick={() => imageUrls.length > 1 && setImageUrls(prev => prev.slice(0, -1))}
+                                    className="ms-1"
+                                    disabled={imageUrls.length === 1}
+                                >
+                                    -
+                                </Button>
+                            </div>
                         </div>
                     ))}
                 </Form.Group>
+
 
                 {/* Non-required fields */}
                 <Row>
@@ -337,12 +453,14 @@ const CustomWindow: React.FC = () => {
                         <Form.Group controlId="tags">
                             <Form.Label>Tags</Form.Label>
                             <Form.Control
-                                type="text"
-                                placeholder='anime, style, woman, onimai, anime style, styles, onii-chan wa oshimai!'
+                                as="textarea"
+                                rows={3}
+                                placeholder="anime, style, woman, onimai, anime style, styles, onii-chan wa oshimai!"
                                 value={tags}
                                 onChange={e => setTags(e.target.value)}
                             />
                         </Form.Group>
+
                     </Col>
                     <Col md={4} className="mb-3">
                         <Form.Group controlId="localTags">
