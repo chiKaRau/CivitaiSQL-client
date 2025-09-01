@@ -241,7 +241,7 @@ const OfflineWindow: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [offlineDownloadList, setOfflineDownloadList] = useState<OfflineDownloadEntry[]>([]);
     const [displayMode, setDisplayMode] = useState<
-        'table' | 'bigCard' | 'smallCard' | 'failedCard' | 'errorCard' | 'updateCard'
+        'table' | 'bigCard' | 'smallCard' | 'failedCard' | 'errorCard' | 'updateCard' | 'recentCard'
     >('bigCard');
 
     // States for filtering
@@ -263,6 +263,8 @@ const OfflineWindow: React.FC = () => {
 
     const modify_downloadFilePath = chromeData.downloadFilePath;
     const modify_selectedCategory = chromeData.selectedCategory;
+
+    const [recentlyDownloaded, setRecentlyDownloaded] = useState<OfflineDownloadEntry[]>([]);
 
 
     // how many *entries* per page of tags:
@@ -1410,6 +1412,14 @@ const OfflineWindow: React.FC = () => {
 
                         // If download is successful, do the DB insert and bookmark
                         if (isDownloadSuccessful) {
+
+                            setRecentlyDownloaded(prev => {
+                                const key = `${entry.civitaiModelID}|${entry.civitaiVersionID}`;
+                                const dedup = prev.filter(e => `${e.civitaiModelID}|${e.civitaiVersionID}` !== key);
+                                const snap = JSON.parse(JSON.stringify(entry)); // deep clone so it survives backend removal
+                                return [snap, ...dedup].slice(0, 200);
+                            });
+
                             if (!entry.downloadFilePath.includes("/@scan@/Update/")) {
                                 await fetchAddRecordToDatabase(selectedCategory, civitaiUrl, downloadFilePath, dispatch);
                             }
@@ -2648,6 +2658,15 @@ const OfflineWindow: React.FC = () => {
                                 Update Card Mode
                             </Button> */}
 
+                            <Button
+                                style={{ ...responsiveButtonStyle }}
+                                variant={displayMode === 'recentCard' ? 'primary' : 'secondary'}
+                                onClick={() => setDisplayMode('recentCard')}
+                            >
+                                Recently Downloaded
+                            </Button>
+
+
                             {/* New: Failed Card Mode Button with Badge */}
                             <Button
                                 variant={displayMode === 'failedCard' ? 'primary' : 'secondary'}
@@ -3405,6 +3424,18 @@ const OfflineWindow: React.FC = () => {
                                         handleSelectAll={handleSelectAll}
                                     />
                                 )}
+
+                                {displayMode === 'recentCard' && (
+                                    <BigCardMode
+                                        filteredDownloadList={recentlyDownloaded} // reuse BigCard exactly as-is
+                                        isDarkMode={isDarkMode}
+                                        isModifyMode={false}                      // read-only
+                                        selectedIds={selectedIds}
+                                        toggleSelect={toggleSelect}
+                                        handleSelectAll={handleSelectAll}
+                                    />
+                                )}
+
 
                                 {/* {displayMode === 'updateCard' && (
                                     <UpdateCardMode
