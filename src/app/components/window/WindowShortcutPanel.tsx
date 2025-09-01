@@ -209,11 +209,11 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
             return; // Exit the function if the user cancels
         }
 
-        const isBackupSuccessful = await fetchBackupOfflineDownloadList(dispatch);
-        if (!isBackupSuccessful) {
-            alert("Backup failed. Cannot proceed with the download.");
-            return;
-        }
+        // const isBackupSuccessful = await fetchBackupOfflineDownloadList(dispatch);
+        // if (!isBackupSuccessful) {
+        //     alert("Backup failed. Cannot proceed with the download.");
+        //     return;
+        // }
 
         setIsLoading(true);
         try {

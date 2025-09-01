@@ -1213,11 +1213,11 @@ const OfflineWindow: React.FC = () => {
     const handleDownloadNow = async () => {
         console.log("Download Now button clicked");
 
-        const isBackupSuccessful = await fetchBackupOfflineDownloadList(dispatch);
-        if (!isBackupSuccessful) {
-            alert("Backup failed. Cannot proceed with the download.");
-            return;
-        }
+        // const isBackupSuccessful = await fetchBackupOfflineDownloadList(dispatch);
+        // if (!isBackupSuccessful) {
+        //     alert("Backup failed. Cannot proceed with the download.");
+        //     return;
+        // }
 
         // Collect selected entries from the filtered list
         const entriesToDownload = filteredDownloadList.filter(entry => {
@@ -1501,11 +1501,11 @@ const OfflineWindow: React.FC = () => {
             return;
         }
 
-        const isBackupSuccessful = await fetchBackupOfflineDownloadList(dispatch);
-        if (!isBackupSuccessful) {
-            alert("Backup failed. Cannot proceed with the download.");
-            return;
-        }
+        // const isBackupSuccessful = await fetchBackupOfflineDownloadList(dispatch);
+        // if (!isBackupSuccessful) {
+        //     alert("Backup failed. Cannot proceed with the download.");
+        //     return;
+        // }
 
         const selectedEntries = offlineDownloadList.filter(entry => selectedIds.has(entry.civitaiVersionID));
 
@@ -1588,11 +1588,11 @@ const OfflineWindow: React.FC = () => {
             return; // Exit the function if the user cancels
         }
 
-        const isBackupSuccessful = await fetchBackupOfflineDownloadList(dispatch);
-        if (!isBackupSuccessful) {
-            alert("Backup failed. Cannot proceed with the download.");
-            return;
-        }
+        // const isBackupSuccessful = await fetchBackupOfflineDownloadList(dispatch);
+        // if (!isBackupSuccessful) {
+        //     alert("Backup failed. Cannot proceed with the download.");
+        //     return;
+        // }
 
         if (selectedIds.size === 0) {
             alert("No items selected to remove.");
