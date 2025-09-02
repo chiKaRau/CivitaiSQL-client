@@ -875,6 +875,7 @@ const WindowComponent: React.FC = () => {
         }
     }, [currentCreatorUrlIndex, creatorUrlList]);
 
+
     const handleRatingUp = () => {
         if (currentCreatorUrlIndex == null) return;
         const cur = selectedRating;
@@ -1199,16 +1200,24 @@ const WindowComponent: React.FC = () => {
     }
 
     const handleRemoveCreatorUrl = async (url: string) => {
-
         const userConfirmed = window.confirm("Are you sure you want to remove the selected Creator Url?");
-        if (!userConfirmed) {
-            console.log("User canceled the removal operation.");
-            return; // Exit the function if the user cancels
+        if (!userConfirmed) return;
+
+        // if we’re deleting the currently-selected row, clear selection first
+        if (
+            currentCreatorUrlIndex != null &&
+            creatorUrlList[currentCreatorUrlIndex] &&
+            creatorUrlList[currentCreatorUrlIndex].creatorUrl === url
+        ) {
+            setCurrentCreatorUrlIndex(null);
+            setSelectedCreatorUrlText('');
+            setSelectedRating('N/A');
         }
 
-        await fetchRemoveFromCreatorUrlList(url, dispatch)
+        await fetchRemoveFromCreatorUrlList(url, dispatch);
         handleRefreshList();
-    }
+    };
+
 
     const handleFoldersListOnChange = (event: any, newValue: string | null) => {
         const disallowedRegex = /[<>:"\\\|?*]/g;
