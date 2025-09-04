@@ -78,6 +78,7 @@ interface CreatorUrlItem {
     lastChecked: boolean;
     status: string;
     rating: string;
+    lastCheckedDate?: string | null;
 }
 
 const WindowComponent: React.FC = () => {
@@ -118,12 +119,14 @@ const WindowComponent: React.FC = () => {
 
     const [tabCreator, setTabCreator] = useState("");
 
+    const [useAgeNav, setUseAgeNav] = useState(false);
+
     const [collapseButtonStates, setCollapseButtonStates] = useState<{ [key: string]: boolean }>({
         checkDatabaseButton: false,
         bookmarkButton: false, // Initial value to help TypeScript infer the types
-        downloadButton: false, // You can add more initial panels as needed
+        downloadButton: true, // You can add more initial panels as needed
         utilsButton: false,
-        tabsButton: false
+        tabsButton: true
     });
 
     const [updateCount, setUpdateCount] = useState(10);
@@ -225,14 +228,106 @@ const WindowComponent: React.FC = () => {
             setCreatorUrlList(
                 list.map(item => ({
                     ...item,
-                    rating: item.rating ?? "N/A"
+                    rating: item.rating ?? "N/A",
+                    lastCheckedDate: item.lastCheckedDate ?? null
                 }))
             );
         }
     }
 
+    const timeAgo = (input: string | Date | null | undefined) => {
+        if (!input) return "";
+        const d = typeof input === "string" ? new Date(input) : input;
+        const s = Math.floor((Date.now() - d.getTime()) / 1000);
+        if (Number.isNaN(s)) return "";
+        if (s < 60) return `${s}s ago`;
+        const m = Math.floor(s / 60);
+        if (m < 60) return `${m}m ago`;
+        const h = Math.floor(m / 60);
+        if (h < 24) return `${h}h ago`;
+        const day = Math.floor(h / 24);
+        if (day < 7) return `${day}d ago`;
+        const w = Math.floor(day / 7);
+        if (w < 5) return `${w}w ago`;
+        const mo = Math.floor(day / 30);
+        if (mo < 12) return `${mo}mo ago`;
+        const y = Math.floor(day / 365);
+        return `${y}y ago`;
+    };
+
 
     const [selectedCreatorUrlText, setSelectedCreatorUrlText] = useState("");
+
+    const nullNewIndices = useMemo(() => {
+        return creatorUrlList
+            .map((item, i) => ({ i, item }))
+            .filter(({ item }) => item.status === "new" && ratingFilters[item.rating] && !item.lastCheckedDate)
+            .map(({ i }) => i); // keep original index order
+    }, [creatorUrlList, ratingFilters]);
+
+    const datedNewIndices = useMemo(() => {
+        return creatorUrlList
+            .map((item, i) => ({ i, item }))
+            .filter(({ item }) => item.status === "new" && ratingFilters[item.rating] && !!item.lastCheckedDate)
+            .sort((a, b) => new Date(a.item.lastCheckedDate!).getTime() - new Date(b.item.lastCheckedDate!).getTime()) // oldest→newest
+            .map(({ i }) => i);
+    }, [creatorUrlList, ratingFilters]);
+
+
+    const pickByNullThenAge = (direction: 1 | -1): number | null => {
+        const cur = currentCreatorUrlIndex ?? -1;
+
+        // If any nulls exist, navigate among nulls ONLY.
+        if (nullNewIndices.length > 0) {
+            const pos = nullNewIndices.indexOf(cur);
+            if (pos !== -1) {
+                // currently on a null → move to next/prev null
+                return direction === 1
+                    ? nullNewIndices[(pos + 1) % nullNewIndices.length]
+                    : nullNewIndices[(pos - 1 + nullNewIndices.length) % nullNewIndices.length];
+            } else {
+                // currently not on a null → jump to the nearest null in the chosen direction
+                if (direction === 1) {
+                    const ahead = nullNewIndices.find(idx => idx > cur);
+                    return ahead ?? nullNewIndices[0]; // wrap
+                } else {
+                    const behind = [...nullNewIndices].reverse().find(idx => idx < cur);
+                    return behind ?? nullNewIndices[nullNewIndices.length - 1]; // wrap
+                }
+            }
+        }
+
+        // No nulls → use dated (age-ordered).
+        if (datedNewIndices.length === 0) return null;
+
+        const posD = datedNewIndices.indexOf(cur);
+        if (posD !== -1) {
+            return direction === 1
+                ? datedNewIndices[(posD + 1) % datedNewIndices.length]
+                : datedNewIndices[(posD - 1 + datedNewIndices.length) % datedNewIndices.length];
+        } else {
+            // not on any dated item yet → start at oldest/newest depending on direction
+            return direction === 1 ? datedNewIndices[0] : datedNewIndices[datedNewIndices.length - 1];
+        }
+    };
+
+    const handleNextByAge = () => {
+        const targetIdx = pickByNullThenAge(1);
+        if (targetIdx == null) return; // or fallback to handleNext()
+        setCurrentCreatorUrlIndex(targetIdx);
+        setSelectedCreatorUrlText(creatorUrlList[targetIdx].creatorUrl.split('/')[4]);
+        goToUrlInBrowserTab(creatorUrlList[targetIdx].creatorUrl);
+    };
+
+    const handlePreviousByAge = () => {
+        const targetIdx = pickByNullThenAge(-1);
+        if (targetIdx == null) return; // or fallback to handlePrevious()
+        setCurrentCreatorUrlIndex(targetIdx);
+        setSelectedCreatorUrlText(creatorUrlList[targetIdx].creatorUrl.split('/')[4]);
+        goToUrlInBrowserTab(creatorUrlList[targetIdx].creatorUrl);
+    };
+
+
 
 
     // Handler when a creator URL is selected from the dropdown
@@ -1522,6 +1617,13 @@ const WindowComponent: React.FC = () => {
                                             <span>{totalCreators}</span>
                                             <span style={{ fontWeight: 'bold' }}>New:</span>
                                             <span>{newCreatorsCount}</span>
+                                            <Form.Check
+                                                type="checkbox"
+                                                id="nav-by-age"
+                                                label="By last-checked age"
+                                                checked={useAgeNav}
+                                                onChange={(e) => setUseAgeNav(e.target.checked)}
+                                            />
                                         </div>
 
                                         {/* Put everything in one row (Flex Container) */}
@@ -1601,10 +1703,14 @@ const WindowComponent: React.FC = () => {
                                                                     {!item.lastChecked ? (
                                                                         <>
                                                                             {item.creatorUrl.split('/')[4]} <em>({item.rating})</em>
+                                                                            {item.lastCheckedDate && (
+                                                                                <> <small>({timeAgo(item.lastCheckedDate)})</small></>
+                                                                            )}
                                                                         </>
                                                                     ) : (
                                                                         <b>
                                                                             {item.creatorUrl.split('/')[4]} <em>({item.rating})</em> <FaLeftLong />
+                                                                            <> <small>(lastchecked{item.lastCheckedDate ? ` - ${timeAgo(item.lastCheckedDate)}` : ""})</small></>
                                                                         </b>
                                                                     )}
                                                                 </span>
@@ -1636,23 +1742,42 @@ const WindowComponent: React.FC = () => {
                                                 </Button>
                                             </OverlayTrigger>
 
-                                            <OverlayTrigger
-                                                placement={"top"}
-                                                overlay={<Tooltip id="tooltip">Previous Page</Tooltip>}
-                                            >
-                                                <Button variant="success" onClick={handlePrevious} disabled={!hasFilteredNewItems}>
-                                                    <MdSkipPrevious />
-                                                </Button>
-                                            </OverlayTrigger>
+                                            {useAgeNav ? (
+                                                <>
+                                                    <OverlayTrigger
+                                                        placement="top"
+                                                        overlay={<Tooltip id="tooltip">Previous (by last-checked age)</Tooltip>}
+                                                    >
+                                                        <Button variant="primary" onClick={handlePreviousByAge} disabled={!hasFilteredNewItems}>
+                                                            <MdSkipPrevious />
+                                                        </Button>
+                                                    </OverlayTrigger>
 
-                                            <OverlayTrigger
-                                                placement={"top"}
-                                                overlay={<Tooltip id="tooltip">Next Page</Tooltip>}
-                                            >
-                                                <Button variant="success" onClick={handleNext} disabled={!hasFilteredNewItems}>
-                                                    <MdSkipNext />
-                                                </Button>
-                                            </OverlayTrigger>
+                                                    <OverlayTrigger
+                                                        placement="top"
+                                                        overlay={<Tooltip id="tooltip">Next (by last-checked age)</Tooltip>}
+                                                    >
+                                                        <Button variant="primary" onClick={handleNextByAge} disabled={!hasFilteredNewItems}>
+                                                            <MdSkipNext />
+                                                        </Button>
+                                                    </OverlayTrigger>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip">Previous Page</Tooltip>}>
+                                                        <Button variant="success" onClick={handlePrevious} disabled={!hasFilteredNewItems}>
+                                                            <MdSkipPrevious />
+                                                        </Button>
+                                                    </OverlayTrigger>
+
+                                                    <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip">Next Page</Tooltip>}>
+                                                        <Button variant="success" onClick={handleNext} disabled={!hasFilteredNewItems}>
+                                                            <MdSkipNext />
+                                                        </Button>
+                                                    </OverlayTrigger>
+                                                </>
+                                            )}
+
 
                                             <OverlayTrigger
                                                 placement={"top"}
