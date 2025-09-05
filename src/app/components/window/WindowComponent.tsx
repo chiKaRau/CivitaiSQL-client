@@ -119,7 +119,7 @@ const WindowComponent: React.FC = () => {
 
     const [tabCreator, setTabCreator] = useState("");
 
-    const [useAgeNav, setUseAgeNav] = useState(false);
+    const [useAgeNav, setUseAgeNav] = useState(true);
 
     const [collapseButtonStates, setCollapseButtonStates] = useState<{ [key: string]: boolean }>({
         checkDatabaseButton: false,
@@ -1765,13 +1765,13 @@ const WindowComponent: React.FC = () => {
                                             ) : (
                                                 <>
                                                     <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip">Previous Page</Tooltip>}>
-                                                        <Button variant="success" onClick={handlePrevious} disabled={!hasFilteredNewItems}>
+                                                        <Button variant="secondary" onClick={handlePrevious} disabled={!hasFilteredNewItems}>
                                                             <MdSkipPrevious />
                                                         </Button>
                                                     </OverlayTrigger>
 
                                                     <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip">Next Page</Tooltip>}>
-                                                        <Button variant="success" onClick={handleNext} disabled={!hasFilteredNewItems}>
+                                                        <Button variant="secondary" onClick={handleNext} disabled={!hasFilteredNewItems}>
                                                             <MdSkipNext />
                                                         </Button>
                                                     </OverlayTrigger>

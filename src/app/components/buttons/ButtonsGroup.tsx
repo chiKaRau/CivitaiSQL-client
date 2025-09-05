@@ -6,7 +6,7 @@ import { AppState } from '../../store/configureStore';
 import { togglePanel } from '../../store/actions/panelActions';
 
 //Icons Components
-import { BsCheck, BsArrowRepeat, BsStarFill, BsStar, BsFillCloudArrowUpFill, BsInfoCircleFill, BsFillCartCheckFill } from 'react-icons/bs';
+import { BsCheck, BsArrowRepeat, BsStarFill, BsStar, BsFillCloudArrowUpFill, BsInfoCircleFill, BsFillCartCheckFill, BsReverseLayoutTextWindowReverse } from 'react-icons/bs';
 import { MdOutlineDownloadForOffline, MdOutlineDownload } from "react-icons/md";
 import { AiFillFolderOpen } from "react-icons/ai"
 import { GrCopy, GrPowerShutdown } from 'react-icons/gr';
@@ -41,7 +41,8 @@ const ButtonsGroup: React.FC = () => {
     const { isBookmarked, bookmarkID, offlineMode } = chromeData
 
     const [collapseButtonStates, setCollapseButtonStates] = useState<{ [key: string]: boolean }>({
-        utilsButtons: false
+        utilsButtons: false,
+        WindowsButtons: false
     });
 
     const handleToggleCollapseButton = (panelId: any) => {
@@ -50,6 +51,28 @@ const ButtonsGroup: React.FC = () => {
             [panelId]: !prevStates[panelId],
         }));
     };
+
+    const handleOpenModelListModeWindow = () => {
+        console.log("open Model List window")
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            // Store the original tab ID in local storage
+            // chrome.storage.local.set({ originalTabId: tabs[0].id });
+            // Then open the new window
+            chrome.runtime.sendMessage({ action: "openNewWindow" });
+            //window.close(); // This closes the popup window
+        });
+    }
+
+    const handleOpenOfflineWindow = () => {
+        console.log("open offline window")
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            // Store the original tab ID in local storage
+            // chrome.storage.local.set({ originalTabId: tabs[0].id });
+            // Then open the new window
+            chrome.runtime.sendMessage({ action: "openOfflineWindow" });
+            //window.close(); // This closes the popup window
+        });
+    }
 
     const handleOpenCustomWindow = () => {
         console.log("open custom window")
@@ -97,15 +120,49 @@ const ButtonsGroup: React.FC = () => {
             }}
                 handleFunctionCall={() => dispatch(togglePanel("DatabaseUpdateModelPanel"))} />
 
-            {/**Database's CustomModelPanel Button */}
-            <ButtonWrap buttonConfig={{
-                placement: "bottom",
-                tooltip: "Add a custom model",
-                variant: "warning",
-                buttonIcon: <TbDatabasePlus />,
-                disabled: false,
-            }}
-                handleFunctionCall={() => handleOpenCustomWindow()} />
+            <WindowCollapseButton
+                panelId="WindowsButtons"
+                isPanelOpen={collapseButtonStates['WindowsButtons']}
+                handleTogglePanel={handleToggleCollapseButton}
+                icons={<MdOutlineApps />}
+                buttons={
+                    <div>
+
+                        {/**Open Offline Window */}
+                        <ButtonWrap buttonConfig={{
+                            placement: "top",
+                            tooltip: "Open Offline Window",
+                            variant: "primary",
+                            buttonIcon: <BsReverseLayoutTextWindowReverse />
+                            ,
+                            disabled: false,
+                        }}
+                            handleFunctionCall={() => handleOpenModelListModeWindow()} />
+
+                        {/**Open Offline Window */}
+                        <ButtonWrap buttonConfig={{
+                            placement: "top",
+                            tooltip: "Open Offline Window",
+                            variant: "primary",
+                            buttonIcon: <BsReverseLayoutTextWindowReverse />
+                            ,
+                            disabled: false,
+                        }}
+                            handleFunctionCall={() => handleOpenOfflineWindow()} />
+
+                        {/**Database's CustomModelPanel Button */}
+                        <ButtonWrap buttonConfig={{
+                            placement: "bottom",
+                            tooltip: "Add a custom model",
+                            variant: "warning",
+                            buttonIcon: <TbDatabasePlus />,
+                            disabled: false,
+                        }}
+                            handleFunctionCall={() => handleOpenCustomWindow()} />
+                    </div>
+                }
+            />
+
 
             {/**Database's LatestAddedModelsPanel Button */}
             <ButtonWrap buttonConfig={{

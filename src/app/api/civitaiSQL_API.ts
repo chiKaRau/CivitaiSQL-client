@@ -911,6 +911,22 @@ export const fetchCheckQuantityOfOfflinedownloadList = async (url: string, dispa
     }
 }
 
+export const fetchOpenModelDownloadDirectory = async (modelDownloadPath: string, dispatch: any) => {
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+        const response = await axios.post(`${config.domain}/api/open-model-download-directory`, { modelDownloadPath: modelDownloadPath });
+        if (!(response.status >= 200 && response.status < 300)) {
+            // Handle the case when response is false
+            throw new Error("Failed opening download directory.");
+        }
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Civitai Info retrieval:", error.message);
+        // Optionally, you can throw an error or return a specific value
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}
 
 export const fetchCheckQuantityofUrlinDatabaseByUrl = async (url: string, dispatch: any) => {
     try {

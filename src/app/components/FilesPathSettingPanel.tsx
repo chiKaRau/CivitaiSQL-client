@@ -20,6 +20,8 @@ interface FilesPathSettingPanelProps {
     setIsHandleRefresh: (b: boolean) => void;
 }
 
+const DEFAULT_OFF = new Set(['real', 'creature']);
+
 const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
     isHandleRefresh,
     setIsHandleRefresh
@@ -71,7 +73,7 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
                     // seed defaults
                     const initial = cats.map((category: any) => ({
                         category,
-                        display: true as const
+                        display: !DEFAULT_OFF.has(String(category.name).trim().toLowerCase())
                     }));
                     setSelectedFilteredCategoriesList(initial);
 

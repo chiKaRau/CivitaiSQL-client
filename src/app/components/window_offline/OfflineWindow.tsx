@@ -41,7 +41,9 @@ import {
     fetchBackupOfflineDownloadList,
     fetchGetPendingRemoveTagsList,
     fetchAddPendingRemoveTag,
-    fetchGetCategoriesPrefixsList
+    fetchGetCategoriesPrefixsList,
+    fetchOpenDownloadDirectory,
+    fetchOpenModelDownloadDirectory
 } from "../../api/civitaiSQL_api"
 
 import {
@@ -1851,6 +1853,7 @@ const OfflineWindow: React.FC = () => {
                                             e.stopPropagation();
                                             toggleSelect(entry.civitaiVersionID);
                                         }}
+                                        disabled={displayMode === "recentCard"}
                                         style={{
                                             position: 'absolute',
                                             top: '10px',
@@ -1984,7 +1987,34 @@ const OfflineWindow: React.FC = () => {
                                                 wordWrap: 'break-word',   // wrap long paths
                                             }}
                                         >
-                                            <strong>Download Path:</strong> {entry.downloadFilePath ?? 'N/A'}
+                                            {displayMode !== 'recentCard' ? (
+                                                <>
+                                                    <strong>Download Path:</strong> {entry.downloadFilePath ?? 'N/A'}
+                                                </>
+                                            ) : (
+                                                entry.downloadFilePath ? (
+                                                    <a
+                                                        href="#"
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            e.stopPropagation(); // if this sits inside a clickable card
+                                                            fetchOpenModelDownloadDirectory(entry.downloadFilePath, dispatch);
+                                                        }}
+                                                        style={{
+                                                            textDecoration: 'underline',
+                                                            cursor: 'pointer',
+                                                            color: isDarkMode ? '#60A5FA' : '#1D4ED8'
+                                                        }}
+                                                        aria-label="Open model download directory"
+                                                        title={entry.downloadFilePath}
+                                                    >
+                                                        {entry.downloadFilePath}
+                                                    </a>
+                                                ) : (
+                                                    'N/A'
+                                                )
+                                            )}
+
                                         </p>
 
                                         {/* Category */}
@@ -2744,6 +2774,34 @@ const OfflineWindow: React.FC = () => {
                             >
                                 {isDarkMode ? <FaSun color="#FFA500" /> : <FaMoon color="#4B0082" />}
                             </Button>
+
+                            {/* Theme Toggle Button */}
+                            <Button
+                                onClick={() => fetchOpenDownloadDirectory(dispatch)}
+                                aria-label="Open Download Directory"
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    width: 40,
+                                    height: 40,
+                                    borderRadius: 10,
+                                    backgroundColor: isDarkMode ? '#0B1220' : '#FFF7ED',   // subtle amber surface
+                                    color: isDarkMode ? '#FFD166' : '#9A6700',    // readable icon/text
+                                    border: '1px solid',
+                                    borderColor: isDarkMode ? '#2A3344' : '#F4E5C2',
+                                    boxShadow: isDarkMode ? '0 2px 8px rgba(0,0,0,.45)' : '0 2px 8px rgba(0,0,0,.08)',
+                                    transition: 'transform .06s ease-out, box-shadow .2s ease'
+                                }}
+                                onMouseDown={e => (e.currentTarget.style.transform = 'translateY(1px)')}
+                                onMouseUp={e => (e.currentTarget.style.transform = 'translateY(0)')}
+                                onMouseLeave={e => (e.currentTarget.style.transform = 'translateY(0)')}
+                            >
+                                {/* Icon inherits currentColor (no explicit color prop needed) */}
+                                <AiFillFolderOpen size={20} />
+                            </Button>
+
+
                         </div>
                     </div>
 
@@ -3066,6 +3124,7 @@ const OfflineWindow: React.FC = () => {
                                             setSelectCount(newVal);
                                         }
                                     }}
+                                    disabled={isLoading}
                                     style={{
                                         width: '100px',
                                         padding: '5px',
@@ -3310,6 +3369,7 @@ const OfflineWindow: React.FC = () => {
                                 alignItems: 'center',
                                 gap: '5px',
                             }}
+                            disabled={isLoading}
                             aria-label={isAllSelected ? 'Deselect All' : 'Select All'}
                         >
                             {isAllSelected ? 'Deselect All' : 'Select All'}
