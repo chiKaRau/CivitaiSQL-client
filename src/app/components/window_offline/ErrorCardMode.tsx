@@ -594,7 +594,8 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({
 
                                     return (
                                         <p style={{ margin: '4px 0', fontStyle: 'italic', fontSize: '0.9rem', display: 'flex', alignItems: 'center' }}>
-                                            <strong>Download Path:</strong> {displayPath}
+                                            <strong>Download Path:</strong>
+                                            <span onClick={(e) => (e.stopPropagation(), void navigator.clipboard.writeText(displayPath))} style={{ cursor: 'copy' }}>{displayPath}</span>
                                             <span
                                                 onClick={(e) => {
                                                     e.stopPropagation();

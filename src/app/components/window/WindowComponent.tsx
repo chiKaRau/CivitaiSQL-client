@@ -121,6 +121,10 @@ const WindowComponent: React.FC = () => {
 
     const [useAgeNav, setUseAgeNav] = useState(true);
 
+    const [currentTabUrl, setCurrentTabUrl] = useState("");
+    const [currentTabCreator, setCurrentTabCreator] = useState("");
+    const [isCurrentCreatorInList, setIsCurrentCreatorInList] = useState(false);
+
     const [collapseButtonStates, setCollapseButtonStates] = useState<{ [key: string]: boolean }>({
         checkDatabaseButton: false,
         bookmarkButton: false, // Initial value to help TypeScript infer the types
@@ -225,15 +229,17 @@ const WindowComponent: React.FC = () => {
     async function fetchCreatorUrlList() {
         const list = await fetchGetCreatorUrlList(dispatch);
         if (Array.isArray(list)) {
-            setCreatorUrlList(
-                list.map(item => ({
-                    ...item,
-                    rating: item.rating ?? "N/A",
-                    lastCheckedDate: item.lastCheckedDate ?? null
-                }))
-            );
+            const normalized = list.map(item => ({
+                ...item,
+                rating: item.rating ?? "N/A",
+                lastCheckedDate: item.lastCheckedDate ?? null
+            }));
+            setCreatorUrlList(normalized);
+            return normalized; // <-- NEW
         }
+        return []; // <-- NEW
     }
+
 
     const timeAgo = (input: string | Date | null | undefined) => {
         if (!input) return "";
@@ -328,6 +334,62 @@ const WindowComponent: React.FC = () => {
     };
 
 
+    // Normalize URLs for safe comparison
+    const normalizeUrl = (u: string) => (u || "").replace(/\/+$/, "").toLowerCase();
+
+    // Find the original tab (if set) or fall back to the active tab in a normal window
+    const getActiveOrOriginalTab = async (): Promise<chrome.tabs.Tab | null> => {
+        const { originalTabId } = await chrome.storage.local.get("originalTabId");
+        if (originalTabId) {
+            try {
+                const t = await chrome.tabs.get(originalTabId);
+                if (t?.url) return t;
+            } catch { }
+        }
+        const windows = await chrome.windows.getAll({ populate: false });
+        const normalWindow = windows.find(w => w.type === "normal");
+        if (!normalWindow) return null;
+        const [activeTab] = await chrome.tabs.query({ active: true, windowId: normalWindow.id });
+        return activeTab || null;
+    };
+
+    // Read current tab, extract creator if URL matches /user/<creator>/models
+    const refreshCurrentTabCreator = async () => {
+        const tab = await getActiveOrOriginalTab();
+        const url = tab?.url || "";
+        setCurrentTabUrl(url);
+
+        const m = url.match(/civitai\.com\/user\/([^/]+)\/models/i);
+        const creator = m ? decodeURIComponent(m[1]) : "";
+        setCurrentTabCreator(creator);
+
+        const currentCreatorUrl = creator ? `https://civitai.com/user/${creator}/models` : "";
+        const inList = !!creator && creatorUrlList.some(i => normalizeUrl(i.creatorUrl) === normalizeUrl(currentCreatorUrl));
+        setIsCurrentCreatorInList(inList);
+    };
+
+    // Add the current tab's creator to list, then auto-select it in the dropdown
+    const handleAddCurrentTabCreator = async () => {
+        await refreshCurrentTabCreator();
+        if (!currentTabCreator) {
+            alert("Current tab is not a creator page.");
+            return;
+        }
+        const creatorUrl = `https://civitai.com/user/${currentTabCreator}/models`;
+
+        // You asked to call your existing function — we can call the API directly instead of the message form:
+        await fetchUpdateCreatorUrlList(creatorUrl, "new", false, "N/A", dispatch);
+
+        // Refresh the list and auto-select this creator
+        const newList = await fetchCreatorUrlList(); // see small change below to return the list
+        const idx = newList.findIndex(it => it.creatorUrl.split("/")[4] === currentTabCreator);
+        if (idx !== -1) {
+            setCurrentCreatorUrlIndex(idx);
+            setSelectedCreatorUrlText(currentTabCreator); // this also drives the rating via your useEffect
+        }
+
+        await refreshCurrentTabCreator();
+    };
 
 
     // Handler when a creator URL is selected from the dropdown
@@ -1181,6 +1243,7 @@ const WindowComponent: React.FC = () => {
                         chrome.tabs.sendMessage(result.originalTabId, { action: "display-checkboxes" });
                     }
                 });
+                await refreshCurrentTabCreator();
                 console.log(`Original Tab ID set to: ${activeTab.id}`);
             } else {
                 console.error('No active tab found in the normal window.');
@@ -1201,6 +1264,18 @@ const WindowComponent: React.FC = () => {
             handleGetFoldersList()
         }
     }, [isHandleRefresh]);
+
+    // On mount, read the current tab
+    useEffect(() => {
+        refreshCurrentTabCreator();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Whenever the list changes, re-check if current tab creator is in it
+    useEffect(() => {
+        refreshCurrentTabCreator();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [creatorUrlList]);
 
 
     useEffect(() => {
@@ -1788,14 +1863,33 @@ const WindowComponent: React.FC = () => {
                                                 </Button>
                                             </OverlayTrigger>
 
-                                            <OverlayTrigger
-                                                placement={"top"}
-                                                overlay={<Tooltip id="tooltip">Remove Selected Creator Url</Tooltip>}
-                                            >
-                                                <Button variant="danger" onClick={() => handleRemoveCreatorUrl(`https://civitai.com/user/${selectedCreatorUrlText}/models`)}>
-                                                    <IoCloseOutline />
-                                                </Button>
-                                            </OverlayTrigger>
+                                            {currentTabCreator && (
+                                                isCurrentCreatorInList ? (
+                                                    <OverlayTrigger
+                                                        placement="top"
+                                                        overlay={<Tooltip id="tooltip">Remove Current Tab Creator Url ({currentTabCreator})</Tooltip>}
+                                                    >
+                                                        <Button
+                                                            variant="danger"
+                                                            onClick={async () => {
+                                                                await handleRemoveCreatorUrl(`https://civitai.com/user/${currentTabCreator}/models`);
+                                                                await refreshCurrentTabCreator();
+                                                            }}
+                                                        >
+                                                            <IoCloseOutline />
+                                                        </Button>
+                                                    </OverlayTrigger>
+                                                ) : (
+                                                    <OverlayTrigger
+                                                        placement="top"
+                                                        overlay={<Tooltip id="tooltip">Add current Tab Creator ({currentTabCreator})</Tooltip>}
+                                                    >
+                                                        <Button variant="success" onClick={handleAddCurrentTabCreator}>
+                                                            + 
+                                                        </Button>
+                                                    </OverlayTrigger>
+                                                )
+                                            )}
 
 
                                         </div>
