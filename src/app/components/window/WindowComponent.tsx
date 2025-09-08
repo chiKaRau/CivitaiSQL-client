@@ -1101,7 +1101,8 @@ const WindowComponent: React.FC = () => {
             }
             await fetchUpdateCreatorUrlList(url, "checked", true, "N/A", dispatch)
             handleRefreshList();
-            handleSetOriginalTab()
+            // handleSetOriginalTab()
+            setTimeout(() => { refreshCurrentTabCreator(); }, 200);
         } catch (error) {
             console.error("Error updating tab:", error);
         }
@@ -1244,6 +1245,21 @@ const WindowComponent: React.FC = () => {
                     }
                 });
                 await refreshCurrentTabCreator();
+
+                // Auto-select the current tab's creator in the dropdown
+                const urlStr = activeTab.url ?? "";
+                const m = urlStr.match(/civitai\.com\/user\/([^/]+)\/models/i);
+                if (m) {
+                    const creator = decodeURIComponent(m[1]);
+                    setSelectedCreatorUrlText(creator); // shows creator in the toggle immediately
+
+                    // if it's already in the list, select it so rating syncs via your useEffect
+                    const idx = creatorUrlList.findIndex(it => it.creatorUrl.split('/')[4] === creator);
+                    if (idx !== -1) {
+                        setCurrentCreatorUrlIndex(idx);
+                    }
+                }
+
                 console.log(`Original Tab ID set to: ${activeTab.id}`);
             } else {
                 console.error('No active tab found in the normal window.');
@@ -1885,7 +1901,7 @@ const WindowComponent: React.FC = () => {
                                                         overlay={<Tooltip id="tooltip">Add current Tab Creator ({currentTabCreator})</Tooltip>}
                                                     >
                                                         <Button variant="success" onClick={handleAddCurrentTabCreator}>
-                                                            + 
+                                                            +
                                                         </Button>
                                                     </OverlayTrigger>
                                                 )
