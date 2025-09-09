@@ -1103,6 +1103,22 @@ const OfflineWindow: React.FC = () => {
         justifyContent: 'center',
     };
 
+    const badgeStyle: React.CSSProperties = {
+        position: 'absolute',
+        top: -6,
+        right: -6,
+        background: 'red',
+        color: 'white',
+        borderRadius: '999px',
+        padding: '2px 6px',
+        fontSize: '0.75rem',
+        lineHeight: 1,
+        zIndex: 1
+    };
+
+    const badgeCount = (n: number) => (n > 99 ? '99+' : String(n));
+
+
     const agGridStyle: React.CSSProperties = {
         height: '1000px',
         width: '100%',
@@ -2689,40 +2705,36 @@ const OfflineWindow: React.FC = () => {
                             </Button> */}
 
                             <Button
-                                style={{ ...responsiveButtonStyle }}
+                                style={{ ...responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
                                 variant={displayMode === 'recentCard' ? 'primary' : 'secondary'}
                                 onClick={() => setDisplayMode('recentCard')}
+                                aria-label={`Recently Downloaded (${recentlyDownloaded.length})`}
                             >
                                 Recently Downloaded
-                            </Button>
-
-
-                            {/* New: Failed Card Mode Button with Badge */}
-                            <Button
-                                variant={displayMode === 'failedCard' ? 'primary' : 'secondary'}
-                                onClick={() => setDisplayMode('failedCard')}
-                                style={{
-                                    ...responsiveButtonStyle
-                                }}
-                            >
-                                Failed Card Mode
-                                {failedEntries.length > 0 && (
+                                {recentlyDownloaded.length > 0 && (
                                     <span
                                         style={{
-                                            position: 'absolute',
-                                            top: '-5px',
-                                            right: '-10px',
-                                            background: 'red',
-                                            color: 'white',
-                                            borderRadius: '50%',
-                                            padding: '2px 6px',
-                                            fontSize: '0.75rem',
+                                            ...badgeStyle,
+                                            background: '#28a745' // green for "recent/success"
                                         }}
                                     >
-                                        {failedEntries.length}
+                                        {badgeCount(recentlyDownloaded.length)}
                                     </span>
                                 )}
                             </Button>
+
+                            <Button
+                                variant={displayMode === 'failedCard' ? 'primary' : 'secondary'}
+                                onClick={() => setDisplayMode('failedCard')}
+                                style={{ ...responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
+                            >
+                                Failed Card Mode
+                                {failedEntries.length > 0 && (
+                                    <span style={badgeStyle}>{badgeCount(failedEntries.length)}</span>
+                                )}
+                            </Button>
+
+
 
                             <Button
                                 variant={displayMode === 'errorCard' ? 'primary' : 'secondary'}
