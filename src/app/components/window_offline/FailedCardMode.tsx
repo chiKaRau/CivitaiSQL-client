@@ -95,7 +95,7 @@ interface OfflineDownloadEntry {
     civitaiUrl: string;
     civitaiVersionID: string;
     civitaiModelID: string;
-    imageUrlsArray: string[];
+    imageUrlsArray: (string | { url: string; width?: number; height?: number; nsfw?: any })[];
     selectedCategory: string;
     civitaiTags: string[];
 }
@@ -121,6 +121,23 @@ const FailedCardMode: React.FC<FailedCardModeProps> = ({
                 No failed downloads.
             </div>
         );
+    }
+
+    const IMG_WIDTH_RE = /\/width=\d+\//;
+    function withWidth(url: string, w: number) {
+        return IMG_WIDTH_RE.test(url)
+            ? url.replace(IMG_WIDTH_RE, `/width=${w}/`)
+            : url.replace(/\/([^\/?#]+)([?#]|$)/, `/width=${w}/$1$2`);
+    }
+
+    function buildSrcSet(url: string, widths: number[]) {
+        return widths.map(w => `${withWidth(url, w)} ${w}w`).join(', ');
+    }
+
+    function normalizeImg(img: string | { url: string; width?: number; height?: number }) {
+        return typeof img === 'string'
+            ? { url: img, width: undefined, height: undefined }
+            : { url: img.url, width: img.width, height: img.height };
     }
 
     return (
@@ -252,24 +269,30 @@ const FailedCardMode: React.FC<FailedCardModeProps> = ({
                                     indicators={entry.imageUrlsArray.length > 1}
                                     controls={entry.imageUrlsArray.length > 1}
                                     interval={null}
-                                    style={{
-                                        marginBottom: 0, // Remove extra space under the carousel
-                                    }}
+                                    style={{ marginBottom: 0 }}
                                 >
-                                    {entry.imageUrlsArray.map((imgUrl, imgIndex) => (
-                                        <Carousel.Item key={imgIndex}>
-                                            <img
-                                                className="d-block w-100"
-                                                src={imgUrl}
-                                                alt={`Slide ${imgIndex + 1}`}
-                                                style={{
-                                                    maxHeight: '300px',
-                                                    objectFit: 'contain',
-                                                    margin: '0 auto',
-                                                }}
-                                            />
-                                        </Carousel.Item>
-                                    ))}
+                                    {entry.imageUrlsArray.map((img, imgIndex) => {
+                                        // IMPORTANT: don't annotate as string; it's a union.
+                                        const { url, width, height } = normalizeImg(img);
+                                        const cardW = 380; // pick a reasonable display width for failed cards
+
+                                        return (
+                                            <Carousel.Item key={imgIndex}>
+                                                <img
+                                                    className="d-block w-100"
+                                                    src={withWidth(url, cardW)}                          // request thumbnail
+                                                    srcSet={buildSrcSet(url, [320, 480, 640, 800])}      // responsive candidates
+                                                    sizes="(max-width: 420px) 100vw, 380px"
+                                                    loading={imgIndex === 0 ? 'eager' : 'lazy'}          // first slide eager, others lazy
+                                                    decoding="async"
+                                                    width={width ?? undefined}
+                                                    height={height ?? undefined}
+                                                    alt={`Slide ${imgIndex + 1}`}
+                                                    style={{ maxHeight: '300px', objectFit: 'contain', margin: '0 auto' }}
+                                                />
+                                            </Carousel.Item>
+                                        );
+                                    })}
                                 </Carousel>
                             ) : (
                                 <div
@@ -279,13 +302,14 @@ const FailedCardMode: React.FC<FailedCardModeProps> = ({
                                         alignItems: 'center',
                                         justifyContent: 'center',
                                         backgroundColor: isDarkMode ? '#555' : '#f0f0f0',
-                                        marginBottom: 0, // Keep the same no extra margin
+                                        marginBottom: 0,
                                         borderRadius: '4px',
                                     }}
                                 >
                                     <span>No Images Available</span>
                                 </div>
                             )}
+
 
                             {/* 3) Smaller text under the carousel */}
                             <div

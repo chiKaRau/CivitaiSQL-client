@@ -158,7 +158,7 @@ interface OfflineDownloadEntry {
     civitaiUrl: string;
     civitaiVersionID: string;
     civitaiModelID: string;
-    imageUrlsArray: string[];
+    imageUrlsArray: (string | { url: string; width?: number; height?: number; nsfw?: any })[];
     selectedCategory: string;
     civitaiTags: string[];
 }
@@ -267,6 +267,26 @@ const OfflineWindow: React.FC = () => {
     const modify_selectedCategory = chromeData.selectedCategory;
 
     const [recentlyDownloaded, setRecentlyDownloaded] = useState<OfflineDownloadEntry[]>([]);
+
+    // Replace /width=###/ in Civitai URLs; if missing, insert it before the filename.
+    const IMG_WIDTH_RE = /\/width=\d+\//;
+    function withWidth(url: string, w: number) {
+        return IMG_WIDTH_RE.test(url)
+            ? url.replace(IMG_WIDTH_RE, `/width=${w}/`)
+            : url.replace(/\/([^\/?#]+)([?#]|$)/, `/width=${w}/$1$2`);
+    }
+
+    // Build a responsive srcset so the browser picks the smallest adequate size.
+    function buildSrcSet(url: string, widths: number[]) {
+        return widths.map(w => `${withWidth(url, w)} ${w}w`).join(', ');
+    }
+
+    // Accept either a string URL or an {url,width,height} object.
+    function normalizeImg(img: string | { url: string; width?: number; height?: number }) {
+        return typeof img === 'string'
+            ? { url: img, width: undefined, height: undefined }
+            : { url: img.url, width: img.width, height: img.height };
+    }
 
 
     // how many *entries* per page of tags:
@@ -1926,24 +1946,28 @@ const OfflineWindow: React.FC = () => {
                                             indicators={entry.imageUrlsArray.length > 1}
                                             controls={entry.imageUrlsArray.length > 1}
                                             interval={null}
-                                            style={{
-                                                marginBottom: 0, // 2) Remove extra space under the carousel
-                                            }}
+                                            style={{ marginBottom: 0 }}
                                         >
-                                            {entry.imageUrlsArray.map((imgUrl, imgIndex) => (
-                                                <Carousel.Item key={imgIndex}>
-                                                    <img
-                                                        className="d-block w-100"
-                                                        src={imgUrl}
-                                                        alt={`Slide ${imgIndex + 1}`}
-                                                        style={{
-                                                            maxHeight: '300px',
-                                                            objectFit: 'contain',
-                                                            margin: '0 auto',
-                                                        }}
-                                                    />
-                                                </Carousel.Item>
-                                            ))}
+                                            {entry.imageUrlsArray.map((img, imgIndex) => {
+                                                const { url, width, height } = normalizeImg(img as any);
+                                                const baseW = 380; // card target width
+                                                return (
+                                                    <Carousel.Item key={imgIndex}>
+                                                        <img
+                                                            className="d-block w-100"
+                                                            src={withWidth(url, baseW)}                              // request thumbnail
+                                                            srcSet={buildSrcSet(url, [320, 480, 640, 800])}          // responsive thumbs
+                                                            sizes="(max-width: 420px) 100vw, 380px"
+                                                            loading={imgIndex === 0 ? 'eager' : 'lazy'}              // first slide eager; rest lazy
+                                                            decoding="async"
+                                                            width={width ?? undefined}
+                                                            height={height ?? undefined}
+                                                            alt={`Slide ${imgIndex + 1}`}
+                                                            style={{ maxHeight: '300px', objectFit: 'contain', margin: '0 auto' }}
+                                                        />
+                                                    </Carousel.Item>
+                                                );
+                                            })}
                                         </Carousel>
                                     ) : (
                                         <div
@@ -1953,13 +1977,14 @@ const OfflineWindow: React.FC = () => {
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
                                                 backgroundColor: isDarkMode ? '#555' : '#f0f0f0',
-                                                marginBottom: 0, // Keep the same no extra margin
+                                                marginBottom: 0,
                                                 borderRadius: '4px',
                                             }}
                                         >
                                             <span>No Images Available</span>
                                         </div>
                                     )}
+
 
                                     {/* 3) Smaller text under the carousel */}
                                     <div
@@ -2228,19 +2253,39 @@ const OfflineWindow: React.FC = () => {
                                     </div>
 
                                     {/* Image (Thumbnail) */}
-                                    {firstImageUrl ? (
-                                        <img
-                                            src={firstImageUrl}
-                                            alt={`Thumbnail ${index + 1}`}
-                                            style={{
-                                                width: '100%',
-                                                maxHeight: '100px',
-                                                objectFit: 'contain',
-                                                borderRadius: '4px',
-                                                marginBottom: '2px', // Minimizing extra space
-                                            }}
-                                        />
-                                    ) : (
+                                    {/* Image (Thumbnail) */}
+                                    {firstImageUrl ? (() => {
+                                        // If firstImageUrl is always a string, use:
+                                        // const url = firstImageUrl as string;
+                                        //
+                                        // If it can be an object {url,width,height}, use normalizeImg:
+                                        const { url, width, height } =
+                                            typeof firstImageUrl === 'string'
+                                                ? { url: firstImageUrl, width: undefined, height: undefined }
+                                                : normalizeImg(firstImageUrl as any);
+
+                                        const thumbW = 180; // small-card target width
+
+                                        return (
+                                            <img
+                                                src={withWidth(url, thumbW)}                       // serve a thumbnail
+                                                srcSet={buildSrcSet(url, [160, 200, 320])}         // responsive thumbs
+                                                sizes="(max-width: 200px) 100vw, 180px"
+                                                loading="lazy"
+                                                decoding="async"
+                                                width={width ?? undefined}                         // keeps aspect ratio if known
+                                                height={height ?? undefined}
+                                                alt={`Thumbnail ${index + 1}`}
+                                                style={{
+                                                    width: '100%',
+                                                    maxHeight: '100px',
+                                                    objectFit: 'contain',
+                                                    borderRadius: '4px',
+                                                    marginBottom: '2px',
+                                                }}
+                                            />
+                                        );
+                                    })() : (
                                         <div
                                             style={{
                                                 height: '100px',
@@ -2248,13 +2293,14 @@ const OfflineWindow: React.FC = () => {
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
                                                 backgroundColor: isDarkMode ? '#555' : '#f0f0f0',
-                                                marginBottom: '2px', // Minimizing extra space
+                                                marginBottom: '2px',
                                                 borderRadius: '4px',
                                             }}
                                         >
                                             <span>No Image</span>
                                         </div>
                                     )}
+
 
                                     {/* Info Section under the image */}
                                     <div
@@ -2467,40 +2513,45 @@ const OfflineWindow: React.FC = () => {
                                             indicators={entry.imageUrlsArray.length > 1}
                                             controls={entry.imageUrlsArray.length > 1}
                                             interval={null}
-                                            style={{
-                                                marginBottom: 0, // Remove extra space under the carousel
-                                            }}
+                                            style={{ marginBottom: 0 }}
                                         >
-                                            {entry.imageUrlsArray.map((imgUrl, imgIndex) => (
-                                                <Carousel.Item key={imgIndex}>
-                                                    <img
-                                                        className="d-block w-100"
-                                                        src={imgUrl}
-                                                        alt={`Slide ${imgIndex + 1}`}
-                                                        style={{
-                                                            maxHeight: '300px',
-                                                            objectFit: 'contain',
-                                                            margin: '0 auto',
-                                                        }}
-                                                    />
-                                                </Carousel.Item>
-                                            ))}
+                                            {entry.imageUrlsArray.map((img, imgIndex) => {
+                                                const { url, width, height } = normalizeImg(img as any);
+                                                const thumbW = 180; // small card width
+                                                return (
+                                                    <Carousel.Item key={imgIndex}>
+                                                        <img
+                                                            className="d-block w-100"
+                                                            src={withWidth(url, thumbW)}
+                                                            srcSet={buildSrcSet(url, [160, 200, 320])}
+                                                            sizes="(max-width: 200px) 100vw, 180px"
+                                                            loading="lazy"
+                                                            decoding="async"
+                                                            width={width ?? undefined}
+                                                            height={height ?? undefined}
+                                                            alt={`Slide ${imgIndex + 1}`}
+                                                            style={{ maxHeight: '100px', objectFit: 'contain', margin: '0 auto', borderRadius: '4px' }}
+                                                        />
+                                                    </Carousel.Item>
+                                                );
+                                            })}
                                         </Carousel>
                                     ) : (
                                         <div
                                             style={{
-                                                height: '200px',
+                                                height: '100px',
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
                                                 backgroundColor: isDarkMode ? '#555' : '#f0f0f0',
-                                                marginBottom: 0, // Keep the same no extra margin
+                                                marginBottom: 0,
                                                 borderRadius: '4px',
                                             }}
                                         >
-                                            <span>No Images Available</span>
+                                            <span>No Image</span>
                                         </div>
                                     )}
+
 
                                     {/* 3) Smaller text under the carousel */}
                                     <div

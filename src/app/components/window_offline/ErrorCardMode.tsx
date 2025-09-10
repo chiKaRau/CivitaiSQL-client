@@ -27,7 +27,7 @@ import { MdOutlineFontDownload, MdFontDownload } from "react-icons/md";
 interface OfflineDownloadEntry {
     civitaiModelID: string;
     civitaiVersionID: string;
-    imageUrlsArray: string[];
+    imageUrlsArray: (string | { url: string; width?: number; height?: number; nsfw?: any })[];
     downloadFilePath: string;   // ← add this line
     // ...other properties as defined in your app
 }
@@ -149,7 +149,11 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({
                         );
                         if (fallbackEntry && fallbackEntry.imageUrlsArray?.length > 0) {
                             modelData = {
-                                images: fallbackEntry.imageUrlsArray.map((url: string) => ({ url })),
+                                images: fallbackEntry.imageUrlsArray.map((img) =>
+                                    typeof img === 'string'
+                                        ? { url: img }
+                                        : { url: img.url, width: img.width, height: img.height }
+                                ),
                             };
                             offlineFallbackUsed = true;
                         }
@@ -165,7 +169,11 @@ const ErrorCardMode: React.FC<ErrorCardModeProps> = ({
                 );
                 if (fallbackEntry && fallbackEntry.imageUrlsArray?.length > 0) {
                     modelData = {
-                        images: fallbackEntry.imageUrlsArray.map((url: string) => ({ url })),
+                        images: fallbackEntry.imageUrlsArray.map((img) =>
+                            typeof img === 'string'
+                                ? { url: img }
+                                : { url: img.url, width: img.width, height: img.height }
+                        ),
                     };
                     offlineFallbackUsed = true;
                 }
