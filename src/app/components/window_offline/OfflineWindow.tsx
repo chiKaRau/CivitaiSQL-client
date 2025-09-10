@@ -1829,12 +1829,12 @@ const OfflineWindow: React.FC = () => {
                             justifyContent: 'center'
                         }}
                     >
-                        {filteredDownloadList.map((entry, index) => {
+                        {filteredDownloadList.map((entry, cardIndex) => {
                             const isSelected = selectedIds.has(entry.civitaiVersionID);
                             const earlyEnds = entry.modelVersionObject?.earlyAccessEndsAt;
                             return (
                                 <Card
-                                    key={index}
+                                    key={cardIndex}
                                     style={{
                                         width: '100%',
                                         maxWidth: '380px',
@@ -1958,7 +1958,7 @@ const OfflineWindow: React.FC = () => {
                                                             src={withWidth(url, baseW)}                              // request thumbnail
                                                             srcSet={buildSrcSet(url, [320, 480, 640, 800])}          // responsive thumbs
                                                             sizes="(max-width: 420px) 100vw, 380px"
-                                                            loading={imgIndex === 0 ? 'eager' : 'lazy'}              // first slide eager; rest lazy
+                                                            loading={imgIndex === 0 && cardIndex === 0 ? 'eager' : 'lazy'}
                                                             decoding="async"
                                                             width={width ?? undefined}
                                                             height={height ?? undefined}
@@ -2144,6 +2144,7 @@ const OfflineWindow: React.FC = () => {
                             const isSelected = selectedIds.has(entry.civitaiVersionID);
                             const earlyEnds = entry.modelVersionObject?.earlyAccessEndsAt;
                             const firstImageUrl = entry.imageUrlsArray?.[0] ?? null;
+                            const isFirstCard = index === 0;
 
                             return (
                                 <Card
@@ -2271,7 +2272,7 @@ const OfflineWindow: React.FC = () => {
                                                 src={withWidth(url, thumbW)}                       // serve a thumbnail
                                                 srcSet={buildSrcSet(url, [160, 200, 320])}         // responsive thumbs
                                                 sizes="(max-width: 200px) 100vw, 180px"
-                                                loading="lazy"
+                                                loading={isFirstCard ? 'eager' : 'lazy'}
                                                 decoding="async"
                                                 width={width ?? undefined}                         // keeps aspect ratio if known
                                                 height={height ?? undefined}
@@ -2356,297 +2357,6 @@ const OfflineWindow: React.FC = () => {
                 </div>
             );
         };
-
-
-    // Inside your OfflineWindow component
-
-    // **UpdateCardMode Component Implementation**
-    const UpdateCardMode: React.FC<{
-        filteredDownloadList: OfflineDownloadEntry[];
-        isDarkMode: boolean;
-        isModifyMode: boolean;
-        selectedIds: Set<string>;
-        toggleSelect: (id: string) => void;
-        handleSelectAll: () => void;
-    }> = ({
-        filteredDownloadList,
-        isDarkMode,
-        isModifyMode,
-        selectedIds,
-        toggleSelect,
-        handleSelectAll
-    }) => {
-            if (filteredDownloadList.length === 0) {
-                return (
-                    <div style={{ color: isDarkMode ? '#fff' : '#000' }}>
-                        No update downloads available.
-                    </div>
-                );
-            }
-
-            return (
-                <div>
-                    <div
-                        style={{
-                            display: 'flex',
-                            flexWrap: 'wrap',
-                            gap: '20px',
-                            justifyContent: 'center'
-                        }}
-                    >
-                        {filteredDownloadList.map((entry, index) => {
-                            const isSelected = selectedIds.has(entry.civitaiVersionID);
-                            const earlyEnds = entry.modelVersionObject?.earlyAccessEndsAt;
-                            return (
-                                <Card
-                                    key={index}
-                                    style={{
-                                        width: '100%',
-                                        maxWidth: '380px',
-                                        border: '1px solid',
-                                        borderColor: isDarkMode ? '#555' : '#ccc',
-                                        borderRadius: '8px',
-                                        boxShadow: isDarkMode
-                                            ? '2px 2px 8px rgba(255,255,255,0.1)'
-                                            : '2px 2px 8px rgba(0,0,0,0.1)',
-                                        backgroundColor: isDarkMode ? '#333' : '#fff',
-                                        color: isDarkMode ? '#fff' : '#000',
-                                        position: 'relative',
-                                        cursor: isModifyMode ? 'pointer' : 'default',
-                                        opacity: isModifyMode && !isSelected ? 0.8 : 1,
-                                        transition:
-                                            'background-color 0.3s ease, color 0.3s ease, opacity 0.3s ease',
-                                        overflow: 'hidden',
-                                        margin: '0 auto',
-                                        padding: '10px'
-                                    }}
-                                    onClick={(e) => {
-                                        if (isModifyMode && e.ctrlKey) {
-                                            toggleSelect(entry.civitaiVersionID);
-                                        }
-                                    }}
-                                >
-                                    {/* Early Access badge at the top-right */}
-                                    {earlyEnds && (
-                                        <div
-                                            style={{
-                                                position: 'absolute',
-                                                top: '5px',
-                                                right: '5px',
-                                                color: 'red',
-                                                fontWeight: 'bold',
-                                                fontSize: '0.8rem',
-                                                backgroundColor: isDarkMode ? '#444' : '#fff',
-                                                padding: '2px 4px',
-                                                borderRadius: '4px',
-                                                border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
-                                            }}
-                                        >
-                                            Ends: {new Date(earlyEnds).toLocaleString()}
-                                        </div>
-                                    )}
-
-                                    {/* Selection Checkbox at the top-left */}
-                                    <Form.Check
-                                        type="checkbox"
-                                        checked={isSelected}
-                                        onChange={(e) => {
-                                            e.stopPropagation();
-                                            toggleSelect(entry.civitaiVersionID);
-                                        }}
-                                        style={{
-                                            position: 'absolute',
-                                            top: '10px',
-                                            left: '10px',
-                                            transform: 'scale(1.2)',
-                                            cursor: isModifyMode ? 'pointer' : 'not-allowed',
-                                            accentColor: isDarkMode ? '#fff' : '#000',
-                                        }}
-                                    />
-
-                                    {/* ---- 1) BaseModel badge + Title ---- */}
-                                    <div
-                                        style={{
-                                            marginTop: '40px', // push down below the checkbox row
-                                            marginBottom: '5px',
-                                            textAlign: 'center',
-                                            borderBottom: `1px solid ${isDarkMode ? '#555' : '#ccc'}`,
-                                            paddingBottom: '5px',
-                                            whiteSpace: 'nowrap',
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis',
-                                        }}
-                                    >
-                                        {/* BaseModel as a badge, only if present */}
-                                        {entry.modelVersionObject?.baseModel && (
-                                            <span
-                                                style={{
-                                                    display: 'inline-block',
-                                                    fontSize: '0.7rem',
-                                                    fontWeight: 'bold',
-                                                    backgroundColor: '#007bff',
-                                                    color: '#fff',
-                                                    padding: '2px 6px',
-                                                    borderRadius: '4px',
-                                                    marginRight: '6px',
-                                                }}
-                                            >
-                                                {entry.modelVersionObject.baseModel}
-                                            </span>
-                                        )}
-                                        {/* Model title */}
-                                        <span
-                                            style={{
-                                                fontSize: '0.9rem',
-                                                fontWeight: 'bold',
-                                            }}
-                                            title={entry?.modelVersionObject?.model?.name ?? 'N/A'}
-                                        >
-                                            {entry?.modelVersionObject?.model?.name ?? 'N/A'}
-                                        </span>
-                                    </div>
-
-                                    {/* Carousel for Images */}
-                                    {entry.imageUrlsArray && entry.imageUrlsArray.length > 0 ? (
-                                        <Carousel
-                                            variant={isDarkMode ? 'dark' : 'light'}
-                                            indicators={entry.imageUrlsArray.length > 1}
-                                            controls={entry.imageUrlsArray.length > 1}
-                                            interval={null}
-                                            style={{ marginBottom: 0 }}
-                                        >
-                                            {entry.imageUrlsArray.map((img, imgIndex) => {
-                                                const { url, width, height } = normalizeImg(img as any);
-                                                const thumbW = 180; // small card width
-                                                return (
-                                                    <Carousel.Item key={imgIndex}>
-                                                        <img
-                                                            className="d-block w-100"
-                                                            src={withWidth(url, thumbW)}
-                                                            srcSet={buildSrcSet(url, [160, 200, 320])}
-                                                            sizes="(max-width: 200px) 100vw, 180px"
-                                                            loading="lazy"
-                                                            decoding="async"
-                                                            width={width ?? undefined}
-                                                            height={height ?? undefined}
-                                                            alt={`Slide ${imgIndex + 1}`}
-                                                            style={{ maxHeight: '100px', objectFit: 'contain', margin: '0 auto', borderRadius: '4px' }}
-                                                        />
-                                                    </Carousel.Item>
-                                                );
-                                            })}
-                                        </Carousel>
-                                    ) : (
-                                        <div
-                                            style={{
-                                                height: '100px',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                backgroundColor: isDarkMode ? '#555' : '#f0f0f0',
-                                                marginBottom: 0,
-                                                borderRadius: '4px',
-                                            }}
-                                        >
-                                            <span>No Image</span>
-                                        </div>
-                                    )}
-
-
-                                    {/* 3) Smaller text under the carousel */}
-                                    <div
-                                        style={{
-                                            marginTop: '5px',
-                                            fontSize: '0.8rem', // smaller text
-                                            lineHeight: 1.3,
-                                            padding: '0 5px',
-                                        }}
-                                    >
-                                        {/* Version Name */}
-                                        <div
-                                            style={{
-                                                textAlign: 'center',
-                                                wordWrap: 'break-word',
-                                                whiteSpace: 'nowrap',
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                            }}
-                                            title={entry.modelVersionObject?.name ?? 'N/A'}
-                                        >
-                                            <strong>Version:</strong> {entry.modelVersionObject?.name ?? 'N/A'}
-                                        </div>
-
-                                        {/* File Name */}
-                                        <p
-                                            style={{
-                                                margin: '4px 0',
-                                                whiteSpace: 'nowrap',
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                            }}
-                                            title={entry.civitaiFileName ?? 'N/A'}
-                                        >
-                                            <strong>File Name:</strong> {entry.civitaiFileName ?? 'N/A'}
-                                        </p>
-
-                                        {/* Show full download path with line wrapping */}
-                                        <p
-                                            style={{
-                                                margin: '4px 0',
-                                                whiteSpace: 'normal',     // allow multi-line
-                                                wordWrap: 'break-word',   // wrap long paths
-                                            }}
-                                        >
-                                            <strong>Download Path:</strong> {entry.downloadFilePath ?? 'N/A'}
-                                        </p>
-
-                                        {/* Category */}
-                                        <p style={{ margin: '4px 0' }}>
-                                            <strong>Category:</strong> {entry.selectedCategory ?? 'N/A'}
-                                        </p>
-
-                                        <p style={{ margin: '4px 0' }}>
-                                            <strong>Version ID:</strong> {entry.modelVersionObject?.id ?? 'N/A'}
-                                        </p>
-                                        <p style={{ margin: '4px 0' }}>
-                                            <strong>Model ID:</strong> {entry.modelVersionObject?.modelId ?? 'N/A'}
-                                        </p>
-                                        <p style={{ margin: '4px 0' }}>
-                                            <strong>URL:</strong>{' '}
-                                            {entry.civitaiUrl ? (
-                                                <a
-                                                    href={entry.civitaiUrl}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    style={{ color: isDarkMode ? '#1e90ff' : '#007bff' }}
-                                                >
-                                                    Visit Model
-                                                </a>
-                                            ) : (
-                                                'N/A'
-                                            )}
-                                        </p>
-                                        <p style={{ margin: '4px 0' }}>
-                                            <strong>File Size:</strong>{' '}
-                                            {(() => {
-                                                const safetensorFile =
-                                                    entry.modelVersionObject?.files?.find(file =>
-                                                        file.name.endsWith('.safetensors')
-                                                    );
-                                                return safetensorFile
-                                                    ? `${(safetensorFile.sizeKB / 1024).toFixed(2)} MB`
-                                                    : 'N/A';
-                                            })()}
-                                        </p>
-                                    </div>
-                                </Card>
-                            );
-                        })}
-                    </div>
-                </div>
-            );
-        };
-
 
 
     const handleSelectAll = () => {

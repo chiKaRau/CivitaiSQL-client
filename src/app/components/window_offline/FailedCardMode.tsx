@@ -150,12 +150,12 @@ const FailedCardMode: React.FC<FailedCardModeProps> = ({
                     justifyContent: 'center'
                 }}
             >
-                {failedEntries.map((entry, index) => {
+                {failedEntries.map((entry, cardIndex) => {
                     const isSelected = selectedIds.has(entry.civitaiVersionID);
                     const earlyEnds = entry.modelVersionObject?.earlyAccessEndsAt;
                     return (
                         <Card
-                            key={index}
+                            key={cardIndex}
                             style={{
                                 width: '100%',
                                 maxWidth: '380px',
@@ -283,7 +283,7 @@ const FailedCardMode: React.FC<FailedCardModeProps> = ({
                                                     src={withWidth(url, cardW)}                          // request thumbnail
                                                     srcSet={buildSrcSet(url, [320, 480, 640, 800])}      // responsive candidates
                                                     sizes="(max-width: 420px) 100vw, 380px"
-                                                    loading={imgIndex === 0 ? 'eager' : 'lazy'}          // first slide eager, others lazy
+                                                    loading={imgIndex === 0 && cardIndex === 0 ? 'eager' : 'lazy'}
                                                     decoding="async"
                                                     width={width ?? undefined}
                                                     height={height ?? undefined}
