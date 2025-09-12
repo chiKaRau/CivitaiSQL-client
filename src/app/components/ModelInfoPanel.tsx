@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { AppState } from '../store/configureStore';
 import { Button } from 'react-bootstrap';
+import { fetchFullRecordFromAllTableModelIDandVersionID } from '../api/civitaiSQL_api';
 
 //Model Page
 const ModelInfoPanel: React.FC = () => {
@@ -13,6 +14,8 @@ const ModelInfoPanel: React.FC = () => {
     const { civitaiUrl, civitaiModelID, civitaiVersionID } = civitaiModel;
     const civitaiData: Record<string, any> | undefined = civitaiModel.civitaiModelObject;
     const modelName = civitaiData?.name;
+    const [isLoading, setIsLoading] = useState(false)
+    const dispatch = useDispatch();
 
     const databaseModel = useSelector((state: AppState) => state.databaseModel);
     const { isInDatabase } = databaseModel
@@ -20,6 +23,37 @@ const ModelInfoPanel: React.FC = () => {
     const databaseModelsList = databaseData;
 
     const [showDatabaseSection, setShowDatabaseSection] = useState(false);
+
+    const [fullRecord, setFullRecord] = useState<any | null>(null);
+
+    const fmt = (iso?: string) => (iso ? new Date(iso).toLocaleString() : '—');
+
+    const handleRetrieveFullInfoData = async () => {
+        setIsLoading(true);
+
+        console.log("calling handleRetrieveFullInfoData ")
+
+        const data = await fetchFullRecordFromAllTableModelIDandVersionID(
+            civitaiModelID,
+            civitaiVersionID,
+            dispatch
+        );
+        console.log("data : ", data)
+
+        // expect the shape you showed: data.payload.model
+        setFullRecord(data ?? null);
+        setIsLoading(false);
+    };
+
+    // auto-load when IDs are available/changed (or call the handler from a button if you prefer)
+    useEffect(() => {
+        console.log(civitaiModelID)
+        console.log(civitaiVersionID)
+        if (civitaiModelID && civitaiVersionID) {
+            handleRetrieveFullInfoData();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [civitaiModelID, civitaiVersionID]);
 
     const toggleDatabaseSection = () => {
         setShowDatabaseSection(!showDatabaseSection);
@@ -30,9 +64,17 @@ const ModelInfoPanel: React.FC = () => {
             <div className="modelSection">
                 <div className="modelDetails">
                     <div className="modelVersionContainer">
-                        <p>mID: {civitaiModelID}</p>
-                        <p>vID: {civitaiVersionID}</p>
+                        <p><b>Model ID: {civitaiModelID}</b></p>
+                        <p><b>Version ID: {civitaiVersionID}</b></p>
                     </div>
+
+                    {fullRecord && (
+                        <div className="modelTimestamps">
+                            <div><strong>Created:</strong> {fmt(fullRecord.createdAt)}</div>
+                            <div><strong>Updated:</strong> {fmt(fullRecord.updatedAt)}</div>
+                        </div>
+                    )}
+
                     {isInDatabase && (
                         <Button
                             onClick={() => toggleDatabaseSection()}
