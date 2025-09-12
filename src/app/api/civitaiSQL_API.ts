@@ -54,9 +54,6 @@ export const fetchFullRecordFromAllTableModelIDandVersionID = async (modelID: st
 
         if (response.status >= 200 && response.status < 300) {
             return responseData.payload.model;
-        } else {
-            // Handle the case when success is false
-            throw new Error("Retriving Civitai model info from Civitai failed.");
         }
     } catch (error: any) {
         // Handle other types of errors, e.g., network issues
