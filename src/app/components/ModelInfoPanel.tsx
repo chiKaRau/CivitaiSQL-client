@@ -95,6 +95,23 @@ const ModelInfoPanel: React.FC = () => {
                     <label className="inputLabel">Url:</label>
                     <input className="inputField" type="text" placeholder="Url" value={civitaiUrl} />
                 </div>
+                {fullRecord && (<div className="inputContainer">
+                    <label className="inputLabel">LocalPath:</label>
+                    <input
+                        type="text"
+                        value={fullRecord?.localPath ?? ''}
+                        placeholder="Local Path"
+                        readOnly
+                        title={fullRecord?.localPath ?? ''}
+                        style={{
+                            direction: 'rtl',
+                            textAlign: 'left',
+                            width: '100%',          // keep full width
+                            boxSizing: 'border-box' // include padding/border in width
+                        }}
+                    />
+
+                </div>)}
             </div>
             {isInDatabase && showDatabaseSection && (
                 <div className="databaseSection">

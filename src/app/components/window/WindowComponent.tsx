@@ -654,6 +654,7 @@ const WindowComponent: React.FC = () => {
         return data;
     };
 
+
     // Function to handle the API call and update the button state
     const handleDownloadMultipleFile_v2 = async (civitaiData: any, civitaiUrl: string, modelId: string, versionIndex: any) => {
 
@@ -1459,6 +1460,45 @@ const WindowComponent: React.FC = () => {
 
     const hasFilteredNewItems = filteredCreatorUrlList.some(item => item.status === "new");
 
+    // --- NEW: Creator dropdown hints (respect rating filters)
+    const creatorAgeHints = useMemo(() => {
+        const inScope = filteredCreatorUrlList;
+
+        if (!inScope || inScope.length === 0) {
+            return {
+                nullCount: 0,
+                newCount: 0,
+                oldestNewLine: 'Oldest last-checked (new only): -',
+            };
+        }
+
+        // 1) How many null lastCheckedDate? (any status)
+        const nullCount = inScope.filter(it => !it.lastCheckedDate).length;
+
+        // 2) How many creators have status === "new"?
+        const newOnly = inScope.filter(it => it.status === 'new');
+        const newCount = newOnly.length;
+
+        // 3) Among NEW ONLY, find the oldest lastCheckedDate (if any)
+        const datedNew = newOnly
+            .filter(it => !!it.lastCheckedDate)
+            .sort(
+                (a, b) =>
+                    new Date(a.lastCheckedDate as string).getTime() -
+                    new Date(b.lastCheckedDate as string).getTime()
+            );
+
+        const oldestNew = datedNew.length ? (datedNew[0].lastCheckedDate as string) : null;
+
+        return {
+            nullCount,
+            newCount,
+            oldestNewLine: oldestNew
+                ? `Oldest last-checked (new only): ${new Date(oldestNew).toLocaleString()} - ${timeAgo(oldestNew)}`
+                : 'Oldest last-checked (new only): - ',
+        };
+    }, [filteredCreatorUrlList, timeAgo]);
+
     return (
         <>
 
@@ -1776,6 +1816,20 @@ const WindowComponent: React.FC = () => {
                                                         {selectedCreatorUrlText || "-- Creator URL List (choose one) --"}
                                                     </Dropdown.Toggle>
                                                     <Dropdown.Menu style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                                                        <div
+                                                            style={{
+                                                                padding: 8,
+                                                                background: 'var(--bs-dropdown-bg, #fff)',
+                                                                borderBottom: '1px solid rgba(0,0,0,0.075)',
+                                                                fontSize: 12,
+                                                                color: '#6c757d',
+                                                                lineHeight: 1.4,
+                                                            }}
+                                                        >
+                                                            <div><strong>Null last-checked:</strong> {creatorAgeHints.nullCount}</div>
+                                                            <div><strong>New in filter:</strong> {creatorAgeHints.newCount}</div>
+                                                            <div>{creatorAgeHints.oldestNewLine}</div>
+                                                        </div>
                                                         {filteredCreatorUrlList.map((item) => (
                                                             <Dropdown.Item
                                                                 as="div"

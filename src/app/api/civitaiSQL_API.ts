@@ -49,12 +49,12 @@ export const fetchFullRecordFromAllTableModelIDandVersionID = async (modelID: st
     try {
         // Clear any previous errors
         dispatch(clearError());
-        const response = await axios.post(`${config.domain}/api/find-full-record-from-all-tables-by-modelID-and-version`, { modelID: modelID, versionID: versionID });
-        const responseData = response.data;
-
-        if (response.status >= 200 && response.status < 300) {
-            return responseData.payload.model;
-        }
+        const { data, status } = await axios.post(
+            `${config.domain}/api/find-full-record-from-all-tables-by-modelID-and-version`,
+            { modelID, versionID }
+        );
+        if (status >= 200 && status < 300) return data?.payload?.model ?? null;
+        return null;
     } catch (error: any) {
         // Handle other types of errors, e.g., network issues
         console.error("Error during Civitai Info retrieval:", error.message);
