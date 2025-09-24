@@ -102,6 +102,10 @@ interface ModelVersionObject {
         nsfw: boolean;
         poi: boolean;
     };
+    creator: {
+        username: string;
+        image: string;
+    };
     files: {
         id: number;
         sizeKB: number;
@@ -618,6 +622,7 @@ const OfflineWindow: React.FC = () => {
             entry.modelVersionObject?.name, //version name
             entry.civitaiUrl,
             entry.modelVersionObject?.model?.name, //This should be the title
+            entry.modelVersionObject?.creator?.username,
             entry.civitaiTags,
             entry.civitaiModelID,
             entry.civitaiVersionID,
@@ -1011,6 +1016,7 @@ const OfflineWindow: React.FC = () => {
                 category: entry.selectedCategory ?? 'N/A',
                 filepath: entry.downloadFilePath ?? 'N/A',
                 url: entry.civitaiUrl ?? 'N/A',
+                creator: entry.modelVersionObject?.creator?.username ?? 'N/A',
                 filesize: filesizeMB + " MB",
                 earlyAccessEndsAt: entry.modelVersionObject?.earlyAccessEndsAt ?? null,
             };
@@ -2083,6 +2089,9 @@ const OfflineWindow: React.FC = () => {
                                             ) : (
                                                 'N/A'
                                             )}
+                                        </p>
+                                        <p style={{ margin: '4px 0' }}>
+                                            <strong>Creator:</strong> {entry.modelVersionObject?.creator?.username ?? 'N/A'}
                                         </p>
                                         <p style={{ margin: '4px 0' }}>
                                             <strong>File Size:</strong>{' '}

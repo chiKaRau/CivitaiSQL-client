@@ -318,20 +318,38 @@ const WindowComponent: React.FC = () => {
     };
 
     const handleNextByAge = () => {
-        const targetIdx = pickByNullThenAge(1);
-        if (targetIdx == null) return; // or fallback to handleNext()
+        const override = jumpToExtremeIfNeeded(1);
+        const targetIdx = override ?? pickByNullThenAge(1);
+        if (targetIdx == null) return;
         setCurrentCreatorUrlIndex(targetIdx);
         setSelectedCreatorUrlText(creatorUrlList[targetIdx].creatorUrl.split('/')[4]);
         goToUrlInBrowserTab(creatorUrlList[targetIdx].creatorUrl);
     };
 
     const handlePreviousByAge = () => {
-        const targetIdx = pickByNullThenAge(-1);
-        if (targetIdx == null) return; // or fallback to handlePrevious()
+        const override = jumpToExtremeIfNeeded(-1);
+        const targetIdx = override ?? pickByNullThenAge(-1);
+        if (targetIdx == null) return;
         setCurrentCreatorUrlIndex(targetIdx);
         setSelectedCreatorUrlText(creatorUrlList[targetIdx].creatorUrl.split('/')[4]);
         goToUrlInBrowserTab(creatorUrlList[targetIdx].creatorUrl);
     };
+
+    // Make BOTH Next and Prev jump to OLDEST first when there are no nulls
+    const jumpToExtremeIfNeeded = (direction: 1 | -1): number | null => {
+        if (nullNewIndices.length > 0) return null;
+        if (datedNewIndices.length === 0) return null;
+
+        const cur = currentCreatorUrlIndex ?? -1;
+        const oldest = datedNewIndices[0];
+
+        // If we're not on the oldest yet, first hop goes to oldest (for BOTH directions)
+        if (cur !== oldest) return oldest;
+
+        // Otherwise, no override—let pickByNullThenAge do normal cycling
+        return null;
+    };
+
 
 
     // Normalize URLs for safe comparison
@@ -1460,26 +1478,25 @@ const WindowComponent: React.FC = () => {
 
     const hasFilteredNewItems = filteredCreatorUrlList.some(item => item.status === "new");
 
-    // --- NEW: Creator dropdown hints (respect rating filters)
+    // --- NEW: Creator dropdown summary (NEW only, respects rating filters)
     const creatorAgeHints = useMemo(() => {
         const inScope = filteredCreatorUrlList;
-
         if (!inScope || inScope.length === 0) {
             return {
-                nullCount: 0,
+                nullNewCount: 0,
                 newCount: 0,
                 oldestNewLine: 'Oldest last-checked (new only): -',
             };
         }
 
-        // 1) How many null lastCheckedDate? (any status)
-        const nullCount = inScope.filter(it => !it.lastCheckedDate).length;
-
-        // 2) How many creators have status === "new"?
+        // Only NEW items within the rating-filtered list
         const newOnly = inScope.filter(it => it.status === 'new');
         const newCount = newOnly.length;
 
-        // 3) Among NEW ONLY, find the oldest lastCheckedDate (if any)
+        // Among NEW ONLY, how many have null/absent lastCheckedDate?
+        const nullNewCount = newOnly.filter(it => !it.lastCheckedDate).length;
+
+        // Among NEW ONLY, find oldest lastCheckedDate (if any present)
         const datedNew = newOnly
             .filter(it => !!it.lastCheckedDate)
             .sort(
@@ -1491,13 +1508,14 @@ const WindowComponent: React.FC = () => {
         const oldestNew = datedNew.length ? (datedNew[0].lastCheckedDate as string) : null;
 
         return {
-            nullCount,
+            nullNewCount,
             newCount,
             oldestNewLine: oldestNew
                 ? `Oldest last-checked (new only): ${new Date(oldestNew).toLocaleString()} - ${timeAgo(oldestNew)}`
-                : 'Oldest last-checked (new only): - ',
+                : 'Oldest last-checked (new only): -',
         };
     }, [filteredCreatorUrlList, timeAgo]);
+
 
     return (
         <>
@@ -1826,8 +1844,8 @@ const WindowComponent: React.FC = () => {
                                                                 lineHeight: 1.4,
                                                             }}
                                                         >
-                                                            <div><strong>Null last-checked:</strong> {creatorAgeHints.nullCount}</div>
-                                                            <div><strong>New in filter:</strong> {creatorAgeHints.newCount}</div>
+                                                            <div><strong>(New):</strong> {creatorAgeHints.newCount}</div>
+                                                            <div><strong>(New) - Null:</strong> {creatorAgeHints.nullNewCount}</div>
                                                             <div>{creatorAgeHints.oldestNewLine}</div>
                                                         </div>
                                                         {filteredCreatorUrlList.map((item) => (
