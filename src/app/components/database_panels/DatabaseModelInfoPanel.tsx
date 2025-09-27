@@ -136,7 +136,7 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) =>
             return;
         }
 
-        fetchAddRecordToDatabase(selectedCategory, civitaiUrl, "", dispatch);
+        fetchAddRecordToDatabase(selectedCategory, civitaiUrl, downloadFilePath, dispatch);
         bookmarkThisModel(civitaiData?.type, dispatch)
         props.toggleDatabaseModelInfoPanelOpen()
         setIsLoading(false)

@@ -1836,12 +1836,16 @@ const WindowComponent: React.FC = () => {
                                                     <Dropdown.Menu style={{ maxHeight: '400px', overflowY: 'auto' }}>
                                                         <div
                                                             style={{
+                                                                position: 'sticky',
+                                                                top: 0,
+                                                                zIndex: 2,
                                                                 padding: 8,
                                                                 background: 'var(--bs-dropdown-bg, #fff)',
                                                                 borderBottom: '1px solid rgba(0,0,0,0.075)',
                                                                 fontSize: 12,
                                                                 color: '#6c757d',
                                                                 lineHeight: 1.4,
+                                                                boxShadow: '0 2px 4px rgba(0,0,0,0.06)',
                                                             }}
                                                         >
                                                             <div><strong>(New):</strong> {creatorAgeHints.newCount}</div>
