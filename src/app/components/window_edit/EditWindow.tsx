@@ -1,719 +1,652 @@
 import React, { useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { AppState } from '../../store/configureStore';
+import { useDispatch } from 'react-redux';
 import { Container, Row, Col, Form, Button, Toast } from 'react-bootstrap';
-import { fetchAddRecordToDatabaseInCustom, fetchDownloadFilesByServer_v2ForCustom } from '../../api/civitaiSQL_api';
-
-import { OverlayTrigger, Tooltip } from 'react-bootstrap';
-import { CiWarning } from 'react-icons/ci';
-import { AiOutlineCheckCircle, AiOutlineCloseCircle } from 'react-icons/ai';
-
-import CategoriesListSelector from '../CategoriesListSelector';
-import DownloadFilePathOptionPanel from '../DownloadFilePathOptionPanel';
-import FolderDropdown from '../FolderDropdown';
+import { fetchFullRecordFromAllTableModelIDandVersionID, fetchUpdateFullRecord } from '../../api/civitaiSQL_api';
+import { setError, clearError } from '../../store/actions/errorsActions';
 
 const EditWindow: React.FC = () => {
     const dispatch = useDispatch();
-    const { downloadFilePath, selectedCategory } = useSelector((s: AppState) => s.chrome);
 
-    // Toast state
+    // toast
     const [showToast, setShowToast] = useState(false);
     const [toastMsg, setToastMsg] = useState('');
     const [toastVariant, setToastVariant] = useState<'success' | 'danger'>('success');
 
-    // Required fields
+    // lookup keys
+    const [modelNumber, setModelNumber] = useState('');
+    const [versionNumber, setVersionNumber] = useState('');
+    const [url, setUrl] = useState('');
+
+    // models_table
+    const [id, setId] = useState<number | null>(null);
     const [name, setName] = useState('');
     const [mainModelName, setMainModelName] = useState('');
-    const [url, setUrl] = useState('');
-    const [versionNumber, setVersionNumber] = useState('');
-    const [modelNumber, setModelNumber] = useState('');
-    const [type, setType] = useState('');
-    const [baseModel, setBaseModel] = useState('');
+    const [tags, setTags] = useState('');           // JSON-ish string
+    const [localTags, setLocalTags] = useState(''); // JSON-ish string
+    const [aliases, setAliases] = useState('');     // JSON-ish string
+    const [localPath, setLocalPath] = useState('');
+    const [category, setCategory] = useState('');
+    const [triggerWords, setTriggerWords] = useState(''); // JSON-ish string
+    const [nsfw, setNsfw] = useState<boolean>(false);
+    const [urlAccessable, setUrlAccessable] = useState<boolean>(false);
+    const [flag, setFlag] = useState<boolean>(false);
+    const [myRating, setMyRating] = useState<number | ''>('');
 
-    // Dynamic Image URLs (must have at least 1)
-    const [imageUrls, setImageUrls] = useState<string[]>(['']);
-
-    // Optional fields
-    const [tags, setTags] = useState('');
-    const [localTags, setLocalTags] = useState('');
-    const [aliases, setAliases] = useState('');
-    const [triggerWords, setTriggerWords] = useState('');
+    // other tables
     const [description, setDescription] = useState('');
+    const [modelUrl, setModelUrl] = useState('');
+    const [type, setType] = useState('');
     const [stats, setStats] = useState('');
+    const [uploaded, setUploaded] = useState(''); // yyyy-mm-dd
+    const [baseModel, setBaseModel] = useState('');
     const [hash, setHash] = useState('');
     const [usageTips, setUsageTips] = useState('');
     const [creatorName, setCreatorName] = useState('');
-    const [nsfw, setNsfw] = useState(false);
-    const [flag, setFlag] = useState(false);
-    const [urlAccessable, setUrlAccessable] = useState(true);
+    const [imageUrls, setImageUrls] = useState('');
 
-    const [downloadUrlInput, setDownloadUrlInput] = useState('');
+    // at top with other state
+    const [isLoaded, setIsLoaded] = useState(false);
 
-    const [prevData, setPrevData] = useState<any>(null);
 
-    const toArray = (s: string) =>
-        s.split(',').map(x => x.trim()).filter(Boolean);
-
-    // Add/remove image URL inputs
-    const handleAddImage = () => setImageUrls(prev => [...prev, '']);
-    const handleRemoveImage = () => {
-        if (imageUrls.length > 1) setImageUrls(prev => prev.slice(0, -1));
-    };
-    const handleImageChange = (i: number, v: string) =>
-        setImageUrls(prev => prev.map((val, idx) => idx === i ? v : val));
-
-    // Reset everything
-    const handleClear = () => {
-        // 1) snapshot current values
-        setPrevData({
-            name,
-            mainModelName,
-            url,
-            versionNumber,
-            modelNumber,
-            type,
-            baseModel,
-            imageUrls,
-            tags,
-            localTags,
-            aliases,
-            triggerWords,
-            description,
-            stats,
-            hash,
-            usageTips,
-            creatorName,
-            nsfw,
-            flag,
-            urlAccessable,
-            downloadUrlInput,
-        });
-        // 2) then clear
-        setName(''); setMainModelName(''); setUrl('');
-        setVersionNumber(''); setModelNumber(''); setType(''); setBaseModel('');
-        setImageUrls(['']);
-        setTags(''); setLocalTags(''); setAliases(''); setTriggerWords('');
-        setDescription(''); setStats(''); setHash(''); setUsageTips('');
-        setCreatorName(''); setNsfw(false); setFlag(false); setUrlAccessable(false);
-        setDownloadUrlInput('');
+    const popToast = (msg: string, variant: 'success' | 'danger' = 'success') => {
+        setToastMsg(msg);
+        setToastVariant(variant);
+        setShowToast(true);
     };
 
-    const handleUndo = () => {
-        if (!prevData) return;
-        // prevData is now `any`, so no TS errors:
-        setName(prevData.name);
-        setMainModelName(prevData.mainModelName);
-        setUrl(prevData.url);
-        setVersionNumber(prevData.versionNumber);
-        setModelNumber(prevData.modelNumber);
-        setType(prevData.type);
-        setBaseModel(prevData.baseModel);
-        setImageUrls(prevData.imageUrls);
-        setTags(prevData.tags);
-        setLocalTags(prevData.localTags);
-        setAliases(prevData.aliases);
-        setTriggerWords(prevData.triggerWords);
-        setDescription(prevData.description);
-        setStats(prevData.stats);
-        setHash(prevData.hash);
-        setUsageTips(prevData.usageTips);
-        setCreatorName(prevData.creatorName);
-        setNsfw(prevData.nsfw);
-        setFlag(prevData.flag);
-        setUrlAccessable(prevData.urlAccessable);
-        setDownloadUrlInput(prevData.downloadUrlInput);
-        // clear the snapshot so Undo only works once
-        setPrevData(null);
+    // tiny helpers
+    const str = (v: any) => (v == null ? '' : String(v));
+
+    // load when helper returns FULL DTO: { model, description, url, details, images }
+    const loadFromFullDTO = (full: any) => {
+        const m = full?.model ?? {};
+        setId(typeof m.id === 'number' ? m.id : null); // <— add this
+        setName(str(m.name));
+        setMainModelName(str(m.mainModelName));
+        setTags(str(m.tags));
+        setLocalTags(str(m.localTags));
+        setAliases(str(m.aliases));
+        setLocalPath(str(m.localPath));
+        setCategory(str(m.category));
+        setTriggerWords(str(m.triggerWords));
+        setNsfw(!!m.nsfw);
+        setUrlAccessable(!!m.urlAccessable);
+        setFlag(!!m.flag);
+        setMyRating(Number.isInteger(m.myRating) ? m.myRating : '');
+
+        const dsc = full?.description ?? {};
+        setDescription(str(dsc.description));
+
+        const urec = full?.url ?? {};
+        setModelUrl(str(urec.url));
+
+        const det = full?.details ?? {};
+        setType(str(det.type));
+        setStats(str(det.stats));
+        setUploaded(str(det.uploaded)); // "YYYY-MM-DD" is fine for <input type="date">
+        setBaseModel(str(det.baseModel));
+        setHash(str(det.hash));
+        setUsageTips(str(det.usageTips));
+        setCreatorName(str(det.creatorName));
+
+        const img = full?.images ?? {};
+        setImageUrls(str(img.imageUrls));
     };
 
+    // load when helper returns only the MODEL entity
+    const loadFromModelOnly = (m: any) => {
+        setId(typeof m.id === 'number' ? m.id : null); // <— add this
+        setName(str(m.name));
+        setMainModelName(str(m.mainModelName));
+        setTags(str(m.tags));
+        setLocalTags(str(m.localTags));
+        setAliases(str(m.aliases));
+        setLocalPath(str(m.localPath));
+        setCategory(str(m.category));
+        setTriggerWords(str(m.triggerWords));
+        setNsfw(!!m.nsfw);
+        setUrlAccessable(!!m.urlAccessable);
+        setFlag(!!m.flag);
+        setMyRating(Number.isInteger(m.myRating) ? m.myRating : '');
 
-    // Submit handler
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const dto: any = {
-            name,
-            mainModelName,
-            url,
-            category: selectedCategory,
-            versionNumber,
-            modelNumber,
-            type,
-            baseModel,
-            imageUrls: imageUrls.map(u => ({ url: u })),
-            tags: toArray(tags),
-            localTags: toArray(localTags),
-            aliases: toArray(aliases),
-            triggerWords: toArray(triggerWords),
-            description: description || null,
-            stats: stats || null,
-            localPath: downloadFilePath,
-            uploaded: null,
-            hash: hash || null,
-            usageTips: usageTips || null,
-            creatorName: creatorName || null,
-            nsfw,
-            flag,
-            urlAccessable,
-        };
-
-        try {
-            await fetchAddRecordToDatabaseInCustom(dto);
-            setToastMsg('Submit successful');
-            setToastVariant('success');
-        } catch (err: any) {
-            console.error('API error:', err);
-            setToastMsg(err.message || 'Submit failed');
-            setToastVariant('danger');
-        } finally {
-            setShowToast(true);
-        }
+        // clear non-model tables since we didn't receive them
+        setDescription('');
+        setModelUrl('');
+        setType('');
+        setStats('');
+        setUploaded('');
+        setBaseModel('');
+        setHash('');
+        setUsageTips('');
+        setCreatorName('');
+        setImageUrls('');
     };
 
-    // Force-refresh DownloadFilePath panel when needed
-    const [isHandleRefresh, setIsHandleRefresh] = useState(false);
-
-    const handleScrapEverything = async () => {
+    // scrape model/version from active tab URL
+    const handleScrapeIDs = async () => {
         try {
             // @ts-ignore
             if (!chrome?.tabs) throw new Error('Chrome extension APIs not available');
-
-            // Step 1: normal window → active tab
             const windows = await chrome.windows.getAll({ populate: false });
-            const normalWindow = windows.find(win => win.type === 'normal');
-            if (!normalWindow) throw new Error('No normal window found');
+            const normal = windows.find(w => w.type === 'normal');
+            if (!normal) throw new Error('No normal window found');
+            const [activeTab] = await chrome.tabs.query({ active: true, windowId: normal.id });
+            if (!activeTab?.url) throw new Error('No active tab URL');
 
-            const [activeTab] = await chrome.tabs.query({ active: true, windowId: normalWindow.id });
-            if (!activeTab?.id) throw new Error('No active tab found');
+            setUrl(activeTab.url);
 
-            await chrome.storage.local.set({ originalTabId: activeTab.id });
+            const u = new URL(activeTab.url);
+            const v = u.searchParams.get('modelVersionId');            // may be null
+            const mMatch = u.pathname.match(/\/models\/(\d+)/);         // captures ID from /models/<id>
+            const m = mMatch?.[1] ?? null;
 
-            // Step 2: put the tab URL into Model URL input + extract IDs
-            if (activeTab.url) {
-                setUrl(activeTab.url);
-                try {
-                    const u = new URL(activeTab.url);
-                    const versionId = u.searchParams.get('modelVersionId'); // version number
-                    const modelIdMatch = u.pathname.match(/\/models\/(\d+)/); // model number before version
-                    if (versionId) setVersionNumber(versionId);
-                    if (modelIdMatch?.[1]) setModelNumber(modelIdMatch[1]);
-                } catch {
-                    /* ignore parse error */
-                }
+            if (!m) throw new Error('Could not parse model ID from URL.');
+
+            // Always set modelID if found
+            setModelNumber(m);
+
+            if (v) {
+                // URL already has versionID
+                setVersionNumber(v);
+                popToast('Scraped Model & Version IDs from URL', 'success');
+                return;
             }
 
-            // Step 3: scrape images (>50x50 preferred; fallback to any)
-            // @ts-ignore
-            if (!chrome?.scripting) throw new Error('Missing "scripting" permission in manifest');
-
-            const [{ result }] = await chrome.scripting.executeScript({
-                target: { tabId: activeTab.id },
-                func: () => {
-                    const imgs = Array.from(document.images || []);
-                    const large = imgs.filter(img => {
-                        const w = img.naturalWidth || img.width || 0;
-                        const h = img.naturalHeight || img.height || 0;
-                        return w >= 50 && h >= 50;
-                    });
-
-                    const pick = (large.length ? large : imgs)
-                        .map(img => img.currentSrc || img.src)
-                        .filter(Boolean);
-
-                    const urls = Array.from(
-                        new Set(
-                            pick.map(src => {
-                                try { return new URL(src, document.baseURI).href; } catch { return src; }
-                            })
-                        )
-                    );
-
-                    return urls.slice(0, 12);
-                },
-            });
-
-            if (Array.isArray(result) && result.length) {
-                setImageUrls(result);
-                setToastMsg(`Scraped URL + ${result.length} image(s)`);
-                setToastVariant('success');
-            } else {
-                setToastMsg('Scraped URL; no images found on page');
-                setToastVariant('success');
-            }
-        } catch (err: any) {
-            setToastMsg(err?.message || 'Scrape failed');
-            setToastVariant('danger');
-        } finally {
-            setShowToast(true);
+            // No versionID in URL → fetch from Civitai API
+            const fetchedV = await fetchVersionIdForModel(m);
+            if (!fetchedV) throw new Error('No modelVersions found from Civitai API.');
+            setVersionNumber(fetchedV);
+            popToast('Scraped Model ID from URL and Version ID from API', 'success');
+        } catch (e: any) {
+            popToast(e?.message || 'Scrape failed', 'danger');
         }
     };
 
+
+    const fetchVersionIdForModel = async (modelId: string): Promise<string | null> => {
+        const resp = await fetch(`https://civitai.com/api/v1/models/${modelId}`, { method: 'GET' });
+        if (!resp.ok) throw new Error(`Civitai API ${resp.status}`);
+        const data = await resp.json();
+        const arr = Array.isArray(data?.modelVersions) ? data.modelVersions : [];
+        if (!arr.length || !arr[0]?.id) return null;
+        return String(arr[0].id); // use first element's id as versionID
+    };
+
+    const fetchCivitaiModel = async (modelId: string) => {
+        const resp = await fetch(`https://civitai.com/api/v1/models/${modelId}`, { method: 'GET' });
+        if (!resp.ok) throw new Error(`Civitai API ${resp.status}`);
+        return resp.json();
+    };
+
+    const pickVersion = (api: any, wantedVersionId?: string | null) => {
+        const versions: any[] = Array.isArray(api?.modelVersions) ? api.modelVersions : [];
+        if (!versions.length) return null;
+        if (wantedVersionId) {
+            const exact = versions.find(v => String(v.id) === String(wantedVersionId));
+            if (exact) return exact;
+        }
+        return versions[0];
+    };
+
+    const toYYYYMMDD = (iso?: string) => {
+        if (!iso) return '';
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return '';
+        const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+        return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+    };
+
+
+    const handleSyncFromAPI = async () => {
+        try {
+            if (!modelNumber) throw new Error('Model ID is required to sync from API.');
+
+            const api = await fetchCivitaiModel(modelNumber);
+            const ver = pickVersion(api, versionNumber);
+            if (!ver) throw new Error('No modelVersions found on API response.');
+
+            // Tags (API array -> JSON string)
+            if (Array.isArray(api.tags)) setTags(JSON.stringify(api.tags));
+
+            // Trigger Words (from version.trainedWords array -> JSON string)
+            if (Array.isArray(ver.trainedWords)) setTriggerWords(JSON.stringify([ver.trainedWords.join(', ')]));
+
+            // Description
+            if (typeof api.description === 'string') setDescription(api.description);
+
+            // Details
+            if (typeof api.type === 'string') setType(api.type);
+            if (typeof ver.baseModel === 'string') setBaseModel(ver.baseModel);
+            setUploaded(toYYYYMMDD(ver.publishedAt)); // may be empty if invalid/missing
+            if (ver.stats) setStats(JSON.stringify(ver.stats));
+
+            // Hashes (from primary file, else first file)
+            const files: any[] = Array.isArray(ver.files) ? ver.files : [];
+            const primary = files.find(f => f.primary) || files[0];
+            if (primary?.hashes) setHash(JSON.stringify(primary.hashes));
+
+            // Images -> {url, nsfw, width, height}
+            const imgs: any[] = Array.isArray(ver.images) ? ver.images : [];
+            const mappedImgs = imgs
+                .filter(i => i?.url)
+                .map(i => ({
+                    url: i.url,
+                    nsfw: (typeof i.nsfwLevel === 'number' ? i.nsfwLevel > 1 : false),
+                    width: typeof i.width === 'number' ? i.width : undefined,
+                    height: typeof i.height === 'number' ? i.height : undefined,
+                }));
+            if (mappedImgs.length) setImageUrls(JSON.stringify(mappedImgs));
+
+            // nsfw (top-level)
+            if (typeof api.nsfw === 'boolean') setNsfw(api.nsfw);
+
+            // creator
+            const creatorUser = api?.creator?.username;
+            if (creatorUser) setCreatorName(creatorUser);
+
+            // Optional: set page URL if we want to store a canonical one
+            // setModelUrl(`https://civitai.com/models/${modelNumber}?modelVersionId=${ver.id}`);
+
+            popToast('Synced fields from Civitai API', 'success');
+        } catch (err: any) {
+            popToast(err?.message || 'Sync failed', 'danger');
+        }
+    };
+
+
+    // load record — uses YOUR helper only
+    const handleFetchRecord = async (e?: React.FormEvent) => {
+        e?.preventDefault();
+        try {
+            if (!modelNumber || !versionNumber) throw new Error('Model ID and Version ID are required.');
+            dispatch(clearError());
+
+            const res = await fetchFullRecordFromAllTableModelIDandVersionID(modelNumber, versionNumber, dispatch);
+
+            // res could be either:
+            //  - FULL DTO (has .model/.description/.url/.details/.images)
+            //  - MODEL entity (has fields like name/category/etc.)
+            if (res && (res.model || res.description || res.url || res.details || res.images)) {
+                loadFromFullDTO(res);
+            } else if (res) {
+                loadFromModelOnly(res);
+            } else {
+                throw new Error('Record not found');
+            }
+
+            // after loadFromFullDTO/res logic succeeds:
+            setIsLoaded(true);
+            popToast('Record loaded', 'success');
+
+        } catch (err: any) {
+            console.error(err);
+            dispatch(setError({ hasError: true, errorMessage: err?.message || String(err) }));
+            popToast(err?.message || 'Load failed', 'danger');
+        }
+    };
+
+    const handleClear = () => {
+        setId(null);
+        setModelNumber('');
+        setVersionNumber('');
+        setUrl('');
+
+        // models_table
+        setName('');
+        setMainModelName('');
+        setTags('');
+        setLocalTags('');
+        setAliases('');
+        setLocalPath('');
+        setCategory('');
+        setTriggerWords('');
+        setNsfw(false);
+        setUrlAccessable(false);
+        setFlag(false);
+        setMyRating('');
+
+        // other tables
+        setDescription('');
+        setModelUrl('');
+        setType('');
+        setStats('');
+        setUploaded('');
+        setBaseModel('');
+        setHash('');
+        setUsageTips('');
+        setCreatorName('');
+        setImageUrls('');
+
+        setIsLoaded(false);
+        popToast('Cleared', 'success');
+    };
+
+
+    // …inside your component file
+
+    // --- helpers for shaping payload ---
+    const isBlank = (v: any) => v == null || String(v).trim() === '';
+
+    /** For JSON columns: return undefined if blank (omit), else validate + canonicalize. */
+    const jsonOrUndef = (label: string, value: string): string | undefined => {
+        if (isBlank(value)) return undefined;               // don't send "" to JSON columns
+        const trimmed = value.trim();
+        try {
+            const parsed = JSON.parse(trimmed);
+            return JSON.stringify(parsed);                    // canonical JSON string
+        } catch {
+            throw new Error(`${label} must be valid JSON (or left empty).`);
+        }
+    };
+
+
+    const handleSaveChanges = async () => {
+        try {
+            dispatch(clearError());
+
+            // Validate/normalize JSON fields; undefined = omit from payload
+            const normTags = jsonOrUndef('Tags', tags);
+            const normLocalTags = jsonOrUndef('Local Tags', localTags);
+            const normAliases = jsonOrUndef('Aliases', aliases);
+            const normTrigger = jsonOrUndef('Trigger Words', triggerWords);
+            const normImageUrls = jsonOrUndef('Image URLs', imageUrls);
+
+            // Base model payload (include JSON fields only if defined)
+            const modelPayload: any = {
+                modelNumber,
+                versionNumber,
+                name,
+                mainModelName,
+                localPath,
+                category,
+                nsfw,
+                urlAccessable,
+                flag,
+                myRating: myRating === '' ? null : Number(myRating),
+            };
+            if (normTags !== undefined) modelPayload.tags = normTags;
+            if (normLocalTags !== undefined) modelPayload.localTags = normLocalTags;
+            if (normAliases !== undefined) modelPayload.aliases = normAliases;
+            if (normTrigger !== undefined) modelPayload.triggerWords = normTrigger;
+
+            // Build DTO; add sections only if user provided data
+            const dto: any = { model: modelPayload };
+
+            // description (LONGTEXT) — send only if user typed something
+            if (!isBlank(description)) {
+                dto.description = { description };
+            }
+
+            // url — send ONLY if user entered/changed it (avoids server upsert/link when blank)
+            if (!isBlank(modelUrl)) {
+                dto.url = { url: modelUrl };
+            }
+
+            // details — include only the fields that are non-blank
+            const hasDetails =
+                !isBlank(type) || !isBlank(stats) || !isBlank(uploaded) ||
+                !isBlank(baseModel) || !isBlank(hash) || !isBlank(usageTips) || !isBlank(creatorName);
+
+            if (hasDetails) {
+                const details: any = {};
+                if (!isBlank(type)) details.type = type;
+                if (!isBlank(stats)) details.stats = stats;         // stored as String in DB
+                if (!isBlank(uploaded)) details.uploaded = uploaded;   // yyyy-mm-dd
+                if (!isBlank(baseModel)) details.baseModel = baseModel;
+                if (!isBlank(hash)) details.hash = hash;           // String in DB
+                if (!isBlank(usageTips)) details.usageTips = usageTips;
+                if (!isBlank(creatorName)) details.creatorName = creatorName;
+                dto.details = details;
+            }
+
+            // images (JSON) — include only if non-blank & valid JSON
+            if (normImageUrls !== undefined) {
+                dto.images = { imageUrls: normImageUrls };
+            }
+
+            const updated = await fetchUpdateFullRecord(dispatch, dto);
+            if (!updated) throw new Error('Update failed');
+
+            popToast('Changes saved', 'success');
+        } catch (err: any) {
+            dispatch(setError({ hasError: true, errorMessage: err?.message || String(err) }));
+            popToast(err?.message || 'Save failed', 'danger');
+        }
+    };
 
 
 
     return (
-        <Container fluid className="bg-dark text-light p-4 rounded" style={{ maxWidth: 900 }}>
-            <h2 className="text-center mb-4">Adding Custom Model</h2>
-
-            <Form onSubmit={handleSubmit}>
-
-                <Button variant="outline-light" onClick={handleScrapEverything}>
-                    Scrape
-                </Button>
-
-                {/* Row 1: Name, Main Model */}
-                <Row>
-                    <Col md={6} className="mb-3">
-                        <Form.Group controlId="name">
-                            <Form.Label>Name*</Form.Label>
-                            <Form.Control
-                                type="text"
-                                value={name}
-                                placeholder='illustrious_XL_zuihou.safetensors'
-                                onChange={e => setName(e.target.value)}
-                                required
-                            />
-                        </Form.Group>
+        <Container fluid className="bg-dark text-light p-4 rounded" style={{ maxWidth: 1100 }}>
+            <Form onSubmit={handleFetchRecord}>
+                {/* keys */}
+                <Row className="gy-3 align-items-end">
+                    <Col md={4}>
+                        <Form.Label>Model ID</Form.Label>
+                        <Form.Control value={modelNumber} onChange={e => setModelNumber(e.target.value)} placeholder="e.g. 1033906" />
                     </Col>
-                    <Col md={6} className="mb-3">
-                        <Form.Group controlId="mainModelName">
-                            <Form.Label>Main Model Name*</Form.Label>
-                            <Form.Control
-                                type="text"
-                                value={mainModelName}
-                                placeholder='model title'
-                                onChange={e => setMainModelName(e.target.value)}
-                                required
-                            />
-                        </Form.Group>
+                    <Col md={4}>
+                        <Form.Label>Version ID</Form.Label>
+                        <Form.Control value={versionNumber} onChange={e => setVersionNumber(e.target.value)} placeholder="e.g. 1159595" />
                     </Col>
+                    <Col md="auto">
+                        <Button variant="secondary" type="button" onClick={handleScrapeIDs}>
+                            Scrape IDs
+                        </Button>
+                    </Col>
+                    <Row className="gy-3 align-items-end">
+                        {/* ... Model ID / Version ID inputs (and optional Scrape IDs button) ... */}
+
+                        <Col md="auto" className="d-flex gap-2">
+                            <Button variant="primary" type="submit">
+                                Submit (Load)
+                            </Button>
+
+                            <Button
+                                variant="outline-info"
+                                type="button"
+                                onClick={handleSyncFromAPI}
+                                disabled={!isLoaded}
+                                title={isLoaded ? '' : 'Load a record first'}
+                            >
+                                Sync From Civitai API
+                            </Button>
+
+                            <Button
+                                variant="outline-secondary"
+                                type="button"
+                                onClick={handleClear}
+                            >
+                                Clear
+                            </Button>
+                        </Col>
+                    </Row>
+
+
                 </Row>
 
-                {/* Row 2 */}
-                <Row>
-                    <Col md={12} className="mb-3">
-                        <Form.Group controlId="url">
-                            <Form.Label>Model URL*</Form.Label>
-                            <Form.Control
-                                type="url" value={url}
-                                placeholder='https://civitaiarchive.com/models/1722778?modelVersionId=1949611'
-                                onChange={e => setUrl(e.target.value)} required
-                            />
-                        </Form.Group>
-                    </Col>
-                </Row>
+                <hr className="my-4" />
 
-                {/* Combined Category + Download Path in white box */}
-                <Row className="mb-3">
-                    <Col>
-                        <div
-                            style={{
-                                backgroundColor: '#fff',
-                                color: '#000',
-                                padding: 12,
-                                borderRadius: 4,
-                                display: 'flex',
-                                gap: '1rem',
-                            }}
-                        >
-                            <div style={{ flex: 1 }}>
-                                <Form.Label>Category*</Form.Label>
-                                <CategoriesListSelector />
-                            </div>
-                            <div style={{ flex: 1 }}>
-                                <Form.Label>Download File Path*</Form.Label>
-                                <DownloadFilePathOptionPanel
-                                    isHandleRefresh={isHandleRefresh}
-                                    setIsHandleRefresh={setIsHandleRefresh}
-                                />
-                                <FolderDropdown />
-                            </div>
-                        </div>
+                {/* models_table */}
+                <h5 className="mb-3">Model (models_table)</h5>
+                <Row className="gy-3">
+                    <Col md={4}>
+                        <Form.Label>ID</Form.Label>
+                        <Form.Control value={id ?? ''} readOnly plaintext={false} />
                     </Col>
-                </Row>
 
-                {/* Row 2: Version, Model#, Type, Base Model */}
-                <Row>
-                    <Col md={3} className="mb-3">
-                        <Form.Group controlId="modelNumber">
-                            <Form.Label>Model Number*</Form.Label>
-                            <Form.Control
-                                type="text"
-                                placeholder='1722778'
-                                value={modelNumber}
-                                onChange={e => setModelNumber(e.target.value)}
-                                required
-                            />
-                        </Form.Group>
+                    <Col md={8}>
+                        <Form.Label>Name</Form.Label>
+                        <Form.Control value={name} onChange={e => setName(e.target.value)} />
                     </Col>
-                    <Col md={3} className="mb-3">
-                        <Form.Group controlId="versionNumber">
-                            <Form.Label>Version Number*</Form.Label>
-                            <Form.Control
-                                type="text"
-                                placeholder='1949611'
-                                value={versionNumber}
-                                onChange={e => setVersionNumber(e.target.value)}
-                                required
-                            />
-                        </Form.Group>
-                    </Col>
-                    <Col md={3} className="mb-3">
-                        <Form.Group controlId="type">
-                            <Form.Label>Type*</Form.Label>
-                            <Form.Control
-                                type="text"
-                                placeholder='LORA'
-                                value={type}
-                                onChange={e => setType(e.target.value)}
-                                required
-                            />
-                        </Form.Group>
-                    </Col>
-                    <Col md={3} className="mb-3">
-                        <Form.Group controlId="baseModel">
-                            <Form.Label>Base Model*</Form.Label>
-                            <Form.Control
-                                type="text"
-                                placeholder='Illustrious'
-                                value={baseModel}
-                                onChange={e => setBaseModel(e.target.value)}
-                                required
-                            />
-                        </Form.Group>
-                    </Col>
-                </Row>
 
-                {/* Image URLs with + and – */}
-                <Form.Group className="mb-3">
-                    <div className="d-flex justify-content-between align-items-center">
-                        <Form.Label className="mb-0">Image URLs*</Form.Label>
-                    </div>
-
-                    {imageUrls.map((u, i) => (
-                        <div key={i} className="mb-2">
-                            {/* Preview above input — 50x100 box, show whole image */}
-                            {u ? (
-                                <div
-                                    style={{
-                                        width: 100,
-                                        height: 50,
-                                        border: '1px solid #666',
-                                        borderRadius: 4,
-                                        marginBottom: 6,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        background: '#111'
-                                    }}
-                                >
-                                    {/* show full image (no crop) */}
-                                    <img
-                                        src={u}
-                                        alt={`preview-${i}`}
-                                        style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
-                                        referrerPolicy="no-referrer"
-                                    />
-                                </div>
-                            ) : (
-                                <div style={{ height: 56 }} /> /* keep layout consistent */
-                            )}
-
-                            <div className="d-flex align-items-center">
-                                <Form.Control
-                                    type="url"
-                                    value={u}
-                                    placeholder="https://image.example.com/abc.jpg"
-                                    onChange={e => handleImageChange(i, e.target.value)}
-                                    required
-                                />
-                                <Button
-                                    variant="outline-light"
-                                    onClick={() => setImageUrls(prev => [...prev, ''])}
-                                    className="ms-2"
-                                >
-                                    +
-                                </Button>
-                                <Button
-                                    variant="outline-light"
-                                    onClick={() => imageUrls.length > 1 && setImageUrls(prev => prev.slice(0, -1))}
-                                    className="ms-1"
-                                    disabled={imageUrls.length === 1}
-                                >
-                                    -
-                                </Button>
-                            </div>
-                        </div>
-                    ))}
-                </Form.Group>
-
-
-                {/* Non-required fields */}
-                <Row>
-                    <Col md={4} className="mb-3">
-                        <Form.Group controlId="tags">
-                            <Form.Label>Tags</Form.Label>
-                            <Form.Control
-                                as="textarea"
-                                rows={3}
-                                placeholder="anime, style, woman, onimai, anime style, styles, onii-chan wa oshimai!"
-                                value={tags}
-                                onChange={e => setTags(e.target.value)}
-                            />
-                        </Form.Group>
-
-                    </Col>
-                    <Col md={4} className="mb-3">
-                        <Form.Group controlId="localTags">
-                            <Form.Label>Local Tags</Form.Label>
-                            <Form.Control
-                                type="text"
-                                placeholder='Miki'
-                                value={localTags}
-                                onChange={e => setLocalTags(e.target.value)}
-                            />
-                        </Form.Group>
-                    </Col>
-                    <Col md={4} className="mb-3">
-                        <Form.Group controlId="aliases">
-                            <Form.Label>Aliases</Form.Label>
-                            <Form.Control
-                                type="text"
-                                placeholder='Style'
-                                value={aliases}
-                                onChange={e => setAliases(e.target.value)}
-                            />
-                        </Form.Group>
-                    </Col>
-                </Row>
-
-                <Row>
-                    <Col md={6} className="mb-3">
-                        <Form.Group controlId="triggerWords">
-                            <Form.Label>Trigger Words</Form.Label>
-                            <Form.Control
-                                type="text"
-                                placeholder='onimastyle'
-                                value={triggerWords}
-                                onChange={e => setTriggerWords(e.target.value)}
-                            />
-                        </Form.Group>
-                    </Col>
-                    <Col md={6} className="mb-3">
-                        <Form.Group controlId="stats">
-                            <Form.Label>Stats</Form.Label>
-                            <Form.Control
-                                type="text"
-                                placeholder='{"downloadCount":704,"ratingCount":1,"rating":5}'
-                                value={stats}
-                                onChange={e => setStats(e.target.value)}
-                            />
-                        </Form.Group>
-                    </Col>
-                </Row>
-
-                <Row>
-                    <Col md={12} className="mb-3">
-                        <Form.Group controlId="description">
-                            <Form.Label>Description</Form.Label>
-                            <Form.Control
-                                as="textarea"
-                                rows={3}
-                                value={description}
-                                onChange={e => setDescription(e.target.value)}
-                            />
-                        </Form.Group>
-                    </Col>
-                </Row>
-
-                <Row>
-                    <Col md={8} className="mb-3">
-                        <Form.Group controlId="hash">
-                            <Form.Label>Hash</Form.Label>
-                            <Form.Control
-                                type="text"
-                                placeholder='{"SHA256":null,"CRC32":null,"AutoV1":null,"AutoV2":"253A861FE4","AutoV3":null,"BLAKE3":null}'
-                                value={hash}
-                                onChange={e => setHash(e.target.value)}
-                            />
-                        </Form.Group>
-                    </Col>
-                    <Col md={4} className="mb-3">
-                        <Form.Group controlId="usageTips">
-                            <Form.Label>Usage Tips</Form.Label>
-                            <Form.Control
-                                type="text"
-                                placeholder='Clip Skip: 2'
-                                value={usageTips}
-                                onChange={e => setUsageTips(e.target.value)}
-                            />
-                        </Form.Group>
-                    </Col>
-                </Row>
-
-                <Row className="mb-3">
                     <Col md={6}>
-                        <Form.Group controlId="creatorName">
-                            <Form.Label>Creator Name</Form.Label>
-                            <Form.Control
-                                type="text"
-                                placeholder='ShadowxArt'
-                                value={creatorName}
-                                onChange={e => setCreatorName(e.target.value)}
-                            />
-                        </Form.Group>
+                        <Form.Label>Main Model Name</Form.Label>
+                        <Form.Control value={mainModelName} onChange={e => setMainModelName(e.target.value)} />
                     </Col>
                     <Col md={6}>
+                        <Form.Label>Category</Form.Label>
+                        <Form.Control value={category} onChange={e => setCategory(e.target.value)} />
+                    </Col>
+                    <Col md={6}>
+                        <Form.Label>Local Path</Form.Label>
+                        <Form.Control value={localPath} onChange={e => setLocalPath(e.target.value)} />
+                    </Col>
+                    <Col md={4}>
+                        <Form.Check type="switch" id="nsfw" label="NSFW" checked={nsfw} onChange={e => setNsfw(e.target.checked)} />
+                    </Col>
+                    <Col md={4}>
                         <Form.Check
-                            type="checkbox"
-                            label="NSFW"
-                            checked={nsfw}
-                            onChange={e => setNsfw(e.target.checked)}
-                        />
-                        <Form.Check
-                            type="checkbox"
-                            label="Flag"
-                            checked={flag}
-                            onChange={e => setFlag(e.target.checked)}
-                        />
-                        <Form.Check
-                            type="checkbox"
+                            type="switch"
+                            id="urlAccessable"
                             label="URL Accessible"
                             checked={urlAccessable}
                             onChange={e => setUrlAccessable(e.target.checked)}
                         />
                     </Col>
-                </Row>
-
-                <Row className="mt-4 align-items-end">
+                    <Col md={4}>
+                        <Form.Check type="switch" id="flag" label="Flag" checked={flag} onChange={e => setFlag(e.target.checked)} />
+                    </Col>
+                    <Col md={4}>
+                        <Form.Label>My Rating (0-20)</Form.Label>
+                        <Form.Control
+                            type="number"
+                            min={0}
+                            max={20}
+                            value={myRating}
+                            onChange={e => {
+                                const v = e.target.value;
+                                if (v === '') return setMyRating('');
+                                const n = Number(v);
+                                if (!Number.isNaN(n)) setMyRating(n);
+                            }}
+                        />
+                    </Col>
                     <Col md={8}>
-                        <Form.Group controlId="downloadUrlInput">
-                            <Form.Label>Download URL</Form.Label>
-                            <Form.Control
-                                type="url"
-                                placeholder="https://example.com/file.safetensors"
-                                value={downloadUrlInput}
-                                onChange={e => setDownloadUrlInput(e.target.value)}
-                            />
-                        </Form.Group>
-                    </Col>
-                    <Col md={4} className="d-flex align-items-center">
-                        {(() => {
-                            const fields = [
-                                { label: 'Download Path', ok: !!downloadFilePath },
-                                { label: 'Name', ok: !!name },
-                                { label: 'Model URL', ok: !!url },
-                                { label: 'Model Number', ok: !!modelNumber },
-                                { label: 'Version Number', ok: !!versionNumber },
-                                { label: 'Base Model', ok: !!baseModel },
-                                { label: 'Download URL', ok: !!downloadUrlInput },
-                                { label: 'At least one Image URL', ok: imageUrls.some(u => !!u) },
-                            ];
-                            const missing = fields.filter(f => !f.ok).map(f => f.label);
-                            const canDownload = missing.length === 0;
-
-                            return (
-                                <>
-                                    <Button
-                                        variant="light"
-                                        onClick={async () => {
-                                            try {
-                                                const ok = await fetchDownloadFilesByServer_v2ForCustom(
-                                                    {
-                                                        downloadFilePath,
-                                                        civitaiFileName: name,
-                                                        civitaiModelID: modelNumber,
-                                                        civitaiVersionID: versionNumber,
-                                                        civitaiUrl: url,
-                                                        baseModel,
-                                                        downloadUrl: downloadUrlInput,
-                                                        imageUrls
-                                                    }
-                                                );
-                                                setToastMsg(ok ? 'Download Successful' : 'Download failed');
-                                                setToastVariant(ok ? 'success' : 'danger');
-                                            } catch (err: any) {
-                                                setToastMsg(err.message || 'Download failed');
-                                                setToastVariant('danger');
-                                            } finally {
-                                                setShowToast(true);
-                                            }
-                                        }}
-                                        disabled={!canDownload}
-                                        className="me-2"
-                                    >
-                                        Download
-                                    </Button>
-
-                                    {!canDownload && (
-                                        <OverlayTrigger
-                                            placement="top"
-                                            trigger={['hover', 'focus']}
-                                            overlay={
-                                                <Tooltip id="download-missing-tooltip">
-                                                    <div>
-                                                        {fields.map(f => (
-                                                            <div
-                                                                key={f.label}
-                                                                style={{
-                                                                    display: 'flex',
-                                                                    alignItems: 'center',
-                                                                    color: f.ok ? 'green' : 'red',
-                                                                    margin: '2px 0',
-                                                                }}
-                                                            >
-                                                                {f.ok
-                                                                    ? <AiOutlineCheckCircle className="me-1" />
-                                                                    : <AiOutlineCloseCircle className="me-1" />
-                                                                }
-                                                                {f.label}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </Tooltip>
-                                            }
-                                        >
-                                            <span className="d-inline-block">
-                                                <CiWarning size={24} className="text-warning" style={{ cursor: 'pointer' }} />
-                                            </span>
-                                        </OverlayTrigger>
-                                    )}
-                                </>
-                            );
-                        })()}
+                        <Form.Label>Page URL (reference)</Form.Label>
+                        <Form.Control value={url} onChange={e => setUrl(e.target.value)} placeholder="https://..." />
                     </Col>
                 </Row>
 
-                {/* Submit + Clear */}
-                <div className="d-flex justify-content-between mt-4">
-                    <div>
-                        <Button
-                            variant="outline-light"
-                            onClick={handleUndo}
-                            disabled={!prevData}
-                            className="me-2"
-                        >
-                            Undo
+                <Row className="gy-3 mt-3">
+                    <Col md={4}>
+                        <Form.Label>Tags (JSON)</Form.Label>
+                        <Form.Control as="textarea" rows={3} value={tags} onChange={e => setTags(e.target.value)} />
+                    </Col>
+                    <Col md={4}>
+                        <Form.Label>Local Tags (JSON)</Form.Label>
+                        <Form.Control as="textarea" rows={3} value={localTags} onChange={e => setLocalTags(e.target.value)} />
+                    </Col>
+                    <Col md={4}>
+                        <Form.Label>Aliases (JSON)</Form.Label>
+                        <Form.Control as="textarea" rows={3} value={aliases} onChange={e => setAliases(e.target.value)} />
+                    </Col>
+                </Row>
+
+                <Row className="gy-3 mt-3">
+                    <Col md={12}>
+                        <Form.Label>Trigger Words (JSON)</Form.Label>
+                        <Form.Control as="textarea" rows={2} value={triggerWords} onChange={e => setTriggerWords(e.target.value)} />
+                    </Col>
+                </Row>
+
+                <hr className="my-4" />
+
+                {/* models_descriptions_table */}
+                <h5 className="mb-3">Description (models_descriptions_table)</h5>
+                <Form.Group className="mb-3">
+                    <Form.Control
+                        as="textarea"
+                        rows={6}
+                        value={description}
+                        onChange={e => setDescription(e.target.value)}
+                        placeholder="Long description / HTML acceptable"
+                    />
+                </Form.Group>
+
+                <hr className="my-4" />
+
+                {/* models_urls_table */}
+                <h5 className="mb-3">URL (models_urls_table)</h5>
+                <Row className="gy-3">
+                    <Col md={12}>
+                        <Form.Label>Model URL</Form.Label>
+                        <Form.Control value={modelUrl} onChange={e => setModelUrl(e.target.value)} placeholder="https://..." />
+                    </Col>
+                </Row>
+
+                <hr className="my-4" />
+
+                {/* models_details_table */}
+                <h5 className="mb-3">Details (models_details_table)</h5>
+                <Row className="gy-3">
+                    <Col md={4}>
+                        <Form.Label>Type</Form.Label>
+                        <Form.Control value={type} onChange={e => setType(e.target.value)} />
+                    </Col>
+                    <Col md={4}>
+                        <Form.Label>Uploaded</Form.Label>
+                        <Form.Control type="date" value={uploaded || ''} onChange={e => setUploaded(e.target.value)} />
+                    </Col>
+                    <Col md={4}>
+                        <Form.Label>Base Model</Form.Label>
+                        <Form.Control value={baseModel} onChange={e => setBaseModel(e.target.value)} />
+                    </Col>
+                    <Col md={6}>
+                        <Form.Label>Stats</Form.Label>
+                        <Form.Control value={stats} onChange={e => setStats(e.target.value)} placeholder='e.g. {"downloadCount":22}' />
+                    </Col>
+                    <Col md={6}>
+                        <Form.Label>Hash</Form.Label>
+                        <Form.Control value={hash} onChange={e => setHash(e.target.value)} />
+                    </Col>
+                    <Col md={12}>
+                        <Form.Label>Usage Tips</Form.Label>
+                        <Form.Control as="textarea" rows={3} value={usageTips} onChange={e => setUsageTips(e.target.value)} />
+                    </Col>
+                    <Col md={6}>
+                        <Form.Label>Creator Name</Form.Label>
+                        <Form.Control value={creatorName} onChange={e => setCreatorName(e.target.value)} />
+                    </Col>
+                </Row>
+
+                <hr className="my-4" />
+
+                {/* models_images_table */}
+                <h5 className="mb-3">Images (models_images_table)</h5>
+                <Row className="gy-3">
+                    <Col md={12}>
+                        <Form.Label>Image URLs (JSON)</Form.Label>
+                        <Form.Control
+                            as="textarea"
+                            rows={4}
+                            value={imageUrls}
+                            onChange={e => setImageUrls(e.target.value)}
+                            placeholder='e.g. [{"url":"https://...","width":768,"height":1280}]'
+                        />
+                    </Col>
+                </Row>
+
+                <Row className="gy-3 mt-4">
+                    <Col md="auto">
+                        <Button variant="success" type="button" onClick={handleSaveChanges}>
+                            Save Changes
                         </Button>
-                        <Button variant="outline-light" onClick={handleClear}>
-                            Clear
-                        </Button>
-                    </div>
-                    <Button variant="light" type="submit">
-                        Submit
-                    </Button>
-                </div>
+                    </Col>
+                </Row>
             </Form>
 
-            {/* Toast */}
+            {/* toast */}
             <Toast
+                bg={toastVariant === 'success' ? 'success' : 'danger'}
                 onClose={() => setShowToast(false)}
                 show={showToast}
-                bg={toastVariant}
-                delay={3000}
+                delay={2500}
                 autohide
-                className="position-fixed bottom-0 end-0 m-3"
+                className="position-fixed"
+                style={{ bottom: 16, right: 16, minWidth: 320 }}
             >
-                <Toast.Body className="text-light">{toastMsg}</Toast.Body>
+                <Toast.Body className="text-white">{toastMsg}</Toast.Body>
             </Toast>
         </Container>
     );

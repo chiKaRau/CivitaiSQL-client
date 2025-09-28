@@ -70,8 +70,8 @@ const ModelInfoPanel: React.FC = () => {
 
                     {fullRecord && (
                         <div className="modelTimestamps">
-                            <div><strong>Created:</strong> {fmt(fullRecord.createdAt)}</div>
-                            <div><strong>Updated:</strong> {fmt(fullRecord.updatedAt)}</div>
+                            <div><strong>Created:</strong> {fmt(fullRecord?.model?.createdAt)}</div>
+                            <div><strong>Updated:</strong> {fmt(fullRecord?.model?.updatedAt)}</div>
                         </div>
                     )}
 
@@ -95,14 +95,14 @@ const ModelInfoPanel: React.FC = () => {
                     <label className="inputLabel">Url:</label>
                     <input className="inputField" type="text" placeholder="Url" value={civitaiUrl} />
                 </div>
-                {fullRecord && (<div className="inputContainer">
+                {fullRecord?.model && (<div className="inputContainer">
                     <label className="inputLabel">LocalPath:</label>
                     <input
                         type="text"
-                        value={fullRecord?.localPath ?? ''}
+                        value={fullRecord?.model?.localPath ?? ''}
                         placeholder="Local Path"
                         readOnly
-                        title={fullRecord?.localPath ?? ''}
+                        title={fullRecord?.model?.localPath ?? ''}
                         style={{
                             direction: 'rtl',
                             textAlign: 'left',

@@ -53,7 +53,7 @@ export const fetchFullRecordFromAllTableModelIDandVersionID = async (modelID: st
             `${config.domain}/api/find-full-record-from-all-tables-by-modelID-and-version`,
             { modelID, versionID }
         );
-        if (status >= 200 && status < 300) return data?.payload?.model ?? null;
+        if (status >= 200 && status < 300) return data?.payload ?? null;
         return null;
     } catch (error: any) {
         // Handle other types of errors, e.g., network issues
@@ -1050,4 +1050,32 @@ export const fetchFindVersionNumbersForModel = async (modelId: string, versionId
         // Optionally, you can throw an error or return a specific value
         dispatch(setError({ hasError: true, errorMessage: error.message }));
     }
-} 
+}
+
+export const fetchUpdateFullRecord = async (dispatch: any, dto: any) => {
+    try {
+        // Clear previous errors
+        dispatch(clearError());
+
+        // Basic guard (backend will also validate)
+        if (!dto?.model?.modelNumber || !dto?.model?.versionNumber) {
+            throw new Error("model.modelNumber and model.versionNumber are required");
+        }
+
+        const response = await axios.put(
+            `${config.domain}/api/update-full-record-by-modelID-and-version`,
+            dto,
+            { headers: { "Content-Type": "application/json" } }
+        );
+
+        if (response.status >= 200 && response.status < 300) {
+            // Backend uses CustomResponse; updated record is in payload
+            return response.data?.payload;
+        } else {
+            throw new Error("Unexpected response status: " + response.status);
+        }
+    } catch (error: any) {
+        console.error("Error during full record update:", error?.message || error);
+        dispatch(setError({ hasError: true, errorMessage: error?.message || String(error) }));
+    }
+};
