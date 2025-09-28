@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import WindowUpdateModelPanel from './WindowUpdateModelPanel';
 import { fetchBackupOfflineDownloadList, fetchFindVersionNumbersForModel, fetchFindVersionNumbersForOfflineDownloadList, fetchRemoveOfflineDownloadFileIntoOfflineDownloadList } from '../../api/civitaiSQL_api';
@@ -8,6 +8,8 @@ import { BsDatabaseFillExclamation } from "react-icons/bs";
 import { GoChecklist } from "react-icons/go";
 import { OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { PiListDashesFill } from "react-icons/pi";
+// top of file (with the other icon imports)
+import { MdDeleteSweep } from "react-icons/md";
 
 import { IoIosRefresh } from "react-icons/io";
 import { MdAddCircle, MdLibraryAdd, MdRemove } from "react-icons/md";
@@ -104,6 +106,51 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
             setIsLoading(false);
         }
     };
+
+    const offlineIdsInThisModel = useMemo(() => {
+        if (!modelData) return [];
+        const ids = modelData.modelVersions.map(v => v.id.toString());
+        return ids.filter(id => existingOfflineVersions.includes(id));
+    }, [modelData, existingOfflineVersions]);
+
+    const handleRemoveAllFromOfflineList = async () => {
+        if (!modelData) return;
+
+        if (offlineIdsInThisModel.length === 0) {
+            alert("No versions from this model are in the Offline List.");
+            return;
+        }
+
+        const userConfirmed = window.confirm(
+            `Remove ${offlineIdsInThisModel.length} version(s) from the Offline List for model ${modelId}?`
+        );
+        if (!userConfirmed) return;
+
+        setIsLoading(true);
+        try {
+            // remove sequentially to be polite with the backend
+            for (const civitaiVersionID of offlineIdsInThisModel) {
+                await fetchRemoveOfflineDownloadFileIntoOfflineDownloadList(
+                    { civitaiModelID: modelId, civitaiVersionID },
+                    dispatch
+                );
+            }
+
+            // Optimistically update badges so ^ disappears immediately
+            setExistingOfflineVersions(prev =>
+                prev.filter(id => !offlineIdsInThisModel.includes(id))
+            );
+
+            setMessage({ text: `${offlineIdsInThisModel.length} item(s) removed from Offline List.`, type: 'success' });
+        } catch (error: any) {
+            console.error("Bulk remove failed:", error?.message || error);
+            setMessage({ text: 'Failed to remove some entries. Check console for details.', type: 'error' });
+        } finally {
+            setSelectedUrl("");
+            setIsLoading(false);
+        }
+    };
+
 
     // Handle Dropdown Change
     const handleVersionChange = (versionId: number) => {
@@ -411,6 +458,38 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
                                     </span>
                                 </OverlayTrigger>
                             )}
+
+                            {/* Icon Button: Remove All from Offline List */}
+                            {modelData && (
+                                <OverlayTrigger
+                                    placement="top"
+                                    overlay={<Tooltip id="tooltip-remove-all">Remove all versions of this model from Offline List</Tooltip>}
+                                >
+                                    <span>
+                                        <button
+                                            onClick={handleRemoveAllFromOfflineList}
+                                            disabled={offlineIdsInThisModel.length === 0 || isLoading}
+                                            style={{
+                                                background: 'none',
+                                                border: 'none',
+                                                cursor: offlineIdsInThisModel.length === 0 || isLoading ? 'not-allowed' : 'pointer',
+                                                fontSize: '20px',
+                                                width: '24px',
+                                                height: '24px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                opacity: offlineIdsInThisModel.length === 0 || isLoading ? 0.5 : 1
+                                            }}
+                                            title="Remove all from Offline List"
+                                            aria-label="Remove all from Offline List"
+                                        >
+                                            <MdDeleteSweep />
+                                        </button>
+                                    </span>
+                                </OverlayTrigger>
+                            )}
+
 
                             {/* Checklist Icon with Tooltip */}
                             {message && message.type === 'error' && (
