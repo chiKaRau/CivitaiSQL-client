@@ -41,6 +41,9 @@ interface updateAvaliable {
     isEarlyAccess: any;
 }
 
+type Category = { name: string; value: string };
+type SelectedItem = { category: Category; display: boolean };
+
 //Apis
 import {
     fetchCivitaiModelInfoFromCivitaiByModelID,
@@ -1315,87 +1318,71 @@ const WindowComponent: React.FC = () => {
 
     useEffect(() => {
         if (selectedFilteredCategoriesList) {
+            console.log("selectedFilteredCategoriesList: ");
+            console.log(selectedFilteredCategoriesList);
             handleAddFilterIntoFoldersList(JSON.parse(selectedFilteredCategoriesList))
         }
     }, [selectedFilteredCategoriesList, foldersList])
 
 
-    const handleAddFilterIntoFoldersList = (selectedFilteredCategoriesList: any) => {
+    const handleAddFilterIntoFoldersList = (selected: SelectedItem[]) => {
+        const lc = (s: string) => s.toLowerCase();
 
-        const filteredFolderList = (foldersList as any[]).filter(folder => {
-            const isIncluded = (selectedFilteredCategoriesList as any[]).some(item => {
-                return item.display && folder.toLowerCase().includes(item.category.value.toLowerCase());
+        // Prefix-style categories (the path-like ones)
+        const allowPrefixes = selected
+            .filter(i => i.display && i.category.value.startsWith("/@scan@/"))
+            .map(i => lc(i.category.value));
+
+        const denyPrefixes = selected
+            .filter(i => !i.display && i.category.value.startsWith("/@scan@/"))
+            .map(i => lc(i.category.value));
+
+        // Toggle-style flags (not path prefixes)
+        const isCharactersSelected = selected.some(i => i.category.name === "Characters" && i.display);
+        const isRealSelected = selected.some(i => i.category.name === "Real" && i.display);
+        const isPosesSelected = selected.some(i => i.category.name === "Poses" && i.display);
+        const isMalesSelected = selected.some(i => i.category.name === "Males" && i.display);
+        const isSFWSelected = selected.some(i => i.category.name === "SFW" && i.display);
+        const isNSFWSelected = selected.some(i => i.category.name === "NSFW" && i.display);
+        const isEXSelected = selected.some(i => i.category.name === "EX" && i.display);
+
+        const filteredFolderList = (foldersList as string[])
+            .filter(raw => {
+                const folder = lc(raw);
+
+                // Must match at least one allowed prefix (if any are defined)
+                const allowed =
+                    allowPrefixes.length === 0 ? true : allowPrefixes.some(p => folder.startsWith(p));
+                if (!allowed) return false;
+
+                // Any deny prefix blocks it (this fixes the Creature case)
+                if (denyPrefixes.some(p => folder.startsWith(p))) return false;
+
+                // Extra exception logic
+                if (isCharactersSelected && !isMalesSelected && folder.includes("(males)")) return false;
+
+                if (isPosesSelected && !isNSFWSelected && folder.includes("/nsfw/")) return false;
+                if (isPosesSelected && !isSFWSelected && folder.includes("/sfw/")) return false;
+                if (isPosesSelected && !isRealSelected && folder.includes("/real/")) return false;
+
+                if (isSFWSelected && !isNSFWSelected && folder.includes("/nsfw/")) return false;
+
+                if (!isEXSelected && folder.includes("/ex/")) return false;
+
+                return true;
+            })
+            .sort((a: string, b: string) => {
+                const firstCharA = a.charAt(0).toUpperCase();
+                const firstCharB = b.charAt(0).toUpperCase();
+                const isDigitA = /\d/.test(firstCharA);
+                const isDigitB = /\d/.test(firstCharB);
+                if (isDigitA && !isDigitB) return 1;
+                if (!isDigitA && isDigitB) return -1;
+                return a.localeCompare(b, "en", { numeric: true, sensitivity: "base" });
             });
 
-            if (!isIncluded) {
-                return false;
-            }
-
-            // Additional checks for specific exceptions
-            const isCharactersSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "Characters" && item.display);
-            const isRealSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "Real" && item.display);
-            const isPosesSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "Poses" && item.display);
-            const isMalesSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "Males" && item.display);
-            const isSFWSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "SFW" && item.display);
-            const isNSFWSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "NSFW" && item.display);
-            const isEXSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "EX" && item.display);
-
-            // Check exceptions
-            if (isCharactersSelected && !isMalesSelected && folder.toLowerCase().includes("(males)")) {
-                return false;
-            }
-
-            if (isPosesSelected && !isNSFWSelected && folder.toLowerCase().includes("/nsfw/")) {
-                return false;
-            }
-
-            if (isPosesSelected && !isSFWSelected && folder.toLowerCase().includes("/sfw/")) {
-                return false;
-            }
-
-            if (isPosesSelected && !isRealSelected && folder.toLowerCase().includes("/real/")) {
-                return false;
-            }
-
-            if (isPosesSelected && !isRealSelected && folder.toLowerCase().includes("/real/")) {
-                return false;
-            }
-
-            if (isSFWSelected && !isNSFWSelected && folder.toLowerCase().includes("/nsfw/")) {
-                return false;
-            }
-
-
-            if (!isEXSelected && folder.toLowerCase().includes("/ex/")) {
-                return false;
-            }
-
-
-
-            return true;
-        }).sort((a: string, b: string) => {
-            // Extract the first character of each string to compare
-            const firstCharA = a.charAt(0).toUpperCase();
-            const firstCharB = b.charAt(0).toUpperCase();
-
-            // Check if both characters are digits or not
-            const isDigitA = /\d/.test(firstCharA);
-            const isDigitB = /\d/.test(firstCharB);
-
-            if (isDigitA && !isDigitB) {
-                // If A is a digit and B is not, A should come after B
-                return 1;
-            } else if (!isDigitA && isDigitB) {
-                // If B is a digit and A is not, A should come before B
-                return -1;
-            }
-            // If both are digits or both are not digits, compare alphabetically/numerically
-            return a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' });
-        });
-
         setSortedandFilteredfoldersList(filteredFolderList);
-
-    }
+    };
 
     const handleGetFoldersList = async () => {
         setIsLoading(true)
