@@ -49,6 +49,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "openEditWindow") {
+    console.log("open edit window")
+    chrome.windows.create({
+      url: chrome.runtime.getURL('editwindow.html'),
+      type: 'popup',
+      width: 850,
+      height: 900,
+      left: 1800
+    });
+  }
+});
+
 interface ModelFile {
   name: string;
   downloadUrl: string;

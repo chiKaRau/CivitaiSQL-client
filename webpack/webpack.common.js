@@ -11,6 +11,7 @@ module.exports = {
         window: path.join(srcDir, 'window.tsx'), // Add this line
         offlinewindow: path.join(srcDir, 'offlinewindow.tsx'), // Add this line
         customWindow: path.join(srcDir, 'customwindow.tsx'), // Add this line
+        editWindow: path.join(srcDir, 'editwindow.tsx'), // Add this line
         content_script: path.join(srcDir, 'content_script.tsx'),
 
     },

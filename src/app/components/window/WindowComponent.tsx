@@ -75,6 +75,7 @@ import { BiSolidBarChartSquare, BiSolidHdd } from 'react-icons/bi';
 import WindowFullInfoModelPanel from './WindowFullInfoModelPanel';
 import SetOriginalTabButton from './SetOriginalTabButton';
 import WindowShortcutPanel from './WindowShortcutPanel';
+import { FaEdit } from 'react-icons/fa';
 
 interface CreatorUrlItem {
     creatorUrl: string;
@@ -745,6 +746,17 @@ const WindowComponent: React.FC = () => {
             // chrome.storage.local.set({ originalTabId: tabs[0].id });
             // Then open the new window
             chrome.runtime.sendMessage({ action: "openCustomWindow" });
+            //window.close(); // This closes the popup window
+        });
+    }
+
+    const handleOpenEditWindow = () => {
+        console.log("open edit window")
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs: any) => {
+            // Store the original tab ID in local storage
+            // chrome.storage.local.set({ originalTabId: tabs[0].id });
+            // Then open the new window
+            chrome.runtime.sendMessage({ action: "openEditWindow" });
             //window.close(); // This closes the popup window
         });
     }
@@ -1637,6 +1649,17 @@ const WindowComponent: React.FC = () => {
                                             disabled: false,
                                         }}
                                             handleFunctionCall={() => handleOpenCustomWindow()} />
+
+                                        {/**Open Edit Window */}
+                                        <ButtonWrap buttonConfig={{
+                                            placement: "top",
+                                            tooltip: "Open Edit Window",
+                                            variant: "warning",
+                                            buttonIcon: <FaEdit />
+                                            ,
+                                            disabled: false,
+                                        }}
+                                            handleFunctionCall={() => handleOpenEditWindow()} />
                                     </div>
                                 }
                             />

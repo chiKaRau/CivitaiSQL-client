@@ -12,6 +12,7 @@ import { AiFillFolderOpen } from "react-icons/ai"
 import { GrCopy, GrPowerShutdown } from 'react-icons/gr';
 import { PiMagnifyingGlassBold } from "react-icons/pi"
 import { MdAddLocation } from "react-icons/md";
+import { FaEdit } from 'react-icons/fa';
 
 import { RiFileAddFill } from "react-icons/ri";
 import { MdAccessAlarms, MdOutlineApps } from "react-icons/md"
@@ -84,6 +85,18 @@ const ButtonsGroup: React.FC = () => {
             //window.close(); // This closes the popup window
         });
     }
+
+    const handleOpenEditWindow = () => {
+        console.log("open edit window")
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs: any) => {
+            // Store the original tab ID in local storage
+            // chrome.storage.local.set({ originalTabId: tabs[0].id });
+            // Then open the new window
+            chrome.runtime.sendMessage({ action: "openEditWindow" });
+            //window.close(); // This closes the popup window
+        });
+    }
+
 
     const dispatch = useDispatch();
 
@@ -159,6 +172,16 @@ const ButtonsGroup: React.FC = () => {
                             disabled: false,
                         }}
                             handleFunctionCall={() => handleOpenCustomWindow()} />
+
+                        {/**Database's CustomModelPanel Button */}
+                        <ButtonWrap buttonConfig={{
+                            placement: "bottom",
+                            tooltip: "edit a model",
+                            variant: "warning",
+                            buttonIcon: <FaEdit />,
+                            disabled: false,
+                        }}
+                            handleFunctionCall={() => handleOpenEditWindow()} />
                     </div>
                 }
             />
