@@ -43,7 +43,12 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText }) => {
         try {
             const data = await fetchGetFoldersList(dispatch);
             if (Array.isArray(data)) {
-                setFoldersList(data);
+                const cleaned = data.filter(f =>
+                    typeof f === "string" &&
+                    f.trim().startsWith("/") &&
+                    !f.toLowerCase().includes("/update/")
+                );
+                setFoldersList(cleaned);
             }
         } catch (error) {
             console.error('Error fetching folders list:', error);
