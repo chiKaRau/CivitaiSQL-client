@@ -2,6 +2,31 @@ import axios from "axios"
 import config from "../config/config.json"
 import { setError, clearError } from '../store/actions/errorsActions';
 
+// --- Types ---
+export interface TopTagsRequest {
+    page: number;  // 0-based
+    size: number;
+    source: 'all' | 'tags' | 'fileName' | 'titles';
+    exclude?: string[];
+    minLen?: number;
+    allowNumbers?: boolean;
+    search?: string;
+    op?: 'contains' | 'does not contain' | 'equals' | 'does not equal' | 'begins with' | 'ends with';
+}
+
+export interface TagCountDTO {
+    tag: string;
+    count: number;
+}
+
+export interface PageResponse<T> {
+    content: T[];
+    totalElements: number;
+    totalPages: number;
+    pageNumber?: number;
+    pageSize?: number;
+}
+
 export const fetchVerifyConnectingDatabase = async (dispatch: any) => {
     try {
         // Clear any previous errors
@@ -675,6 +700,24 @@ export const fetchOfflineDownloadList = async (dispatch: any) => {
     }
 };
 
+export const fetchTopTagsPage = async (
+    dispatch: any,
+    body: TopTagsRequest
+): Promise<PageResponse<TagCountDTO>> => {
+    try {
+        const url = `${config.domain}/api/get-top-tags`; // matches your Postman examples
+        const response = await axios.post(url, body);
+
+        if (response.status >= 200 && response.status < 300) {
+            // assuming your server wraps payload like { payload: PageResponse<TagCountDTO> }
+            return response.data?.payload as PageResponse<TagCountDTO>;
+        }
+        throw new Error('Unexpected response status: ' + response.status);
+    } catch (err: any) {
+        console.error('fetchTopTagsPage error:', err?.message || err);
+        throw err;
+    }
+};
 
 /**
  * Fetch one page of the offline download list.
@@ -700,38 +743,47 @@ export const fetchOfflineDownloadListPage = async (
     size: number,
     filterEmptyBaseModel: boolean = false,
     prefixes?: string[],
+    search?: string,
+    op?: 'contains' | 'does not contain' | 'equals' | 'does not equal' | 'begins with' | 'ends with',
 ) => {
     try {
-        // dispatch(clearError());  // keep if you’re using it
-
         const params = new URLSearchParams();
-        params.set('page', String(page));
+        params.set('page', String(page));                // backend expects 0-based
         params.set('size', String(size));
         params.set('filterEmptyBaseModel', String(filterEmptyBaseModel));
 
+        // Folder prefixes
         if (Array.isArray(prefixes)) {
-            // If user deselected all → send __NONE__ so backend returns 0 results
             if (prefixes.length === 0) {
+                // Sentinel so server returns empty result
                 params.append('prefix', '__NONE__');
             } else {
                 prefixes.forEach(p => params.append('prefix', p));
             }
         }
 
+        // Text search
+        if (search && search.trim().length > 0) {
+            params.set('search', search.trim());
+        }
+
+        // Operator (let backend default to "contains" if omitted)
+        if (op) {
+            params.set('op', op);
+        }
+
         const url = `${config.domain}/api/get_offline_download_list-in-page?${params.toString()}`;
         const response = await axios.get(url);
 
         if (response.status >= 200 && response.status < 300) {
-            return response.data?.payload; // PageResponse
+            return response.data?.payload; // PageResponse from server
         }
         throw new Error('Unexpected response status: ' + response.status);
     } catch (error: any) {
         console.error('Paged fetch error:', error.message);
-        // dispatch(setError(...)) if you use it
         throw error;
     }
 };
-
 
 /**
  * Calls the backend API to backup the offline_download_list.json file.
