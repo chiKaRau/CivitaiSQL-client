@@ -675,6 +675,64 @@ export const fetchOfflineDownloadList = async (dispatch: any) => {
     }
 };
 
+
+/**
+ * Fetch one page of the offline download list.
+ * - `page0` is 0-based (backend expects 0-based).
+ * - `size` is your page size.
+ * - `filterEmptyBaseModel` keeps parity with your backend flag (default false).
+ *
+ * Returns the server payload directly:
+ * {
+ *   content: OfflineDownloadEntry[] (same shape you already use),
+ *   page: number,
+ *   size: number,
+ *   totalElements: number,
+ *   totalPages: number,
+ *   hasNext: boolean,
+ *   hasPrevious: boolean
+ * }
+ */
+// civitaiSQL_api.ts
+export const fetchOfflineDownloadListPage = async (
+    dispatch: any,
+    page: number,
+    size: number,
+    filterEmptyBaseModel: boolean = false,
+    prefixes?: string[],
+) => {
+    try {
+        // dispatch(clearError());  // keep if you’re using it
+
+        const params = new URLSearchParams();
+        params.set('page', String(page));
+        params.set('size', String(size));
+        params.set('filterEmptyBaseModel', String(filterEmptyBaseModel));
+
+        if (Array.isArray(prefixes)) {
+            // If user deselected all → send __NONE__ so backend returns 0 results
+            if (prefixes.length === 0) {
+                params.append('prefix', '__NONE__');
+            } else {
+                prefixes.forEach(p => params.append('prefix', p));
+            }
+        }
+
+        const url = `${config.domain}/api/get_offline_download_list-in-page?${params.toString()}`;
+        const response = await axios.get(url);
+
+        if (response.status >= 200 && response.status < 300) {
+            return response.data?.payload; // PageResponse
+        }
+        throw new Error('Unexpected response status: ' + response.status);
+    } catch (error: any) {
+        console.error('Paged fetch error:', error.message);
+        // dispatch(setError(...)) if you use it
+        throw error;
+    }
+};
+
+
 /**
  * Calls the backend API to backup the offline_download_list.json file.
  *

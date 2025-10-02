@@ -43,7 +43,8 @@ import {
     fetchAddPendingRemoveTag,
     fetchGetCategoriesPrefixsList,
     fetchOpenDownloadDirectory,
-    fetchOpenModelDownloadDirectory
+    fetchOpenModelDownloadDirectory,
+    fetchOfflineDownloadListPage
 } from "../../api/civitaiSQL_api"
 
 import {
@@ -270,6 +271,16 @@ const OfflineWindow: React.FC = () => {
     const modify_downloadFilePath = chromeData.downloadFilePath;
     const modify_selectedCategory = chromeData.selectedCategory;
 
+    // **Add Pagination State and Logic**
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(100); // Default to 100 as in table mode
+
+    const [serverTotalItems, setServerTotalItems] = useState(0);
+    const [serverTotalPages, setServerTotalPages] = useState(1);
+    const [uiMode, setUiMode] = useState<'idle' | 'paging' | 'downloading' | 'modifying' | 'removing'>('idle');
+
+    const [showGalleries, setShowGalleries] = useState(false);
+
     const [recentlyDownloaded, setRecentlyDownloaded] = useState<OfflineDownloadEntry[]>([]);
 
     // Replace /width=###/ in Civitai URLs; if missing, insert it before the filename.
@@ -449,6 +460,20 @@ const OfflineWindow: React.FC = () => {
     const [categoriesPrefixsList, setCategoriesPrefixsList] = useState<{ name: string; value: string; }[]>([]);
     const [selectedPrefixes, setSelectedPrefixes] = useState<Set<string>>(new Set());
 
+    // treat both forms as "pending"
+    const PENDING_PATHS = ["/@scan@/ACG/Pending", "/@scan@/ACG/Pending/"];
+
+    const getActivePrefixes = useCallback(
+        () => (onlyPendingPaths ? PENDING_PATHS : Array.from(selectedPrefixes)),
+        [onlyPendingPaths, selectedPrefixes]
+    );
+
+    // when the toggle changes, go back to page 1
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [onlyPendingPaths]);
+
+
     useEffect(() => {
         const loadPrefixes = async () => {
             const list = await fetchGetCategoriesPrefixsList(dispatch);
@@ -583,32 +608,46 @@ const OfflineWindow: React.FC = () => {
         };
     }, [batchCooldown]);
 
-    // Fetch data on mount
     useEffect(() => {
-        const fetchData = async () => {
+        let cancelled = false;
+        const timer = setTimeout(async () => {
+            if (cancelled) return;
+
+            setUiMode('paging');
             setIsLoading(true);
             try {
-                const data = await fetchOfflineDownloadList(dispatch);
-                if (Array.isArray(data)) {
-                    setOfflineDownloadList(data);
-                    // Initialize all IDs as selected by default
-                    // const allIds = data.map((entry: OfflineDownloadEntry) => entry.civitaiVersionID);
-                    // setSelectedIds(new Set(allIds));
-                } else {
-                    console.warn("fetchOfflineDownloadList returned non-array data:", data);
-                    setOfflineDownloadList([]);
-                }
-            } catch (error: any) {
-                console.error("Error fetching offline download list:", error.message);
-                setOfflineDownloadList([]);
-                // Optionally, dispatch an error to the Redux store
-                // dispatch(setError({ hasError: true, errorMessage: error.message }));
-            }
-            setIsLoading(false);
-        };
+                const page0 = Math.max(0, currentPage - 1);
+                const prefixes = getActivePrefixes();
+                const p = await fetchOfflineDownloadListPage(dispatch, page0, itemsPerPage, false, prefixes);
 
-        fetchData();
-    }, [dispatch]);
+                if (!cancelled) {
+                    setOfflineDownloadList(Array.isArray(p.content) ? p.content : []);
+                    setServerTotalItems(p.totalElements ?? 0);
+                    setServerTotalPages(p.totalPages ?? 1);
+                }
+            } catch (e: any) {
+                if (!cancelled) {
+                    console.error("Paged fetch failed:", e?.message || e);
+                    setOfflineDownloadList([]);
+                    setServerTotalItems(0);
+                    setServerTotalPages(1);
+                }
+            } finally {
+                if (!cancelled) {
+                    setIsLoading(false);
+                    setUiMode('idle');
+                }
+            }
+        }, 200); // 200–300ms feels nice
+
+        return () => { cancelled = true; clearTimeout(timer); };
+    }, [dispatch, currentPage, itemsPerPage, getActivePrefixes]);
+
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [getActivePrefixes]);
+
 
     useEffect(() => {
         // Reset the selection when filterText or filterCondition changes
@@ -687,44 +726,30 @@ const OfflineWindow: React.FC = () => {
 
     // Memoized filtered list based on filterText and filterCondition
     const filteredDownloadList = useMemo(() => {
-        // Apply filtering based on filterText and filterCondition
+        // Apply text filter first
         let filtered = filterText.trim() === ''
             ? offlineDownloadList
             : offlineDownloadList.filter(entry => doesEntryMatch(entry));
 
-        // If the user has checked "Only Pending Paths," keep only those
+        // Optional: Only pending paths toggle (still client-side)
         if (onlyPendingPaths) {
             filtered = filtered.filter(entry => {
                 const path = entry.downloadFilePath ?? "";
-                return (
-                    path === "/@scan@/ACG/Pending" ||
-                    path === "/@scan@/ACG/Pending/"
-                );
+                return path === "/@scan@/ACG/Pending" || path === "/@scan@/ACG/Pending/";
             });
         }
 
-        if (selectedPrefixes.size > 0) {
-            filtered = filtered.filter(entry => {
-                const path = entry.downloadFilePath ?? '';
-                return Array.from(selectedPrefixes).some(pref =>
-                    path.startsWith(pref)
-                );
-            });
-        }
-
-        // Only sort if modify mode is off
+        // Sorting (selected items first) only when not in Modify Mode
         if (!isModifyMode) {
-            // Sort the filtered list so that selected entries come first
             return [...filtered].sort((a, b) => {
                 const aSelected = selectedIds.has(a.civitaiVersionID) ? 1 : 0;
                 const bSelected = selectedIds.has(b.civitaiVersionID) ? 1 : 0;
-                return bSelected - aSelected; // Descending: selected first
+                return bSelected - aSelected;
             });
         }
 
-        // If modify mode is on, return the filtered list without sorting
         return filtered;
-    }, [offlineDownloadList, filterText, filterCondition, selectedIds, isModifyMode, onlyPendingPaths, displayMode, selectedPrefixes]);
+    }, [offlineDownloadList, filterText, filterCondition, selectedIds, isModifyMode, onlyPendingPaths, displayMode]);
 
     // New state for selecting the tag source (defaulting to 'all')
     const [tagSource, setTagSource] = useState<'all' | 'tags' | 'fileName' | 'titles' | 'other'>('all');
@@ -743,27 +768,17 @@ const OfflineWindow: React.FC = () => {
     }, [offlineDownloadList, filteredDownloadList, excludedTags, tagSource]);
 
 
+    // server-driven totals
+    const totalItems = serverTotalItems;
+    const totalPages = serverTotalPages;
 
-    // **Add Pagination State and Logic**
-    const [currentPage, setCurrentPage] = useState(1);
-    const [itemsPerPage, setItemsPerPage] = useState(100); // Default to 100 as in table mode
+    // one page already comes from the server
+    const paginatedDownloadList = filteredDownloadList;
 
-    const totalPages = Math.ceil(filteredDownloadList.length / itemsPerPage);
-    const totalItems = filteredDownloadList.length;
+    // range text
+    const startItem = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+    const endItem = Math.min(currentPage * itemsPerPage, totalItems);
 
-    const paginatedDownloadList = useMemo(() => {
-        const startIndex = (currentPage - 1) * itemsPerPage;
-        return filteredDownloadList.slice(startIndex, startIndex + itemsPerPage);
-    }, [filteredDownloadList, currentPage, itemsPerPage]);
-
-    // Compute current range
-    const startItem = useMemo(() => {
-        return filteredDownloadList.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
-    }, [filteredDownloadList, currentPage, itemsPerPage]);
-
-    const endItem = useMemo(() => {
-        return Math.min(currentPage * itemsPerPage, filteredDownloadList.length);
-    }, [filteredDownloadList, currentPage, itemsPerPage]);
 
     // **New: Separate useEffect for itemsPerPage changes**
     useEffect(() => {
@@ -771,14 +786,11 @@ const OfflineWindow: React.FC = () => {
         console.log(`Items per page changed to ${itemsPerPage}. Resetting to page 1.`);
     }, [itemsPerPage]);
 
-    // **New: Adjust currentPage if it exceeds totalPages**
     useEffect(() => {
-        const newTotalPages = Math.ceil(filteredDownloadList.length / itemsPerPage);
-        if (currentPage > newTotalPages) {
-            setCurrentPage(newTotalPages > 0 ? newTotalPages : 1);
-            console.log(`Adjusted currentPage to ${newTotalPages > 0 ? newTotalPages : 1} based on new totalPages.`);
+        if (currentPage > serverTotalPages) {
+            setCurrentPage(serverTotalPages || 1);
         }
-    }, [itemsPerPage, filteredDownloadList, currentPage]);
+    }, [serverTotalPages, currentPage]);
 
     const [preventPendingPaths, setPreventPendingPaths] = useState(true);
 
@@ -1205,59 +1217,46 @@ const OfflineWindow: React.FC = () => {
         });
     }, []);
 
-    // **New: Function to handle "Refresh List" button click**
     const handleRefreshList = async () => {
-        // Prevent multiple refreshes
         if (isLoading) return;
 
-        console.log("Refresh List button clicked");
-
-        // Reset failed entries if necessary
         setFailedEntries([]);
-        // setCompletedCount(0); // Reset completed count on refresh
-
         try {
             setIsLoading(true);
-            console.log("isLoading set to true");
+            const page0 = Math.max(0, currentPage - 1);
+            const prefixes = getActivePrefixes();
 
-            // Fetch the latest download list
-            const updatedData = await fetchOfflineDownloadList(dispatch);
+            const p = await fetchOfflineDownloadListPage(
+                dispatch,
+                page0,
+                itemsPerPage,
+                /* filterEmptyBaseModel */ false,
+                prefixes
+            );
 
-            if (Array.isArray(updatedData)) {
-                setOfflineDownloadList(updatedData);
-                // const allIds = updatedData.map((entry: OfflineDownloadEntry) => entry.civitaiVersionID);
-                // setSelectedIds(new Set(allIds));
-                console.log("Download list successfully refreshed");
-            } else {
-                console.warn("fetchOfflineDownloadList returned non-array data:", updatedData);
-                setOfflineDownloadList([]);
-                setSelectedIds(new Set());
-            }
+            setOfflineDownloadList(Array.isArray(p.content) ? p.content : []);
+            setServerTotalItems(p.totalElements ?? 0);
+            setServerTotalPages(p.totalPages ?? 1);
         } catch (error: any) {
-            console.error("Failed to refresh download list:", error.message);
-            // Optionally, display a toast notification or alert to inform the user
+            console.error("Failed to refresh the download list:", error.message);
             alert("Failed to refresh the download list. Please try again later.");
-            // Optionally, dispatch an error to the Redux store
-            // dispatch(setError({ hasError: true, errorMessage: error.message }));
         } finally {
             setIsLoading(false);
-            console.log("isLoading set to false");
         }
 
         try {
             fetchExcludedTags();
         } catch (error: any) {
             console.error("Failed to refresh pending remove tag list:", error.message);
-            // Optionally, display a toast notification or alert to inform the user
-            alert("Failed to refresh the pending remove tag  list. Please try again later.");
-            // Optionally, dispatch an error to the Redux store
-            // dispatch(setError({ hasError: true, errorMessage: error.message }));
+            alert("Failed to refresh the pending remove tag list. Please try again later.");
         }
     };
+
 
     // Function to handle "Download Now" button click
     const handleDownloadNow = async () => {
         console.log("Download Now button clicked");
+
 
         // const isBackupSuccessful = await fetchBackupOfflineDownloadList(dispatch);
         // if (!isBackupSuccessful) {
@@ -1303,51 +1302,58 @@ const OfflineWindow: React.FC = () => {
         // setCompletedCount(0);
         setIsCancelled(false);
 
-        // Callback to update the download list after each download completes
-        const handleEachDownloadComplete = async (success: boolean, entry: OfflineDownloadEntry) => {
-            if (!success) {
-                setFailedEntries(prev => [...prev, entry]);
+        // Refresh helper: re-fetch the current page from the server
+        const refreshCurrentPage = async () => {
+            try {
+                const page0 = Math.max(0, currentPage - 1); // UI 1-based → server 0-based
+                const prefixes = getActivePrefixes();
+
+                const p = await fetchOfflineDownloadListPage(
+                    dispatch,
+                    page0,
+                    itemsPerPage,
+                    /* filterEmptyBaseModel */ false,
+                    prefixes
+                );
+
+                setOfflineDownloadList(Array.isArray(p.content) ? p.content : []);
+                setServerTotalItems(p.totalElements ?? 0);
+                setServerTotalPages(p.totalPages ?? 1);
+            } catch (error: any) {
+                console.error("Failed to fetch updated download list:", error.message);
+                setOfflineDownloadList([]);
+                setServerTotalItems(0);
+                setServerTotalPages(1);
+                setSelectedIds(new Set());
             }
+        };
 
-            // setCompletedCount(prevCount => {
-            //     const newCount = prevCount + 1;
-
-            //     // After every 10 completions, initiate a cooldown
-            //     if (newCount % 10 === 0) {
-            //         setDelayTime(60); // 60-second cooldown
-            //         console.log("Cooldown initiated for 60 seconds after 10 downloads.");
-            //     }
-
-            //     return newCount;
-            // });
+        // Called after each file completes
+        const handleEachDownloadComplete = async (success: boolean, entry: OfflineDownloadEntry) => {
+            if (!success) setFailedEntries(prev => [...prev, entry]);
 
             setDownloadProgress(prev => ({ completed: prev.completed + 1, total: prev.total }));
 
-            // Optionally, update the download list
-            try {
-                const updatedData = await fetchOfflineDownloadList(dispatch);
-                if (Array.isArray(updatedData)) {
-                    setOfflineDownloadList(updatedData);
-                } else {
-                    console.warn("fetchOfflineDownloadList returned non-array data:", updatedData);
-                    setOfflineDownloadList([]);
-                    setSelectedIds(new Set());
-                }
-            } catch (error: any) {
-                console.error("Failed to fetch updated download list:", error.message);
-            }
+            // Re-fetch only the current page (not the whole list)
+            await refreshCurrentPage();
         };
 
         try {
             setIsLoading(true);
-            console.log("isLoading set to true");
+            setUiMode('downloading');
 
-            await downloadSelectedEntries(entriesToDownload, dispatch, handleEachDownloadComplete, isPausedRef, isCancelledRef);
+            await downloadSelectedEntries(
+                entriesToDownload,
+                dispatch,
+                handleEachDownloadComplete,
+                isPausedRef,
+                isCancelledRef
+            );
         } catch (error: any) {
             console.error("Download failed:", error.message);
         } finally {
             setIsLoading(false);
-            console.log("isLoading set to false");
+            setUiMode('idle');
         }
     };
 
@@ -1361,9 +1367,9 @@ const OfflineWindow: React.FC = () => {
     }
 
     /**
-     * Download selected entries in batches of 10.
-     * Wait for all entries in one batch to finish before moving to the next batch.
-     */
+ * Download selected entries in batches of 10.
+ * Wait for all entries in one batch to finish before moving to the next batch.
+ */
     const downloadSelectedEntries = async (
         entriesToDownload: OfflineDownloadEntry[],
         dispatch: any,
@@ -1371,34 +1377,31 @@ const OfflineWindow: React.FC = () => {
         isPausedRef: React.MutableRefObject<boolean>,
         isCancelledRef: React.MutableRefObject<boolean>
     ) => {
-        const CONCURRENCY_LIMIT = 5; // or any number you want
+        const CONCURRENCY_LIMIT = 5;
+        const BATCH_SIZE = 10;
         const semaphore = new Semaphore(CONCURRENCY_LIMIT);
 
-        // Split the entries into chunks (batches) of 10
-        const batches = chunkArray(entriesToDownload, 10);
+        // Split the entries into chunks (batches) of BATCH_SIZE
+        const batches = chunkArray(entriesToDownload, BATCH_SIZE);
 
         let batchIndex = 0;
         for (const batch of batches) {
-            // 1) Check if the entire download process has been cancelled
             if (isCancelledRef.current) {
                 console.log("Download process cancelled before batch:", batchIndex);
                 break;
             }
 
-
-            // Determine the range of the current batch
-            const start = batchIndex * 10 + 1;
-            const end = Math.min((batchIndex + 1) * 10, entriesToDownload.length);
-            setCurrentBatchRange(`Now processing ${start} ~ ${end}, please wait until processing next 10.`);
+            // Range text for this batch (1-based)
+            const start = batchIndex * BATCH_SIZE + 1;
+            const end = Math.min((batchIndex + 1) * BATCH_SIZE, entriesToDownload.length);
+            setCurrentBatchRange(`Now processing ${start} ~ ${end}, please wait until processing next ${BATCH_SIZE}.`);
 
             console.log(`Processing batch #${batchIndex + 1} (size: ${batch.length})`);
 
-            // 2) Start downloads for this batch in concurrency-limited parallel
-            //    We'll store all tasks in an array, then await them all.
+            // Start downloads for this batch with concurrency limit
             const tasks: Promise<void>[] = [];
 
             for (const entry of batch) {
-                // Check pause/cancel status before starting each item
                 while (isPausedRef.current) {
                     console.log("Download paused. Waiting to resume...");
                     await sleep(500);
@@ -1409,21 +1412,12 @@ const OfflineWindow: React.FC = () => {
                 }
                 if (isCancelledRef.current) break;
 
-                // *** ADD THIS RANDOM 5–7s DELAY *** 
-                // 1) Calculate the random delay for this file
-                const delayMilliseconds = 5000 + Math.random() * 10000; // 5000ms to 10000ms
+                // Random 5–15s delay before starting this item
+                const delayMilliseconds = 5000 + Math.random() * 10000;
                 const delaySeconds = Math.ceil(delayMilliseconds / 1000);
-
-                // 2) Update state so your "Next download will start in X seconds" appears
                 setInitiationDelay(delaySeconds);
-
-                // 3) (Optional) console log for debugging
                 console.log(`Waiting ${delaySeconds}s before starting ${entry.civitaiFileName}...`);
-
-                // 4) Sleep for that many seconds
                 await sleep(delayMilliseconds);
-
-                // 5) Once the delay is done, clear the UI message
                 setInitiationDelay(null);
 
                 // Acquire a slot in the semaphore
@@ -1441,7 +1435,6 @@ const OfflineWindow: React.FC = () => {
                             modelVersionObject,
                         } = entry;
 
-                        // Perform your actual download
                         const isDownloadSuccessful = await fetchDownloadFilesByServer_v2(
                             {
                                 civitaiUrl,
@@ -1449,18 +1442,16 @@ const OfflineWindow: React.FC = () => {
                                 civitaiModelID,
                                 civitaiVersionID,
                                 downloadFilePath,
-                                civitaiModelFileList
+                                civitaiModelFileList,
                             },
                             dispatch
                         );
 
-                        // If download is successful, do the DB insert and bookmark
                         if (isDownloadSuccessful) {
-
                             setRecentlyDownloaded(prev => {
                                 const key = `${entry.civitaiModelID}|${entry.civitaiVersionID}`;
                                 const dedup = prev.filter(e => `${e.civitaiModelID}|${e.civitaiVersionID}` !== key);
-                                const snap = JSON.parse(JSON.stringify(entry)); // deep clone so it survives backend removal
+                                const snap = JSON.parse(JSON.stringify(entry));
                                 return [snap, ...dedup].slice(0, 200);
                             });
 
@@ -1479,89 +1470,98 @@ const OfflineWindow: React.FC = () => {
                         console.error("Download failed for", entry.civitaiFileName, err);
                         success = false;
                     } finally {
-                        // Notify UI or state that this individual download is done
+                        // Notify caller/UI that this item finished
                         onDownloadComplete(success, entry);
                     }
                 });
 
                 tasks.push(task);
-                // Also check if user cancelled mid-loop
+
                 if (isCancelledRef.current) {
                     console.log("Download cancelled after initiating some tasks in batch.");
                     break;
                 }
             }
 
-            // 3) Wait for all tasks in this batch to complete
+            // Wait for all items in this batch
             await Promise.allSettled(tasks);
 
-            // The entire batch is done here
             console.log(`Batch #${batchIndex + 1} completed.`);
 
-            // If the user cancelled during or after the batch, break
             if (isCancelledRef.current) {
                 console.log("Download process cancelled after completing a batch.");
                 break;
             }
 
-            // Set a 60-second cooldown
+            // 60-second cooldown between batches
             console.log("Starting 60-second cooldown before next batch...");
             setBatchCooldown(60);
-
-            // Option A: Simple approach: just sleep 60s
             await sleep(60000);
-
-            // Clear the cooldown display
             setBatchCooldown(null);
 
-            // Move on to the next batch
             batchIndex++;
         }
 
-        // Finally, wait for any leftover concurrency tasks to settle
+        // Wait for any leftover concurrency to drain
         while ((semaphore as any).activeCount > 0) {
             await sleep(500);
         }
         console.log("All batches processed or cancelled.");
 
-        // **Clear currentBatchRange after all batches are done**
+        // Clear range message
         setCurrentBatchRange(null);
-        // After processing all entries, fetch the updated download list once
-        const updatedData = await fetchOfflineDownloadList(dispatch);
-        if (Array.isArray(updatedData)) {
-            setOfflineDownloadList(updatedData);
-            // const allIds = updatedData.map((entry: OfflineDownloadEntry) => entry.civitaiVersionID);
-            // setSelectedIds(new Set(allIds));
-            setSelectedIds(new Set());
-        } else {
-            console.warn("fetchOfflineDownloadList returned non-array data:", updatedData);
+
+        // FINAL REFRESH: re-fetch the current server page (not the whole list)
+        try {
+            const page0 = Math.max(0, currentPage - 1); // UI 1-based → server 0-based
+            const prefixes = getActivePrefixes();
+
+            const p = await fetchOfflineDownloadListPage(
+                dispatch,
+                page0,
+                itemsPerPage,
+                /* filterEmptyBaseModel */ false,
+                prefixes
+            );
+
+            if (Array.isArray(p.content)) {
+                setOfflineDownloadList(p.content);
+                setSelectedIds(new Set());
+                setServerTotalItems(p.totalElements ?? 0);
+                setServerTotalPages(p.totalPages ?? 1);
+            } else {
+                console.warn("paged fetch returned non-array content:", p.content);
+                setOfflineDownloadList([]);
+                setSelectedIds(new Set());
+                setServerTotalItems(0);
+                setServerTotalPages(1);
+            }
+        } catch (error: any) {
+            console.error("Failed to refresh current page after all batches:", error.message);
             setOfflineDownloadList([]);
             setSelectedIds(new Set());
+            setServerTotalItems(0);
+            setServerTotalPages(1);
         }
     };
 
 
     const handleProcessSelected = async () => {
-
         if (modify_downloadFilePath === "/@scan@/ErrorPath/") {
             alert("Invalid DownloadFilePath: ErrorPath is never allowed");
             return;
         }
 
-        // conditionally‐invalid:
         const pendingPaths = ["/@scan@/ACG/Pending", "/@scan@/ACG/Pending/"];
         if (preventPendingPaths && pendingPaths.includes(modify_downloadFilePath)) {
             alert("Invalid DownloadFilePath: pending paths are blocked");
             return;
         }
 
-        // const isBackupSuccessful = await fetchBackupOfflineDownloadList(dispatch);
-        // if (!isBackupSuccessful) {
-        //     alert("Backup failed. Cannot proceed with the download.");
-        //     return;
-        // }
-
-        const selectedEntries = offlineDownloadList.filter(entry => selectedIds.has(entry.civitaiVersionID));
+        // Use the currently visible list (respects filters/modify mode & server paging)
+        const selectedEntries = filteredDownloadList.filter(entry =>
+            selectedIds.has(entry.civitaiVersionID)
+        );
 
         if (selectedEntries.length === 0) {
             console.log("No entries selected for processing.");
@@ -1570,7 +1570,7 @@ const OfflineWindow: React.FC = () => {
 
         try {
             setIsLoading(true);
-
+            setUiMode('modifying');
             for (const entry of selectedEntries) {
                 try {
                     const {
@@ -1578,10 +1578,7 @@ const OfflineWindow: React.FC = () => {
                         civitaiFileName,
                         civitaiModelID,
                         civitaiVersionID,
-                        downloadFilePath,
                         civitaiModelFileList,
-                        selectedCategory,
-                        modelVersionObject,
                         civitaiTags
                     } = entry;
 
@@ -1596,57 +1593,62 @@ const OfflineWindow: React.FC = () => {
                         civitaiTags
                     };
 
-                    // Update the backend with the model object
                     await fetchAddOfflineDownloadFileIntoOfflineDownloadList(modelObject, true, dispatch);
-
-                    // Optionally, perform additional actions like bookmarking
-                    // bookmarkThisUrl(...); // Uncomment and provide necessary parameters if needed
-
                     console.log(`Processed entry: ${civitaiFileName}`);
                 } catch (entryError: any) {
                     console.error(`Failed to process entry ${entry.civitaiFileName}:`, entryError.message);
-                    // Optionally, handle individual entry errors, e.g., collect failed entries
-                    // You can maintain a list of failed entries to notify the user later
                 }
             }
 
-            // After processing all entries, fetch the updated download list once
-            const updatedData = await fetchOfflineDownloadList(dispatch);
-            if (Array.isArray(updatedData)) {
-                setOfflineDownloadList(updatedData);
-                // const allIds = updatedData.map((entry: OfflineDownloadEntry) => entry.civitaiVersionID);
-                // setSelectedIds(new Set(allIds));
-                setSelectedIds(new Set());
-            } else {
-                console.warn("fetchOfflineDownloadList returned non-array data:", updatedData);
+            const page0 = Math.max(0, currentPage - 1); // UI is 1-based
+            try {
+                const prefixes = getActivePrefixes();
+                const p = await fetchOfflineDownloadListPage(
+                    dispatch,
+                    page0,
+                    itemsPerPage,
+                    /* filterEmptyBaseModel */ false,
+                    prefixes
+                );
+
+                if (Array.isArray(p.content)) {
+                    setOfflineDownloadList(p.content);
+                    setSelectedIds(new Set());
+                    setServerTotalItems(p.totalElements ?? 0);
+                    setServerTotalPages(p.totalPages ?? 1);
+                } else {
+                    console.warn("paged fetch returned non-array content:", p.content);
+                    setOfflineDownloadList([]);
+                    setSelectedIds(new Set());
+                    setServerTotalItems(0);
+                    setServerTotalPages(1);
+                }
+            } catch (e: any) {
+                console.error("Failed to refresh current page after processing:", e.message);
                 setOfflineDownloadList([]);
                 setSelectedIds(new Set());
+                setServerTotalItems(0);
+                setServerTotalPages(1);
             }
+
 
             console.log("All selected entries have been processed.");
         } catch (error: any) {
             console.error("An unexpected error occurred during processing:", error.message);
-            // Optionally, dispatch a global error to the Redux store
-            // dispatch(setError({ hasError: true, errorMessage: error.message }));
         } finally {
             dispatch(updateDownloadFilePath("/@scan@/ACG/Pending/"));
             setIsLoading(false);
+            setUiMode('idle');
         }
     };
 
-    const handleRemoveSelected = async () => {
 
+    const handleRemoveSelected = async () => {
         const userConfirmed = window.confirm("Are you sure you want to remove the selected items?");
         if (!userConfirmed) {
             console.log("User canceled the removal operation.");
-            return; // Exit the function if the user cancels
+            return;
         }
-
-        // const isBackupSuccessful = await fetchBackupOfflineDownloadList(dispatch);
-        // if (!isBackupSuccessful) {
-        //     alert("Backup failed. Cannot proceed with the download.");
-        //     return;
-        // }
 
         if (selectedIds.size === 0) {
             alert("No items selected to remove.");
@@ -1654,13 +1656,13 @@ const OfflineWindow: React.FC = () => {
         }
 
         setIsLoading(true);
+        setUiMode('removing');
         try {
-            // Filter the offlineDownloadList to only those selected
-            const selectedEntries = offlineDownloadList.filter((entry) =>
+            // Use what the user is currently seeing (respects filters & server paging)
+            const selectedEntries = filteredDownloadList.filter(entry =>
                 selectedIds.has(entry.civitaiVersionID)
             );
 
-            // Remove each entry using your API call
             for (const entry of selectedEntries) {
                 await fetchRemoveOfflineDownloadFileIntoOfflineDownloadList(
                     {
@@ -1671,27 +1673,38 @@ const OfflineWindow: React.FC = () => {
                 );
             }
 
-            // Now fetch the updated offline list
-            const updatedData = await fetchOfflineDownloadList(dispatch);
-            if (Array.isArray(updatedData)) {
-                setOfflineDownloadList(updatedData);
-                // If you want to clear selection after removal, do:
-                setSelectedIds(new Set());
-                // Or, reselect all if you prefer:
-                // const allIds = updatedData.map((entry: OfflineDownloadEntry) => entry.civitaiVersionID);
-                // setSelectedIds(new Set(allIds));
-                setSelectedIds(new Set());
+            // Refresh current page
+            const page0 = Math.max(0, currentPage - 1);
+            const prefixes = getActivePrefixes();
+
+            const p = await fetchOfflineDownloadListPage(
+                dispatch,
+                page0,
+                itemsPerPage,
+                /* filterEmptyBaseModel */ false,
+                prefixes
+            );
+
+            // If current page is now past the end, jump to last page
+            const newTotalPages = Math.max(1, p.totalPages || 1);
+            if ((p.content?.length ?? 0) === 0 && (p.totalElements ?? 0) > 0 && currentPage > newTotalPages) {
+                setCurrentPage(newTotalPages);
             } else {
-                console.warn("fetchOfflineDownloadList returned non-array data:", updatedData);
-                setOfflineDownloadList([]);
-                setSelectedIds(new Set());
+                setOfflineDownloadList(Array.isArray(p.content) ? p.content : []);
+                setServerTotalItems(p.totalElements ?? 0);
+                setServerTotalPages(newTotalPages);
             }
+
+            setSelectedIds(new Set());
+
         } catch (error: any) {
             console.error("Failed to remove selected entries:", error.message);
         } finally {
             setIsLoading(false);
+            setUiMode('idle');
         }
     };
+
 
     const handleSelectFirstN = () => {
         // Get the current time to compare with earlyAccessEndsAt
@@ -1809,13 +1822,15 @@ const OfflineWindow: React.FC = () => {
         selectedIds: Set<string>;
         toggleSelect: (id: string) => void;
         handleSelectAll: () => void;
+        showGalleries: boolean;
     }> = ({
         filteredDownloadList,
         isDarkMode,
         isModifyMode,
         selectedIds,
         toggleSelect,
-        handleSelectAll
+        handleSelectAll,
+        showGalleries
     }) => {
             if (filteredDownloadList.length === 0) {
                 return (
@@ -1945,36 +1960,59 @@ const OfflineWindow: React.FC = () => {
                                     </div>
 
 
-                                    {/* Carousel for Images */}
+                                    {/* Images */}
                                     {entry.imageUrlsArray && entry.imageUrlsArray.length > 0 ? (
-                                        <Carousel
-                                            variant={isDarkMode ? 'dark' : 'light'}
-                                            indicators={entry.imageUrlsArray.length > 1}
-                                            controls={entry.imageUrlsArray.length > 1}
-                                            interval={null}
-                                            style={{ marginBottom: 0 }}
-                                        >
-                                            {entry.imageUrlsArray.map((img, imgIndex) => {
-                                                const { url, width, height } = normalizeImg(img as any);
-                                                const baseW = 380; // card target width
+                                        showGalleries ? (
+                                            // Full carousel (same as before)
+                                            <Carousel
+                                                variant={isDarkMode ? 'dark' : 'light'}
+                                                indicators={entry.imageUrlsArray.length > 1}
+                                                controls={entry.imageUrlsArray.length > 1}
+                                                interval={null}
+                                                style={{ marginBottom: 0 }}
+                                            >
+                                                {entry.imageUrlsArray.map((img, imgIndex) => {
+                                                    const { url, width, height } = normalizeImg(img as any);
+                                                    const baseW = 380;
+                                                    return (
+                                                        <Carousel.Item key={imgIndex}>
+                                                            <img
+                                                                className="d-block w-100"
+                                                                src={withWidth(url, baseW)}
+                                                                srcSet={buildSrcSet(url, [320, 480, 640, 800])}
+                                                                sizes="(max-width: 420px) 100vw, 380px"
+                                                                loading={imgIndex === 0 && cardIndex === 0 ? 'eager' : 'lazy'}
+                                                                decoding="async"
+                                                                width={width ?? undefined}
+                                                                height={height ?? undefined}
+                                                                alt={`Slide ${imgIndex + 1}`}
+                                                                style={{ maxHeight: '300px', objectFit: 'contain', margin: '0 auto' }}
+                                                            />
+                                                        </Carousel.Item>
+                                                    );
+                                                })}
+                                            </Carousel>
+                                        ) : (
+                                            // Only the first image (fast)
+                                            (() => {
+                                                const first = normalizeImg(entry.imageUrlsArray[0] as any);
+                                                const baseW = 380;
                                                 return (
-                                                    <Carousel.Item key={imgIndex}>
-                                                        <img
-                                                            className="d-block w-100"
-                                                            src={withWidth(url, baseW)}                              // request thumbnail
-                                                            srcSet={buildSrcSet(url, [320, 480, 640, 800])}          // responsive thumbs
-                                                            sizes="(max-width: 420px) 100vw, 380px"
-                                                            loading={imgIndex === 0 && cardIndex === 0 ? 'eager' : 'lazy'}
-                                                            decoding="async"
-                                                            width={width ?? undefined}
-                                                            height={height ?? undefined}
-                                                            alt={`Slide ${imgIndex + 1}`}
-                                                            style={{ maxHeight: '300px', objectFit: 'contain', margin: '0 auto' }}
-                                                        />
-                                                    </Carousel.Item>
+                                                    <img
+                                                        className="d-block w-100"
+                                                        src={withWidth(first.url, baseW)}
+                                                        srcSet={buildSrcSet(first.url, [320, 480, 640, 800])}
+                                                        sizes="(max-width: 420px) 100vw, 380px"
+                                                        loading={cardIndex === 0 ? 'eager' : 'lazy'}
+                                                        decoding="async"
+                                                        width={first.width ?? undefined}
+                                                        height={first.height ?? undefined}
+                                                        alt="Preview"
+                                                        style={{ maxHeight: '300px', objectFit: 'contain', margin: '0 auto' }}
+                                                    />
                                                 );
-                                            })}
-                                        </Carousel>
+                                            })()
+                                        )
                                     ) : (
                                         <div
                                             style={{
@@ -1990,7 +2028,6 @@ const OfflineWindow: React.FC = () => {
                                             <span>No Images Available</span>
                                         </div>
                                     )}
-
 
                                     {/* 3) Smaller text under the carousel */}
                                     <div
@@ -2583,6 +2620,14 @@ const OfflineWindow: React.FC = () => {
                                 <AiFillFolderOpen size={20} />
                             </Button>
 
+                            <Button
+                                style={responsiveButtonStyle}
+                                variant={showGalleries ? 'primary' : 'secondary'}
+                                onClick={() => setShowGalleries(v => !v)}
+                            >
+                                {showGalleries ? 'Galleries: On' : 'Galleries: Off'}
+                            </Button>
+
 
                         </div>
                     </div>
@@ -2984,17 +3029,18 @@ const OfflineWindow: React.FC = () => {
 
                             <Button
                                 onClick={handlePauseToggle}
-                                disabled={selectedIds.size === 0 || isLoading === false /* or any other condition */}
+                                disabled={uiMode !== 'downloading'}
                             >
                                 {isPaused ? "Resume" : "Pause"}
                             </Button>
 
                             <Button
                                 onClick={handleCancelDownload}
-                                disabled={!isLoading || !isPaused} // Only enable if downloads are in progress *and* paused
+                                disabled={uiMode !== 'downloading' || !isPaused}
                             >
                                 Cancel
                             </Button>
+
 
                         </div>
                     }
@@ -3093,7 +3139,7 @@ const OfflineWindow: React.FC = () => {
                                             setSelectedPrefixes(new Set());
                                         }
                                     }}
-                                    disabled={isLoading}
+                                    disabled={isLoading || onlyPendingPaths}
                                     style={{
                                         marginBottom: '8px',
                                         fontWeight: 'bold',
@@ -3117,7 +3163,7 @@ const OfflineWindow: React.FC = () => {
                                                 return next;
                                             })
                                         }
-                                        disabled={isLoading}
+                                        disabled={isLoading || onlyPendingPaths}
                                         style={{
                                             marginBottom: '4px',
                                             color: isDarkMode ? '#fff' : '#000',
@@ -3195,27 +3241,25 @@ const OfflineWindow: React.FC = () => {
                     </div>
 
                     {/* Download or Modify Progress Indicators */}
-                    {isLoading && (
-                        <div style={{
-                            marginBottom: '20px',
-                            fontWeight: 'bold',
-                            color: isDarkMode ? '#fff' : '#000',
-                            backgroundColor: isDarkMode ? '#555' : '#f8f9fa',
-                            padding: '10px',
-                            borderRadius: '4px',
-                            textAlign: 'center'
-                        }}>
-                            {isModifyMode ? (
-                                <>
-                                    Modifying entries... ({selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'})
-                                </>
-                            ) : (
-                                <>
-                                    Processing downloads... ({downloadProgress.completed}/{downloadProgress.total})
-                                </>
-                            )}
+                    {uiMode !== 'idle' && (
+                        <div
+                            style={{
+                                marginBottom: '20px',
+                                fontWeight: 'bold',
+                                color: isDarkMode ? '#fff' : '#000',
+                                backgroundColor: isDarkMode ? '#555' : '#f8f9fa',
+                                padding: '10px',
+                                borderRadius: '4px',
+                                textAlign: 'center',
+                            }}
+                        >
+                            {uiMode === 'paging' && <>Refreshing page...</>}
+                            {uiMode === 'downloading' && <>Processing downloads... ({downloadProgress.completed}/{downloadProgress.total})</>}
+                            {uiMode === 'modifying' && <>Modifying entries... ({selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'})</>}
+                            {uiMode === 'removing' && <>Removing entries...</>}
                         </div>
                     )}
+
 
                     {/* Main Content Area */}
                     <div ref={rightInnerRef} style={{ flex: 1, overflowY: 'auto' }}>
@@ -3253,6 +3297,7 @@ const OfflineWindow: React.FC = () => {
                                         selectedIds={selectedIds}
                                         toggleSelect={toggleSelect}
                                         handleSelectAll={handleSelectAll}
+                                        showGalleries={showGalleries}
                                     />
                                 )}
 
@@ -3275,6 +3320,7 @@ const OfflineWindow: React.FC = () => {
                                         selectedIds={selectedIds}
                                         toggleSelect={toggleSelect}
                                         handleSelectAll={handleSelectAll}
+                                        showGalleries={false}
                                     />
                                 )}
 
