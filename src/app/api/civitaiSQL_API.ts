@@ -745,38 +745,37 @@ export const fetchOfflineDownloadListPage = async (
     prefixes?: string[],
     search?: string,
     op?: 'contains' | 'does not contain' | 'equals' | 'does not equal' | 'begins with' | 'ends with',
+    status?: 'pending' | 'non-pending' | 'both' // <- NEW
 ) => {
     try {
         const params = new URLSearchParams();
-        params.set('page', String(page));                // backend expects 0-based
+        params.set('page', String(page));
         params.set('size', String(size));
         params.set('filterEmptyBaseModel', String(filterEmptyBaseModel));
 
-        // Folder prefixes
         if (Array.isArray(prefixes)) {
             if (prefixes.length === 0) {
-                // Sentinel so server returns empty result
                 params.append('prefix', '__NONE__');
             } else {
                 prefixes.forEach(p => params.append('prefix', p));
             }
         }
 
-        // Text search
         if (search && search.trim().length > 0) {
             params.set('search', search.trim());
         }
-
-        // Operator (let backend default to "contains" if omitted)
         if (op) {
             params.set('op', op);
+        }
+        if (status) {
+            params.set('status', status); // "pending" | "non-pending" | "both"
         }
 
         const url = `${config.domain}/api/get_offline_download_list-in-page?${params.toString()}`;
         const response = await axios.get(url);
 
         if (response.status >= 200 && response.status < 300) {
-            return response.data?.payload; // PageResponse from server
+            return response.data?.payload;
         }
         throw new Error('Unexpected response status: ' + response.status);
     } catch (error: any) {
@@ -784,6 +783,7 @@ export const fetchOfflineDownloadListPage = async (
         throw error;
     }
 };
+
 
 /**
  * Calls the backend API to backup the offline_download_list.json file.

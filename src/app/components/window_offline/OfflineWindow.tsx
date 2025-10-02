@@ -177,6 +177,15 @@ interface SelectAllHeaderCheckboxProps {
     onChange: (checked: boolean) => void;
 }
 
+// put near your other helpers
+const PENDING_PATH_RE = /[/\\]@scan@[/\\]acg[/\\]pending([/\\]|$)/i;
+
+function isPendingEntry(entry: OfflineDownloadEntry): boolean {
+    const p = (entry.downloadFilePath || '').trim();
+    return PENDING_PATH_RE.test(p);
+}
+
+
 const SelectAllHeaderCheckbox: React.FC<SelectAllHeaderCheckboxProps> = ({ isChecked, isIndeterminate, onChange }) => {
     const checkboxRef = useRef<HTMLInputElement>(null);
 
@@ -285,6 +294,14 @@ const OfflineWindow: React.FC = () => {
 
     const [recentlyDownloaded, setRecentlyDownloaded] = useState<OfflineDownloadEntry[]>([]);
 
+    // Add this in your component's top-level state:
+    const [showPending, setShowPending] = useState(true);
+    const [showNonPending, setShowNonPending] = useState(true);
+
+    const [categoriesPrefixsList, setCategoriesPrefixsList] = useState<{ name: string; value: string; }[]>([]);
+    const [selectedPrefixes, setSelectedPrefixes] = useState<Set<string>>(new Set());
+
+
     // Replace /width=###/ in Civitai URLs; if missing, insert it before the filename.
     const IMG_WIDTH_RE = /\/width=\d+\//;
     function withWidth(url: string, w: number) {
@@ -329,11 +346,14 @@ const OfflineWindow: React.FC = () => {
 
     const [excludedTags, setExcludedTags] = useState<string[]>([]);
 
-    // In your component’s state declarations:
-    const [isEditingTopTag, setIsEditingTopTag] = useState(false);
-    const [topTagInputValue, setTopTagInputValue] = useState(filterText || "");
+    type StatusFilter = 'pending' | 'non-pending' | 'both';
 
-    const [mostFrequentPendingTags, setMostFrequentPendingTags] = useState<string[]>([]);
+    function deriveStatus(showPending: boolean, showNonPending: boolean): StatusFilter {
+        if (showPending && showNonPending) return 'both';
+        if (showPending) return 'pending';
+        if (showNonPending) return 'non-pending';
+        return 'both'; // won't be used if you early-return when both are false
+    }
 
     // 1) Keep your excluded tags in lowercase
     // Updated computeTopTagsFromPending: now accepts a third parameter "source"
@@ -347,11 +367,8 @@ const OfflineWindow: React.FC = () => {
         const entriesForTag =
             source === 'other'
                 ? data
-                : data.filter(
-                    (entry) =>
-                        entry.downloadFilePath === "/@scan@/ACG/Pending" ||
-                        entry.downloadFilePath === "/@scan@/ACG/Pending/"
-                );
+                : data.filter((entry) => isPendingEntry(entry));   // <- use helper
+
 
         const freqMap = new Map<string, number>();
 
@@ -456,24 +473,43 @@ const OfflineWindow: React.FC = () => {
     // Add this alongside your existing useState hooks
     const [initiationDelay, setInitiationDelay] = useState<number | null>(null);
 
-    // Add this in your component's top-level state:
-    const [onlyPendingPaths, setOnlyPendingPaths] = useState(false);
 
-    const [categoriesPrefixsList, setCategoriesPrefixsList] = useState<{ name: string; value: string; }[]>([]);
-    const [selectedPrefixes, setSelectedPrefixes] = useState<Set<string>>(new Set());
+    const SENTINELS = {
+        NONE: "__NONE__",                 // means “no results” (service already supports this one)
+        EXCLUDE_PENDING: "__EXCLUDE_PENDING__" // new: means “everything except Pending”
+    };
 
-    // treat both forms as "pending"
     const PENDING_PATHS = ["/@scan@/ACG/Pending", "/@scan@/ACG/Pending/"];
 
-    const getActivePrefixes = useCallback(
-        () => (onlyPendingPaths ? PENDING_PATHS : Array.from(selectedPrefixes)),
-        [onlyPendingPaths, selectedPrefixes]
-    );
+    const getActivePrefixes = useCallback(() => {
+        const selected = Array.from(selectedPrefixes ?? []);
+        const isPendingPrefix = (p: string) =>
+            PENDING_PATHS.includes(p) || /\/@scan@\/ACG\/Pending\/?$/.test(p);
 
-    // when the toggle changes, go back to page 1
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [onlyPendingPaths]);
+        const onlyPending = selected.filter(isPendingPrefix);
+        const onlyNonPending = selected.filter(p => !isPendingPrefix(p));
+
+        // Both toggles on → whatever user selected (or nothing → means "no server filter")
+        if (showPending && showNonPending) {
+            return selected.length ? selected : []; // ← let server include all
+        }
+
+        // Pending only
+        if (showPending && !showNonPending) {
+            return onlyPending.length ? onlyPending : PENDING_PATHS;
+        }
+
+        // Non-Pending only
+        if (!showPending && showNonPending) {
+            // If user picked some non-pending prefixes, use them.
+            // If not, ask server for “everything except pending”.
+            return onlyNonPending.length ? onlyNonPending : [SENTINELS.EXCLUDE_PENDING];
+        }
+
+        // Neither checked → explicitly zero results
+        return [SENTINELS.NONE];
+    }, [selectedPrefixes, showPending, showNonPending]);
+
 
 
     useEffect(() => {
@@ -534,20 +570,21 @@ const OfflineWindow: React.FC = () => {
     };
 
     const toggleModifyMode = () => {
-        setIsModifyMode((prevMode) => {
-            const nextMode = !prevMode;
-            // If we're enabling modify mode, set onlyPendingPaths = true
-            if (nextMode) {
-                setOnlyPendingPaths(true);
+        setIsModifyMode(prev => {
+            const next = !prev;
+            if (next) {
+                setShowPending(true);
+                setShowNonPending(false);
             } else {
-                // If we're disabling modify mode, set onlyPendingPaths = false
-                setOnlyPendingPaths(false);
+                setShowPending(true);
+                setShowNonPending(true);
             }
-            return nextMode;
+            return next;
         });
-        setSelectedIds(new Set()); // Clear selections when toggling modify mode
-        setFilterText("")
+        setSelectedIds(new Set());
+        setFilterText("");
     };
+
 
     // Utility function to pause execution for a given number of milliseconds
     const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -612,32 +649,48 @@ const OfflineWindow: React.FC = () => {
 
     useEffect(() => {
         let cancelled = false;
+
         const timer = setTimeout(async () => {
             if (cancelled) return;
 
+            // If neither is selected, clear and bail
+            if (!showPending && !showNonPending) {
+                setUiMode('idle');
+                setOfflineDownloadList([]);
+                setServerTotalItems(0);
+                setServerTotalPages(1);
+                setIsLoading(false);
+                return;
+            }
+
+            const status: StatusFilter = deriveStatus(showPending, showNonPending);
+
             setUiMode('paging');
             setIsLoading(true);
+
             try {
                 const page0 = Math.max(0, currentPage - 1);
                 const prefixes = getActivePrefixes();
+
                 const p = await fetchOfflineDownloadListPage(
                     dispatch,
                     page0,
                     itemsPerPage,
-                    /* filterEmptyBaseModel */ false,
-                    getActivePrefixes(),
-                    /* search */ filterText.trim(),
-                    /* op */ filterCondition
+              /* filterEmptyBaseModel */ false,
+                    prefixes,
+              /* search */ filterText.trim(),
+              /* op */ filterCondition,
+              /* status */ status
                 );
 
                 if (!cancelled) {
-                    setOfflineDownloadList(Array.isArray(p.content) ? p.content : []);
-                    setServerTotalItems(p.totalElements ?? 0);
-                    setServerTotalPages(p.totalPages ?? 1);
+                    setOfflineDownloadList(Array.isArray(p?.content) ? p.content : []);
+                    setServerTotalItems(p?.totalElements ?? 0);
+                    setServerTotalPages(p?.totalPages ?? 1);
                 }
             } catch (e: any) {
                 if (!cancelled) {
-                    console.error("Paged fetch failed:", e?.message || e);
+                    console.error('Paged fetch failed:', e?.message || e);
                     setOfflineDownloadList([]);
                     setServerTotalItems(0);
                     setServerTotalPages(1);
@@ -648,11 +701,19 @@ const OfflineWindow: React.FC = () => {
                     setUiMode('idle');
                 }
             }
-        }, 200); // 200–300ms feels nice
+        }, 200);
 
         return () => { cancelled = true; clearTimeout(timer); };
-    }, [dispatch, currentPage, itemsPerPage, getActivePrefixes, filterText, filterCondition]);
-
+    }, [
+        dispatch,
+        currentPage,
+        itemsPerPage,
+        getActivePrefixes,
+        filterText,
+        filterCondition,
+        showPending,
+        showNonPending
+    ]);
 
     useEffect(() => {
         setCurrentPage(1);
@@ -735,20 +796,23 @@ const OfflineWindow: React.FC = () => {
     };
 
     const filteredDownloadList = useMemo(() => {
-        // Server already filtered by prefix + search + op + pending.
         const base = offlineDownloadList;
 
-        // Optional: keep “selected first” sort when not in Modify Mode
+        // pending/non-pending filter
+        const pendingFiltered = base.filter(entry => {
+            const pending = isPendingEntry(entry); // you already have this helper
+            return (showPending && pending) || (showNonPending && !pending);
+        });
+
         if (!isModifyMode) {
-            return [...base].sort((a, b) => {
+            return [...pendingFiltered].sort((a, b) => {
                 const aSelected = selectedIds.has(a.civitaiVersionID) ? 1 : 0;
                 const bSelected = selectedIds.has(b.civitaiVersionID) ? 1 : 0;
                 return bSelected - aSelected;
             });
         }
-
-        return base;
-    }, [offlineDownloadList, selectedIds, isModifyMode]);
+        return pendingFiltered;
+    }, [offlineDownloadList, selectedIds, isModifyMode, showPending, showNonPending]);
 
     useEffect(() => {
         setSelectedIds(new Set());
@@ -1229,15 +1293,17 @@ const OfflineWindow: React.FC = () => {
             setIsLoading(true);
             const page0 = Math.max(0, currentPage - 1);
             const prefixes = getActivePrefixes();
+            const status: StatusFilter = deriveStatus(showPending, showNonPending);
 
             const p = await fetchOfflineDownloadListPage(
                 dispatch,
                 page0,
                 itemsPerPage,
                 /* filterEmptyBaseModel */ false,
-                getActivePrefixes(),
+                prefixes,
                 /* search */ filterText.trim(),
-                /* op */ filterCondition
+                /* op */ filterCondition,
+                /* status */ status
             );
 
 
@@ -1315,15 +1381,17 @@ const OfflineWindow: React.FC = () => {
             try {
                 const page0 = Math.max(0, currentPage - 1); // UI 1-based → server 0-based
                 const prefixes = getActivePrefixes();
+                const status: StatusFilter = deriveStatus(showPending, showNonPending);
 
                 const p = await fetchOfflineDownloadListPage(
                     dispatch,
                     page0,
                     itemsPerPage,
                     /* filterEmptyBaseModel */ false,
-                    getActivePrefixes(),
+                    prefixes,
                     /* search */ filterText.trim(),
-                    /* op */ filterCondition
+                    /* op */ filterCondition,
+                    /* status */ status
                 );
 
                 setOfflineDownloadList(Array.isArray(p.content) ? p.content : []);
@@ -1559,15 +1627,17 @@ const OfflineWindow: React.FC = () => {
         try {
             const page0 = Math.max(0, currentPage - 1); // UI 1-based → server 0-based
             const prefixes = getActivePrefixes();
+            const status: StatusFilter = deriveStatus(showPending, showNonPending);
 
             const p = await fetchOfflineDownloadListPage(
                 dispatch,
                 page0,
                 itemsPerPage,
                 /* filterEmptyBaseModel */ false,
-                getActivePrefixes(),
+                prefixes,
                 /* search */ filterText.trim(),
-                /* op */ filterCondition
+                /* op */ filterCondition,
+                /* status */ status
             );
 
             if (Array.isArray(p.content)) {
@@ -1649,14 +1719,17 @@ const OfflineWindow: React.FC = () => {
             const page0 = Math.max(0, currentPage - 1); // UI is 1-based
             try {
                 const prefixes = getActivePrefixes();
+                const status: StatusFilter = deriveStatus(showPending, showNonPending);
+
                 const p = await fetchOfflineDownloadListPage(
                     dispatch,
                     page0,
                     itemsPerPage,
                     /* filterEmptyBaseModel */ false,
-                    getActivePrefixes(),
+                    prefixes,
                     /* search */ filterText.trim(),
-                    /* op */ filterCondition
+                    /* op */ filterCondition,
+                    /* status */ status
                 );
 
                 if (Array.isArray(p.content)) {
@@ -1724,15 +1797,17 @@ const OfflineWindow: React.FC = () => {
             // Refresh current page
             const page0 = Math.max(0, currentPage - 1);
             const prefixes = getActivePrefixes();
+            const status: StatusFilter = deriveStatus(showPending, showNonPending);
 
             const p = await fetchOfflineDownloadListPage(
                 dispatch,
                 page0,
                 itemsPerPage,
                 /* filterEmptyBaseModel */ false,
-                getActivePrefixes(),
+                prefixes,
                 /* search */ filterText.trim(),
-                /* op */ filterCondition
+                /* op */ filterCondition,
+                /* status */ status
             );
 
             // If current page is now past the end, jump to last page
@@ -1810,12 +1885,6 @@ const OfflineWindow: React.FC = () => {
         setFailedEntries([]);
         // setCompletedCount(0);
         // setDelayTime(0);
-    };
-
-    // Checks if an entry has a pending downloadFilePath
-    const isPendingEntry = (entry: OfflineDownloadEntry): boolean => {
-        const path = entry.downloadFilePath || "";
-        return path === "/@scan@/ACG/Pending" || path === "/@scan@/ACG/Pending/";
     };
 
     // Similar to doesEntryMatch(), but using the provided tag (always with 'contains' logic)
@@ -2787,31 +2856,41 @@ const OfflineWindow: React.FC = () => {
                                 <option value="begins with">Begins with</option>
                                 <option value="ends with">Ends with</option>
                             </select>
-
                             <div style={{ margin: '1rem 0', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                {/* 1st line: “Only Pending” */}
+                                {/* Pending */}
                                 <Form.Check
                                     type="checkbox"
-                                    id="only-pending-checkbox"
-                                    label={<MdOutlinePendingActions size={24} color={isDarkMode ? '#fff' : '#000'} />}
-                                    checked={onlyPendingPaths}
+                                    id="show-pending-checkbox"
+                                    label={<span style={{ color: isDarkMode ? '#fff' : '#000', fontWeight: 600 }}>Pending</span>}
+                                    checked={showPending}
                                     disabled={isLoading}
-                                    onChange={e => setOnlyPendingPaths(e.target.checked)}
-                                    style={{ fontWeight: 'bold' }}
-                                    title="Only Pending"
+                                    onChange={e => setShowPending(e.target.checked)}
+                                    title="Show items whose download path is a Pending folder"
                                 />
 
-                                {/* 2nd line: “Prevent Pending Paths” */}
+                                {/* Non-Pending */}
+                                <Form.Check
+                                    type="checkbox"
+                                    id="show-non-pending-checkbox"
+                                    label={<span style={{ color: isDarkMode ? '#fff' : '#000', fontWeight: 600 }}>Non-Pending</span>}
+                                    checked={showNonPending}
+                                    disabled={isLoading}
+                                    onChange={e => setShowNonPending(e.target.checked)}
+                                    title="Show items not in Pending folders"
+                                />
+
+                                {/* (keep your existing “Prevent Pending Paths” toggle) */}
                                 <Form.Check
                                     type="checkbox"
                                     id="prevent-pending-paths"
                                     disabled={isLoading}
-                                    label={<MdOutlinePendingActions size={24} color={isDarkMode ? '#fff' : '#000'} />}
+                                    label={<span style={{ color: isDarkMode ? '#fff' : '#000', fontWeight: 600 }}>Block Pending path edits</span>}
                                     checked={preventPendingPaths}
                                     onChange={e => setPreventPendingPaths(e.target.checked)}
-                                    title="disallow modify the downloadFilePath to be pending"
+                                    title="Disallow setting the downloadFilePath to a Pending folder"
                                 />
                             </div>
+
 
                         </div>
 
@@ -2827,7 +2906,7 @@ const OfflineWindow: React.FC = () => {
                                 }}
                                 disabled={isLoading}
                             >
-                                Select First
+                                Select First (Not Pending)
                             </Button>
 
                             {/* Select Count UI */}
@@ -3023,7 +3102,7 @@ const OfflineWindow: React.FC = () => {
                                 <Form.Check
                                     type="checkbox"
                                     id="prefix-select-all"
-                                    label="Select All"
+                                    label="Select All in This Page"
                                     ref={selectAllRef}
                                     checked={selectedPrefixes.size === categoriesPrefixsList.length}
                                     onChange={e => {
@@ -3033,7 +3112,7 @@ const OfflineWindow: React.FC = () => {
                                             setSelectedPrefixes(new Set());
                                         }
                                     }}
-                                    disabled={isLoading || onlyPendingPaths}
+                                    disabled={isLoading || (showPending && !showNonPending)}
                                     style={{
                                         marginBottom: '8px',
                                         fontWeight: 'bold',
@@ -3057,7 +3136,7 @@ const OfflineWindow: React.FC = () => {
                                                 return next;
                                             })
                                         }
-                                        disabled={isLoading || onlyPendingPaths}
+                                        disabled={isLoading || (showPending && !showNonPending)}
                                         style={{
                                             marginBottom: '4px',
                                             color: isDarkMode ? '#fff' : '#000',
