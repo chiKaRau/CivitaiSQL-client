@@ -862,6 +862,25 @@ const OfflineWindow: React.FC = () => {
 
     const [preventPendingPaths, setPreventPendingPaths] = useState(true);
 
+    // LEFT OVERLAY (preview) state
+    const [leftOverlayEntry, setLeftOverlayEntry] = useState<OfflineDownloadEntry | null>(null);
+
+    // Toggle: click the same card again to close; different card swaps the content
+    const toggleLeftOverlay = useCallback((entry: OfflineDownloadEntry) => {
+        setLeftOverlayEntry(prev => (prev?.civitaiVersionID === entry.civitaiVersionID ? null : entry));
+    }, []);
+
+    const closeLeftOverlay = useCallback(() => setLeftOverlayEntry(null), []);
+
+    // ESC to close
+    useEffect(() => {
+        if (!leftOverlayEntry) return;
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeLeftOverlay(); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [leftOverlayEntry, closeLeftOverlay]);
+
+
     // Define themes
     const darkTheme = {
         headerBackgroundColor: '#333',
@@ -1137,6 +1156,57 @@ const OfflineWindow: React.FC = () => {
         zIndex: 1000,
         padding: '20px',
         boxSizing: 'border-box',
+    };
+
+    const leftPanelComputedStyle: React.CSSProperties = {
+        ...leftPanelStyle,
+        overflowY: leftOverlayEntry ? 'hidden' : leftPanelStyle.overflowY
+    };
+
+    const leftOverlayBackdropStyle: React.CSSProperties = {
+        position: 'absolute',
+        inset: 0,
+        background: 'rgba(0,0,0,0.45)',  // dims ONLY the left panel
+        display: 'flex',
+        zIndex: 1100
+    };
+
+    const leftOverlayDrawerStyle: React.CSSProperties = {
+        width: '95%',  // covers ~95% of the left panel
+        height: '100%',
+        backgroundColor: isDarkMode ? '#1f2937' : '#ffffff',
+        color: isDarkMode ? '#fff' : '#000',
+        boxShadow: '2px 0 10px rgba(0,0,0,0.4)',
+        overflowY: 'auto',
+        boxSizing: 'border-box',
+        padding: 14,
+        position: 'relative',
+        transform: 'translateX(0)',
+        transition: 'transform 180ms ease'
+    };
+
+    const closeBtnStyle: React.CSSProperties = {
+        position: 'absolute',
+        top: 8, right: 8,
+        background: 'transparent',
+        border: 'none',
+        cursor: 'pointer'
+    };
+
+    const previewBtnStyle: React.CSSProperties = {
+        position: 'absolute',
+        bottom: 8,
+        right: 8,
+        width: 34,
+        height: 34,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: '999px',
+        border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
+        background: isDarkMode ? '#111' : '#fff',
+        cursor: 'pointer',
+        boxShadow: isDarkMode ? '0 1px 4px rgba(0,0,0,0.5)' : '0 1px 4px rgba(0,0,0,0.2)'
     };
 
 
@@ -1933,6 +2003,114 @@ const OfflineWindow: React.FC = () => {
         setCurrentPage(clamped);
     };
 
+    const PreviewCard: React.FC<{ entry: OfflineDownloadEntry; isDarkMode: boolean }> = ({ entry, isDarkMode }) => {
+        const earlyEnds = entry.modelVersionObject?.earlyAccessEndsAt;
+
+        return (
+            <Card
+                style={{
+                    width: '100%',
+                    maxWidth: 520,
+                    margin: '0 auto',
+                    border: isDarkMode ? '1px solid #666' : '1px solid #ccc',
+                    borderRadius: 10,
+                    backgroundColor: isDarkMode ? '#333' : '#fff',
+                    color: isDarkMode ? '#fff' : '#000',
+                    boxShadow: isDarkMode ? '2px 2px 12px rgba(255,255,255,0.08)' : '2px 2px 12px rgba(0,0,0,0.1)',
+                    position: 'relative',
+                    padding: 12
+                }}
+            >
+                {earlyEnds && (
+                    <div style={{
+                        position: 'absolute', top: 8, right: 8,
+                        background: isDarkMode ? '#444' : '#fff',
+                        color: 'red', fontWeight: 700, fontSize: '.8rem',
+                        border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
+                        padding: '2px 6px', borderRadius: 6
+                    }}>
+                        Ends: {new Date(earlyEnds).toLocaleString()}
+                    </div>
+                )}
+
+                <div style={{
+                    display: 'flex', alignItems: 'center',
+                    marginTop: 10, marginBottom: 6,
+                    borderBottom: `1px solid ${isDarkMode ? '#555' : '#ccc'}`, paddingBottom: 6
+                }}>
+                    {entry.modelVersionObject?.baseModel && (
+                        <span style={{
+                            fontSize: '.75rem', fontWeight: 700, background: '#007bff',
+                            color: '#fff', padding: '2px 8px', borderRadius: 6, marginRight: 8
+                        }}>
+                            {entry.modelVersionObject.baseModel}
+                        </span>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <TitleNameToggle titleName={entry?.modelVersionObject?.model?.name ?? 'N/A'} truncateAfter={40} />
+                    </div>
+                </div>
+
+                {entry.imageUrlsArray?.length ? (() => {
+                    const first = normalizeImg(entry.imageUrlsArray[0] as any);
+                    const baseW = 520;
+                    return (
+                        <img
+                            className="d-block w-100"
+                            src={withWidth(first.url, baseW)}
+                            srcSet={buildSrcSet(first.url, [400, 520, 720, 960])}
+                            sizes="(max-width: 560px) 100vw, 520px"
+                            loading="eager"
+                            decoding="async"
+                            width={first.width ?? undefined}
+                            height={first.height ?? undefined}
+                            alt="Preview"
+                            style={{ maxHeight: 360, objectFit: 'contain', margin: '0 auto' }}
+                        />
+                    );
+                })() : (
+                    <div style={{
+                        height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: isDarkMode ? '#555' : '#f0f0f0', borderRadius: 6
+                    }}>
+                        No Images Available
+                    </div>
+                )}
+
+                <div style={{ marginTop: 8, fontSize: '.9rem', lineHeight: 1.35 }}>
+                    <div title={entry.modelVersionObject?.name ?? 'N/A'}><strong>Version:</strong> {entry.modelVersionObject?.name ?? 'N/A'}</div>
+                    <FileNameToggle fileName={entry.civitaiFileName ?? 'N/A'} truncateAfter={56} />
+                    {Array.isArray(entry.civitaiTags) && entry.civitaiTags.length > 0 && (
+                        <TagList tags={entry.civitaiTags} isDarkMode={isDarkMode} />
+                    )}
+                    <div style={{ marginTop: 4, whiteSpace: 'normal', wordWrap: 'break-word' }}>
+                        <strong>Download Path:</strong> {entry.downloadFilePath ?? 'N/A'}
+                    </div>
+                    <div><strong>Category:</strong> {entry.selectedCategory ?? 'N/A'}</div>
+                    <div><strong>Version ID:</strong> {entry.modelVersionObject?.id ?? 'N/A'}</div>
+                    <div><strong>Model ID:</strong> {entry.modelVersionObject?.modelId ?? 'N/A'}</div>
+                    <div>
+                        <strong>URL:</strong>{' '}
+                        {entry.civitaiUrl ? (
+                            <a href={entry.civitaiUrl} target="_blank" rel="noopener noreferrer" style={{ color: isDarkMode ? '#60A5FA' : '#0d6efd' }}>
+                                Visit Model
+                            </a>
+                        ) : 'N/A'}
+                    </div>
+                    <div><strong>Creator:</strong> {entry.modelVersionObject?.creator?.username ?? 'N/A'}</div>
+                    <div>
+                        <strong>File Size:</strong>{' '}
+                        {(() => {
+                            const f = entry.modelVersionObject?.files?.find(file => file.name.endsWith('.safetensors'));
+                            return f ? `${(f.sizeKB / 1024).toFixed(2)} MB` : 'N/A';
+                        })()}
+                    </div>
+                </div>
+            </Card>
+        );
+    };
+
+
     // **BigCardMode Component Implementation**
     const BigCardMode: React.FC<{
         filteredDownloadList: OfflineDownloadEntry[];
@@ -1942,6 +2120,7 @@ const OfflineWindow: React.FC = () => {
         toggleSelect: (id: string) => void;
         handleSelectAll: () => void;
         showGalleries: boolean;
+        onToggleOverlay: (entry: OfflineDownloadEntry) => void;
     }> = ({
         filteredDownloadList,
         isDarkMode,
@@ -1949,7 +2128,8 @@ const OfflineWindow: React.FC = () => {
         selectedIds,
         toggleSelect,
         handleSelectAll,
-        showGalleries
+        showGalleries,
+        onToggleOverlay
     }) => {
             if (filteredDownloadList.length === 0) {
                 return (
@@ -2262,6 +2442,18 @@ const OfflineWindow: React.FC = () => {
                                             })()}
                                         </p>
                                     </div>
+
+
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); onToggleOverlay(entry); }}
+                                        title="Preview in left panel"
+                                        aria-label="Preview in left panel"
+                                        style={previewBtnStyle}
+                                    >
+                                        <LuPanelLeftOpen size={18} />
+                                    </button>
+
                                 </Card>
                             );
                         })}
@@ -2279,6 +2471,7 @@ const OfflineWindow: React.FC = () => {
         selectedIds: Set<string>;
         toggleSelect: (id: string) => void;
         handleSelectAll: () => void;
+        onToggleOverlay: (entry: OfflineDownloadEntry) => void;
     }> = ({
         filteredDownloadList,
         isDarkMode,
@@ -2286,6 +2479,7 @@ const OfflineWindow: React.FC = () => {
         selectedIds,
         toggleSelect,
         handleSelectAll,
+        onToggleOverlay
     }) => {
             if (filteredDownloadList.length === 0) {
                 return (
@@ -2515,6 +2709,16 @@ const OfflineWindow: React.FC = () => {
                                             <strong>Cat:</strong> {entry.selectedCategory ?? 'N/A'}
                                         </p>
                                     </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); onToggleOverlay(entry); }}
+                                        title="Preview in left panel"
+                                        aria-label="Preview in left panel"
+                                        style={previewBtnStyle}
+                                    >
+                                        <LuPanelLeftOpen size={18} />
+                                    </button>
                                 </Card>
                             );
                         })}
@@ -2553,7 +2757,7 @@ const OfflineWindow: React.FC = () => {
         <div style={containerStyle}>
             {/* Scrollable Content Area */}
             <>
-                <div style={leftPanelStyle} ref={leftPanelRef}>
+                <div style={leftPanelComputedStyle} ref={leftPanelRef}>
                     <div style={headerStyleContainer}>
                         <h3 style={{ color: isDarkMode ? '#fff' : '#000' }}>Offline Download List</h3>
 
@@ -3061,6 +3265,19 @@ const OfflineWindow: React.FC = () => {
                         </div>
                     )}
 
+                    {leftOverlayEntry && (
+                        <div style={leftOverlayBackdropStyle} onClick={closeLeftOverlay}>
+                            <div style={leftOverlayDrawerStyle} onClick={(e) => e.stopPropagation()}>
+                                <button onClick={closeLeftOverlay} style={closeBtnStyle} aria-label="Close overlay">
+                                    <IoCloseOutline size={22} />
+                                </button>
+
+                                <PreviewCard entry={leftOverlayEntry} isDarkMode={isDarkMode} />
+                            </div>
+                            {/* The remaining ~5% area is the dimmed backdrop; clicking it closes the overlay */}
+                        </div>
+                    )}
+
 
                 </div>
 
@@ -3271,6 +3488,7 @@ const OfflineWindow: React.FC = () => {
                                         toggleSelect={toggleSelect}
                                         handleSelectAll={handleSelectAll}
                                         showGalleries={showGalleries}
+                                        onToggleOverlay={toggleLeftOverlay}
                                     />
                                 )}
 
@@ -3282,6 +3500,7 @@ const OfflineWindow: React.FC = () => {
                                         selectedIds={selectedIds}
                                         toggleSelect={toggleSelect}
                                         handleSelectAll={handleSelectAll}
+                                        onToggleOverlay={toggleLeftOverlay}
                                     />
                                 )}
 
@@ -3294,6 +3513,7 @@ const OfflineWindow: React.FC = () => {
                                         toggleSelect={toggleSelect}
                                         handleSelectAll={handleSelectAll}
                                         showGalleries={false}
+                                        onToggleOverlay={toggleLeftOverlay}
                                     />
                                 )}
 
