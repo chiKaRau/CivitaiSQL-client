@@ -68,6 +68,7 @@ import FileNameToggle from './FileNameToggle';
 import TagList from './TagList';
 import TitleNameToggle from './TitleNameToggle';
 import TopTagsDropdown from './TopTagsDropdown';
+import SimilarSearchPanel from './SimilarSearchPanel';
 
 // TypeScript Interfaces
 interface CivitaiModelFile {
@@ -156,7 +157,7 @@ interface ModelVersionObject {
     downloadUrl: string;
 }
 
-interface OfflineDownloadEntry {
+export interface OfflineDownloadEntry {
     civitaiFileName: string;
     civitaiModelFileList: CivitaiModelFile[];
     modelVersionObject: ModelVersionObject;
@@ -3273,6 +3274,11 @@ const OfflineWindow: React.FC = () => {
                                 </button>
 
                                 <PreviewCard entry={leftOverlayEntry} isDarkMode={isDarkMode} />
+
+                                {leftOverlayEntry && (
+                                    <SimilarSearchPanel entry={leftOverlayEntry} isDarkMode={isDarkMode} />
+                                )}
+
                             </div>
                             {/* The remaining ~5% area is the dimmed backdrop; clicking it closes the overlay */}
                         </div>
