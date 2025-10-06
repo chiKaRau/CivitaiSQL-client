@@ -21,7 +21,11 @@ type SimilarResult = {
     imageUrls?: Array<{ url: string; width?: number; height?: number; nsfw?: any }> | string | null;
     stats?: CivitaiStats | string | null;
     myRating?: number | null;
+
+    /** mark items that came from the offline endpoint */
+    isOffline?: boolean;
 };
+
 
 const SimilarSearchPanel: React.FC<{
     entry: OfflineDownloadEntry;
@@ -320,9 +324,11 @@ const SimilarSearchPanel: React.FC<{
                 typeof u === 'string' ? { url: u } : { url: u?.url, width: u?.width, height: u?.height }
             ),
             stats: mv?.stats ?? null,
-            myRating: null
+            myRating: null,
+            isOffline: true, // ⬅️ flag it here
         };
     }
+
 
 
     const clearSimilar = () => {
@@ -410,6 +416,14 @@ const SimilarSearchPanel: React.FC<{
         setCarouselIndex(ci => ({ ...ci, [k]: getIdx(k, len) + 1 }));
     }
 
+    function civitaiModelUrl(m: SimilarResult): string {
+        const modelId = String(m?.modelNumber ?? '').trim();
+        const versionId = String(m?.versionNumber ?? '').trim();
+        if (!modelId || !versionId || modelId === 'N/A' || versionId === 'N/A') return '';
+        return `https://civitai.com/models/${encodeURIComponent(modelId)}?modelVersionId=${encodeURIComponent(versionId)}`;
+    }
+
+
     return (
         <div style={panelWrap}>
             <div style={sectionTitle}>
@@ -424,7 +438,7 @@ const SimilarSearchPanel: React.FC<{
                             style={input}
                             type="text"
                             value={simInput}
-                            placeholder="type or click tags… (space-separated)"
+                            placeholder="type or click tags ... (space-separated)"
                             onChange={(e) => syncSelectionFromInput(e.target.value)}
                         />
                         <div style={hint}>Selected tags appear here. Press space to separate.</div>
@@ -499,17 +513,30 @@ const SimilarSearchPanel: React.FC<{
                             const statsObj = simGetParsedStats(m);
                             const r = simGetMyRating(m);
 
+                            const cardStyle: React.CSSProperties = m.isOffline
+                                ? { ...fileCard, border: '2px solid rgb(0, 123, 255)' }
+                                : fileCard;
+
                             return (
                                 <div key={`${k}_${i}`} style={cardSlot}>
-                                    <div style={fileCard}>
+                                    <div style={cardStyle}>
+
                                         <div style={carouselWrap(400)}>
                                             {curUrl ? (
                                                 <img
-                                                    src={curUrl || PLACEHOLDER}
-                                                    alt="preview"
-                                                    style={imgStyle}
+                                                    className="d-block"
+                                                    src={withWidth(curUrl, 350)}
+                                                    srcSet={buildSrcSet(curUrl, [240, 350, 520, 720])}
+                                                    sizes="(max-width: 380px) 100vw, 350px"
                                                     loading="lazy"
                                                     decoding="async"
+                                                    alt="preview"
+                                                    style={{
+                                                        width: '100%',
+                                                        height: '100%',
+                                                        objectFit: 'cover',  // or 'contain' if you prefer no crop
+                                                        display: 'block'
+                                                    }}
                                                     onError={(e) => {
                                                         const t = e.currentTarget as HTMLImageElement;
                                                         if (t.src !== PLACEHOLDER) t.src = PLACEHOLDER;
@@ -519,7 +546,26 @@ const SimilarSearchPanel: React.FC<{
                                                 <div style={{ ...imgStyle, display: 'grid', placeItems: 'center', fontSize: 12, opacity: .6 }}>No image</div>
                                             )}
 
-                                            <div style={{ ...badge, left: 8 }}>ID: {m.modelNumber} / {m.versionNumber}</div>
+                                            {(() => {
+                                                const href = civitaiModelUrl(m);
+                                                const shared = { ...badge, left: 8, textDecoration: 'none', color: 'inherit', cursor: href ? 'pointer' as const : 'default' as const };
+                                                return href ? (
+                                                    <a
+                                                        href={href}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        aria-label={`Open model ${m.modelNumber} version ${m.versionNumber} on Civitai`}
+                                                        style={shared}
+                                                        title="Open on Civitai"
+                                                    >
+                                                        ID: {m.modelNumber} / {m.versionNumber}
+                                                    </a>
+                                                ) : (
+                                                    <div style={shared}>
+                                                        ID: {m.modelNumber} / {m.versionNumber}
+                                                    </div>
+                                                );
+                                            })()}
                                             <div style={{ ...badge, right: 8 }}>{m.baseModel || 'N/A'}</div>
 
                                             {len > 1 && (
@@ -595,5 +641,17 @@ const SimilarSearchPanel: React.FC<{
         </div>
     );
 };
+
+const IMG_WIDTH_RE = /\/width=\d+\//;
+function withWidth(url: string, w: number) {
+    return IMG_WIDTH_RE.test(url)
+        ? url.replace(IMG_WIDTH_RE, `/width=${w}/`)
+        : url.replace(/\/([^\/?#]+)([?#]|$)/, `/width=${w}/$1$2`);
+}
+
+// Build a responsive srcset so the browser picks the smallest adequate size.
+function buildSrcSet(url: string, widths: number[]) {
+    return widths.map(w => `${withWidth(url, w)} ${w}w`).join(', ');
+}
 
 export default SimilarSearchPanel;

@@ -2015,7 +2015,7 @@ const OfflineWindow: React.FC = () => {
 
     const PreviewCard: React.FC<{ entry: OfflineDownloadEntry; isDarkMode: boolean }> = ({ entry, isDarkMode }) => {
         const earlyEnds = entry.modelVersionObject?.earlyAccessEndsAt;
-
+        const [activeIdx, setActiveIdx] = React.useState(0);
         return (
             <Card
                 style={{
@@ -2062,17 +2062,31 @@ const OfflineWindow: React.FC = () => {
                 </div>
 
                 {entry.imageUrlsArray?.length ? (
-                    <div style={{ height: 400 }}>
+                    <div style={{ height: 400, overflow: 'hidden' }}>
                         <Carousel
                             variant={isDarkMode ? 'dark' : 'light'}
                             indicators={entry.imageUrlsArray.length > 1}
                             controls={entry.imageUrlsArray.length > 1}
                             interval={null}
-                            style={{ height: '100%', marginBottom: 0 }}
+                            style={{ height: '100%', marginBottom: 0, overflow: 'hidden' }}
+                            activeIndex={activeIdx}
+                            onSelect={(next) => setActiveIdx(next as number)}
                         >
                             {entry.imageUrlsArray.map((img, idx) => {
-                                const { url, width, height } = normalizeImg(img as any);
-                                const baseW = 520;
+                                const { url } = normalizeImg(img as any);
+                                const len = entry.imageUrlsArray.length;
+
+                                const isActive = idx === activeIdx;
+                                const isNear =
+                                    idx === (activeIdx + 1) % len || idx === (activeIdx - 1 + len) % len;
+
+                                // choose “tiers” of sizes
+                                const widths = isActive
+                                    ? [520, 720, 960]  // sharp for current slide
+                                    : isNear
+                                        ? [400, 520]       // medium for next/prev
+                                        : [200, 320];      // tiny thumbnails for others
+
                                 return (
                                     <Carousel.Item key={idx} style={{ height: '100%' }}>
                                         <div
@@ -2089,18 +2103,18 @@ const OfflineWindow: React.FC = () => {
                                         >
                                             <img
                                                 className="d-block"
-                                                src={withWidth(url, baseW)}
-                                                srcSet={buildSrcSet(url, [400, 520, 720, 960])}
+                                                // use a small src, let srcSet upgrade when active
+                                                src={withWidth(url, widths[0])}
+                                                srcSet={buildSrcSet(url, widths)}
                                                 sizes="(max-width: 560px) 100vw, 520px"
-                                                loading={idx === 0 ? 'eager' : 'lazy'}
+                                                loading={isActive ? 'eager' : 'lazy'}
                                                 decoding="async"
-                                                width={width ?? undefined}
-                                                height={height ?? undefined}
                                                 alt={`Preview ${idx + 1}`}
                                                 style={{
-                                                    maxHeight: '100%',
-                                                    maxWidth: '100%',
+                                                    width: '100%',
+                                                    height: '100%',
                                                     objectFit: 'contain',
+                                                    display: 'block',
                                                 }}
                                             />
                                         </div>
