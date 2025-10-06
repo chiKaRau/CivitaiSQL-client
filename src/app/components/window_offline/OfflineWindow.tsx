@@ -1205,9 +1205,18 @@ const OfflineWindow: React.FC = () => {
         justifyContent: 'center',
         borderRadius: '999px',
         border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
+        color: isDarkMode ? '#fff' : '#111',
         background: isDarkMode ? '#111' : '#fff',
         cursor: 'pointer',
         boxShadow: isDarkMode ? '0 1px 4px rgba(0,0,0,0.5)' : '0 1px 4px rgba(0,0,0,0.2)'
+    };
+
+    const previewBtnActiveStyle: React.CSSProperties = {
+        ...previewBtnStyle,
+        background: '#2563eb',
+        borderColor: isDarkMode ? '#60A5FA' : '#93c5fd',
+        color: '#fff',
+        boxShadow: isDarkMode ? '0 0 0 3px rgba(37,99,235,.35)' : '0 0 0 3px rgba(37,99,235,.2)'
     };
 
 
@@ -2052,31 +2061,70 @@ const OfflineWindow: React.FC = () => {
                     </div>
                 </div>
 
-                {entry.imageUrlsArray?.length ? (() => {
-                    const first = normalizeImg(entry.imageUrlsArray[0] as any);
-                    const baseW = 520;
-                    return (
-                        <img
-                            className="d-block w-100"
-                            src={withWidth(first.url, baseW)}
-                            srcSet={buildSrcSet(first.url, [400, 520, 720, 960])}
-                            sizes="(max-width: 560px) 100vw, 520px"
-                            loading="eager"
-                            decoding="async"
-                            width={first.width ?? undefined}
-                            height={first.height ?? undefined}
-                            alt="Preview"
-                            style={{ maxHeight: 360, objectFit: 'contain', margin: '0 auto' }}
-                        />
-                    );
-                })() : (
-                    <div style={{
-                        height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: isDarkMode ? '#555' : '#f0f0f0', borderRadius: 6
-                    }}>
+                {entry.imageUrlsArray?.length ? (
+                    <div style={{ height: 400 }}>
+                        <Carousel
+                            variant={isDarkMode ? 'dark' : 'light'}
+                            indicators={entry.imageUrlsArray.length > 1}
+                            controls={entry.imageUrlsArray.length > 1}
+                            interval={null}
+                            style={{ height: '100%', marginBottom: 0 }}
+                        >
+                            {entry.imageUrlsArray.map((img, idx) => {
+                                const { url, width, height } = normalizeImg(img as any);
+                                const baseW = 520;
+                                return (
+                                    <Carousel.Item key={idx} style={{ height: '100%' }}>
+                                        <div
+                                            style={{
+                                                height: '100%',
+                                                width: '100%',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                background: isDarkMode ? '#2b2b2b' : '#f5f5f5',
+                                                borderRadius: 6,
+                                                overflow: 'hidden',
+                                            }}
+                                        >
+                                            <img
+                                                className="d-block"
+                                                src={withWidth(url, baseW)}
+                                                srcSet={buildSrcSet(url, [400, 520, 720, 960])}
+                                                sizes="(max-width: 560px) 100vw, 520px"
+                                                loading={idx === 0 ? 'eager' : 'lazy'}
+                                                decoding="async"
+                                                width={width ?? undefined}
+                                                height={height ?? undefined}
+                                                alt={`Preview ${idx + 1}`}
+                                                style={{
+                                                    maxHeight: '100%',
+                                                    maxWidth: '100%',
+                                                    objectFit: 'contain',
+                                                }}
+                                            />
+                                        </div>
+                                    </Carousel.Item>
+                                );
+                            })}
+                        </Carousel>
+                    </div>
+                ) : (
+                    <div
+                        style={{
+                            height: 400,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            background: isDarkMode ? '#555' : '#f0f0f0',
+                            borderRadius: 6,
+                        }}
+                    >
                         No Images Available
                     </div>
                 )}
+
+
 
                 <div style={{ marginTop: 8, fontSize: '.9rem', lineHeight: 1.35 }}>
                     <div title={entry.modelVersionObject?.name ?? 'N/A'}><strong>Version:</strong> {entry.modelVersionObject?.name ?? 'N/A'}</div>
@@ -2118,6 +2166,7 @@ const OfflineWindow: React.FC = () => {
         isDarkMode: boolean;
         isModifyMode: boolean;
         selectedIds: Set<string>;
+        activePreviewId: string | null;
         toggleSelect: (id: string) => void;
         handleSelectAll: () => void;
         showGalleries: boolean;
@@ -2130,6 +2179,7 @@ const OfflineWindow: React.FC = () => {
         toggleSelect,
         handleSelectAll,
         showGalleries,
+        activePreviewId,
         onToggleOverlay
     }) => {
             if (filteredDownloadList.length === 0) {
@@ -2450,7 +2500,7 @@ const OfflineWindow: React.FC = () => {
                                         onClick={(e) => { e.stopPropagation(); onToggleOverlay(entry); }}
                                         title="Preview in left panel"
                                         aria-label="Preview in left panel"
-                                        style={previewBtnStyle}
+                                        style={activePreviewId === entry.civitaiVersionID ? previewBtnActiveStyle : previewBtnStyle}
                                     >
                                         <LuPanelLeftOpen size={18} />
                                     </button>
@@ -2470,6 +2520,7 @@ const OfflineWindow: React.FC = () => {
         isDarkMode: boolean;
         isModifyMode: boolean;
         selectedIds: Set<string>;
+        activePreviewId: string | null;
         toggleSelect: (id: string) => void;
         handleSelectAll: () => void;
         onToggleOverlay: (entry: OfflineDownloadEntry) => void;
@@ -2479,6 +2530,7 @@ const OfflineWindow: React.FC = () => {
         isModifyMode,
         selectedIds,
         toggleSelect,
+        activePreviewId,
         handleSelectAll,
         onToggleOverlay
     }) => {
@@ -2716,7 +2768,7 @@ const OfflineWindow: React.FC = () => {
                                         onClick={(e) => { e.stopPropagation(); onToggleOverlay(entry); }}
                                         title="Preview in left panel"
                                         aria-label="Preview in left panel"
-                                        style={previewBtnStyle}
+                                        style={activePreviewId === entry.civitaiVersionID ? previewBtnActiveStyle : previewBtnStyle}
                                     >
                                         <LuPanelLeftOpen size={18} />
                                     </button>
@@ -3495,6 +3547,7 @@ const OfflineWindow: React.FC = () => {
                                         handleSelectAll={handleSelectAll}
                                         showGalleries={showGalleries}
                                         onToggleOverlay={toggleLeftOverlay}
+                                        activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
                                     />
                                 )}
 
@@ -3507,6 +3560,7 @@ const OfflineWindow: React.FC = () => {
                                         toggleSelect={toggleSelect}
                                         handleSelectAll={handleSelectAll}
                                         onToggleOverlay={toggleLeftOverlay}
+                                        activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
                                     />
                                 )}
 
@@ -3520,6 +3574,7 @@ const OfflineWindow: React.FC = () => {
                                         handleSelectAll={handleSelectAll}
                                         showGalleries={false}
                                         onToggleOverlay={toggleLeftOverlay}
+                                        activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
                                     />
                                 )}
 

@@ -144,7 +144,7 @@ const ButtonsGroup: React.FC = () => {
                         {/**Open Offline Window */}
                         <ButtonWrap buttonConfig={{
                             placement: "top",
-                            tooltip: "Open Offline Window",
+                            tooltip: "Open Model List Window",
                             variant: "primary",
                             buttonIcon: <BsReverseLayoutTextWindowReverse />
                             ,

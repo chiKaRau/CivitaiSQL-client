@@ -1,5 +1,8 @@
 import React from 'react';
 import { OfflineDownloadEntry } from './OfflineWindow';
+import { FaChevronCircleLeft, FaChevronCircleRight, FaStar } from 'react-icons/fa';
+import { MdDownload, MdOutlineSupervisorAccount } from 'react-icons/md';
+import { IoMdThumbsUp } from 'react-icons/io';
 
 type CivitaiStats = {
     downloadCount?: number;
@@ -42,9 +45,9 @@ const SimilarSearchPanel: React.FC<{
         marginTop: 14,
         padding: 12,
         borderRadius: 8,
-        border: `1px solid ${isDarkMode ? '#4b5563' : '#d1d5db'}`,
-        background: isDarkMode ? '#111827' : '#ffffff',
-        color: isDarkMode ? '#f9fafb' : '#111827'
+        border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
+        background: isDarkMode ? '#333' : '#fff',
+        color: isDarkMode ? '#fff' : '#000'
     };
     const sectionTitle: React.CSSProperties = {
         display: 'flex',
@@ -58,30 +61,37 @@ const SimilarSearchPanel: React.FC<{
     const row: React.CSSProperties = { display: 'grid', gridTemplateColumns: '120px 1fr', gap: 12, alignItems: 'center' };
     const input: React.CSSProperties = {
         width: '100%', padding: '8px 10px', borderRadius: 6,
-        border: `1px solid ${isDarkMode ? '#374151' : '#d1d5db'}`,
-        background: isDarkMode ? '#0b1220' : '#fff',
-        color: isDarkMode ? '#fff' : '#111'
+        border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
+        background: isDarkMode ? '#444' : '#fff',
+        color: isDarkMode ? '#fff' : '#000'
     };
     const hint: React.CSSProperties = { fontSize: 12, opacity: 0.75, marginTop: 6 };
     const chip: React.CSSProperties = {
-        display: 'inline-flex', alignItems: 'center', padding: '4px 8px', borderRadius: 999,
-        border: `1px solid ${isDarkMode ? '#374151' : '#d1d5db'}`,
+        display: 'inline-flex', alignItems: 'center', padding: '4px 8px',
+        borderRadius: 999,
+        border: `1px solid ${isDarkMode ? '#555' : '#d1d5db'}`,
+        background: isDarkMode ? '#2a2a2a' : '#fff',
+        color: isDarkMode ? '#ddd' : '#111',
         margin: '4px 6px 0 0', cursor: 'pointer', userSelect: 'none'
     };
     const chipActive: React.CSSProperties = {
-        ...chip, background: isDarkMode ? '#1e3a8a' : '#e0e7ff', borderColor: isDarkMode ? '#1e3a8a' : '#6366f1'
+        ...chip,
+        background: '#2563eb',          // strong highlight
+        borderColor: '#93c5fd',
+        color: '#fff'
     };
     const btn: React.CSSProperties = { padding: '6px 10px', borderRadius: 6, border: 'none', cursor: 'pointer' };
     const btnPrimary: React.CSSProperties = { ...btn, background: '#0ea5e9', color: '#fff' };
     const btnGhost: React.CSSProperties = {
-        ...btn, background: isDarkMode ? '#111827' : '#fff',
-        border: `1px solid ${isDarkMode ? '#374151' : '#e5e7eb'}`, color: 'inherit'
+        ...btn,
+        background: isDarkMode ? '#333' : '#fff',
+        border: `1px solid ${isDarkMode ? '#555' : '#e5e7eb'}`, color: 'inherit'
     };
-    const filterbar: React.CSSProperties = { marginTop: 8, paddingTop: 8, borderTop: `1px solid ${isDarkMode ? '#374151' : '#e5e7eb'}` };
+    const filterbar: React.CSSProperties = { marginTop: 8, paddingTop: 8, borderTop: `1px solid ${isDarkMode ? '#555' : '#e5e7eb'}` };
     const filterGroup: React.CSSProperties = { display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 };
     const checkboxChip: React.CSSProperties = {
         display: 'inline-flex', alignItems: 'center', gap: 6,
-        padding: '6px 10px', borderRadius: 999, border: `1px solid ${isDarkMode ? '#374151' : '#d1d5db'}`
+        padding: '6px 10px', borderRadius: 999, border: `1px solid ${isDarkMode ? '#555' : '#d1d5db'}`
     };
     const cardGrid: React.CSSProperties = {
         display: 'grid',
@@ -94,9 +104,9 @@ const SimilarSearchPanel: React.FC<{
     const cardSlot: React.CSSProperties = { position: 'relative' };
     const fileCard: React.CSSProperties = {
         borderRadius: 10,
-        border: `1px solid ${isDarkMode ? '#374151' : '#e5e7eb'}`,
-        background: isDarkMode ? '#0b1220' : '#fff',
-        color: isDarkMode ? '#f9fafb' : '#111827',
+        border: `1px solid ${isDarkMode ? '#555' : '#e5e7eb'}`,
+        background: isDarkMode ? '#2b2b2b' : '#fff',
+        color: isDarkMode ? '#fff' : '#111827',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
@@ -104,8 +114,8 @@ const SimilarSearchPanel: React.FC<{
     };
     const badge: React.CSSProperties = {
         position: 'absolute', top: 8, padding: '2px 6px', borderRadius: 6,
-        background: isDarkMode ? 'rgba(17,24,39,.8)' : 'rgba(255,255,255,.85)',
-        border: `1px solid ${isDarkMode ? '#374151' : '#e5e7eb'}`, fontSize: 12, fontWeight: 700
+        background: isDarkMode ? 'rgba(0,0,0,.5)' : 'rgba(255,255,255,.85)',
+        border: `1px solid ${isDarkMode ? '#555' : '#e5e7eb'}`, fontSize: 12, fontWeight: 700
     };
     const footer: React.CSSProperties = {
         padding: 10, backdropFilter: 'blur(2px)',
@@ -120,7 +130,7 @@ const SimilarSearchPanel: React.FC<{
         position: 'relative',
         width: '100%',
         height: '100%',
-        background: isDarkMode ? '#0b1220' : '#f3f4f6'
+        background: isDarkMode ? '#2a2a2a' : '#f3f4f6'
     });
 
     const imgStyle: React.CSSProperties = {
@@ -136,8 +146,9 @@ const SimilarSearchPanel: React.FC<{
         width: 34,
         height: 34,
         borderRadius: '999px',
-        border: `1px solid ${isDarkMode ? '#374151' : '#e5e7eb'}`,
-        background: isDarkMode ? 'rgba(17,24,39,.65)' : 'rgba(255,255,255,.8)',
+        border: `1px solid ${isDarkMode ? '#555' : '#e5e7eb'}`,
+        background: isDarkMode ? 'rgba(0,0,0,.5)' : 'rgba(255,255,255,.8)',
+        color: isDarkMode ? '#fff' : '#111',
         display: 'grid',
         placeItems: 'center',
         cursor: 'pointer',
@@ -164,14 +175,9 @@ const SimilarSearchPanel: React.FC<{
         );
 
     const viewport: React.CSSProperties = {
-        position: 'relative',
-        width: 350,
-        height: 400,
-        background: isDarkMode ? '#0b1220' : '#f3f4f6'
+        position: 'relative', width: 350, height: 400, background: isDarkMode ? '#262626' : '#f3f4f6'
+
     };
-
-
-
 
     // helpers
     const tokenizeToWords = React.useCallback((s: string): string[] => {
@@ -390,7 +396,7 @@ const SimilarSearchPanel: React.FC<{
                                 </span>
                             ))
                         ) : (
-                            <span>—</span>
+                            <span> - </span>
                         )}
                     </div>
                 </div>
@@ -399,7 +405,7 @@ const SimilarSearchPanel: React.FC<{
                     <label></label>
                     <div style={{ display: 'flex', gap: 8 }}>
                         <button style={btnPrimary} disabled={!hasAnyInputTokens || simLoading} onClick={submitSimilar}>
-                            {simLoading ? 'Searching…' : 'Submit Tags'}
+                            {simLoading ? 'Searching ...' : 'Submit Tags'}
                         </button>
                         <button style={btnGhost} disabled={simLoading} onClick={clearSimilar}>
                             Clear
@@ -474,14 +480,14 @@ const SimilarSearchPanel: React.FC<{
                                                         style={{ ...arrowBtn, left: 8 }}
                                                         onClick={() => prevImg(k, len)}
                                                     >
-                                                        ‹
+                                                        <FaChevronCircleLeft />
                                                     </button>
                                                     <button
                                                         aria-label="Next"
                                                         style={{ ...arrowBtn, right: 8 }}
                                                         onClick={() => nextImg(k, len)}
                                                     >
-                                                        ›
+                                                        <FaChevronCircleRight />
                                                     </button>
                                                 </>
                                             )}
@@ -492,13 +498,15 @@ const SimilarSearchPanel: React.FC<{
                                                 {m.mainModelName || 'N/A'}
                                             </div>
                                             <div style={{ fontSize: 13, opacity: .85 }}>
-                                                {m.creatorName || '—'}
+                                                {m.creatorName || '-'}
                                             </div>
                                             <div style={stats}>
-                                                <span>⬇ {statsObj?.downloadCount ?? 'N/A'}</span>
-                                                <span>📝 {statsObj?.ratingCount ?? 'N/A'}</span>
-                                                <span>⭐ {statsObj?.rating ?? 'N/A'}</span>
-                                                <span>👍 {statsObj?.thumbsUpCount ?? 'N/A'}</span>
+                                                <span> <MdDownload /> {statsObj?.downloadCount ?? 'N/A'}</span>
+                                                <span> <MdOutlineSupervisorAccount />
+                                                    {statsObj?.ratingCount ?? 'N/A'}</span>
+                                                <span> <FaStar /> {statsObj?.rating ?? 'N/A'}</span>
+                                                <span> <IoMdThumbsUp />
+                                                    {statsObj?.thumbsUpCount ?? 'N/A'}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -518,12 +526,12 @@ const SimilarSearchPanel: React.FC<{
                     </div>
                 ) : (
                     <>
-                        {simLoading && <div style={loadingMsg}>Searching…</div>}
+                        {simLoading && <div style={loadingMsg}>Searching ...</div>}
                         {!simLoading && nothingSelected && (
-                            <div style={loadingMsg}>No base models selected — check some filters or press “Select all”.</div>
+                            <div style={loadingMsg}>No base models selected - check some filters or press “Select all”.</div>
                         )}
                         {!simLoading && !nothingSelected && (
-                            <div style={loadingMsg}>No results yet — choose tags and Submit.</div>
+                            <div style={loadingMsg}>No results yet - choose tags and Submit.</div>
                         )}
                     </>
                 )}
