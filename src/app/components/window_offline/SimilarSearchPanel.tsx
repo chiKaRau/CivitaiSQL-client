@@ -243,25 +243,41 @@ const SimilarSearchPanel: React.FC<{
 
     const hasAnyInputTokens = tokenizeToWords(simInput).length > 0;
 
+    // REPLACE your submitSimilar with this version
     const submitSimilar = async () => {
         const tagsList = tokenizeToWords(simInput);
         if (!tagsList.length) return;
         setSimLoading(true); setSimError(null);
         try {
-            const res = await fetch('http://localhost:3000/api/find-list-of-models-dto-from-all-table-by-tagsList-tampermonkey', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tagsList })
-            });
-            const json = await res.json();
-            const list: SimilarResult[] = json?.payload?.modelsList ?? [];
-            setSimResults(list);
+            const [onlineRes, offlineRes] = await Promise.all([
+                fetch('http://localhost:3000/api/find-list-of-models-dto-from-all-table-by-tagsList-tampermonkey', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tagsList })
+                }),
+                fetch('http://localhost:3000/api/search_offline_downloads', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ keywords: tagsList })
+                })
+            ]);
 
+            const onlineJson = await onlineRes.json().catch(() => ({}));
+            const offlineJson = await offlineRes.json().catch(() => ({}));
+
+            const onlineList: SimilarResult[] = onlineJson?.payload?.modelsList ?? [];
+            const offlineRaw: any[] = offlineJson?.payload?.offlineDownloadList ?? [];
+            const offlineList: SimilarResult[] = offlineRaw.map(mapOfflineToSimilar);
+
+            const combined = uniqByKey([...(onlineList || []), ...(offlineList || [])]);
+            setSimResults(combined);
+
+            // rebuild base-model filters from combined results
             const map = new Map<string, string>();
-            for (const m of list) {
-                const key = canonBaseModel(m?.baseModel);
+            for (const m of combined) {
+                const k = canonBaseModel(m?.baseModel);
                 const label = displayBaseModel(m?.baseModel);
-                if (!map.has(key)) map.set(key, label);
+                if (!map.has(k)) map.set(k, label);
             }
             setSimBaseModels(map);
             setSimSelectedBaseModels(new Set(map.keys()));
@@ -275,6 +291,39 @@ const SimilarSearchPanel: React.FC<{
             setSimLoading(false);
         }
     };
+
+
+    // ADD these helpers near your other utils
+    function uniqByKey(list: SimilarResult[]) {
+        const seen = new Set<string>();
+        const out: SimilarResult[] = [];
+        for (const m of list) {
+            const k = `${m.modelNumber}_${m.versionNumber}`;
+            if (!seen.has(k)) { seen.add(k); out.push(m); }
+        }
+        return out;
+    }
+
+    function mapOfflineToSimilar(e: any): SimilarResult {
+        const mv = e?.modelVersionObject ?? {};
+        const mdl = mv?.model ?? {};
+        const creator = mv?.creator ?? {};
+        const imgs = Array.isArray(e?.imageUrlsArray) ? e.imageUrlsArray : [];
+        return {
+            modelNumber: e?.civitaiModelID ?? mdl?.id ?? 'N/A',
+            versionNumber: e?.civitaiVersionID ?? mv?.id ?? 'N/A',
+            baseModel: e?.civitaiBaseModel ?? mv?.baseModel ?? null,
+            mainModelName: mdl?.name ?? null,
+            creatorName: creator?.username ?? null,
+            uploaded: mv?.createdAt ?? null,
+            imageUrls: imgs.map((u: any) =>
+                typeof u === 'string' ? { url: u } : { url: u?.url, width: u?.width, height: u?.height }
+            ),
+            stats: mv?.stats ?? null,
+            myRating: null
+        };
+    }
+
 
     const clearSimilar = () => {
         setSimInput('');
