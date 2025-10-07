@@ -1298,7 +1298,7 @@ const OfflineWindow: React.FC = () => {
         zIndex: 1
     };
 
-    const badgeCount = (n: number) => (n > 99 ? '99+' : String(n));
+    const badgeCount = (n: number) => (String(n));
 
 
     const agGridStyle: React.CSSProperties = {
