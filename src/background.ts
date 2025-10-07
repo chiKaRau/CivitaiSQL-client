@@ -10,18 +10,63 @@ polling();
 
 //if create a new window, make sure you delete the dist folder and let npm run build to rebuild
 
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === "openNewWindow") {
-    console.log("open new window")
-    chrome.windows.create({
-      url: chrome.runtime.getURL('window.html'),
+const POPUP_URL = chrome.runtime.getURL('window.html');
+
+let popupWindowId: number | undefined;
+let isOpening = false;
+
+async function openOrFocusPopup() {
+  if (isOpening) return;              // simple lock to avoid races
+  isOpening = true;
+  try {
+    // 1) If a tab for our window already exists, focus it.
+    const tabs = await chrome.tabs.query({ url: `${POPUP_URL}*` });
+    if (tabs.length) {
+      const tab = tabs[0];
+      if (tab.windowId != null) {
+        await chrome.windows.update(tab.windowId, { focused: true, state: 'normal' as any });
+      }
+      if (tab.id != null) {
+        await chrome.tabs.update(tab.id, { active: true });
+      }
+      popupWindowId = tab.windowId!;
+      return;
+    }
+
+    // 2) Otherwise create it.
+    const win = await chrome.windows.create({
+      url: POPUP_URL,
       type: 'popup',
       width: 1100,
       height: 750,
-      left: 1450
+      left: 1450,
+      focused: true
     });
+
+    if (win?.id != null) popupWindowId = win.id;
+
+  } finally {
+    isOpening = false;
+  }
+}
+
+// Listen for your message and open/focus the singleton window.
+chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+  if (request.action === 'openNewWindow') {
+    // If you want to reply after the async work, return true and call sendResponse later.
+    (async () => {
+      await openOrFocusPopup();
+      sendResponse({ ok: true });
+    })();
+    return true; // keep the message channel open for the async sendResponse
   }
 });
+
+// Clear our cached id when that window is closed (optional but tidy)
+chrome.windows.onRemoved.addListener((id) => {
+  if (id === popupWindowId) popupWindowId = undefined;
+});
+
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "openOfflineWindow") {
