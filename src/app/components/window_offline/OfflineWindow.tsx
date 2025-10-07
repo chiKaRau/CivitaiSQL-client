@@ -1741,6 +1741,21 @@ const OfflineWindow: React.FC = () => {
         }
     };
 
+    useEffect(() => {
+        if (!leftOverlayEntry) return;
+
+        const onDocClick = (ev: MouseEvent) => {
+            const leftEl = leftPanelRef.current;
+            // ignore clicks inside the left panel (overlay/backdrop already handle their own close)
+            if (leftEl && leftEl.contains(ev.target as Node)) return;
+            closeLeftOverlay();
+        };
+
+        document.addEventListener('click', onDocClick);
+        return () => document.removeEventListener('click', onDocClick);
+    }, [leftOverlayEntry, closeLeftOverlay]);
+
+
 
     const handleProcessSelected = async () => {
         if (modify_downloadFilePath === "/@scan@/ErrorPath/") {
