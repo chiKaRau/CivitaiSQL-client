@@ -2,6 +2,8 @@
 
 import React from 'react';
 import { Card, Form, Carousel } from 'react-bootstrap';
+import { fetchOpenModelDownloadDirectory } from '../../api/civitaiSQL_api';
+import { useDispatch } from 'react-redux';
 
 interface ModelVersionObject {
     id: number;
@@ -115,6 +117,9 @@ const FailedCardMode: React.FC<FailedCardModeProps> = ({
     toggleSelect,
     isModifyMode
 }) => {
+
+    const dispatch = useDispatch();
+
     if (failedEntries.length === 0) {
         return (
             <div style={{ color: isDarkMode ? '#fff' : '#000' }}>
@@ -355,7 +360,27 @@ const FailedCardMode: React.FC<FailedCardModeProps> = ({
                                         wordWrap: 'break-word',   // wrap long paths
                                     }}
                                 >
-                                    <strong>Download Path:</strong> {entry.downloadFilePath ?? 'N/A'}
+                                    {entry.downloadFilePath ? (
+                                        <a
+                                            href="#"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation(); // if this sits inside a clickable card
+                                                fetchOpenModelDownloadDirectory(entry.downloadFilePath, dispatch);
+                                            }}
+                                            style={{
+                                                textDecoration: 'underline',
+                                                cursor: 'pointer',
+                                                color: isDarkMode ? '#60A5FA' : '#1D4ED8'
+                                            }}
+                                            aria-label="Open model download directory"
+                                            title={entry.downloadFilePath}
+                                        >
+                                            {entry.downloadFilePath}
+                                        </a>
+                                    ) : (
+                                        'N/A'
+                                    )}
                                 </p>
 
                                 {/* Category */}
