@@ -90,7 +90,7 @@ interface ModelVersionObject {
     baseModel: string;
     baseModelType: any;
     earlyAccessEndsAt: any;
-    earlyAccessConfig: any;
+    availability?: 'EarlyAccess' | 'Public' | string;
     description: string;
     uploadType: string;
     air: string;
@@ -1079,15 +1079,11 @@ const OfflineWindow: React.FC = () => {
             },
         },
         {
-            headerName: "Early Access Ends",
-            field: "earlyAccessEndsAt",
+            headerName: "Early Access",
+            field: "earlyAccessDisplay",
             sortable: true,
             filter: false,
             cellStyle: cellStyle,
-            // Optionally format the date or show a fallback if null
-            valueFormatter: (params) => {
-                return params.value ? new Date(params.value).toLocaleString() : "Active";
-            }
         },
         {
             headerName: "File Size (MB)",
@@ -1118,7 +1114,7 @@ const OfflineWindow: React.FC = () => {
                 url: entry.civitaiUrl ?? 'N/A',
                 creator: entry.modelVersionObject?.creator?.username ?? 'N/A',
                 filesize: filesizeMB + " MB",
-                earlyAccessEndsAt: entry.modelVersionObject?.earlyAccessEndsAt ?? null,
+                earlyAccessDisplay: earlyAccessLabel(entry),
             };
         });
     }, [filteredDownloadList]);
@@ -1422,18 +1418,10 @@ const OfflineWindow: React.FC = () => {
         const entriesToDownload = filteredDownloadList.filter(entry => {
             // Must be selected
             const isSelected = selectedIds.has(entry.civitaiVersionID);
+            const isEarly = isEntryEarlyAccess(entry); // NEW
 
             // Grab early access date and file path
-            const earlyAccessEndsAt = entry.modelVersionObject?.earlyAccessEndsAt;
             const downloadFilePath = entry.downloadFilePath ?? "";
-
-            // Get current time
-            const now = new Date();
-
-            // If earlyAccessEndsAt is defined AND strictly after now, it's still in early access
-            const stillEarlyAccess = earlyAccessEndsAt
-                ? new Date(earlyAccessEndsAt) > now
-                : false;   // if null/undefined, treat as "not early access"
 
             // Check if file path indicates pending
             const isPendingPath =
@@ -1441,13 +1429,13 @@ const OfflineWindow: React.FC = () => {
                 downloadFilePath === "/@scan@/ACG/Pending/";
 
             // Exclude if still in early access or if file path is pending
-            const shouldExclude = stillEarlyAccess || isPendingPath;
+            const shouldExclude = isEarly || isPendingPath;
 
             return isSelected && !shouldExclude;
         });
 
         if (entriesToDownload.length === 0) {
-            alert("No valid entries to download. Either they're missing earlyAccessEndsAt or pointing to /@scan@/ACG/Pending.");
+            alert("No valid entries to download. Either they're Early Access Only or pointing to /@scan@/ACG/Pending.");
             return;
         }
 
@@ -1741,6 +1729,16 @@ const OfflineWindow: React.FC = () => {
         }
     };
 
+    function isEntryEarlyAccess(entry: OfflineDownloadEntry): boolean {
+        const avail = entry.modelVersionObject?.availability;
+        const ends = entry.modelVersionObject?.earlyAccessEndsAt;
+        return (typeof avail === 'string' && avail === 'EarlyAccess') || !!ends;
+    };
+
+    function earlyAccessLabel(entry: OfflineDownloadEntry): 'Early Access Only' | 'Public' {
+        return isEntryEarlyAccess(entry) ? 'Early Access Only' : 'Public';
+    };
+
     useEffect(() => {
         if (!leftOverlayEntry) return;
 
@@ -1927,9 +1925,6 @@ const OfflineWindow: React.FC = () => {
 
 
     const handleSelectFirstN = () => {
-        // Get the current time to compare with earlyAccessEndsAt
-        const now = new Date();
-
         // Create a Set of combined civitaiVersionID and civitaiModelID for efficient lookup
         const failedIds = new Set(
             failedEntries.map(entry => `${entry.civitaiVersionID}|${entry.civitaiModelID}`)
@@ -1937,11 +1932,8 @@ const OfflineWindow: React.FC = () => {
 
         // Apply the same exclusion criteria as in handleDownloadNow
         const validEntries = filteredDownloadList.filter(entry => {
-            const earlyAccessEndsAt = entry.modelVersionObject?.earlyAccessEndsAt;
+            const isEarly = isEntryEarlyAccess(entry);
             const downloadFilePath = entry.downloadFilePath ?? "";
-
-            // Determine if the entry is still in early access
-            const stillEarlyAccess = earlyAccessEndsAt ? new Date(earlyAccessEndsAt) > now : false;
 
             // Determine if the download path is pending
             const isPendingPath =
@@ -1952,7 +1944,7 @@ const OfflineWindow: React.FC = () => {
             const combinedId = `${entry.civitaiVersionID}|${entry.civitaiModelID}`;
 
             // Exclude entries that are still in early access or have a pending path
-            return !stillEarlyAccess && !isPendingPath && !failedIds.has(combinedId);
+            return !isEarly && !isPendingPath && !failedIds.has(combinedId);
         });
 
         // Select the first N entries from the valid entries
@@ -2029,7 +2021,7 @@ const OfflineWindow: React.FC = () => {
     };
 
     const PreviewCard: React.FC<{ entry: OfflineDownloadEntry; isDarkMode: boolean }> = ({ entry, isDarkMode }) => {
-        const earlyEnds = entry.modelVersionObject?.earlyAccessEndsAt;
+        const showEA = isEntryEarlyAccess(entry);
         const [activeIdx, setActiveIdx] = React.useState(0);
         return (
             <Card
@@ -2046,7 +2038,7 @@ const OfflineWindow: React.FC = () => {
                     padding: 12
                 }}
             >
-                {earlyEnds && (
+                {showEA && (
                     <div style={{
                         position: 'absolute', top: 8, right: 8,
                         background: isDarkMode ? '#444' : '#fff',
@@ -2054,7 +2046,7 @@ const OfflineWindow: React.FC = () => {
                         border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
                         padding: '2px 6px', borderRadius: 6
                     }}>
-                        Ends: {new Date(earlyEnds).toLocaleString()}
+                        Early Access Only
                     </div>
                 )}
 
@@ -2103,7 +2095,7 @@ const OfflineWindow: React.FC = () => {
                                         : [200, 320];      // tiny thumbnails for others
 
                                 return (
-                                    <Carousel.Item key={idx} style={{ height: '100%' }}>
+                                    <Carousel.Item key={idx} style={{ height: '400px' }}>
                                         <div
                                             style={{
                                                 height: '100%',
@@ -2231,7 +2223,7 @@ const OfflineWindow: React.FC = () => {
                     >
                         {filteredDownloadList.map((entry, cardIndex) => {
                             const isSelected = selectedIds.has(entry.civitaiVersionID);
-                            const earlyEnds = entry.modelVersionObject?.earlyAccessEndsAt;
+                            const showEA = isEntryEarlyAccess(entry);
                             return (
                                 <Card
                                     key={cardIndex}
@@ -2262,7 +2254,7 @@ const OfflineWindow: React.FC = () => {
                                     }}
                                 >
                                     {/* Early Access badge at the top-right */}
-                                    {earlyEnds && (
+                                    {showEA && (
                                         <div
                                             style={{
                                                 position: 'absolute',
@@ -2277,7 +2269,7 @@ const OfflineWindow: React.FC = () => {
                                                 border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
                                             }}
                                         >
-                                            Ends: {new Date(earlyEnds).toLocaleString()}
+                                            Early Access Only
                                         </div>
                                     )}
 
@@ -2583,7 +2575,7 @@ const OfflineWindow: React.FC = () => {
                     >
                         {filteredDownloadList.map((entry, index) => {
                             const isSelected = selectedIds.has(entry.civitaiVersionID);
-                            const earlyEnds = entry.modelVersionObject?.earlyAccessEndsAt;
+                            const showEA = isEntryEarlyAccess(entry);
                             const firstImageUrl = entry.imageUrlsArray?.[0] ?? null;
                             const isFirstCard = index === 0;
 
@@ -2614,7 +2606,7 @@ const OfflineWindow: React.FC = () => {
                                         }
                                     }}
                                 >
-                                    {earlyEnds && (
+                                    {showEA && (
                                         <div
                                             style={{
                                                 position: 'absolute',
@@ -2629,7 +2621,7 @@ const OfflineWindow: React.FC = () => {
                                                 border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
                                             }}
                                         >
-                                            Ends: {new Date(earlyEnds).toLocaleString()}
+                                            Early Access Only
                                         </div>
                                     )}
 

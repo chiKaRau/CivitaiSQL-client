@@ -18,8 +18,8 @@ interface ModelVersionObject {
     trainingDetails: any;
     baseModel: string;
     baseModelType: any;
+    availability?: 'EarlyAccess' | 'Public' | string;
     earlyAccessEndsAt: any;
-    earlyAccessConfig: any;
     description: string;
     uploadType: string;
     air: string;
@@ -145,6 +145,12 @@ const FailedCardMode: React.FC<FailedCardModeProps> = ({
             : { url: img.url, width: img.width, height: img.height };
     }
 
+    function isEntryEarlyAccess(entry: OfflineDownloadEntry): boolean {
+        const avail = entry.modelVersionObject?.availability;
+        const ends = entry.modelVersionObject?.earlyAccessEndsAt;
+        return (typeof avail === 'string' && avail === 'EarlyAccess') || !!ends;
+    };
+
     return (
         <div>
             <div
@@ -157,7 +163,7 @@ const FailedCardMode: React.FC<FailedCardModeProps> = ({
             >
                 {failedEntries.map((entry, cardIndex) => {
                     const isSelected = selectedIds.has(entry.civitaiVersionID);
-                    const earlyEnds = entry.modelVersionObject?.earlyAccessEndsAt;
+                    const showEA = isEntryEarlyAccess(entry);
                     return (
                         <Card
                             key={cardIndex}
@@ -188,7 +194,7 @@ const FailedCardMode: React.FC<FailedCardModeProps> = ({
                             }}
                         >
                             {/* Early Access badge at the top-right */}
-                            {earlyEnds && (
+                            {showEA && (
                                 <div
                                     style={{
                                         position: 'absolute',
@@ -203,7 +209,7 @@ const FailedCardMode: React.FC<FailedCardModeProps> = ({
                                         border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
                                     }}
                                 >
-                                    Ends: {new Date(earlyEnds).toLocaleString()}
+                                    Early Access Only
                                 </div>
                             )}
 
