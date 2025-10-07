@@ -523,12 +523,18 @@ const OfflineWindow: React.FC = () => {
                 // Add a virtual “Updates” option that matches ANY path containing /@scan@/Update/
                 const enhanced = [
                     ...filtered,
-                    { name: 'Updates (any folder)', value: '/@scan@/Update/' }
+                    { name: 'Updates (any folder)', value: '/@scan@/Update/' },
                 ];
 
                 setCategoriesPrefixsList(enhanced);
 
-                setSelectedPrefixes(new Set(filtered.map(p => p.value)));
+                // Start with everything selected EXCEPT '/@scan@/' and the virtual Updates option
+                const DEFAULT_UNCHECKED = new Set<string>(['/@scan@/', '/@scan@/Update/']);
+                const initialChecked = enhanced
+                    .filter(p => !DEFAULT_UNCHECKED.has(p.value))
+                    .map(p => p.value);
+
+                setSelectedPrefixes(new Set(initialChecked));
             }
         };
         loadPrefixes();
