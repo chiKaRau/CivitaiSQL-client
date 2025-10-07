@@ -41,6 +41,10 @@ const SimilarSearchPanel: React.FC<{
     const [simBaseModels, setSimBaseModels] = React.useState<Map<string, string>>(new Map());
     const [simSelectedBaseModels, setSimSelectedBaseModels] = React.useState<Set<string>>(new Set());
 
+    // sort direction for "uploaded" time
+    const [sortDir, setSortDir] = React.useState<'asc' | 'desc'>('desc');
+
+
     // per-card carousel index, keyed by model-version
     const [carouselIndex, setCarouselIndex] = React.useState<Record<string, number>>({});
 
@@ -370,10 +374,38 @@ const SimilarSearchPanel: React.FC<{
             ? simResults
             : hasSelection
                 ? simResults.filter(m => simSelectedBaseModels.has(canonBaseModel(m?.baseModel)))
-                : []; // nothing selected → show nothing
+                : [];
 
-        return base.slice().sort((a, b) => uploadedTime(b?.uploaded) - uploadedTime(a?.uploaded));
-    }, [simResults, simSelectedBaseModels, simBaseModels]);
+        // Interpret sortDir as source priority only:
+        // desc => OFFLINE FIRST, asc => ONLINE FIRST
+        const offlineFirst = sortDir === 'desc';
+
+        // Date order fixed to newest first so the toggle only flips source priority
+        const DATE_MUL = -1; // newest first
+
+        return base.slice().sort((a, b) => {
+            // 1) Source priority
+            const aOff = a?.isOffline ? 1 : 0;
+            const bOff = b?.isOffline ? 1 : 0;
+            if (aOff !== bOff) {
+                return offlineFirst ? (bOff - aOff) : (aOff - bOff);
+            }
+
+            // 2) Within same source: date (newest first)
+            const da = uploadedTime(a?.uploaded);
+            const db = uploadedTime(b?.uploaded);
+            if (da !== db) return DATE_MUL * (da - db);
+
+            // 3) Tie-breakers
+            const an = (a?.mainModelName ?? '').toLowerCase();
+            const bn = (b?.mainModelName ?? '').toLowerCase();
+            if (an !== bn) return an < bn ? -1 : 1;
+
+            return String(a?.modelNumber).localeCompare(String(b?.modelNumber));
+        });
+    }, [simResults, simSelectedBaseModels, simBaseModels, sortDir]);
+
+
 
 
     const simGetParsedStats = (m: SimilarResult): CivitaiStats | null =>
@@ -422,6 +454,12 @@ const SimilarSearchPanel: React.FC<{
         if (!modelId || !versionId || modelId === 'N/A' || versionId === 'N/A') return '';
         return `https://civitai.com/models/${encodeURIComponent(modelId)}?modelVersionId=${encodeURIComponent(versionId)}`;
     }
+
+    // near your other callbacks
+    const toggleSortDir = React.useCallback(
+        () => setSortDir(d => (d === 'asc' ? 'desc' : 'asc')),
+        []
+    );
 
 
     return (
@@ -497,6 +535,15 @@ const SimilarSearchPanel: React.FC<{
                         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                             <button style={btnGhost} onClick={selectAllBaseModels}>Select all</button>
                             <button style={btnGhost} onClick={clearBaseModels}>Clear</button>
+                            <button
+                                style={sortDir === 'desc' ? btnPrimary : btnGhost}
+                                onClick={toggleSortDir}
+                                aria-label={`Toggle source priority (currently ${sortDir === 'desc' ? 'OFFLINE first' : 'ONLINE first'})`}
+                                title={`Source priority: ${sortDir === 'desc' ? 'OFFLINE first' : 'ONLINE first'} (click to toggle)`}
+                            >
+                                {sortDir === 'asc' ? 'ASC (ONLINE FIRST)' : 'DESC (OFFLINE FIRST)'}
+                            </button>
+
                         </div>
                     </div>
                 )}
