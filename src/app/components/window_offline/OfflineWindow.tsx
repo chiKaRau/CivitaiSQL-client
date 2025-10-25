@@ -302,6 +302,8 @@ const OfflineWindow: React.FC = () => {
     const [categoriesPrefixsList, setCategoriesPrefixsList] = useState<{ name: string; value: string; }[]>([]);
     const [selectedPrefixes, setSelectedPrefixes] = useState<Set<string>>(new Set());
 
+    const [allowTryEarlyAccess, setAllowTryEarlyAccess] = useState(false);
+
 
     // Replace /width=###/ in Civitai URLs; if missing, insert it before the filename.
     const IMG_WIDTH_RE = /\/width=\d+\//;
@@ -1424,7 +1426,7 @@ const OfflineWindow: React.FC = () => {
         const entriesToDownload = filteredDownloadList.filter(entry => {
             // Must be selected
             const isSelected = selectedIds.has(entry.civitaiVersionID);
-            const isEarly = isEntryEarlyAccess(entry); // NEW
+            const isEarly = isEarlyAccessActive(entry);
 
             // Grab early access date and file path
             const downloadFilePath = entry.downloadFilePath ?? "";
@@ -1435,15 +1437,20 @@ const OfflineWindow: React.FC = () => {
                 downloadFilePath === "/@scan@/ACG/Pending/";
 
             // Exclude if still in early access or if file path is pending
-            const shouldExclude = isEarly || isPendingPath;
+            const shouldExclude = (!allowTryEarlyAccess && isEarly) || isPendingPath;
 
             return isSelected && !shouldExclude;
         });
 
         if (entriesToDownload.length === 0) {
-            alert("No valid entries to download. Either they're Early Access Only or pointing to /@scan@/ACG/Pending.");
+            alert(
+                allowTryEarlyAccess
+                    ? "No valid entries to download. They may be pointing to /@scan@/ACG/Pending."
+                    : "No valid entries to download. Either they're Early Access or pointing to /@scan@/ACG/Pending."
+            );
             return;
         }
+
 
         setDownloadProgress({ completed: 0, total: entriesToDownload.length });
         setFailedEntries([]);
@@ -1735,14 +1742,46 @@ const OfflineWindow: React.FC = () => {
         }
     };
 
-    function isEntryEarlyAccess(entry: OfflineDownloadEntry): boolean {
-        const avail = entry.modelVersionObject?.availability;
-        const ends = entry.modelVersionObject?.earlyAccessEndsAt;
-        return (typeof avail === 'string' && avail === 'EarlyAccess') || !!ends;
-    };
+    // ---- Early Access helpers ----
+    function pad2(n: number) { return n < 10 ? `0${n}` : `${n}`; }
 
-    function earlyAccessLabel(entry: OfflineDownloadEntry): 'Early Access Only' | 'Public' {
-        return isEntryEarlyAccess(entry) ? 'Early Access Only' : 'Public';
+    function formatLocalDateTime(isoOrDate: string | Date): string {
+        const d = typeof isoOrDate === 'string' ? new Date(isoOrDate) : isoOrDate;
+        if (Number.isNaN(d.getTime())) return '';
+        return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+    }
+
+    function getEarlyAccessEndsAt(entry: OfflineDownloadEntry): Date | null {
+        const raw = entry?.modelVersionObject?.earlyAccessEndsAt as any;
+        if (!raw) return null;
+        const d = new Date(raw);
+        return Number.isNaN(d.getTime()) ? null : d;
+    }
+
+    /** Early access is ACTIVE iff:
+     *  - endsAt exists and is in the FUTURE, OR
+     *  - endsAt missing but availability === 'EarlyAccess'
+     */
+    function isEarlyAccessActive(entry: OfflineDownloadEntry, now = new Date()): boolean {
+        const ends = getEarlyAccessEndsAt(entry);
+        if (ends) return ends.getTime() > now.getTime();
+        const avail = entry?.modelVersionObject?.availability;
+        return typeof avail === 'string' && avail === 'EarlyAccess';
+    }
+
+    /** Label for grids/cards:
+     *  - future endsAt  -> "YYYY-MM-DD HH:MM:SS"
+     *  - no endsAt but EarlyAccess -> "Early Access Only"
+     *  - otherwise -> "Public"
+     */
+    function earlyAccessLabel(entry: OfflineDownloadEntry): string {
+        if (!isEarlyAccessActive(entry)) return 'Public';
+        const ends = getEarlyAccessEndsAt(entry);
+        return ends ? formatLocalDateTime(ends) : 'Early Access Only';
+    }
+
+    function isEntryEarlyAccess(entry: OfflineDownloadEntry): boolean {
+        return isEarlyAccessActive(entry);
     };
 
     useEffect(() => {
@@ -1938,20 +1977,19 @@ const OfflineWindow: React.FC = () => {
 
         // Apply the same exclusion criteria as in handleDownloadNow
         const validEntries = filteredDownloadList.filter(entry => {
-            const isEarly = isEntryEarlyAccess(entry);
+            const isEarlyActive = isEarlyAccessActive(entry); // <-- use ACTIVE check
             const downloadFilePath = entry.downloadFilePath ?? "";
 
-            // Determine if the download path is pending
             const isPendingPath =
                 downloadFilePath === "/@scan@/ACG/Pending" ||
                 downloadFilePath === "/@scan@/ACG/Pending/";
 
-            // Create the combined identifier for the current entry
             const combinedId = `${entry.civitaiVersionID}|${entry.civitaiModelID}`;
 
-            // Exclude entries that are still in early access or have a pending path
-            return !isEarly && !isPendingPath && !failedIds.has(combinedId);
+            // Include if NOT early-active, NOT pending, and NOT previously failed
+            return !isEarlyActive && !isPendingPath && !failedIds.has(combinedId);
         });
+
 
         // Select the first N entries from the valid entries
         const firstN = validEntries.slice(0, selectCount);
@@ -2052,7 +2090,11 @@ const OfflineWindow: React.FC = () => {
                         border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
                         padding: '2px 6px', borderRadius: 6
                     }}>
-                        Early Access Only
+                        {(() => {
+                            const ends = getEarlyAccessEndsAt(entry);
+                            return ends ? formatLocalDateTime(ends) : 'Early Access Only';
+                        })()}
+
                     </div>
                 )}
 
@@ -2275,7 +2317,11 @@ const OfflineWindow: React.FC = () => {
                                                 border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
                                             }}
                                         >
-                                            Early Access Only
+                                            {(() => {
+                                                const ends = getEarlyAccessEndsAt(entry);
+                                                return ends ? formatLocalDateTime(ends) : 'Early Access Only';
+                                            })()}
+
                                         </div>
                                     )}
 
@@ -2627,7 +2673,11 @@ const OfflineWindow: React.FC = () => {
                                                 border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
                                             }}
                                         >
-                                            Early Access Only
+                                            {(() => {
+                                                const ends = getEarlyAccessEndsAt(entry);
+                                                return ends ? formatLocalDateTime(ends) : 'Early Access Only';
+                                            })()}
+
                                         </div>
                                     )}
 
@@ -3173,6 +3223,20 @@ const OfflineWindow: React.FC = () => {
                                     onChange={e => setPreventPendingPaths(e.target.checked)}
                                     title="Disallow setting the downloadFilePath to a Pending folder"
                                 />
+
+                                <Form.Check
+                                    type="checkbox"
+                                    id="allow-try-early-access"
+                                    label={<span style={{ color: isDarkMode ? '#fff' : '#000', fontWeight: 600 }}>
+                                        Allow try to download Early Access
+                                    </span>}
+                                    checked={allowTryEarlyAccess}
+                                    disabled={isLoading}
+                                    onChange={e => setAllowTryEarlyAccess(e.target.checked)}
+                                    title="If enabled, Download Now will include entries still in Early Access."
+                                />
+
+
                             </div>
 
 
