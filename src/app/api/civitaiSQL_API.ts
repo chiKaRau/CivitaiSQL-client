@@ -872,6 +872,58 @@ export const fetchRemoveOfflineDownloadFileIntoOfflineDownloadList = async (
     }
 }
 
+export const fetchUpdateHoldFromOfflineDownloadList = async (
+    modelObject: { civitaiModelID: string; civitaiVersionID: string },
+    hold: boolean,
+    dispatch: any
+) => {
+    try {
+        dispatch(clearError());
+
+        const response = await axios.post(
+            `${config.domain}/api/update-hold-from-offline-download_list`,
+            {
+                modelNumber: modelObject.civitaiModelID,
+                versionNumber: modelObject.civitaiVersionID,
+                hold,
+            }
+        );
+
+        if (!(response.status >= 200 && response.status < 300)) {
+            throw new Error("Failed to update 'hold' for offline download record.");
+        }
+    } catch (error: any) {
+        console.error("Error updating hold:", error?.message);
+        dispatch(setError({ hasError: true, errorMessage: error?.message || "Unknown error" }));
+    }
+};
+
+export const fetchUpdateDownloadPriorityFromOfflineDownloadList = async (
+    modelObject: { civitaiModelID: string; civitaiVersionID: string },
+    downloadPriority: number,
+    dispatch: any
+) => {
+    try {
+        dispatch(clearError());
+
+        const response = await axios.post(
+            `${config.domain}/api/update-download-priority-from-offline-download_list`,
+            {
+                modelNumber: modelObject.civitaiModelID,
+                versionNumber: modelObject.civitaiVersionID,
+                downloadPriority,
+            }
+        );
+
+        if (!(response.status >= 200 && response.status < 300)) {
+            throw new Error("Failed to update 'downloadPriority' for offline download record.");
+        }
+    } catch (error: any) {
+        console.error("Error updating download priority:", error?.message);
+        dispatch(setError({ hasError: true, errorMessage: error?.message || "Unknown error" }));
+    }
+};
+
 export const fetchRemoveFromErrorModelList = async (
     modelObject: {
         civitaiModelID: string,

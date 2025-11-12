@@ -45,7 +45,9 @@ import {
     fetchOpenDownloadDirectory,
     fetchOpenModelDownloadDirectory,
     fetchOfflineDownloadListPage,
-    TagCountDTO
+    TagCountDTO,
+    fetchUpdateHoldFromOfflineDownloadList,
+    fetchUpdateDownloadPriorityFromOfflineDownloadList
 } from "../../api/civitaiSQL_api"
 
 import {
@@ -169,6 +171,9 @@ export interface OfflineDownloadEntry {
     imageUrlsArray: (string | { url: string; width?: number; height?: number; nsfw?: any })[];
     selectedCategory: string;
     civitaiTags: string[];
+    hold?: boolean;
+    downloadPriority?: number;           // 1..10
+    earlyAccessEndsAt?: string | null;
 }
 
 // **1. SelectAllHeaderCheckbox Component**
@@ -2567,6 +2572,58 @@ const OfflineWindow: React.FC = () => {
                                         </p>
                                     </div>
 
+                                    {/* --- Hold & Priority Controls (DB-backed) --- */}
+                                    <div
+                                        style={{
+                                            marginTop: 8,
+                                            paddingTop: 8,
+                                            borderTop: `1px solid ${isDarkMode ? '#555' : '#ddd'}`,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 10,
+                                            justifyContent: 'space-between'
+                                        }}
+                                    >
+                                        {/* Hold checkbox */}
+                                        <Form.Check
+                                            type="checkbox"
+                                            id={`hold-${entry.civitaiModelID}-${entry.civitaiVersionID}`}
+                                            label={<span style={{ fontWeight: 600 }}>Hold</span>}
+                                            checked={Boolean(entry.hold)}
+                                            onChange={(e) => {
+                                                e.stopPropagation();
+                                                handleHoldChange(entry, e.target.checked);
+                                            }}
+                                            disabled={isLoading}
+                                            style={{ cursor: 'pointer' }}
+                                        />
+
+                                        {/* Download Priority (1..10) */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <span style={{ fontSize: '.85rem', opacity: .9 }}>Priority</span>
+                                            <Form.Select
+                                                size="sm"
+                                                value={(entry.downloadPriority ?? 10)}
+                                                onChange={(e) => {
+                                                    const next = parseInt(e.target.value, 10);
+                                                    handlePriorityChange(entry, next);
+                                                }}
+                                                disabled={isLoading}
+                                                style={{
+                                                    width: 90,
+                                                    backgroundColor: isDarkMode ? '#444' : '#fff',
+                                                    color: isDarkMode ? '#fff' : '#000',
+                                                    border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`
+                                                }}
+                                                aria-label="Download priority (1–10)"
+                                            >
+                                                {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
+                                                    <option key={n} value={n}>{n}</option>
+                                                ))}
+                                            </Form.Select>
+                                        </div>
+                                    </div>
+
 
                                     <button
                                         type="button"
@@ -2869,6 +2926,54 @@ const OfflineWindow: React.FC = () => {
             setSelectedIds(newSelectedIds);
         }
     };
+
+    const updateEntryLocal = (matcher: (e: OfflineDownloadEntry) => boolean, patch: Partial<OfflineDownloadEntry>) => {
+        setOfflineDownloadList(prev =>
+            prev.map(e => (matcher(e) ? { ...e, ...patch } : e))
+        );
+    };
+
+    const handleHoldChange = async (entry: OfflineDownloadEntry, nextHold: boolean) => {
+        const match = (e: OfflineDownloadEntry) =>
+            e.civitaiVersionID === entry.civitaiVersionID && e.civitaiModelID === entry.civitaiModelID;
+        const prevHold = entry.hold ?? false;
+
+        // optimistic
+        updateEntryLocal(match, { hold: nextHold });
+        try {
+            await fetchUpdateHoldFromOfflineDownloadList(
+                { civitaiModelID: entry.civitaiModelID, civitaiVersionID: entry.civitaiVersionID },
+                nextHold,
+                dispatch
+            );
+        } catch (err: any) {
+            // revert on failure
+            updateEntryLocal(match, { hold: prevHold });
+            alert(`Failed to update hold: ${err?.message || 'Unknown error'}`);
+        }
+    };
+
+    const handlePriorityChange = async (entry: OfflineDownloadEntry, nextPriority: number) => {
+        const clamped = Math.max(1, Math.min(10, nextPriority | 0));
+        const match = (e: OfflineDownloadEntry) =>
+            e.civitaiVersionID === entry.civitaiVersionID && e.civitaiModelID === entry.civitaiModelID;
+        const prev = entry.downloadPriority ?? 10;
+
+        // optimistic
+        updateEntryLocal(match, { downloadPriority: clamped });
+        try {
+            await fetchUpdateDownloadPriorityFromOfflineDownloadList(
+                { civitaiModelID: entry.civitaiModelID, civitaiVersionID: entry.civitaiVersionID },
+                clamped,
+                dispatch
+            );
+        } catch (err: any) {
+            // revert on failure
+            updateEntryLocal(match, { downloadPriority: prev });
+            alert(`Failed to update download priority: ${err?.message || 'Unknown error'}`);
+        }
+    };
+
 
     const getSelectableEntries = (): OfflineDownloadEntry[] => {
         if (displayMode === 'failedCard') {
