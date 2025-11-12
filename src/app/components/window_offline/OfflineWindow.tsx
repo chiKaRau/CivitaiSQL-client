@@ -17,7 +17,7 @@ import { FcGenericSortingAsc, FcGenericSortingDesc } from "react-icons/fc";
 import { PiTabsFill } from "react-icons/pi";
 import { LuPanelLeftOpen, LuPanelRightOpen } from "react-icons/lu";
 import { BsReverseLayoutTextWindowReverse } from "react-icons/bs";
-import { FaArrowUp } from 'react-icons/fa';
+import { FaArrowUp, FaTrashAlt } from 'react-icons/fa';
 import { FaTimes } from 'react-icons/fa'; // Import the '×' icon
 import { FaAngleDoubleLeft, FaAngleLeft, FaAngleRight, FaAngleDoubleRight } from 'react-icons/fa';
 import { IoCloseOutline } from "react-icons/io5";
@@ -1141,6 +1141,56 @@ const OfflineWindow: React.FC = () => {
         cellStyle: cellStyle,
     };
 
+    const controlRowStyle: React.CSSProperties = {
+        marginTop: 8,
+        paddingTop: 8,
+        paddingBottom: 8,
+        borderTop: `1px solid ${isDarkMode ? '#555' : '#ddd'}`,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        flexWrap: 'nowrap',        // keep on a single line
+    };
+
+    const inlineIconBtnStyle: React.CSSProperties = {
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
+        background: isDarkMode ? '#111' : '#fff',
+        color: isDarkMode ? '#fff' : '#000',
+        cursor: 'pointer',
+    };
+
+    const inlineDangerBtnStyle: React.CSSProperties = {
+        ...inlineIconBtnStyle,
+        border: `1px solid ${isDarkMode ? '#7f1d1d' : '#f5c2c7'}`,
+        background: '#dc3545',
+        color: '#fff',
+    };
+
+
+    const removeBtnStyle: React.CSSProperties = {
+        position: 'absolute',
+        bottom: 8,
+        right: 50, // leave room for the preview button at right:8
+        width: 34,
+        height: 34,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: '999px',
+        border: `1px solid ${isDarkMode ? '#7f1d1d' : '#f5c2c7'}`,
+        color: '#fff',
+        background: '#dc3545',
+        cursor: 'pointer',
+        boxShadow: isDarkMode ? '0 1px 4px rgba(0,0,0,0.5)' : '0 1px 4px rgba(0,0,0,0.2)'
+    };
+
+
     // Inline styles
     const containerStyle: React.CSSProperties = {
         display: 'flex',
@@ -1415,6 +1465,35 @@ const OfflineWindow: React.FC = () => {
         }
     };
 
+    // Refresh helper: re-fetch the current page from the server
+    const refreshCurrentPage = async () => {
+        try {
+            const page0 = Math.max(0, currentPage - 1); // UI 1-based → server 0-based
+            const prefixes = getActivePrefixes();
+            const status: StatusFilter = deriveStatus(showPending, showNonPending);
+
+            const p = await fetchOfflineDownloadListPage(
+                dispatch,
+                page0,
+                itemsPerPage,
+                false,
+                prefixes,
+                filterText.trim(),
+                filterCondition,
+                status
+            );
+
+            setOfflineDownloadList(Array.isArray(p.content) ? p.content : []);
+            setServerTotalItems(p.totalElements ?? 0);
+            setServerTotalPages(p.totalPages ?? 1);
+        } catch (error: any) {
+            console.error("Failed to fetch updated download list:", error.message);
+            setOfflineDownloadList([]);
+            setServerTotalItems(0);
+            setServerTotalPages(1);
+            setSelectedIds(new Set());
+        }
+    };
 
     // Function to handle "Download Now" button click
     const handleDownloadNow = async () => {
@@ -1461,36 +1540,6 @@ const OfflineWindow: React.FC = () => {
         setFailedEntries([]);
         // setCompletedCount(0);
         setIsCancelled(false);
-
-        // Refresh helper: re-fetch the current page from the server
-        const refreshCurrentPage = async () => {
-            try {
-                const page0 = Math.max(0, currentPage - 1); // UI 1-based → server 0-based
-                const prefixes = getActivePrefixes();
-                const status: StatusFilter = deriveStatus(showPending, showNonPending);
-
-                const p = await fetchOfflineDownloadListPage(
-                    dispatch,
-                    page0,
-                    itemsPerPage,
-                    /* filterEmptyBaseModel */ false,
-                    prefixes,
-                    /* search */ filterText.trim(),
-                    /* op */ filterCondition,
-                    /* status */ status
-                );
-
-                setOfflineDownloadList(Array.isArray(p.content) ? p.content : []);
-                setServerTotalItems(p.totalElements ?? 0);
-                setServerTotalPages(p.totalPages ?? 1);
-            } catch (error: any) {
-                console.error("Failed to fetch updated download list:", error.message);
-                setOfflineDownloadList([]);
-                setServerTotalItems(0);
-                setServerTotalPages(1);
-                setSelectedIds(new Set());
-            }
-        };
 
         // Called after each file completes
         const handleEachDownloadComplete = async (success: boolean, entry: OfflineDownloadEntry) => {
@@ -1972,6 +2021,62 @@ const OfflineWindow: React.FC = () => {
             setUiMode('idle');
         }
     };
+
+    const handleRemoveOne = async (entry: OfflineDownloadEntry) => {
+        if (!entry?.civitaiModelID || !entry?.civitaiVersionID) return;
+
+        const ok = window.confirm(
+            `Remove "${entry.modelVersionObject?.model?.name ?? entry.civitaiFileName}" from the list?`
+        );
+        if (!ok) return;
+
+        setUiMode('removing');
+        setIsLoading(true);
+
+        // optimistic remove
+        const key = `${entry.civitaiModelID}|${entry.civitaiVersionID}`;
+        const prevList = offlineDownloadList;
+        setOfflineDownloadList(prev => prev.filter(e => `${e.civitaiModelID}|${e.civitaiVersionID}` !== key));
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            next.delete(entry.civitaiVersionID);
+            return next;
+        });
+
+        try {
+            await fetchRemoveOfflineDownloadFileIntoOfflineDownloadList(
+                { civitaiModelID: entry.civitaiModelID, civitaiVersionID: entry.civitaiVersionID },
+                dispatch
+            );
+
+            // refresh current page so totals/paging stay correct
+            const page0 = Math.max(0, currentPage - 1);
+            const prefixes = getActivePrefixes();
+            const status: StatusFilter = deriveStatus(showPending, showNonPending);
+
+            const p = await fetchOfflineDownloadListPage(
+                dispatch,
+                page0,
+                itemsPerPage,
+            /* filterEmptyBaseModel */ false,
+                prefixes,
+            /* search */ filterText.trim(),
+            /* op */ filterCondition,
+            /* status */ status
+            );
+
+            setOfflineDownloadList(Array.isArray(p?.content) ? p.content : []);
+            setServerTotalItems(p?.totalElements ?? 0);
+            setServerTotalPages(p?.totalPages ?? 1);
+        } catch (err: any) {
+            alert(`Failed to remove: ${err?.message || 'Unknown error'}`);
+            setOfflineDownloadList(prevList); // revert
+        } finally {
+            setIsLoading(false);
+            setUiMode('idle');
+        }
+    };
+
 
 
     const handleSelectFirstN = () => {
@@ -2572,18 +2677,8 @@ const OfflineWindow: React.FC = () => {
                                         </p>
                                     </div>
 
-                                    {/* --- Hold & Priority Controls (DB-backed) --- */}
-                                    <div
-                                        style={{
-                                            marginTop: 8,
-                                            paddingTop: 8,
-                                            borderTop: `1px solid ${isDarkMode ? '#555' : '#ddd'}`,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: 10,
-                                            justifyContent: 'space-between'
-                                        }}
-                                    >
+                                    {/* --- Hold, Priority, Remove, Preview (one line) --- */}
+                                    <div style={controlRowStyle}>
                                         {/* Hold checkbox */}
                                         <Form.Check
                                             type="checkbox"
@@ -2598,7 +2693,7 @@ const OfflineWindow: React.FC = () => {
                                             style={{ cursor: 'pointer' }}
                                         />
 
-                                        {/* Download Priority (1..10) */}
+                                        {/* Priority */}
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                             <span style={{ fontSize: '.85rem', opacity: .9 }}>Priority</span>
                                             <Form.Select
@@ -2622,18 +2717,35 @@ const OfflineWindow: React.FC = () => {
                                                 ))}
                                             </Form.Select>
                                         </div>
+
+                                        {/* right-side action buttons */}
+                                        <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+                                            {/* Remove */}
+                                            <button
+                                                type="button"
+                                                onClick={(e) => { e.stopPropagation(); handleRemoveOne(entry); }}
+                                                title="Remove from list"
+                                                aria-label="Remove from list"
+                                                style={inlineDangerBtnStyle}
+                                                disabled={isLoading}
+                                            >
+                                                <FaTrashAlt size={14} />
+                                            </button>
+
+                                            {/* Preview in left panel */}
+                                            <button
+                                                type="button"
+                                                onClick={(e) => { e.stopPropagation(); onToggleOverlay(entry); }}
+                                                title="Preview in left panel"
+                                                aria-label="Preview in left panel"
+                                                style={inlineIconBtnStyle}
+                                                disabled={isLoading}
+                                            >
+                                                <LuPanelLeftOpen size={18} />
+                                            </button>
+                                        </div>
                                     </div>
 
-
-                                    <button
-                                        type="button"
-                                        onClick={(e) => { e.stopPropagation(); onToggleOverlay(entry); }}
-                                        title="Preview in left panel"
-                                        aria-label="Preview in left panel"
-                                        style={activePreviewId === entry.civitaiVersionID ? previewBtnActiveStyle : previewBtnStyle}
-                                    >
-                                        <LuPanelLeftOpen size={18} />
-                                    </button>
 
                                 </Card>
                             );
@@ -2967,6 +3079,7 @@ const OfflineWindow: React.FC = () => {
                 clamped,
                 dispatch
             );
+
         } catch (err: any) {
             // revert on failure
             updateEntryLocal(match, { downloadPriority: prev });
