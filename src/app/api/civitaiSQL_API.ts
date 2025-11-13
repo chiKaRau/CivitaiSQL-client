@@ -791,6 +791,37 @@ export const fetchOfflineDownloadListPage = async (
     }
 };
 
+export const fetchOfflineDownloadListHold = async (dispatch: any) => {
+    try {
+        const url = `${config.domain}/api/get_offline_download_list_hold`;
+        const response = await axios.get(url);
+
+        if (response.status >= 200 && response.status < 300) {
+            // payload is: List<Map<String, Object>>
+            return response.data?.payload;
+        }
+        throw new Error('Unexpected response status: ' + response.status);
+    } catch (error: any) {
+        console.error('Hold list fetch error:', error.message);
+        throw error;
+    }
+};
+
+export const fetchOfflineDownloadListEarlyAccessActive = async (dispatch: any) => {
+    try {
+        const url = `${config.domain}/api/get_offline_download_list_early_access_active`;
+        const response = await axios.get(url);
+
+        if (response.status >= 200 && response.status < 300) {
+            // payload is: List<Map<String, Object>>
+            return response.data?.payload;
+        }
+        throw new Error('Unexpected response status: ' + response.status);
+    } catch (error: any) {
+        console.error('Early-access-active list fetch error:', error.message);
+        throw error;
+    }
+};
 
 /**
  * Calls the backend API to backup the offline_download_list.json file.

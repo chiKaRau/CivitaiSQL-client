@@ -47,7 +47,9 @@ import {
     fetchOfflineDownloadListPage,
     TagCountDTO,
     fetchUpdateHoldFromOfflineDownloadList,
-    fetchUpdateDownloadPriorityFromOfflineDownloadList
+    fetchUpdateDownloadPriorityFromOfflineDownloadList,
+    fetchOfflineDownloadListHold,
+    fetchOfflineDownloadListEarlyAccessActive
 } from "../../api/civitaiSQL_api"
 
 import {
@@ -264,8 +266,17 @@ const OfflineWindow: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [offlineDownloadList, setOfflineDownloadList] = useState<OfflineDownloadEntry[]>([]);
     const [displayMode, setDisplayMode] = useState<
-        'table' | 'bigCard' | 'smallCard' | 'failedCard' | 'errorCard' | 'updateCard' | 'recentCard'
+        'table'
+        | 'bigCard'
+        | 'smallCard'
+        | 'failedCard'
+        | 'errorCard'
+        | 'updateCard'
+        | 'recentCard'
+        | 'holdCard'
+        | 'earlyAccessCard'
     >('bigCard');
+
 
     // States for filtering
     const [filterText, setFilterText] = useState('');
@@ -298,6 +309,8 @@ const OfflineWindow: React.FC = () => {
     const [showGalleries, setShowGalleries] = useState(false);
 
     const [recentlyDownloaded, setRecentlyDownloaded] = useState<OfflineDownloadEntry[]>([]);
+    const [holdEntries, setHoldEntries] = useState<OfflineDownloadEntry[]>([]);
+    const [earlyAccessEntries, setEarlyAccessEntries] = useState<OfflineDownloadEntry[]>([]);
 
     // Add this in your component's top-level state:
     const [showPending, setShowPending] = useState(true);
@@ -352,6 +365,47 @@ const OfflineWindow: React.FC = () => {
         fetchExcludedTags();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadSpecialList = async () => {
+            // Only react when switching into one of these modes
+            if (displayMode !== 'holdCard' && displayMode !== 'earlyAccessCard') return;
+
+            try {
+                setUiMode('paging');
+                setIsLoading(true);
+
+                if (displayMode === 'holdCard') {
+                    const payload = await fetchOfflineDownloadListHold(dispatch);
+                    if (!cancelled) {
+                        setHoldEntries(Array.isArray(payload) ? payload as OfflineDownloadEntry[] : []);
+                    }
+                } else {
+                    const payload = await fetchOfflineDownloadListEarlyAccessActive(dispatch);
+                    if (!cancelled) {
+                        setEarlyAccessEntries(Array.isArray(payload) ? payload as OfflineDownloadEntry[] : []);
+                    }
+                }
+            } catch (err: any) {
+                console.error('Special list fetch failed:', err?.message || err);
+                if (!cancelled) {
+                    if (displayMode === 'holdCard') setHoldEntries([]);
+                    else setEarlyAccessEntries([]);
+                }
+            } finally {
+                if (!cancelled) {
+                    setIsLoading(false);
+                    setUiMode('idle');
+                }
+            }
+        };
+
+        loadSpecialList();
+        return () => { cancelled = true; };
+    }, [displayMode, dispatch]);
+
 
     async function fetchExcludedTags() {
         const serverTags = await fetchGetPendingRemoveTagsList(dispatch);
@@ -2481,7 +2535,7 @@ const OfflineWindow: React.FC = () => {
                                             e.stopPropagation();
                                             toggleSelect(entry.civitaiVersionID);
                                         }}
-                                        disabled={displayMode === "recentCard"}
+                                        disabled={displayMode === "recentCard" || displayMode === "holdCard" || displayMode === "earlyAccessCard"}
                                         style={{
                                             position: 'absolute',
                                             top: '10px',
@@ -3239,6 +3293,47 @@ const OfflineWindow: React.FC = () => {
                                 )}
                             </Button>
 
+                            {/* NEW: Hold list mode */}
+                            <Button
+                                style={{ ...responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
+                                variant={displayMode === 'holdCard' ? 'primary' : 'secondary'}
+                                onClick={() => setDisplayMode('holdCard')}
+                                aria-label={`Hold entries (${holdEntries.length})`}
+                            >
+                                Hold
+                                {holdEntries.length > 0 && (
+                                    <span
+                                        style={{
+                                            ...badgeStyle,
+                                            background: '#f97316', // orange-ish
+                                        }}
+                                    >
+                                        {badgeCount(holdEntries.length)}
+                                    </span>
+                                )}
+                            </Button>
+
+                            {/* NEW: Early Access mode */}
+                            <Button
+                                style={{ ...responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
+                                variant={displayMode === 'earlyAccessCard' ? 'primary' : 'secondary'}
+                                onClick={() => setDisplayMode('earlyAccessCard')}
+                                aria-label={`Early Access entries (${earlyAccessEntries.length})`}
+                            >
+                                Early Access
+                                {earlyAccessEntries.length > 0 && (
+                                    <span
+                                        style={{
+                                            ...badgeStyle,
+                                            background: '#ef4444', // red-ish
+                                        }}
+                                    >
+                                        {badgeCount(earlyAccessEntries.length)}
+                                    </span>
+                                )}
+                            </Button>
+
+
                             <Button
                                 variant={displayMode === 'failedCard' ? 'primary' : 'secondary'}
                                 onClick={() => setDisplayMode('failedCard')}
@@ -3965,6 +4060,33 @@ const OfflineWindow: React.FC = () => {
                                     />
                                 )}
 
+                                {displayMode === 'holdCard' && (
+                                    <BigCardMode
+                                        filteredDownloadList={holdEntries}
+                                        isDarkMode={isDarkMode}
+                                        isModifyMode={false} // treat as view-only
+                                        selectedIds={selectedIds}
+                                        toggleSelect={toggleSelect}
+                                        handleSelectAll={handleSelectAll}
+                                        showGalleries={false}
+                                        onToggleOverlay={toggleLeftOverlay}
+                                        activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
+                                    />
+                                )}
+
+                                {displayMode === 'earlyAccessCard' && (
+                                    <BigCardMode
+                                        filteredDownloadList={earlyAccessEntries}
+                                        isDarkMode={isDarkMode}
+                                        isModifyMode={false} // view-only
+                                        selectedIds={selectedIds}
+                                        toggleSelect={toggleSelect}
+                                        handleSelectAll={handleSelectAll}
+                                        showGalleries={false}
+                                        onToggleOverlay={toggleLeftOverlay}
+                                        activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
+                                    />
+                                )}
 
                                 {/* {displayMode === 'updateCard' && (
                                     <UpdateCardMode
