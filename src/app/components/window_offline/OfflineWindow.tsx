@@ -304,7 +304,7 @@ const OfflineWindow: React.FC = () => {
     const [showNonPending, setShowNonPending] = useState(true);
 
     // NEW: show / hide “hold” entries
-    const [showHoldEntries, setShowHoldEntries] = useState(true);
+    const [showHoldEntries, setShowHoldEntries] = useState(false);
 
     const [showEarlyAccess, setShowEarlyAccess] = useState(true);
 
@@ -3499,12 +3499,12 @@ const OfflineWindow: React.FC = () => {
                                     {sortDir === 'desc' ? (
                                         <>
                                             <FcGenericSortingDesc />
-                                            <span>Date: New → Old</span>
+                                            <span>Date: New to Old</span>
                                         </>
                                     ) : (
                                         <>
                                             <FcGenericSortingAsc />
-                                            <span>Date: Old → New</span>
+                                            <span>Date: Old to New</span>
                                         </>
                                     )}
                                 </button>
