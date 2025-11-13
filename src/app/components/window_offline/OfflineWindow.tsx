@@ -191,7 +191,6 @@ function isPendingEntry(entry: OfflineDownloadEntry): boolean {
     return PENDING_PATH_RE.test(p);
 }
 
-
 const SelectAllHeaderCheckbox: React.FC<SelectAllHeaderCheckboxProps> = ({ isChecked, isIndeterminate, onChange }) => {
     const checkboxRef = useRef<HTMLInputElement>(null);
 
@@ -303,6 +302,15 @@ const OfflineWindow: React.FC = () => {
     // Add this in your component's top-level state:
     const [showPending, setShowPending] = useState(true);
     const [showNonPending, setShowNonPending] = useState(true);
+
+    // NEW: show / hide “hold” entries
+    const [showHoldEntries, setShowHoldEntries] = useState(true);
+
+    const [showEarlyAccess, setShowEarlyAccess] = useState(true);
+
+
+    // NEW: sort direction for date (server-side)
+    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc'); // if you hate the type, you can drop it
 
     const [categoriesPrefixsList, setCategoriesPrefixsList] = useState<{ name: string; value: string; }[]>([]);
     const [selectedPrefixes, setSelectedPrefixes] = useState<Set<string>>(new Set());
@@ -694,7 +702,11 @@ const OfflineWindow: React.FC = () => {
                     prefixes,
               /* search */ filterText.trim(),
               /* op */ filterCondition,
-              /* status */ status
+              /* status */ status,
+                    showHoldEntries,              // NEW
+                    showEarlyAccess,  // NEW
+                    sortDir                       // NEW ("asc" | "desc")
+
                 );
 
                 if (!cancelled) {
@@ -726,7 +738,10 @@ const OfflineWindow: React.FC = () => {
         filterText,
         filterCondition,
         showPending,
-        showNonPending
+        showNonPending,
+        showHoldEntries,   // add
+        showEarlyAccess,   // add
+        sortDir            // add
     ]);
 
     useEffect(() => {
@@ -818,15 +833,25 @@ const OfflineWindow: React.FC = () => {
             return (showPending && pending) || (showNonPending && !pending);
         });
 
+        const extraFiltered = pendingFiltered.filter(entry => {
+            // Early Access filter:
+            // if checkbox is OFF and this entry is still Early Access -> hide it
+            if (!showEarlyAccess && isEarlyAccessActive(entry)) {
+                return false;
+            }
+            return true;
+        });
+
         if (!isModifyMode) {
-            return [...pendingFiltered].sort((a, b) => {
+            return [...extraFiltered].sort((a, b) => {
                 const aSelected = selectedIds.has(a.civitaiVersionID) ? 1 : 0;
                 const bSelected = selectedIds.has(b.civitaiVersionID) ? 1 : 0;
                 return bSelected - aSelected;
             });
         }
-        return pendingFiltered;
-    }, [offlineDownloadList, selectedIds, isModifyMode, showPending, showNonPending]);
+        return extraFiltered;
+    }, [offlineDownloadList, selectedIds, isModifyMode, showPending, showNonPending,
+        showHoldEntries, showEarlyAccess]);
 
     useEffect(() => {
         setSelectedIds(new Set());
@@ -1442,7 +1467,10 @@ const OfflineWindow: React.FC = () => {
                 prefixes,
                 /* search */ filterText.trim(),
                 /* op */ filterCondition,
-                /* status */ status
+                /* status */ status,
+                showHoldEntries,              // NEW
+                showEarlyAccess,  // NEW
+                sortDir                       // NEW ("asc" | "desc")
             );
 
 
@@ -1480,7 +1508,10 @@ const OfflineWindow: React.FC = () => {
                 prefixes,
                 filterText.trim(),
                 filterCondition,
-                status
+                status,
+                showHoldEntries,              // NEW
+                showEarlyAccess,  // NEW
+                sortDir                       // NEW ("asc" | "desc")
             );
 
             setOfflineDownloadList(Array.isArray(p.content) ? p.content : []);
@@ -1772,7 +1803,10 @@ const OfflineWindow: React.FC = () => {
                 prefixes,
                 /* search */ filterText.trim(),
                 /* op */ filterCondition,
-                /* status */ status
+                /* status */ status,
+                showHoldEntries,              // NEW
+                showEarlyAccess,  // NEW
+                sortDir                       // NEW ("asc" | "desc")
             );
 
             if (Array.isArray(p.content)) {
@@ -1806,22 +1840,17 @@ const OfflineWindow: React.FC = () => {
     }
 
     function getEarlyAccessEndsAt(entry: OfflineDownloadEntry): Date | null {
-        const raw = entry?.modelVersionObject?.earlyAccessEndsAt as any;
-        if (!raw) return null;
-        const d = new Date(raw);
+        if (!entry.earlyAccessEndsAt) return null;
+        const d = new Date(entry.earlyAccessEndsAt);
         return Number.isNaN(d.getTime()) ? null : d;
     }
 
-    /** Early access is ACTIVE iff:
-     *  - endsAt exists and is in the FUTURE, OR
-     *  - endsAt missing but availability === 'EarlyAccess'
-     */
     function isEarlyAccessActive(entry: OfflineDownloadEntry, now = new Date()): boolean {
         const ends = getEarlyAccessEndsAt(entry);
-        if (ends) return ends.getTime() > now.getTime();
-        const avail = entry?.modelVersionObject?.availability;
-        return typeof avail === 'string' && avail === 'EarlyAccess';
+        if (!ends) return false;              // no date -> treat as Public
+        return ends.getTime() > now.getTime(); // only active if in the future
     }
+
 
     /** Label for grids/cards:
      *  - future endsAt  -> "YYYY-MM-DD HH:MM:SS"
@@ -1921,7 +1950,10 @@ const OfflineWindow: React.FC = () => {
                     prefixes,
                     /* search */ filterText.trim(),
                     /* op */ filterCondition,
-                    /* status */ status
+                    /* status */ status,
+                    showHoldEntries,              // NEW
+                    showEarlyAccess,  // NEW
+                    sortDir                       // NEW ("asc" | "desc")
                 );
 
                 if (Array.isArray(p.content)) {
@@ -1999,7 +2031,10 @@ const OfflineWindow: React.FC = () => {
                 prefixes,
                 /* search */ filterText.trim(),
                 /* op */ filterCondition,
-                /* status */ status
+                /* status */ status,
+                showHoldEntries,              // NEW
+                showEarlyAccess,  // NEW
+                sortDir                       // NEW ("asc" | "desc")
             );
 
             // If current page is now past the end, jump to last page
@@ -2062,7 +2097,10 @@ const OfflineWindow: React.FC = () => {
                 prefixes,
             /* search */ filterText.trim(),
             /* op */ filterCondition,
-            /* status */ status
+            /* status */ status,
+                showHoldEntries,              // NEW
+                showEarlyAccess,  // NEW
+                sortDir                       // NEW ("asc" | "desc")
             );
 
             setOfflineDownloadList(Array.isArray(p?.content) ? p.content : []);
@@ -3413,7 +3451,7 @@ const OfflineWindow: React.FC = () => {
                                 <Form.Check
                                     type="checkbox"
                                     id="show-pending-checkbox"
-                                    label={<span style={{ color: isDarkMode ? '#fff' : '#000', fontWeight: 600 }}>Pending</span>}
+                                    label={<span style={{ color: isDarkMode ? '#fff' : '#000', fontWeight: 600 }}>Show Pending</span>}
                                     checked={showPending}
                                     disabled={isLoading}
                                     onChange={e => setShowPending(e.target.checked)}
@@ -3424,12 +3462,52 @@ const OfflineWindow: React.FC = () => {
                                 <Form.Check
                                     type="checkbox"
                                     id="show-non-pending-checkbox"
-                                    label={<span style={{ color: isDarkMode ? '#fff' : '#000', fontWeight: 600 }}>Non-Pending</span>}
+                                    label={<span style={{ color: isDarkMode ? '#fff' : '#000', fontWeight: 600 }}>Show Non-Pending</span>}
                                     checked={showNonPending}
                                     disabled={isLoading}
                                     onChange={e => setShowNonPending(e.target.checked)}
                                     title="Show items not in Pending folders"
                                 />
+
+                                <Form.Check
+                                    type="checkbox"
+                                    id="show-hold-checkbox"
+                                    label={<span style={{ color: isDarkMode ? '#fff' : '#000', fontWeight: 600 }}>Includes Hold</span>}
+                                    checked={showHoldEntries}
+                                    disabled={isLoading}
+                                    onChange={e => setShowHoldEntries(e.target.checked)}
+                                />
+
+                                {/* NEW: EarlyAccessEndsAt filter */}
+                                <Form.Check
+                                    type="checkbox"
+                                    id="show-earlyaccess-checkbox"
+                                    label={<span style={{ color: isDarkMode ? '#fff' : '#000', fontWeight: 600 }}>Includes Early Access</span>}
+                                    checked={showEarlyAccess}
+                                    disabled={isLoading}
+                                    onChange={e => setShowEarlyAccess(e.target.checked)}
+                                />
+
+                                {/* NEW: Date sort toggle */}
+                                <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-secondary"
+                                    disabled={isLoading}
+                                    onClick={() => setSortDir(prev => (prev === 'desc' ? 'asc' : 'desc'))}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                                >
+                                    {sortDir === 'desc' ? (
+                                        <>
+                                            <FcGenericSortingDesc />
+                                            <span>Date: New → Old</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <FcGenericSortingAsc />
+                                            <span>Date: Old → New</span>
+                                        </>
+                                    )}
+                                </button>
 
                                 {/* (keep your existing “Prevent Pending Paths” toggle) */}
                                 <Form.Check
