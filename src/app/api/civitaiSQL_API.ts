@@ -856,14 +856,16 @@ export const fetchBackupOfflineDownloadList = async (dispatch: any) => {
 export const fetchAddOfflineDownloadFileIntoOfflineDownloadList = async (
     modelObject: {
         downloadFilePath: string, civitaiFileName: string, civitaiModelID: string,
-        civitaiVersionID: string, civitaiModelFileList: { name: string; downloadUrl: string }[], civitaiUrl: string, selectedCategory: string, civitaiTags: string[]
+        civitaiVersionID: string, civitaiModelFileList: { name: string; downloadUrl: string }[], civitaiUrl: string, selectedCategory: string, civitaiTags: string[],
+        hold?: boolean,
+        downloadPriority?: number,
     }, isModifyMode: boolean
     , dispatch: any) => {
 
     try {
         // Clear any previous errors
         dispatch(clearError());
-        console.log("ABC")
+        console.log("fetchAddOfflineDownloadFileIntoOfflineDownloadList")
         console.log(modelObject)
         console.log(isModifyMode)
         const response = await axios.post(`${config.domain}/api/add-offline-download-file-into-offline-download-list`, {

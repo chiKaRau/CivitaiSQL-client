@@ -154,6 +154,9 @@ const WindowComponent: React.FC = () => {
 
     const allSelected = ratingOrder.every(r => ratingFilters[r]);
 
+    const [hold, setHold] = useState<boolean>(false);
+    const [downloadPriority, setDownloadPriority] = useState<number>(5);
+
     // Helper to toggle all on/off
     const toggleAllRatings = () => {
         const newVal = !allSelected;
@@ -919,7 +922,8 @@ const WindowComponent: React.FC = () => {
                     let modelObject = {
                         downloadFilePath, civitaiFileName, civitaiModelID,
                         civitaiVersionID, civitaiModelFileList, civitaiUrl,
-                        selectedCategory, civitaiTags
+                        selectedCategory, civitaiTags, hold,
+                        downloadPriority,
                     }
 
                     await fetchAddOfflineDownloadFileIntoOfflineDownloadList(modelObject, false, dispatch);
@@ -947,6 +951,8 @@ const WindowComponent: React.FC = () => {
         setIsLoading(false)
         dispatch(updateDownloadFilePath("/@scan@/ACG/Pending/"));
         setResetMode(true)
+        setHold(false);
+        setDownloadPriority(5);
     };
 
     // Function to handle the API call and update the button state
@@ -2077,6 +2083,44 @@ const WindowComponent: React.FC = () => {
                                                 handleFunctionCall={() => {
                                                     handleSetOriginalTab()
                                                 }} />
+                                        </div>
+
+                                        <div
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '12px',
+                                                margin: '10px 0'
+                                            }}
+                                        >
+                                            {/* Hold checkbox */}
+                                            <Form.Check
+                                                type="checkbox"
+                                                id="offline-hold-flag"
+                                                label="Hold"
+                                                checked={hold}
+                                                onChange={(e) => setHold(e.target.checked)}
+                                            />
+
+                                            {/* Download priority dropdown (1..10) */}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <span style={{ fontSize: '.9rem' }}>Priority</span>
+                                                <Form.Select
+                                                    size="sm"
+                                                    value={downloadPriority}
+                                                    onChange={(e) => {
+                                                        const val = Number(e.target.value);
+                                                        if (!Number.isNaN(val)) {
+                                                            setDownloadPriority(val);
+                                                        }
+                                                    }}
+                                                    style={{ width: 80 }}
+                                                >
+                                                    {Array.from({ length: 10 }, (_, i) => i + 1).map((v) => (
+                                                        <option key={v} value={v}>{v}</option>
+                                                    ))}
+                                                </Form.Select>
+                                            </div>
                                         </div>
 
 
