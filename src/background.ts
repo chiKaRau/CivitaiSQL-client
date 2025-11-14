@@ -38,7 +38,7 @@ async function openOrFocusPopup() {
       url: POPUP_URL,
       type: 'popup',
       width: 1100,
-      height: 750,
+      height: 900,
       left: 1450,
       focused: true
     });

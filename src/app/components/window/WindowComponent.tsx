@@ -2089,8 +2089,10 @@ const WindowComponent: React.FC = () => {
                                             style={{
                                                 display: 'flex',
                                                 alignItems: 'center',
+                                                justifyContent: 'flex-end',   // ⭐ push content to the right
                                                 gap: '12px',
-                                                margin: '10px 0'
+                                                margin: '10px 0',
+                                                width: '100%',                // ⭐ make the row span full width
                                             }}
                                         >
                                             {/* Hold checkbox */}
@@ -2122,6 +2124,7 @@ const WindowComponent: React.FC = () => {
                                                 </Form.Select>
                                             </div>
                                         </div>
+
 
 
                                     </div>
