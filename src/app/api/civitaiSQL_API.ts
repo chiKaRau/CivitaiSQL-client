@@ -297,38 +297,40 @@ export const fetchUpdateRecordAtDatabase = async (id: number, url: string, selec
     }
 }
 
-export const fetchUpdateCreatorUrlList = async (creatorUrl: string, status: string,
-    lastChecked: boolean, selectedRating: string, dispatch: any) => {
-
+export const fetchUpdateCreatorUrlList = async (
+    creatorUrl: string,
+    status: string,
+    lastChecked: boolean,
+    selectedRating: string,
+    dispatch: any
+): Promise<{ status: string }> => {
     try {
-        // Clear any previous errors
         dispatch(clearError());
-        const response = await axios.post(`${config.domain}/api/update_creator_url_list`,
-            { creatorUrl, status, lastChecked, rating: selectedRating });
+
+        const response = await axios.post(
+            `${config.domain}/api/update_creator_url_list`,
+            { creatorUrl, status, lastChecked, rating: selectedRating }
+        );
 
         const responseData = response.data;
 
         if (!(response.status >= 200 && response.status < 300)) {
-            // Handle the case when response is false
-            return { status: "failure" }
-            throw new Error("Failed updating record into Database.");
+            return { status: "failure" };
         }
 
         if (!responseData.success) {
-            return { status: "failure" }
-            // Handle the case when success is false
-            throw new Error("Failed updating record into Database.");
+            return { status: "failure" };
         }
 
-        return { status: "success" }
-
+        return { status: "success" };
     } catch (error: any) {
-        // Handle other types of errors, e.g., network issues
         console.error("Error during Civitai Info retrieval:", error.message);
-        // Optionally, you can throw an error or return a specific value
         dispatch(setError({ hasError: true, errorMessage: error.message }));
+        return { status: "failure" }; // <- super important
     }
-}
+};
+
+
 
 export const fetchRemoveFromCreatorUrlList = async (creatorUrl: string, dispatch: any) => {
     try {

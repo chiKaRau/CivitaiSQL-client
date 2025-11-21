@@ -216,7 +216,31 @@ const WindowComponent: React.FC = () => {
                 //setLastUpdateProcessedIndex(message.lastUpdateProcessedIndex)
 
             } else if (message.action === "addCreator") {
-                handleUpdateCreatorUrlList(message.creator, sendResponse)
+                console.log("[listener] addCreator message received:", message.creator);
+
+                const creator = message.creator;
+                if (!creator) {
+                    console.log("[listener] missing creator, sending failure");
+                    sendResponse({ status: "failure", reason: "missing creator" });
+                    return true; // ok, we responded sync
+                }
+
+                const creatorUrl = `https://civitai.com/user/${creator}/models`;
+                console.log("[listener] calling fetchUpdateCreatorUrlList with:", creatorUrl);
+
+                fetchUpdateCreatorUrlList(creatorUrl, "new", false, "N/A", dispatch)
+                    .then((result) => {
+                        console.log("[listener] addCreator result from fetch:", result);
+                        const payload = result || { status: "failure" };
+                        console.log("[listener] sending response payload:", payload);
+                        sendResponse(payload);
+                    })
+                    .catch((err) => {
+                        console.error("[listener] addCreator error in fetch:", err);
+                        sendResponse({ status: "failure" });
+                    });
+
+                console.log("[listener] returning true (async)");
                 return true;
             }
         };
@@ -435,17 +459,27 @@ const WindowComponent: React.FC = () => {
     };
 
 
-    const handleUpdateCreatorUrlList = async (creator: any, sendResponse: any) => {
-
-        let result = null;
-        if (creator !== null || creator !== "") {
-
-            let creatorUrl = `https://civitai.com/user/${creator}/models`
-
-            result = await fetchUpdateCreatorUrlList(creatorUrl, "new", false, "N/A", dispatch);
+    const handleUpdateCreatorUrlList = async (creator: any): Promise<{ status: string }> => {
+        if (!creator) {
+            return { status: "failure" };
         }
-        sendResponse(result || { status: "failure" })
-    }
+
+        const creatorUrl = `https://civitai.com/user/${creator}/models`;
+
+        const result = await fetchUpdateCreatorUrlList(
+            creatorUrl,
+            "new",
+            false,
+            "N/A",
+            dispatch
+        );
+
+        console.log("handleUpdateCreatorUrlList result:", result);
+
+        // result is already { status: "success" } or { status: "failure" }
+        return result || { status: "failure" };
+    };
+
 
     // -- NEW Buttons: Refresh List & Refresh Page -----------------------
     const handleRefreshList = async () => {

@@ -1078,6 +1078,7 @@ function injectButtonStyles() {
 function sendActionToReact(message: any): Promise<any> {
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(message, (response) => {
+      console.log("sendMessage callback response:", response, "lastError:", chrome.runtime.lastError);
       if (chrome.runtime.lastError) {
         reject(chrome.runtime.lastError);
       } else {
@@ -1129,6 +1130,9 @@ function addCreatorButton(card: HTMLElement) {
       button.textContent = "Processing...";
       try {
         const response = await sendActionToReact({ action: "addCreator", creator: creatorName });
+        console.log("response");
+        console.log(response);
+
         if (response && response.status === "success") {
           displayTemporaryMessage(button, "Success", originalText);
         } else {
