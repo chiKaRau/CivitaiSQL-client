@@ -79,6 +79,15 @@ import SimilarSearchPanel from './SimilarSearchPanel';
 import DownloadPathEditor from './DownloadPathEditor';
 
 type DownloadMethod = 'server' | 'browser';
+type DisplayMode = 'table'
+    | 'bigCard'
+    | 'smallCard'
+    | 'failedCard'
+    | 'errorCard'
+    | 'updateCard'
+    | 'recentCard'
+    | 'holdCard'
+    | 'earlyAccessCard';
 
 // TypeScript Interfaces
 interface CivitaiModelFile {
@@ -334,7 +343,11 @@ const OfflineWindow: React.FC = () => {
     const [recentlyDownloaded, setRecentlyDownloaded] = useState<OfflineDownloadEntry[]>([]);
     const [holdEntries, setHoldEntries] = useState<OfflineDownloadEntry[]>([]);
     const [earlyAccessEntries, setEarlyAccessEntries] = useState<OfflineDownloadEntry[]>([]);
-    const [errorEntries, setErrorEntries] = useState<OfflineDownloadEntry[]>([]);  // 👈 NEW
+    const [errorEntries, setErrorEntries] = useState<OfflineDownloadEntry[]>([]);
+
+    // force reload for special card lists (hold/earlyAccess/error)
+    const [specialReloadToken, setSpecialReloadToken] = useState(0);
+
 
     // Add this in your component's top-level state:
     const [showPending, setShowPending] = useState(true);
@@ -442,7 +455,7 @@ const OfflineWindow: React.FC = () => {
 
         loadSpecialList();
         return () => { cancelled = true; };
-    }, [displayMode, dispatch]);
+    }, [displayMode, dispatch, specialReloadToken]);
 
 
     async function fetchExcludedTags() {
@@ -2151,6 +2164,27 @@ const OfflineWindow: React.FC = () => {
     }, [leftOverlayEntry, closeLeftOverlay]);
 
 
+    const handleDisplayModeClick = (mode: DisplayMode) => {
+        if (displayMode === mode) {
+            // Already in this mode → treat as "refresh"
+
+            // 1) Always refresh the main paged list
+            void handleRefreshList();
+
+            // 2) If this is a special card mode, also force its list to reload
+            if (
+                mode === 'holdCard' ||
+                mode === 'earlyAccessCard' ||
+                mode === 'errorCard'
+            ) {
+                setSpecialReloadToken((t) => t + 1);
+            }
+        } else {
+            // Normal switch between modes
+            setDisplayMode(mode);
+        }
+    };
+
 
     const handleProcessSelected = async () => {
         if (modify_downloadFilePath === "/@scan@/ErrorPath/") {
@@ -3535,7 +3569,7 @@ const OfflineWindow: React.FC = () => {
                                     ...responsiveButtonStyle
                                 }}
                                 variant={displayMode === 'table' ? 'primary' : 'secondary'}
-                                onClick={() => setDisplayMode('table')}
+                                onClick={() => handleDisplayModeClick('table')}
                             >
                                 Table Mode
                             </Button>
@@ -3544,7 +3578,7 @@ const OfflineWindow: React.FC = () => {
                                     ...responsiveButtonStyle
                                 }}
                                 variant={displayMode === 'bigCard' ? 'primary' : 'secondary'}
-                                onClick={() => setDisplayMode('bigCard')}
+                                onClick={() => handleDisplayModeClick('bigCard')}
                             >
                                 Big Card Mode
                             </Button>
@@ -3553,14 +3587,14 @@ const OfflineWindow: React.FC = () => {
                                     ...responsiveButtonStyle
                                 }}
                                 variant={displayMode === 'smallCard' ? 'primary' : 'secondary'}
-                                onClick={() => setDisplayMode('smallCard')}
+                                onClick={() => handleDisplayModeClick('smallCard')}
                             >
                                 Small Card Mode
                             </Button>
                             {/* <Button
                                 style={responsiveButtonStyle}
                                 variant={displayMode === 'updateCard' ? 'primary' : 'secondary'}
-                                onClick={() => setDisplayMode('updateCard')}
+                                onClick={() => handleDisplayModeClick('updateCard')}
                             >
                                 Update Card Mode
                             </Button> */}
@@ -3568,7 +3602,7 @@ const OfflineWindow: React.FC = () => {
                             <Button
                                 style={{ ...responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
                                 variant={displayMode === 'recentCard' ? 'primary' : 'secondary'}
-                                onClick={() => setDisplayMode('recentCard')}
+                                onClick={() => handleDisplayModeClick('recentCard')}
                                 aria-label={`Recently Downloaded (${recentlyDownloaded.length})`}
                             >
                                 Recently Downloaded
@@ -3588,7 +3622,7 @@ const OfflineWindow: React.FC = () => {
                             <Button
                                 style={{ ...responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
                                 variant={displayMode === 'holdCard' ? 'primary' : 'secondary'}
-                                onClick={() => setDisplayMode('holdCard')}
+                                onClick={() => handleDisplayModeClick('holdCard')}
                                 aria-label={`Hold entries (${holdEntries.length})`}
                             >
                                 Hold
@@ -3608,7 +3642,7 @@ const OfflineWindow: React.FC = () => {
                             <Button
                                 style={{ ...responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
                                 variant={displayMode === 'earlyAccessCard' ? 'primary' : 'secondary'}
-                                onClick={() => setDisplayMode('earlyAccessCard')}
+                                onClick={() => handleDisplayModeClick('earlyAccessCard')}
                                 aria-label={`Early Access entries (${earlyAccessEntries.length})`}
                             >
                                 Early Access
@@ -3627,7 +3661,7 @@ const OfflineWindow: React.FC = () => {
 
                             <Button
                                 variant={displayMode === 'failedCard' ? 'primary' : 'secondary'}
-                                onClick={() => setDisplayMode('failedCard')}
+                                onClick={() => handleDisplayModeClick('failedCard')}
                                 style={{ ...responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
                             >
                                 Failed Card Mode
@@ -3638,7 +3672,7 @@ const OfflineWindow: React.FC = () => {
 
                             <Button
                                 variant={displayMode === 'errorCard' ? 'primary' : 'secondary'}
-                                onClick={() => setDisplayMode('errorCard')}
+                                onClick={() => handleDisplayModeClick('errorCard')}
                                 style={{ ...responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
                                 aria-label={`Error entries (${errorEntries.length})`}
                             >
@@ -3987,7 +4021,7 @@ const OfflineWindow: React.FC = () => {
                                     }}
                                     disabled={selectedIds.size === 0 || isLoading}
                                 >
-                                    Process Selected
+                                    Update DownloadFilePath for Selected
                                 </Button>
 
                                 {/* New Remove button */}
