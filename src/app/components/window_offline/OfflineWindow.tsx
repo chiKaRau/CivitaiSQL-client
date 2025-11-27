@@ -8,12 +8,12 @@ import { updateDownloadFilePath } from '../../store/actions/chromeActions';
 
 // Icons Components
 import { AiFillFolderOpen } from "react-icons/ai";
-import { BsDownload } from 'react-icons/bs';
+import { BsCloudDownloadFill, BsDownload } from 'react-icons/bs';
 import { TbDatabaseSearch, TbDatabasePlus, TbDatabaseMinus } from "react-icons/tb";
 import { PiPlusMinusFill } from "react-icons/pi";
 import { FaMagnifyingGlass, FaMagnifyingGlassPlus, FaSun, FaMoon, FaArrowRight } from "react-icons/fa6"; // Added FaSun and FaMoon
 import { MdOutlineApps, MdOutlineTipsAndUpdates, MdOutlineDownloadForOffline, MdOutlineDownload, MdOutlinePendingActions } from "react-icons/md";
-import { FcGenericSortingAsc, FcGenericSortingDesc } from "react-icons/fc";
+import { FcDownload, FcGenericSortingAsc, FcGenericSortingDesc } from "react-icons/fc";
 import { PiTabsFill } from "react-icons/pi";
 import { LuPanelLeftOpen, LuPanelRightOpen } from "react-icons/lu";
 import { BsReverseLayoutTextWindowReverse } from "react-icons/bs";
@@ -51,7 +51,8 @@ import {
     fetchOfflineDownloadListHold,
     fetchOfflineDownloadListEarlyAccessActive,
     fetchUpdateDownloadFilePathFromOfflineDownloadList,
-    fetchGetErrorModelList
+    fetchGetErrorModelList,
+    fetchCivitaiModelInfoFromCivitaiByVersionID
 } from "../../api/civitaiSQL_api"
 
 import {
@@ -76,6 +77,8 @@ import TitleNameToggle from './TitleNameToggle';
 import TopTagsDropdown from './TopTagsDropdown';
 import SimilarSearchPanel from './SimilarSearchPanel';
 import DownloadPathEditor from './DownloadPathEditor';
+
+type DownloadMethod = 'server' | 'browser';
 
 // TypeScript Interfaces
 interface CivitaiModelFile {
@@ -180,6 +183,23 @@ export interface OfflineDownloadEntry {
     downloadPriority?: number;           // 1..10
     earlyAccessEndsAt?: string | null;
 }
+
+interface BigCardModeProps {
+    filteredDownloadList: OfflineDownloadEntry[];
+    isDarkMode: boolean;
+    isModifyMode: boolean;
+    selectedIds: Set<string>;
+    toggleSelect: (id: string) => void;
+    handleSelectAll: (entries: OfflineDownloadEntry[]) => void;
+    showGalleries: boolean;
+    onToggleOverlay: (entry: OfflineDownloadEntry) => void;
+    activePreviewId: string | null;
+
+    // ⬇️ NEW props
+    displayMode?: string;
+    onErrorCardDownload?: (entry: OfflineDownloadEntry, method: 'server' | 'browser') => void;
+}
+
 
 // **1. SelectAllHeaderCheckbox Component**
 interface SelectAllHeaderCheckboxProps {
@@ -1755,6 +1775,144 @@ const OfflineWindow: React.FC = () => {
     );
 
 
+
+    const handleErrorCardDownload = React.useCallback(
+        async (entry: any, method: DownloadMethod) => {
+            const modelID = entry.civitaiModelID;
+            const versionID = entry.civitaiVersionID;
+
+            console.log(`ErrorCard download clicked. modelID=${modelID}, versionID=${versionID}, method=${method}`);
+
+            const civitaiUrl = `https://civitai.com/models/${modelID}?modelVersionId=${versionID}`;
+
+            // Prefer modelVersionObject embedded on the entry if it exists,
+            // otherwise fall back to calling the API.
+            let modelVersionObject = (entry as any).modelVersionObject;
+            if (!modelVersionObject) {
+                modelVersionObject = await fetchCivitaiModelInfoFromCivitaiByVersionID(
+                    String(versionID),
+                    dispatch
+                );
+            }
+
+            if (!modelVersionObject) {
+                alert("Failed to load model information for this error entry.");
+                return;
+            }
+
+            const civitaiFileName =
+                modelVersionObject?.files?.find(
+                    (file: any) =>
+                        typeof file.name === "string" &&
+                        file.name.toLowerCase().endsWith(".safetensors")
+                )?.name || "";
+
+            const civitaiModelFileList =
+                modelVersionObject?.files?.map((file: any) => ({
+                    name: file.name,
+                    downloadUrl: file.downloadUrl,
+                })) || [];
+
+            // Use the per-entry path if it exists and is not 'N/A', otherwise
+            // fall back to the global modify_downloadFilePath from your toolbar.
+            const offlinePath =
+                entry.downloadFilePath && entry.downloadFilePath !== "N/A"
+                    ? entry.downloadFilePath
+                    : "";
+
+            const downloadFilePath = offlinePath || modify_downloadFilePath;
+
+            // Block the Pending path exactly like your old ErrorCardMode
+            if (downloadFilePath === "/@scan@/ACG/Pending/") {
+                alert("Invalid download path: Pending entries cannot be downloaded");
+                return;
+            }
+
+            if (
+                !civitaiUrl ||
+                !civitaiFileName ||
+                !downloadFilePath ||
+                !civitaiModelFileList.length
+            ) {
+                alert(
+                    "Some required data is missing. Please check the model information and try again."
+                );
+                return;
+            }
+
+            const civitaiModelID = modelID;
+            const civitaiVersionID = versionID;
+
+            const modelObject = {
+                downloadFilePath,
+                civitaiFileName,
+                civitaiModelID,
+                civitaiVersionID,
+                civitaiModelFileList,
+                civitaiUrl,
+            };
+
+            try {
+                if (method === "server") {
+                    const isDownloadSuccessful = await fetchDownloadFilesByServer_v2(
+                        {
+                            civitaiUrl,
+                            civitaiFileName,
+                            civitaiModelID,
+                            civitaiVersionID,
+                            downloadFilePath,
+                            civitaiModelFileList,
+                        },
+                        dispatch
+                    );
+
+                    if (isDownloadSuccessful) {
+                        await fetchAddRecordToDatabase(
+                            modify_selectedCategory,
+                            civitaiUrl,
+                            downloadFilePath,
+                            dispatch
+                        );
+                        bookmarkThisUrl(
+                            modelVersionObject?.model?.type ?? "N/A",
+                            civitaiUrl,
+                            `${modelVersionObject?.model?.name ?? "N/A"} - ${civitaiModelID} | Stable Diffusion LoRA | Civitai`
+                        );
+                    }
+                } else {
+                    // Browser mode
+                    const data = modelVersionObject;
+
+                    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                        chrome.runtime.sendMessage({
+                            action: "browser-download_v2_background",
+                            data: { ...modelObject, modelVersionObject: data },
+                        });
+                    });
+
+                    await fetchAddRecordToDatabase(
+                        modify_selectedCategory,
+                        civitaiUrl,
+                        downloadFilePath,
+                        dispatch
+                    );
+                    bookmarkThisUrl(
+                        modelVersionObject?.model?.type ?? "N/A",
+                        civitaiUrl,
+                        `${modelVersionObject?.model?.name ?? "N/A"} - ${civitaiModelID} | Stable Diffusion LoRA | Civitai`
+                    );
+                }
+
+                console.log("ErrorCard model download initiated.");
+            } catch (error) {
+                console.error("Error during ErrorCard download:", error);
+                alert("Failed to initiate download. Please try again.");
+            }
+        },
+        [dispatch, modify_downloadFilePath, modify_selectedCategory]
+    );
+
+
     /**
  * Download selected entries in batches of 10.
  * Wait for all entries in one batch to finish before moving to the next batch.
@@ -2489,17 +2647,7 @@ const OfflineWindow: React.FC = () => {
 
 
     // **BigCardMode Component Implementation**
-    const BigCardMode: React.FC<{
-        filteredDownloadList: OfflineDownloadEntry[];
-        isDarkMode: boolean;
-        isModifyMode: boolean;
-        selectedIds: Set<string>;
-        activePreviewId: string | null;
-        toggleSelect: (id: string) => void;
-        handleSelectAll: () => void;
-        showGalleries: boolean;
-        onToggleOverlay: (entry: OfflineDownloadEntry) => void;
-    }> = ({
+    const BigCardMode: React.FC<BigCardModeProps> = ({
         filteredDownloadList,
         isDarkMode,
         isModifyMode,
@@ -2507,426 +2655,488 @@ const OfflineWindow: React.FC = () => {
         toggleSelect,
         handleSelectAll,
         showGalleries,
+        onToggleOverlay,
         activePreviewId,
-        onToggleOverlay
+        displayMode,
+        onErrorCardDownload,
     }) => {
-            if (filteredDownloadList.length === 0) {
-                return (
-                    <div style={{ color: isDarkMode ? '#fff' : '#000' }}>
-                        No downloads available.
-                    </div>
-                );
-            }
 
+        const [errorDownloadMethod, setErrorDownloadMethod] = React.useState<'server' | 'browser'>('browser');
+
+        if (filteredDownloadList.length === 0) {
             return (
-                <div>
-                    <div
-                        style={{
-                            display: 'flex',
-                            flexWrap: 'wrap',
-                            gap: '20px',
-                            justifyContent: 'center'
-                        }}
-                    >
-                        {filteredDownloadList.map((entry, cardIndex) => {
-                            const isSelected = selectedIds.has(entry.civitaiVersionID);
-                            const showEA = isEntryEarlyAccess(entry);
-                            return (
-                                <Card
-                                    key={cardIndex}
-                                    style={{
-                                        width: '100%',
-                                        maxWidth: '380px',
-                                        border: '1px solid',
-                                        borderColor: isDarkMode ? '#555' : '#ccc',
-                                        borderRadius: '8px',
-                                        boxShadow: isDarkMode
-                                            ? '2px 2px 8px rgba(255,255,255,0.1)'
-                                            : '2px 2px 8px rgba(0,0,0,0.1)',
-                                        backgroundColor: isDarkMode ? '#333' : '#fff',
-                                        color: isDarkMode ? '#fff' : '#000',
-                                        position: 'relative',
-                                        cursor: isModifyMode ? 'pointer' : 'default',
-                                        opacity: isModifyMode && !isSelected ? 0.8 : 1,
-                                        transition:
-                                            'background-color 0.3s ease, color 0.3s ease, opacity 0.3s ease',
-                                        overflow: 'hidden',
-                                        margin: '0 auto',
-                                        padding: '10px'
-                                    }}
-                                    onClick={(e) => {
-                                        if (isModifyMode && e.ctrlKey) {
-                                            toggleSelect(entry.civitaiVersionID);
-                                        }
-                                    }}
-                                >
-                                    {/* Early Access badge at the top-right */}
-                                    {showEA && (
-                                        <div
-                                            style={{
-                                                position: 'absolute',
-                                                top: '5px',
-                                                right: '5px',
-                                                color: 'red',
-                                                fontWeight: 'bold',
-                                                fontSize: '0.8rem',
-                                                backgroundColor: isDarkMode ? '#444' : '#fff',
-                                                padding: '2px 4px',
-                                                borderRadius: '4px',
-                                                border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
-                                            }}
-                                        >
-                                            {(() => {
-                                                const ends = getEarlyAccessEndsAt(entry);
-                                                return ends ? formatLocalDateTime(ends) : 'Early Access Only';
-                                            })()}
-
-                                        </div>
-                                    )}
-
-                                    {/* Selection Checkbox at the top-left */}
-                                    <Form.Check
-                                        type="checkbox"
-                                        checked={isSelected}
-                                        onChange={(e) => {
-                                            e.stopPropagation();
-                                            toggleSelect(entry.civitaiVersionID);
-                                        }}
-                                        disabled={displayMode === "recentCard" || displayMode === "holdCard" || displayMode === "earlyAccessCard"}
-                                        style={{
-                                            position: 'absolute',
-                                            top: '10px',
-                                            left: '10px',
-                                            transform: 'scale(1.2)',
-                                            cursor: isModifyMode ? 'pointer' : 'not-allowed',
-                                            accentColor: isDarkMode ? '#fff' : '#000',
-                                        }}
-                                    />
-
-                                    {/* ---- 1) BaseModel badge + Title ---- */}
-                                    <div
-                                        style={{
-                                            display: 'flex',            // <-- make this a flex container
-                                            alignItems: 'center',       // vertically center badge + title
-                                            marginTop: '40px',
-                                            marginBottom: '5px',
-                                            borderBottom: `1px solid ${isDarkMode ? '#555' : '#ccc'}`,
-                                            paddingBottom: '5px',
-                                        }}
-                                    >
-                                        {/* BaseModel as a badge, only if present */}
-                                        {entry.modelVersionObject?.baseModel && (
-                                            <span
-                                                style={{
-                                                    fontSize: '0.7rem',
-                                                    fontWeight: 'bold',
-                                                    backgroundColor: '#007bff',
-                                                    color: '#fff',
-                                                    padding: '2px 6px',
-                                                    borderRadius: '4px',
-                                                    marginRight: '6px',
-                                                    flexShrink: 0,          // never shrink the badge
-                                                }}
-                                            >
-                                                {entry.modelVersionObject.baseModel}
-                                            </span>
-                                        )}
-
-                                        {/* wrap your toggle in a flex child so it can shrink & ellipsis properly */}
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                            <TitleNameToggle
-                                                titleName={entry?.modelVersionObject?.model?.name ?? 'N/A'}
-                                                truncateAfter={30}
-                                            />
-                                        </div>
-                                    </div>
-
-
-                                    {/* Images */}
-                                    {entry.imageUrlsArray && entry.imageUrlsArray.length > 0 ? (
-                                        showGalleries ? (
-                                            // Full carousel (same as before)
-                                            <Carousel
-                                                variant={isDarkMode ? 'dark' : 'light'}
-                                                indicators={entry.imageUrlsArray.length > 1}
-                                                controls={entry.imageUrlsArray.length > 1}
-                                                interval={null}
-                                                style={{ marginBottom: 0 }}
-                                            >
-                                                {entry.imageUrlsArray.map((img, imgIndex) => {
-                                                    const { url, width, height } = normalizeImg(img as any);
-                                                    const baseW = 380;
-                                                    return (
-                                                        <Carousel.Item key={imgIndex}>
-                                                            <img
-                                                                className="d-block w-100"
-                                                                src={withWidth(url, baseW)}
-                                                                srcSet={buildSrcSet(url, [320, 480, 640, 800])}
-                                                                sizes="(max-width: 420px) 100vw, 380px"
-                                                                loading={imgIndex === 0 && cardIndex === 0 ? 'eager' : 'lazy'}
-                                                                decoding="async"
-                                                                width={width ?? undefined}
-                                                                height={height ?? undefined}
-                                                                alt={`Slide ${imgIndex + 1}`}
-                                                                style={{ maxHeight: '300px', objectFit: 'contain', margin: '0 auto' }}
-                                                            />
-                                                        </Carousel.Item>
-                                                    );
-                                                })}
-                                            </Carousel>
-                                        ) : (
-                                            // Only the first image (fast)
-                                            (() => {
-                                                const first = normalizeImg(entry.imageUrlsArray[0] as any);
-                                                const baseW = 380;
-                                                return (
-                                                    <img
-                                                        className="d-block w-100"
-                                                        src={withWidth(first.url, baseW)}
-                                                        srcSet={buildSrcSet(first.url, [320, 480, 640, 800])}
-                                                        sizes="(max-width: 420px) 100vw, 380px"
-                                                        loading={cardIndex === 0 ? 'eager' : 'lazy'}
-                                                        decoding="async"
-                                                        width={first.width ?? undefined}
-                                                        height={first.height ?? undefined}
-                                                        alt="Preview"
-                                                        style={{ maxHeight: '300px', objectFit: 'contain', margin: '0 auto' }}
-                                                    />
-                                                );
-                                            })()
-                                        )
-                                    ) : (
-                                        <div
-                                            style={{
-                                                height: '200px',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                backgroundColor: isDarkMode ? '#555' : '#f0f0f0',
-                                                marginBottom: 0,
-                                                borderRadius: '4px',
-                                            }}
-                                        >
-                                            <span>No Images Available</span>
-                                        </div>
-                                    )}
-
-                                    {/* 3) Smaller text under the carousel */}
-                                    <div
-                                        style={{
-                                            marginTop: '5px',
-                                            fontSize: '0.8rem', // smaller text
-                                            lineHeight: 1.3,
-                                            padding: '0 5px',
-                                        }}
-                                    >
-                                        {/* Version Name */}
-                                        <div
-                                            style={{
-                                                textAlign: 'center',
-                                                wordWrap: 'break-word',
-                                                whiteSpace: 'nowrap',
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                            }}
-                                            title={entry.modelVersionObject?.name ?? 'N/A'}
-                                        >
-                                            <strong>Version:</strong> {entry.modelVersionObject?.name ?? 'N/A'}
-                                        </div>
-
-                                        {/* File Name */}
-                                        <FileNameToggle
-                                            fileName={entry.civitaiFileName ?? 'N/A'}
-                                            truncateAfter={40}   // adjust to taste
-                                        />
-
-                                        {/* Tags */}
-                                        {Array.isArray(entry.civitaiTags) && entry.civitaiTags.length > 0 && (
-                                            <TagList tags={entry.civitaiTags} isDarkMode={isDarkMode} />
-                                        )}
-
-                                        {/* 3) Show full download path with line wrapping */}
-                                        <div
-                                            style={{
-                                                margin: "4px 0",
-                                                whiteSpace: "normal",
-                                                wordWrap: "break-word",
-                                            }}
-                                        >
-                                            {displayMode === "recentCard" ? (
-                                                // keep your existing clickable link for recentCard
-                                                entry.downloadFilePath ? (
-                                                    <a
-                                                        href="#"
-                                                        onClick={(e) => {
-                                                            e.preventDefault();
-                                                            e.stopPropagation();
-                                                            fetchOpenModelDownloadDirectory(entry.downloadFilePath!, dispatch);
-                                                        }}
-                                                        style={{
-                                                            textDecoration: "underline",
-                                                            cursor: "pointer",
-                                                            color: isDarkMode ? "#60A5FA" : "#1D4ED8",
-                                                        }}
-                                                        aria-label="Open model download directory"
-                                                        title={entry.downloadFilePath}
-                                                    >
-                                                        {entry.downloadFilePath}
-                                                    </a>
-                                                ) : (
-                                                    "N/A"
-                                                )
-                                            ) : editingPathId === entry.civitaiVersionID ? (
-                                                // ⬇️ ONLY this card shows the editor when its ID matches
-                                                <DownloadPathEditor
-                                                    initialValue={entry.downloadFilePath ?? ""}
-                                                    isDarkMode={isDarkMode}
-                                                    onSave={(nextPath: any) => handleDownloadPathSave(entry, nextPath)}
-                                                    onCancel={() => setEditingPathId(null)}
-                                                />
-                                            ) : (
-                                                // Normal display; double-click to start editing for THIS card only
-                                                <>
-                                                    <strong>Download Path:</strong>{" "}
-                                                    <span
-                                                        onDoubleClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setEditingPathId(entry.civitaiVersionID);
-                                                        }}
-                                                        style={{
-                                                            cursor: "pointer",
-                                                            textDecoration: "underline dotted",
-                                                            whiteSpace: "normal",
-                                                            wordWrap: "break-word",
-                                                        }}
-                                                        title="Double-click to edit download path"
-                                                    >
-                                                        {entry.downloadFilePath ?? "N/A"}
-                                                    </span>
-                                                </>
-                                            )}
-                                        </div>
-
-                                        {/* Category */}
-                                        <p style={{ margin: '4px 0' }}>
-                                            <strong>Category:</strong> {entry.selectedCategory ?? 'N/A'}
-                                        </p>
-
-                                        <p style={{ margin: '4px 0' }}>
-                                            <strong>Version ID:</strong> {entry.modelVersionObject?.id ?? 'N/A'}
-                                        </p>
-                                        <p style={{ margin: '4px 0' }}>
-                                            <strong>Model ID:</strong> {entry.modelVersionObject?.modelId ?? 'N/A'}
-                                        </p>
-                                        <p style={{ margin: '4px 0' }}>
-                                            <strong>URL:</strong>{' '}
-                                            {entry.civitaiUrl ? (
-                                                <a
-                                                    href={entry.civitaiUrl}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    style={{ color: isDarkMode ? '#1e90ff' : '#007bff' }}
-                                                >
-                                                    Visit Model
-                                                </a>
-                                            ) : (
-                                                'N/A'
-                                            )}
-                                        </p>
-                                        <p style={{ margin: '4px 0' }}>
-                                            <strong>Creator:</strong> {entry.modelVersionObject?.creator?.username ?? 'N/A'}
-                                        </p>
-                                        <p style={{ margin: '4px 0' }}>
-                                            <strong>File Size:</strong>{' '}
-                                            {(() => {
-                                                const safetensorFile =
-                                                    entry.modelVersionObject?.files?.find(file =>
-                                                        file.name.endsWith('.safetensors')
-                                                    );
-                                                return safetensorFile
-                                                    ? `${(safetensorFile.sizeKB / 1024).toFixed(2)} MB`
-                                                    : 'N/A';
-                                            })()}
-                                        </p>
-                                    </div>
-
-                                    {/* --- Hold, Priority, Remove, Preview (one line) --- */}
-                                    <div style={controlRowStyle}>
-                                        {/* Hold checkbox */}
-                                        <Form.Check
-                                            type="checkbox"
-                                            id={`hold-${entry.civitaiModelID}-${entry.civitaiVersionID}`}
-                                            label={<span style={{ fontWeight: 600 }}>Hold</span>}
-                                            checked={Boolean(entry.hold)}
-                                            onChange={(e) => {
-                                                e.stopPropagation();
-                                                handleHoldChange(entry, e.target.checked);
-                                            }}
-                                            disabled={isLoading}
-                                            style={{ cursor: 'pointer' }}
-                                        />
-
-                                        {/* Priority */}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                            <span style={{ fontSize: '.85rem', opacity: .9 }}>Priority</span>
-                                            <Form.Select
-                                                size="sm"
-                                                value={(entry.downloadPriority ?? 10)}
-                                                onChange={(e) => {
-                                                    const next = parseInt(e.target.value, 10);
-                                                    handlePriorityChange(entry, next);
-                                                }}
-                                                disabled={isLoading}
-                                                style={{
-                                                    width: 90,
-                                                    backgroundColor: isDarkMode ? '#444' : '#fff',
-                                                    color: isDarkMode ? '#fff' : '#000',
-                                                    border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`
-                                                }}
-                                                aria-label="Download priority (1–10)"
-                                            >
-                                                {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
-                                                    <option key={n} value={n}>{n}</option>
-                                                ))}
-                                            </Form.Select>
-                                        </div>
-
-                                        {/* right-side action buttons */}
-                                        <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
-                                            {/* Remove */}
-                                            <button
-                                                type="button"
-                                                onClick={(e) => { e.stopPropagation(); handleRemoveOne(entry); }}
-                                                title="Remove from list"
-                                                aria-label="Remove from list"
-                                                style={inlineDangerBtnStyle}
-                                                disabled={isLoading}
-                                            >
-                                                <FaTrashAlt size={14} />
-                                            </button>
-
-                                            {/* Preview in left panel */}
-                                            <button
-                                                type="button"
-                                                onClick={(e) => { e.stopPropagation(); onToggleOverlay(entry); }}
-                                                title="Preview in left panel"
-                                                aria-label="Preview in left panel"
-                                                style={inlineIconBtnStyle}
-                                                disabled={isLoading}
-                                            >
-                                                <LuPanelLeftOpen size={18} />
-                                            </button>
-                                        </div>
-                                    </div>
-
-
-                                </Card>
-                            );
-                        })}
-                    </div>
+                <div style={{ color: isDarkMode ? '#fff' : '#000' }}>
+                    No downloads available.
                 </div>
             );
-        };
+        }
+        return (
+            <div>
+                <div
+                    style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '20px',
+                        justifyContent: 'center'
+                    }}
+                >
+                    {filteredDownloadList.map((entry, cardIndex) => {
+                        const isSelected = selectedIds.has(entry.civitaiVersionID);
+                        const showEA = isEntryEarlyAccess(entry);
+                        return (
+                            <Card
+                                key={cardIndex}
+                                style={{
+                                    width: '100%',
+                                    maxWidth: '380px',
+                                    border: '1px solid',
+                                    borderColor: isDarkMode ? '#555' : '#ccc',
+                                    borderRadius: '8px',
+                                    boxShadow: isDarkMode
+                                        ? '2px 2px 8px rgba(255,255,255,0.1)'
+                                        : '2px 2px 8px rgba(0,0,0,0.1)',
+                                    backgroundColor: isDarkMode ? '#333' : '#fff',
+                                    color: isDarkMode ? '#fff' : '#000',
+                                    position: 'relative',
+                                    cursor: isModifyMode ? 'pointer' : 'default',
+                                    opacity: isModifyMode && !isSelected ? 0.8 : 1,
+                                    transition:
+                                        'background-color 0.3s ease, color 0.3s ease, opacity 0.3s ease',
+                                    overflow: 'hidden',
+                                    margin: '0 auto',
+                                    padding: '10px'
+                                }}
+                                onClick={(e) => {
+                                    if (isModifyMode && e.ctrlKey) {
+                                        toggleSelect(entry.civitaiVersionID);
+                                    }
+                                }}
+                            >
+                                {/* Early Access badge at the top-right */}
+                                {showEA && (
+                                    <div
+                                        style={{
+                                            position: 'absolute',
+                                            top: '5px',
+                                            right: '5px',
+                                            color: 'red',
+                                            fontWeight: 'bold',
+                                            fontSize: '0.8rem',
+                                            backgroundColor: isDarkMode ? '#444' : '#fff',
+                                            padding: '2px 4px',
+                                            borderRadius: '4px',
+                                            border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
+                                        }}
+                                    >
+                                        {(() => {
+                                            const ends = getEarlyAccessEndsAt(entry);
+                                            return ends ? formatLocalDateTime(ends) : 'Early Access Only';
+                                        })()}
+
+                                    </div>
+                                )}
+
+                                {/* Selection Checkbox at the top-left */}
+                                <Form.Check
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={(e) => {
+                                        e.stopPropagation();
+                                        toggleSelect(entry.civitaiVersionID);
+                                    }}
+                                    disabled={
+                                        displayMode === "recentCard" ||
+                                        displayMode === "holdCard" ||
+                                        displayMode === "earlyAccessCard" ||
+                                        displayMode === "errorCard"
+                                    }
+                                    style={{
+                                        position: 'absolute',
+                                        top: '10px',
+                                        left: '10px',
+                                        transform: 'scale(1.2)',
+                                        cursor: isModifyMode ? 'pointer' : 'not-allowed',
+                                        accentColor: isDarkMode ? '#fff' : '#000',
+                                    }}
+                                />
+
+                                {/* ---- 1) BaseModel badge + Title ---- */}
+                                <div
+                                    style={{
+                                        display: 'flex',            // <-- make this a flex container
+                                        alignItems: 'center',       // vertically center badge + title
+                                        marginTop: '40px',
+                                        marginBottom: '5px',
+                                        borderBottom: `1px solid ${isDarkMode ? '#555' : '#ccc'}`,
+                                        paddingBottom: '5px',
+                                    }}
+                                >
+                                    {/* BaseModel as a badge, only if present */}
+                                    {entry.modelVersionObject?.baseModel && (
+                                        <span
+                                            style={{
+                                                fontSize: '0.7rem',
+                                                fontWeight: 'bold',
+                                                backgroundColor: '#007bff',
+                                                color: '#fff',
+                                                padding: '2px 6px',
+                                                borderRadius: '4px',
+                                                marginRight: '6px',
+                                                flexShrink: 0,          // never shrink the badge
+                                            }}
+                                        >
+                                            {entry.modelVersionObject.baseModel}
+                                        </span>
+                                    )}
+
+                                    {/* wrap your toggle in a flex child so it can shrink & ellipsis properly */}
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <TitleNameToggle
+                                            titleName={entry?.modelVersionObject?.model?.name ?? 'N/A'}
+                                            truncateAfter={30}
+                                        />
+                                    </div>
+                                </div>
+
+
+                                {/* Images */}
+                                {entry.imageUrlsArray && entry.imageUrlsArray.length > 0 ? (
+                                    showGalleries ? (
+                                        // Full carousel (same as before)
+                                        <Carousel
+                                            variant={isDarkMode ? 'dark' : 'light'}
+                                            indicators={entry.imageUrlsArray.length > 1}
+                                            controls={entry.imageUrlsArray.length > 1}
+                                            interval={null}
+                                            style={{ marginBottom: 0 }}
+                                        >
+                                            {entry.imageUrlsArray.map((img, imgIndex) => {
+                                                const { url, width, height } = normalizeImg(img as any);
+                                                const baseW = 380;
+                                                return (
+                                                    <Carousel.Item key={imgIndex}>
+                                                        <img
+                                                            className="d-block w-100"
+                                                            src={withWidth(url, baseW)}
+                                                            srcSet={buildSrcSet(url, [320, 480, 640, 800])}
+                                                            sizes="(max-width: 420px) 100vw, 380px"
+                                                            loading={imgIndex === 0 && cardIndex === 0 ? 'eager' : 'lazy'}
+                                                            decoding="async"
+                                                            width={width ?? undefined}
+                                                            height={height ?? undefined}
+                                                            alt={`Slide ${imgIndex + 1}`}
+                                                            style={{ maxHeight: '300px', objectFit: 'contain', margin: '0 auto' }}
+                                                        />
+                                                    </Carousel.Item>
+                                                );
+                                            })}
+                                        </Carousel>
+                                    ) : (
+                                        // Only the first image (fast)
+                                        (() => {
+                                            const first = normalizeImg(entry.imageUrlsArray[0] as any);
+                                            const baseW = 380;
+                                            return (
+                                                <img
+                                                    className="d-block w-100"
+                                                    src={withWidth(first.url, baseW)}
+                                                    srcSet={buildSrcSet(first.url, [320, 480, 640, 800])}
+                                                    sizes="(max-width: 420px) 100vw, 380px"
+                                                    loading={cardIndex === 0 ? 'eager' : 'lazy'}
+                                                    decoding="async"
+                                                    width={first.width ?? undefined}
+                                                    height={first.height ?? undefined}
+                                                    alt="Preview"
+                                                    style={{ maxHeight: '300px', objectFit: 'contain', margin: '0 auto' }}
+                                                />
+                                            );
+                                        })()
+                                    )
+                                ) : (
+                                    <div
+                                        style={{
+                                            height: '200px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            backgroundColor: isDarkMode ? '#555' : '#f0f0f0',
+                                            marginBottom: 0,
+                                            borderRadius: '4px',
+                                        }}
+                                    >
+                                        <span>No Images Available</span>
+                                    </div>
+                                )}
+
+                                {/* 3) Smaller text under the carousel */}
+                                <div
+                                    style={{
+                                        marginTop: '5px',
+                                        fontSize: '0.8rem', // smaller text
+                                        lineHeight: 1.3,
+                                        padding: '0 5px',
+                                    }}
+                                >
+                                    {/* Version Name */}
+                                    <div
+                                        style={{
+                                            textAlign: 'center',
+                                            wordWrap: 'break-word',
+                                            whiteSpace: 'nowrap',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                        }}
+                                        title={entry.modelVersionObject?.name ?? 'N/A'}
+                                    >
+                                        <strong>Version:</strong> {entry.modelVersionObject?.name ?? 'N/A'}
+                                    </div>
+
+                                    {/* File Name */}
+                                    <FileNameToggle
+                                        fileName={entry.civitaiFileName ?? 'N/A'}
+                                        truncateAfter={40}   // adjust to taste
+                                    />
+
+                                    {/* Tags */}
+                                    {Array.isArray(entry.civitaiTags) && entry.civitaiTags.length > 0 && (
+                                        <TagList tags={entry.civitaiTags} isDarkMode={isDarkMode} />
+                                    )}
+
+                                    {/* 3) Show full download path with line wrapping */}
+                                    <div
+                                        style={{
+                                            margin: "4px 0",
+                                            whiteSpace: "normal",
+                                            wordWrap: "break-word",
+                                        }}
+                                    >
+                                        {displayMode === "recentCard" ? (
+                                            // keep your existing clickable link for recentCard
+                                            entry.downloadFilePath ? (
+                                                <a
+                                                    href="#"
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        fetchOpenModelDownloadDirectory(entry.downloadFilePath!, dispatch);
+                                                    }}
+                                                    style={{
+                                                        textDecoration: "underline",
+                                                        cursor: "pointer",
+                                                        color: isDarkMode ? "#60A5FA" : "#1D4ED8",
+                                                    }}
+                                                    aria-label="Open model download directory"
+                                                    title={entry.downloadFilePath}
+                                                >
+                                                    {entry.downloadFilePath}
+                                                </a>
+                                            ) : (
+                                                "N/A"
+                                            )
+                                        ) : editingPathId === entry.civitaiVersionID ? (
+                                            // ⬇️ ONLY this card shows the editor when its ID matches
+                                            <DownloadPathEditor
+                                                initialValue={entry.downloadFilePath ?? ""}
+                                                isDarkMode={isDarkMode}
+                                                onSave={(nextPath: any) => handleDownloadPathSave(entry, nextPath)}
+                                                onCancel={() => setEditingPathId(null)}
+                                            />
+                                        ) : (
+                                            // Normal display; double-click to start editing for THIS card only
+                                            <>
+                                                <strong>Download Path:</strong>{" "}
+                                                <span
+                                                    onDoubleClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setEditingPathId(entry.civitaiVersionID);
+                                                    }}
+                                                    style={{
+                                                        cursor: "pointer",
+                                                        textDecoration: "underline dotted",
+                                                        whiteSpace: "normal",
+                                                        wordWrap: "break-word",
+                                                    }}
+                                                    title="Double-click to edit download path"
+                                                >
+                                                    {entry.downloadFilePath ?? "N/A"}
+                                                </span>
+                                            </>
+                                        )}
+                                    </div>
+
+                                    {/* Category */}
+                                    <p style={{ margin: '4px 0' }}>
+                                        <strong>Category:</strong> {entry.selectedCategory ?? 'N/A'}
+                                    </p>
+
+                                    <p style={{ margin: '4px 0' }}>
+                                        <strong>Version ID:</strong> {entry.modelVersionObject?.id ?? 'N/A'}
+                                    </p>
+                                    <p style={{ margin: '4px 0' }}>
+                                        <strong>Model ID:</strong> {entry.modelVersionObject?.modelId ?? 'N/A'}
+                                    </p>
+                                    <p style={{ margin: '4px 0' }}>
+                                        <strong>URL:</strong>{' '}
+                                        {entry.civitaiUrl ? (
+                                            <a
+                                                href={entry.civitaiUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                style={{ color: isDarkMode ? '#1e90ff' : '#007bff' }}
+                                            >
+                                                Visit Model
+                                            </a>
+                                        ) : (
+                                            'N/A'
+                                        )}
+                                    </p>
+                                    <p style={{ margin: '4px 0' }}>
+                                        <strong>Creator:</strong> {entry.modelVersionObject?.creator?.username ?? 'N/A'}
+                                    </p>
+                                    <p style={{ margin: '4px 0' }}>
+                                        <strong>File Size:</strong>{' '}
+                                        {(() => {
+                                            const safetensorFile =
+                                                entry.modelVersionObject?.files?.find(file =>
+                                                    file.name.endsWith('.safetensors')
+                                                );
+                                            return safetensorFile
+                                                ? `${(safetensorFile.sizeKB / 1024).toFixed(2)} MB`
+                                                : 'N/A';
+                                        })()}
+                                    </p>
+                                </div>
+
+                                {/* --- Hold, Priority, Remove, Preview (one line) --- */}
+                                <div style={controlRowStyle}>
+                                    {/* Hold checkbox */}
+                                    <Form.Check
+                                        type="checkbox"
+                                        id={`hold-${entry.civitaiModelID}-${entry.civitaiVersionID}`}
+                                        label={<span style={{ fontWeight: 600 }}>Hold</span>}
+                                        checked={Boolean(entry.hold)}
+                                        onChange={(e) => {
+                                            e.stopPropagation();
+                                            handleHoldChange(entry, e.target.checked);
+                                        }}
+                                        disabled={isLoading}
+                                        style={{ cursor: 'pointer' }}
+                                    />
+
+                                    {/* Priority */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <span style={{ fontSize: '.85rem', opacity: .9 }}>Priority</span>
+                                        <Form.Select
+                                            size="sm"
+                                            value={(entry.downloadPriority ?? 10)}
+                                            onChange={(e) => {
+                                                const next = parseInt(e.target.value, 10);
+                                                handlePriorityChange(entry, next);
+                                            }}
+                                            disabled={isLoading}
+                                            style={{
+                                                width: 90,
+                                                backgroundColor: isDarkMode ? '#444' : '#fff',
+                                                color: isDarkMode ? '#fff' : '#000',
+                                                border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`
+                                            }}
+                                            aria-label="Download priority (1–10)"
+                                        >
+                                            {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
+                                                <option key={n} value={n}>{n}</option>
+                                            ))}
+                                        </Form.Select>
+                                    </div>
+
+                                    {/* right-side action buttons */}
+                                    <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+                                        {/* Remove */}
+                                        <button
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); handleRemoveOne(entry); }}
+                                            title="Remove from list"
+                                            aria-label="Remove from list"
+                                            style={inlineDangerBtnStyle}
+                                            disabled={isLoading}
+                                        >
+                                            <FaTrashAlt size={14} />
+                                        </button>
+
+                                        {/* Preview in left panel */}
+                                        <button
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); onToggleOverlay(entry); }}
+                                            title="Preview in left panel"
+                                            aria-label="Preview in left panel"
+                                            style={inlineIconBtnStyle}
+                                            disabled={isLoading}
+                                        >
+                                            <LuPanelLeftOpen size={18} />
+                                        </button>
+                                    </div>
+
+                                    {displayMode === 'errorCard' && onErrorCardDownload && (
+                                        <OverlayTrigger
+                                            placement="top"
+                                            overlay={
+                                                <Tooltip id={`tooltip-error-download-${entry.civitaiVersionID}`}>
+                                                    {`Download by ${errorDownloadMethod === 'server' ? 'server' : 'browser'}`}
+                                                </Tooltip>
+                                            }
+                                        >
+                                            <Dropdown as={ButtonGroup}>
+                                                <Button
+                                                    variant="success"
+                                                    size="sm"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onErrorCardDownload(entry, errorDownloadMethod);
+                                                    }}
+                                                >
+                                                    {errorDownloadMethod === 'server' ? <BsCloudDownloadFill /> : <FcDownload />}
+                                                </Button>
+
+                                                <Dropdown.Toggle
+                                                    split
+                                                    variant="success"
+                                                    size="sm"
+                                                    id={`errorCard-download-${entry.civitaiVersionID}`}
+                                                />
+                                                <Dropdown.Menu>
+                                                    <Dropdown.Item
+                                                        active={errorDownloadMethod === 'server'}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setErrorDownloadMethod('server');
+                                                        }}
+                                                    >
+                                                        server
+                                                    </Dropdown.Item>
+                                                    <Dropdown.Item
+                                                        active={errorDownloadMethod === 'browser'}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setErrorDownloadMethod('browser');
+                                                        }}
+                                                    >
+                                                        browser
+                                                    </Dropdown.Item>
+                                                </Dropdown.Menu>
+                                            </Dropdown>
+                                        </OverlayTrigger>
+                                    )}
+
+
+                                </div>
+
+
+                            </Card>
+                        );
+                    })}
+                </div>
+            </div>
+        );
+    };
 
 
     // **SmallCardMode Component Implementation**
@@ -4036,7 +4246,7 @@ const OfflineWindow: React.FC = () => {
                                 whiteSpace: 'normal',    // allow wrapping onto next line
                             }}
                         >
-
+                            {selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'} selected
                         </div>
                     </div>
 
@@ -4190,6 +4400,8 @@ const OfflineWindow: React.FC = () => {
                                         showGalleries={false}
                                         onToggleOverlay={toggleLeftOverlay}
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
+                                        displayMode="errorCard"
+                                        onErrorCardDownload={handleErrorCardDownload}
                                     />
                                 )}
 
