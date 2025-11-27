@@ -49,7 +49,8 @@ import {
     fetchUpdateHoldFromOfflineDownloadList,
     fetchUpdateDownloadPriorityFromOfflineDownloadList,
     fetchOfflineDownloadListHold,
-    fetchOfflineDownloadListEarlyAccessActive
+    fetchOfflineDownloadListEarlyAccessActive,
+    fetchUpdateDownloadFilePathFromOfflineDownloadList
 } from "../../api/civitaiSQL_api"
 
 import {
@@ -73,6 +74,7 @@ import TagList from './TagList';
 import TitleNameToggle from './TitleNameToggle';
 import TopTagsDropdown from './TopTagsDropdown';
 import SimilarSearchPanel from './SimilarSearchPanel';
+import DownloadPathEditor from './DownloadPathEditor';
 
 // TypeScript Interfaces
 interface CivitaiModelFile {
@@ -329,6 +331,8 @@ const OfflineWindow: React.FC = () => {
     const [selectedPrefixes, setSelectedPrefixes] = useState<Set<string>>(new Set());
 
     const [allowTryEarlyAccess, setAllowTryEarlyAccess] = useState(false);
+
+    const [editingPathId, setEditingPathId] = useState<string | null>(null);
 
 
     // Replace /width=###/ in Civitai URLs; if missing, insert it before the filename.
@@ -807,6 +811,45 @@ const OfflineWindow: React.FC = () => {
         // Reset the selection when filterText or filterCondition changes
         setSelectedIds(new Set());
     }, [filterText, filterCondition]);
+
+    const handleDownloadPathSave = async (
+        entry: OfflineDownloadEntry,
+        nextPath: string
+    ) => {
+        const trimmed = nextPath.trim();
+        const prevPath = entry.downloadFilePath ?? "";
+
+        // Nothing changed → just close
+        if (!trimmed || trimmed === prevPath.trim()) {
+            setEditingPathId(null);
+            return;
+        }
+
+        const matcher = (e: OfflineDownloadEntry) =>
+            e.civitaiModelID === entry.civitaiModelID &&
+            e.civitaiVersionID === entry.civitaiVersionID;
+
+        // Optimistic update
+        updateEntryLocal(matcher, { downloadFilePath: trimmed });
+
+        try {
+            await fetchUpdateDownloadFilePathFromOfflineDownloadList(
+                {
+                    civitaiModelID: entry.civitaiModelID,
+                    civitaiVersionID: entry.civitaiVersionID,
+                },
+                trimmed,
+                dispatch
+            );
+        } catch (err: any) {
+            // Revert on failure
+            updateEntryLocal(matcher, { downloadFilePath: prevPath });
+            alert(`Failed to update download path: ${err?.message || "Unknown error"}`);
+        } finally {
+            setEditingPathId(null);
+        }
+    };
+
 
     // Function to determine if an entry matches the filter condition (OR logic)
     const doesEntryMatch = (entry: OfflineDownloadEntry): boolean => {
@@ -2689,30 +2732,27 @@ const OfflineWindow: React.FC = () => {
                                         )}
 
                                         {/* 3) Show full download path with line wrapping */}
-                                        <p
+                                        <div
                                             style={{
-                                                margin: '4px 0',
-                                                whiteSpace: 'normal',     // allow multi-line
-                                                wordWrap: 'break-word',   // wrap long paths
+                                                margin: "4px 0",
+                                                whiteSpace: "normal",
+                                                wordWrap: "break-word",
                                             }}
                                         >
-                                            {displayMode !== 'recentCard' ? (
-                                                <>
-                                                    <strong>Download Path:</strong> {entry.downloadFilePath ?? 'N/A'}
-                                                </>
-                                            ) : (
+                                            {displayMode === "recentCard" ? (
+                                                // keep your existing clickable link for recentCard
                                                 entry.downloadFilePath ? (
                                                     <a
                                                         href="#"
                                                         onClick={(e) => {
                                                             e.preventDefault();
-                                                            e.stopPropagation(); // if this sits inside a clickable card
-                                                            fetchOpenModelDownloadDirectory(entry.downloadFilePath, dispatch);
+                                                            e.stopPropagation();
+                                                            fetchOpenModelDownloadDirectory(entry.downloadFilePath!, dispatch);
                                                         }}
                                                         style={{
-                                                            textDecoration: 'underline',
-                                                            cursor: 'pointer',
-                                                            color: isDarkMode ? '#60A5FA' : '#1D4ED8'
+                                                            textDecoration: "underline",
+                                                            cursor: "pointer",
+                                                            color: isDarkMode ? "#60A5FA" : "#1D4ED8",
                                                         }}
                                                         aria-label="Open model download directory"
                                                         title={entry.downloadFilePath}
@@ -2720,11 +2760,38 @@ const OfflineWindow: React.FC = () => {
                                                         {entry.downloadFilePath}
                                                     </a>
                                                 ) : (
-                                                    'N/A'
+                                                    "N/A"
                                                 )
+                                            ) : editingPathId === entry.civitaiVersionID ? (
+                                                // ⬇️ ONLY this card shows the editor when its ID matches
+                                                <DownloadPathEditor
+                                                    initialValue={entry.downloadFilePath ?? ""}
+                                                    isDarkMode={isDarkMode}
+                                                    onSave={(nextPath: any) => handleDownloadPathSave(entry, nextPath)}
+                                                    onCancel={() => setEditingPathId(null)}
+                                                />
+                                            ) : (
+                                                // Normal display; double-click to start editing for THIS card only
+                                                <>
+                                                    <strong>Download Path:</strong>{" "}
+                                                    <span
+                                                        onDoubleClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setEditingPathId(entry.civitaiVersionID);
+                                                        }}
+                                                        style={{
+                                                            cursor: "pointer",
+                                                            textDecoration: "underline dotted",
+                                                            whiteSpace: "normal",
+                                                            wordWrap: "break-word",
+                                                        }}
+                                                        title="Double-click to edit download path"
+                                                    >
+                                                        {entry.downloadFilePath ?? "N/A"}
+                                                    </span>
+                                                </>
                                             )}
-
-                                        </p>
+                                        </div>
 
                                         {/* Category */}
                                         <p style={{ margin: '4px 0' }}>

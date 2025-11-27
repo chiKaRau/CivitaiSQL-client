@@ -940,6 +940,38 @@ export const fetchUpdateHoldFromOfflineDownloadList = async (
     }
 };
 
+export const fetchUpdateDownloadFilePathFromOfflineDownloadList = async (
+    modelObject: { civitaiModelID: string; civitaiVersionID: string },
+    downloadFilePath: string,
+    dispatch: any
+) => {
+    try {
+        dispatch(clearError());
+
+        const response = await axios.post(
+            `${config.domain}/api/update-download-file-path-from-offline-download_list`,
+            {
+                modelNumber: modelObject.civitaiModelID,
+                versionNumber: modelObject.civitaiVersionID,
+                downloadFilePath: downloadFilePath?.trim(),
+            }
+        );
+
+        if (!(response.status >= 200 && response.status < 300)) {
+            throw new Error("Failed to update 'downloadFilePath' for offline download record.");
+        }
+    } catch (error: any) {
+        console.error("Error updating downloadFilePath:", error?.message);
+        dispatch(
+            setError({
+                hasError: true,
+                errorMessage: error?.message || "Unknown error",
+            })
+        );
+    }
+};
+
+
 export const fetchUpdateDownloadPriorityFromOfflineDownloadList = async (
     modelObject: { civitaiModelID: string; civitaiVersionID: string },
     downloadPriority: number,
