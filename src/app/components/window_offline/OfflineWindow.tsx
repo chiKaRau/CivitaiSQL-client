@@ -330,6 +330,11 @@ const OfflineWindow: React.FC = () => {
     const modify_downloadFilePath = chromeData.downloadFilePath;
     const modify_selectedCategory = chromeData.selectedCategory;
 
+    // Bulk modify controls (for Modify Mode)
+    const [bulkHold, setBulkHold] = useState(false);
+    const [bulkDownloadPriority, setBulkDownloadPriority] = useState(5);
+
+
     // **Add Pagination State and Logic**
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(100); // Default to 100 as in table mode
@@ -1669,6 +1674,107 @@ const OfflineWindow: React.FC = () => {
             setSelectedIds(new Set());
         }
     };
+
+    const handleBulkHoldUpdate = async () => {
+        const selectedEntries = filteredDownloadList.filter(entry =>
+            selectedIds.has(entry.civitaiVersionID)
+        );
+
+        if (selectedEntries.length === 0) {
+            alert("No items selected to update Hold.");
+            return;
+        }
+
+        setIsLoading(true);
+        setUiMode('modifying');
+
+        try {
+            for (const entry of selectedEntries) {
+                const match = (e: OfflineDownloadEntry) =>
+                    e.civitaiModelID === entry.civitaiModelID &&
+                    e.civitaiVersionID === entry.civitaiVersionID;
+
+                const prevHold = entry.hold ?? false;
+
+                // optimistic update
+                updateEntryLocal(match, { hold: bulkHold });
+
+                try {
+                    await fetchUpdateHoldFromOfflineDownloadList(
+                        {
+                            civitaiModelID: entry.civitaiModelID,
+                            civitaiVersionID: entry.civitaiVersionID,
+                        },
+                        bulkHold,
+                        dispatch
+                    );
+                } catch (err: any) {
+                    console.error("Failed to update hold for", entry.civitaiFileName, err?.message || err);
+                    // revert this one
+                    updateEntryLocal(match, { hold: prevHold });
+                }
+            }
+
+            // One refresh at the end so server + client are in sync
+            await refreshCurrentPage();
+        } finally {
+            setIsLoading(false);
+            setUiMode('idle');
+        }
+    };
+
+    const handleBulkPriorityUpdate = async () => {
+        const selectedEntries = filteredDownloadList.filter(entry =>
+            selectedIds.has(entry.civitaiVersionID)
+        );
+
+        if (selectedEntries.length === 0) {
+            alert("No items selected to update Priority.");
+            return;
+        }
+
+        // normalize to 1..10
+        const clampedPriority = Math.max(1, Math.min(10, bulkDownloadPriority | 0));
+
+        setBulkDownloadPriority(clampedPriority);
+        setIsLoading(true);
+        setUiMode('modifying');
+
+        try {
+            for (const entry of selectedEntries) {
+                const match = (e: OfflineDownloadEntry) =>
+                    e.civitaiModelID === entry.civitaiModelID &&
+                    e.civitaiVersionID === entry.civitaiVersionID;
+
+                const prevPriority = entry.downloadPriority ?? 10;
+
+                // optimistic update
+                updateEntryLocal(match, { downloadPriority: clampedPriority });
+
+                try {
+                    await fetchUpdateDownloadPriorityFromOfflineDownloadList(
+                        {
+                            civitaiModelID: entry.civitaiModelID,
+                            civitaiVersionID: entry.civitaiVersionID,
+                        },
+                        clampedPriority,
+                        dispatch
+                    );
+                } catch (err: any) {
+                    console.error("Failed to update priority for", entry.civitaiFileName, err?.message || err);
+                    // revert this one
+                    updateEntryLocal(match, { downloadPriority: prevPriority });
+                }
+            }
+
+            // sync with server
+            await refreshCurrentPage();
+        } finally {
+            setIsLoading(false);
+            setUiMode('idle');
+        }
+    };
+
 
     // Function to handle "Download Now" button click
     const handleDownloadNow = async () => {
@@ -4011,33 +4117,95 @@ const OfflineWindow: React.FC = () => {
 
                         {/* Action Button for Modify Mode */}
                         {isModifyMode && (
-                            <>
-                                <Button
-                                    onClick={handleProcessSelected}
-                                    style={{
-                                        ...downloadButtonStyle,
-                                        backgroundColor: '#ffc107',
-                                        color: '#000',
-                                    }}
-                                    disabled={selectedIds.size === 0 || isLoading}
-                                >
-                                    Update DownloadFilePath for Selected
-                                </Button>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
+                                {/* Existing: update path + remove */}
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                    <Button
+                                        onClick={handleProcessSelected}
+                                        style={{
+                                            ...downloadButtonStyle,
+                                            backgroundColor: '#ffc107',
+                                            color: '#000',
+                                        }}
+                                        disabled={selectedIds.size === 0 || isLoading}
+                                    >
+                                        Update DownloadFilePath for Selected
+                                    </Button>
 
-                                {/* New Remove button */}
-                                <Button
-                                    onClick={handleRemoveSelected}
-                                    style={{
-                                        ...downloadButtonStyle,
-                                        backgroundColor: '#dc3545',
-                                        color: '#fff',
-                                    }}
-                                    disabled={selectedIds.size === 0 || isLoading}
-                                >
-                                    Remove Selected
-                                </Button>
-                            </>
+                                    <Button
+                                        onClick={handleRemoveSelected}
+                                        style={{
+                                            ...downloadButtonStyle,
+                                            backgroundColor: '#dc3545',
+                                            color: '#fff',
+                                        }}
+                                        disabled={selectedIds.size === 0 || isLoading}
+                                    >
+                                        Remove Selected
+                                    </Button>
+                                </div>
+
+                                {/* Feature #1: bulk Hold */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                    <Form.Check
+                                        type="checkbox"
+                                        id="bulk-hold-checkbox"
+                                        label={<span style={{ color: isDarkMode ? '#fff' : '#000', fontWeight: 600 }}>
+                                            Hold
+                                        </span>}
+                                        checked={bulkHold}
+                                        onChange={e => setBulkHold(e.target.checked)}
+                                        disabled={isLoading}
+                                    />
+                                    <Button
+                                        onClick={handleBulkHoldUpdate}
+                                        style={{
+                                            ...downloadButtonStyle,
+                                            backgroundColor: '#0d6efd',
+                                            color: '#fff',
+                                        }}
+                                        disabled={selectedIds.size === 0 || isLoading}
+                                    >
+                                        Update Hold for Selected
+                                    </Button>
+                                </div>
+
+                                {/* Feature #2: bulk Priority */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: '.9rem', color: isDarkMode ? '#fff' : '#000', fontWeight: 600 }}>Download Priority</span>
+                                    <Form.Select
+                                        size="sm"
+                                        value={bulkDownloadPriority}
+                                        onChange={e => setBulkDownloadPriority(parseInt(e.target.value, 10) || 10)}
+                                        disabled={isLoading}
+                                        style={{
+                                            width: 90,
+                                            backgroundColor: isDarkMode ? '#555' : '#fff',
+                                            color: isDarkMode ? '#fff' : '#000',
+                                            border: '1px solid #ccc',
+                                        }}
+                                    >
+                                        {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
+                                            <option key={n} value={n}>
+                                                {n}
+                                            </option>
+                                        ))}
+                                    </Form.Select>
+                                    <Button
+                                        onClick={handleBulkPriorityUpdate}
+                                        style={{
+                                            ...downloadButtonStyle,
+                                            backgroundColor: '#198754', // green
+                                            color: '#fff',
+                                        }}
+                                        disabled={selectedIds.size === 0 || isLoading}
+                                    >
+                                        Update Priority for Selected
+                                    </Button>
+                                </div>
+                            </div>
                         )}
+
                     </div>
 
                     {!isModifyMode &&
