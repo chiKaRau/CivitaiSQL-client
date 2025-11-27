@@ -463,25 +463,6 @@ export const fetchAddPendingRemoveTag = async (pendingRemoveTag: string, dispatc
     }
 }
 
-export const fetchGetErrorModelList = async (dispatch: any) => {
-    try {
-        // Clear any previous errors
-        dispatch(clearError());
-        const response = await axios.get(`${config.domain}/api/get_error_model_list`);
-        if (response.status >= 200 && response.status < 300) {
-            return response.data.payload.errorModelList;
-        } else {
-            // Handle the case when response is false
-            throw new Error("Retriving Error model List failed.");
-        }
-    } catch (error: any) {
-        // Handle other types of errors, e.g., network issues
-        console.error("Error during Civitai Info retrieval:", error.message);
-        // Optionally, you can throw an error or return a specific value
-        dispatch(setError({ hasError: true, errorMessage: error.message }));
-    }
-}
-
 export const fetchGetTagsList = async (dispatch: any, selectedPrefix: string) => {
     try {
         // Clear any previous errors
@@ -796,6 +777,22 @@ export const fetchOfflineDownloadListPage = async (
 export const fetchOfflineDownloadListHold = async (dispatch: any) => {
     try {
         const url = `${config.domain}/api/get_offline_download_list_hold`;
+        const response = await axios.get(url);
+
+        if (response.status >= 200 && response.status < 300) {
+            // payload is: List<Map<String, Object>>
+            return response.data?.payload;
+        }
+        throw new Error('Unexpected response status: ' + response.status);
+    } catch (error: any) {
+        console.error('Hold list fetch error:', error.message);
+        throw error;
+    }
+};
+
+export const fetchGetErrorModelList = async (dispatch: any) => {
+    try {
+        const url = `${config.domain}/api/get_error_model_list`;
         const response = await axios.get(url);
 
         if (response.status >= 200 && response.status < 300) {

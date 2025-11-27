@@ -50,7 +50,8 @@ import {
     fetchUpdateDownloadPriorityFromOfflineDownloadList,
     fetchOfflineDownloadListHold,
     fetchOfflineDownloadListEarlyAccessActive,
-    fetchUpdateDownloadFilePathFromOfflineDownloadList
+    fetchUpdateDownloadFilePathFromOfflineDownloadList,
+    fetchGetErrorModelList
 } from "../../api/civitaiSQL_api"
 
 import {
@@ -313,6 +314,7 @@ const OfflineWindow: React.FC = () => {
     const [recentlyDownloaded, setRecentlyDownloaded] = useState<OfflineDownloadEntry[]>([]);
     const [holdEntries, setHoldEntries] = useState<OfflineDownloadEntry[]>([]);
     const [earlyAccessEntries, setEarlyAccessEntries] = useState<OfflineDownloadEntry[]>([]);
+    const [errorEntries, setErrorEntries] = useState<OfflineDownloadEntry[]>([]);  // 👈 NEW
 
     // Add this in your component's top-level state:
     const [showPending, setShowPending] = useState(true);
@@ -375,7 +377,13 @@ const OfflineWindow: React.FC = () => {
 
         const loadSpecialList = async () => {
             // Only react when switching into one of these modes
-            if (displayMode !== 'holdCard' && displayMode !== 'earlyAccessCard') return;
+            if (
+                displayMode !== 'holdCard' &&
+                displayMode !== 'earlyAccessCard' &&
+                displayMode !== 'errorCard'
+            ) {
+                return;
+            }
 
             try {
                 setUiMode('paging');
@@ -386,17 +394,23 @@ const OfflineWindow: React.FC = () => {
                     if (!cancelled) {
                         setHoldEntries(Array.isArray(payload) ? payload as OfflineDownloadEntry[] : []);
                     }
-                } else {
+                } else if (displayMode === 'earlyAccessCard') {
                     const payload = await fetchOfflineDownloadListEarlyAccessActive(dispatch);
                     if (!cancelled) {
                         setEarlyAccessEntries(Array.isArray(payload) ? payload as OfflineDownloadEntry[] : []);
+                    }
+                } else if (displayMode === 'errorCard') {
+                    const payload = await fetchGetErrorModelList(dispatch);
+                    if (!cancelled) {
+                        setErrorEntries(Array.isArray(payload) ? payload as OfflineDownloadEntry[] : []);
                     }
                 }
             } catch (err: any) {
                 console.error('Special list fetch failed:', err?.message || err);
                 if (!cancelled) {
                     if (displayMode === 'holdCard') setHoldEntries([]);
-                    else setEarlyAccessEntries([]);
+                    else if (displayMode === 'earlyAccessCard') setEarlyAccessEntries([]);
+                    else if (displayMode === 'errorCard') setErrorEntries([]);
                 }
             } finally {
                 if (!cancelled) {
@@ -3412,17 +3426,25 @@ const OfflineWindow: React.FC = () => {
                                 )}
                             </Button>
 
-
-
                             <Button
                                 variant={displayMode === 'errorCard' ? 'primary' : 'secondary'}
                                 onClick={() => setDisplayMode('errorCard')}
-                                style={{
-                                    ...responsiveButtonStyle
-                                }}
+                                style={{ ...responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
+                                aria-label={`Error entries (${errorEntries.length})`}
                             >
                                 Error Card Mode
+                                {errorEntries.length > 0 && (
+                                    <span
+                                        style={{
+                                            ...badgeStyle,
+                                            background: '#ef4444',  // red badge for errors
+                                        }}
+                                    >
+                                        {badgeCount(errorEntries.length)}
+                                    </span>
+                                )}
                             </Button>
+
 
                             {/* Modify Mode Toggle Button */}
                             <Button
@@ -4014,26 +4036,7 @@ const OfflineWindow: React.FC = () => {
                                 whiteSpace: 'normal',    // allow wrapping onto next line
                             }}
                         >
-                            {(isModifyMode || (displayMode === 'errorCard')) ? (
-                                <>
-                                    {selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'} selected <FaArrowRight />
-                                    "<span
-                                        style={{
-                                            display: 'inline-block',
-                                            maxWidth: '100%',
-                                            whiteSpace: 'normal',    // allow this span to wrap
-                                            wordBreak: 'break-all',  // break long paths anywhere
-                                        }}
-                                        title={modify_downloadFilePath} // When hovered, show full text
-                                    >
-                                        {modify_downloadFilePath}
-                                    </span>"
-                                </>
-                            ) : (
-                                <>
-                                    {selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'} selected
-                                </>
-                            )}
+
                         </div>
                     </div>
 
@@ -4177,12 +4180,16 @@ const OfflineWindow: React.FC = () => {
                                 )}
 
                                 {displayMode === 'errorCard' && (
-                                    <ErrorCardMode
+                                    <BigCardMode
+                                        filteredDownloadList={errorEntries}
                                         isDarkMode={isDarkMode}
-                                        modify_downloadFilePath={modify_downloadFilePath}
-                                        modify_selectedCategory={modify_selectedCategory}
-                                        offlineDownloadList={offlineDownloadList}
-                                        handleRefreshList={handleRefreshList}  // NEW PROP
+                                        isModifyMode={false} // view-only, same as hold / early access
+                                        selectedIds={selectedIds}
+                                        toggleSelect={toggleSelect}
+                                        handleSelectAll={handleSelectAll}
+                                        showGalleries={false}
+                                        onToggleOverlay={toggleLeftOverlay}
+                                        activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
                                     />
                                 )}
 
