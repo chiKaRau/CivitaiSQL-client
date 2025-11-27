@@ -3050,7 +3050,7 @@ const OfflineWindow: React.FC = () => {
                                             wordWrap: "break-word",
                                         }}
                                     >
-                                        {displayMode === "recentCard" ? (
+                                        {(displayMode === "recentCard" || (displayMode === "errorCard")) ? (
                                             // keep your existing clickable link for recentCard
                                             entry.downloadFilePath ? (
                                                 <a
