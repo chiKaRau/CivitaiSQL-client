@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import WindowUpdateModelPanel from './WindowUpdateModelPanel';
-import { fetchBackupOfflineDownloadList, fetchFindVersionNumbersForModel, fetchFindVersionNumbersForOfflineDownloadList, fetchRemoveOfflineDownloadFileIntoOfflineDownloadList } from '../../api/civitaiSQL_api';
+import { fetchAddOfflineDownloadFileIntoOfflineDownloadList, fetchBackupOfflineDownloadList, fetchCivitaiModelInfoFromCivitaiByModelID, fetchFindVersionNumbersForModel, fetchFindVersionNumbersForOfflineDownloadList, fetchGetOfflineRecordByModelAndVersion, fetchRemoveOfflineDownloadFileIntoOfflineDownloadList } from '../../api/civitaiSQL_api';
 import { useDispatch } from 'react-redux';
 import { FaAngleLeft, FaAngleRight } from "react-icons/fa6";
 import { BsDatabaseFillExclamation } from "react-icons/bs";
@@ -9,10 +9,11 @@ import { GoChecklist } from "react-icons/go";
 import { OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { PiListDashesFill } from "react-icons/pi";
 // top of file (with the other icon imports)
-import { MdDeleteSweep } from "react-icons/md";
+import { MdDeleteSweep, MdFirstPage, MdLastPage } from "react-icons/md";
 
 import { IoIosRefresh } from "react-icons/io";
 import { MdAddCircle, MdLibraryAdd, MdRemove } from "react-icons/md";
+import { retrieveCivitaiFileName, retrieveCivitaiFilesList } from '../../utils/objectUtils';
 
 
 interface Version {
@@ -35,6 +36,102 @@ interface PanelProps {
     setUrlList: (updater: (prevUrlList: string[]) => string[]) => void; // Callback to update the URL list
     urlList: string[]; // Pass the list of URLs to check for duplicates
 }
+
+const ui = {
+    panel: {
+        position: 'relative' as const,
+        padding: '8px',
+        borderRadius: '10px',
+        border: '1px solid rgba(255,255,255,0.10)',
+        background: 'rgba(255,255,255,0.04)',
+    },
+    row: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        flexWrap: 'wrap' as const,
+    },
+    grow: { flex: '1 1 auto' },
+    group: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        flexWrap: 'wrap' as const,
+    },
+    divider: {
+        width: '100%',
+        height: '1px',
+        background: 'rgba(255,255,255,0.10)',
+        margin: '8px 0',
+    },
+    label: {
+        opacity: 0.9,
+        fontSize: '12px',
+        whiteSpace: 'nowrap' as const,
+    },
+    select: {
+        padding: '6px 8px',
+        fontSize: '13px',
+        borderRadius: '8px',
+        border: '1px solid rgba(255,255,255,0.15)',
+        background: 'rgba(0,0,0,0.25)',
+        color: 'inherit',
+        maxWidth: '520px',
+    },
+    pill: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '4px 8px',
+        borderRadius: '999px',
+        fontSize: '12px',
+        border: '1px solid rgba(255,255,255,0.15)',
+        background: 'rgba(0,0,0,0.18)',
+        whiteSpace: 'nowrap' as const,
+    },
+    pillBlue: {
+        border: '1px solid rgba(80,140,255,0.45)',
+        background: 'rgba(80,140,255,0.12)',
+    },
+    pillRed: {
+        border: '1px solid rgba(255,80,80,0.45)',
+        background: 'rgba(255,80,80,0.12)',
+    },
+};
+
+const IconBtn: React.FC<{
+    title: string;
+    ariaLabel: string;
+    onClick?: () => void;
+    disabled?: boolean;
+    children: React.ReactNode;
+}> = ({ title, ariaLabel, onClick, disabled, children }) => {
+    return (
+        <button
+            onClick={onClick}
+            disabled={disabled}
+            title={title}
+            aria-label={ariaLabel}
+            style={{
+                width: 30,
+                height: 30,
+                borderRadius: 8,
+                border: '1px solid rgba(255,255,255,0.12)',
+                background: disabled ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.06)',
+                color: 'inherit',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: disabled ? 'not-allowed' : 'pointer',
+                opacity: disabled ? 0.55 : 1,
+                lineHeight: 0,
+            }}
+        >
+            <span style={{ fontSize: 18, display: 'inline-flex' }}>{children}</span>
+        </button>
+    );
+};
+
 
 const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, setSelectedUrl }) => {
     const dispatch = useDispatch();
@@ -283,60 +380,158 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
         }
     };
 
-    const toggleUpdateModelPanel = () => {
-        setIsUpdatePanelVisible(!isUpdatePanelVisible);
+    const shouldShowReplaceButtons = useMemo(() => {
+        return !!modelData && offlineIdsInThisModel.length === 1;
+    }, [modelData, offlineIdsInThisModel]);
+
+    const getFirstVersionId = () => {
+        return modelData?.modelVersions?.[0]?.id?.toString() ?? "";
     };
 
+    const getMaxVersionId = () => {
+        if (!modelData?.modelVersions?.length) return "";
+        const maxId = Math.max(...modelData.modelVersions.map(v => Number(v.id)));
+        return maxId.toString();
+    };
+
+    const handleReplaceOfflineVersion = async (targetVersionId: string, label: string) => {
+        if (!modelData) return;
+        if (offlineIdsInThisModel.length !== 1) return;
+
+        const oldVersionId = offlineIdsInThisModel[0]; // the only offline version in this model
+        if (!oldVersionId) return;
+
+        if (!targetVersionId || targetVersionId === oldVersionId) {
+            alert(`No need to replace. Target is the same as current offline version (${oldVersionId}).`);
+            return;
+        }
+
+        const userConfirmed = window.confirm(
+            `Replace Offline List entry for model ${modelId}:\n\n` +
+            `FROM version ${oldVersionId}\nTO   version ${targetVersionId} (${label})\n\nContinue?`
+        );
+        if (!userConfirmed) return;
+
+        setIsLoading(true);
+        try {
+            // 1) read old offline record to reuse downloadFilePath + selectedCategory (+ hold/downloadPriority)
+            const offlineRecord = await fetchGetOfflineRecordByModelAndVersion(modelId, oldVersionId, dispatch);
+            if (!offlineRecord) {
+                setMessage({ text: `Offline record not found for ${modelId}_${oldVersionId}`, type: 'error' });
+                return;
+            }
+
+            const downloadFilePath = offlineRecord.downloadFilePath;
+            const selectedCategory = offlineRecord.selectedCategory;
+            const hold = !!offlineRecord.hold;
+            const downloadPriority = offlineRecord.downloadPriority ?? 10;
+
+            // 2) get civitai model info (you requested to call this)
+            const data = await fetchCivitaiModelInfoFromCivitaiByModelID(modelId, dispatch);
+            if (!data) {
+                setMessage({ text: `Failed to fetch civitai model info for model ${modelId}`, type: 'error' });
+                return;
+            }
+
+            // 3) build new object for target version
+            const civitaiUrl = `https://civitai.com/models/${modelId}?modelVersionId=${targetVersionId}`;
+            const civitaiVersionID = targetVersionId;     // replacing version
+            const civitaiModelID = modelId;               // model stays same
+
+            const civitaiFileName = retrieveCivitaiFileName(data, civitaiVersionID);
+            const civitaiModelFileList = retrieveCivitaiFilesList(data, civitaiVersionID);
+            const civitaiTags = data?.tags;
+
+            // Validate (same rules you already use)
+            if (
+                !civitaiUrl ||
+                !civitaiFileName ||
+                !civitaiModelID ||
+                !civitaiVersionID ||
+                !downloadFilePath ||
+                !selectedCategory ||
+                !civitaiModelFileList ||
+                !civitaiModelFileList.length ||
+                civitaiTags == null
+            ) {
+                console.log("fail in handleReplaceOfflineVersion()");
+                setMessage({ text: 'Replace failed: missing required fields (see console).', type: 'error' });
+                return;
+            }
+
+            const modelObject = {
+                downloadFilePath,
+                civitaiFileName,
+                civitaiModelID,
+                civitaiVersionID,
+                civitaiModelFileList,
+                civitaiUrl,
+                selectedCategory,
+                civitaiTags,
+                hold,
+                downloadPriority,
+            };
+
+            // 4) SAFER order: add new first, then remove old
+            await fetchAddOfflineDownloadFileIntoOfflineDownloadList(modelObject, false, dispatch);
+
+            await fetchRemoveOfflineDownloadFileIntoOfflineDownloadList(
+                { civitaiModelID: modelId, civitaiVersionID: oldVersionId },
+                dispatch
+            );
+
+            // 5) update UI badges
+            setExistingOfflineVersions(prev => {
+                const next = prev.filter(id => id !== oldVersionId);
+                if (!next.includes(targetVersionId)) next.push(targetVersionId);
+                return next;
+            });
+
+            // optionally switch dropdown selection to the new version
+            const targetV = modelData.modelVersions.find(v => v.id.toString() === targetVersionId) || null;
+            setSelectedVersion(targetV);
+
+            setSelectedUrl("");
+            setMessage({ text: `Replaced Offline entry: ${oldVersionId} → ${targetVersionId}`, type: 'success' });
+        } catch (error: any) {
+            console.error("Replace offline version failed:", error?.message || error);
+            setMessage({ text: 'Replace failed (see console).', type: 'error' });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+
     return (
-        <div style={{ position: 'relative' }}> {/* Added relative positioning to contain the absolute carousel */}
+        <div style={ui.panel}>
             {isLoading ? (
-                <p>Loading...</p>
+                <p style={{ margin: 0 }}>Loading...</p>
             ) : modelData ? (
-                <div>
-                    {/* Flex Container for Buttons, Dropdown, and Messages */}
-                    <div
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            marginBottom: '10px',
-                        }}
-                    >
-                        {/* Icon Button for Force Re-render */}
-                        <button
+                <>
+                    {/* Row 1: Refresh + Dropdown + Add actions */}
+                    <div style={ui.row}>
+                        <IconBtn
+                            title="Refresh model info"
+                            ariaLabel="Refresh model info"
                             onClick={forceRerender}
-                            style={{
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
-                                fontSize: '20px',
-                                width: '24px',
-                                height: '24px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                            }}
-                            title="Force Re-render"
-                            aria-label="Force Re-render"
+                            disabled={isLoading}
                         >
                             <IoIosRefresh />
-                        </button>
+                        </IconBtn>
 
-                        {/* Dropdown with Hover to Show Carousel */}
+                        {/* Dropdown + hover carousel */}
                         <div
-                            style={{ position: 'relative', display: 'inline-block' }}
+                            style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                             onMouseEnter={() => setShowCarousel(true)}
                             onMouseLeave={() => setShowCarousel(false)}
                         >
-                            {/* Dropdown */}
-                            <label htmlFor="versionDropdown" style={{ marginRight: '8px', whiteSpace: 'nowrap' }}>
-                                {modelId}_
-                            </label>
+                            <span style={ui.label}>{modelId}_</span>
+
                             <select
                                 id="versionDropdown"
                                 onChange={(e) => handleVersionChange(Number(e.target.value))}
                                 value={selectedVersion?.id || ''}
-                                style={{ padding: '4px', fontSize: '14px' }}
+                                style={ui.select}
                             >
                                 <option value="">Select Version</option>
                                 {modelData.modelVersions.map((version) => (
@@ -348,20 +543,20 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
                                 ))}
                             </select>
 
-                            {/* Carousel Overlay */}
+
+                            {/* Safer carousel overlay */}
                             {showCarousel && selectedVersion && selectedVersion.images.length > 0 && (
                                 <div
                                     style={{
                                         position: 'absolute',
-                                        top: '100%',
-                                        left: '0',
-                                        marginTop: '5px',
-                                        width: '75px', // Match the Carousel's width
-                                        padding: '5px',
-                                        backgroundColor: 'white',
-                                        border: '1px solid #ccc',
-                                        boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
-                                        zIndex: '100',
+                                        top: '110%',
+                                        left: 0,
+                                        padding: '6px',
+                                        borderRadius: '10px',
+                                        border: '1px solid rgba(255,255,255,0.15)',
+                                        background: 'rgba(15,15,15,0.92)', // looks good in dark mode
+                                        boxShadow: '0 10px 24px rgba(0,0,0,0.35)',
+                                        zIndex: 9999,
                                     }}
                                 >
                                     <Carousel images={selectedVersion.images.map((image) => image.url)} />
@@ -369,70 +564,53 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
                             )}
                         </div>
 
-                        {/* Icon Button for Add to Download List */}
-                        {selectedVersion && (
-                            <button
+                        <div style={ui.group}>
+                            <IconBtn
+                                title="Add selected version to list"
+                                ariaLabel="Add selected version"
                                 onClick={handleAdd}
-                                style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    cursor: 'pointer',
-                                    fontSize: '20px',
-                                    width: '24px',
-                                    height: '24px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                }}
-                                title="Add to Download List"
-                                aria-label="Add to Download List"
+                                disabled={!selectedVersion || isLoading}
                             >
                                 <MdAddCircle />
-                            </button>
-                        )}
+                            </IconBtn>
 
-                        {/* Icon Button for Add All to Download List */}
-                        {selectedVersion && modelData && modelData.modelVersions.length > 0 && (
-                            <button
+                            <IconBtn
+                                title="Add all versions to list"
+                                ariaLabel="Add all versions"
                                 onClick={handleAddAll}
-                                style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    cursor: 'pointer',
-                                    fontSize: '20px',
-                                    width: '24px',
-                                    height: '24px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                }}
-                                title="Add All to Download List"
-                                aria-label="Add All to Download List"
+                                disabled={!modelData?.modelVersions?.length || isLoading}
                             >
                                 <MdLibraryAdd />
-                            </button>
-                        )}
+                            </IconBtn>
 
-                        {/* Message Icons */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            {/* Database Icon with Tooltip */}
+                            <IconBtn
+                                title="Clear selectedUrl"
+                                ariaLabel="Clear selectedUrl"
+                                onClick={() => setSelectedUrl("")}
+                                disabled={isLoading}
+                            >
+                                <MdRemove />
+                            </IconBtn>
+                        </div>
+
+                        {/* Spacer pushes right-side group to next line nicely when narrow */}
+                        <div style={ui.grow} />
+                    </div>
+
+                    <div style={ui.divider} />
+
+                    {/* Row 2: Status + Offline actions */}
+                    <div style={ui.row}>
+                        {/* Status pills (don’t overflow like big icons) */}
+                        <div style={ui.group}>
                             {selectedVersion && existingVersions.includes(selectedVersion.id.toString()) && (
                                 <OverlayTrigger
                                     placement="top"
-                                    overlay={
-                                        <Tooltip id={`tooltip-db`}>
-                                            This version already exists in the database.
-                                        </Tooltip>
-                                    }
+                                    overlay={<Tooltip id="tooltip-db">This version already exists in the database.</Tooltip>}
                                 >
-                                    <span
-                                        style={{
-                                            fontSize: '24px',
-                                            color: 'blue',
-                                            cursor: 'pointer', // Changed to 'pointer' to indicate interactivity
-                                        }}
-                                    >
-                                        <BsDatabaseFillExclamation />
+                                    <span style={{ ...ui.pill, ...ui.pillBlue, cursor: 'default' }}>
+                                        <BsDatabaseFillExclamation style={{ fontSize: 16 }} />
+                                        In DB
                                     </span>
                                 </OverlayTrigger>
                             )}
@@ -440,118 +618,95 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
                             {selectedVersion && existingOfflineVersions.includes(selectedVersion.id.toString()) && (
                                 <OverlayTrigger
                                     placement="top"
-                                    overlay={
-                                        <Tooltip id={`tooltip-db`}>
-                                            This version already exists in the Offline List.
-                                        </Tooltip>
-                                    }
+                                    overlay={<Tooltip id="tooltip-off">This version already exists in the Offline List. Click to remove it.</Tooltip>}
                                 >
                                     <span
-                                        style={{
-                                            fontSize: '24px',
-                                            color: 'blue',
-                                            cursor: 'pointer', // Changed to 'pointer' to indicate interactivity
-                                        }}
+                                        style={{ ...ui.pill, ...ui.pillBlue, cursor: 'pointer' }}
                                         onClick={() => handleRemovefromOfflineList(modelId, selectedVersion?.id?.toString() || '')}
                                     >
-                                        <PiListDashesFill />
+                                        <PiListDashesFill style={{ fontSize: 16 }} />
+                                        In Offline
                                     </span>
                                 </OverlayTrigger>
                             )}
 
-                            {/* Icon Button: Remove All from Offline List */}
-                            {modelData && (
-                                <OverlayTrigger
-                                    placement="top"
-                                    overlay={<Tooltip id="tooltip-remove-all">Remove all versions of this model from Offline List</Tooltip>}
-                                >
-                                    <span>
-                                        <button
-                                            onClick={handleRemoveAllFromOfflineList}
-                                            disabled={offlineIdsInThisModel.length === 0 || isLoading}
-                                            style={{
-                                                background: 'none',
-                                                border: 'none',
-                                                cursor: offlineIdsInThisModel.length === 0 || isLoading ? 'not-allowed' : 'pointer',
-                                                fontSize: '20px',
-                                                width: '24px',
-                                                height: '24px',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                opacity: offlineIdsInThisModel.length === 0 || isLoading ? 0.5 : 1
-                                            }}
-                                            title="Remove all from Offline List"
-                                            aria-label="Remove all from Offline List"
-                                        >
-                                            <MdDeleteSweep />
-                                        </button>
-                                    </span>
-                                </OverlayTrigger>
-                            )}
-
-
-                            {/* Checklist Icon with Tooltip */}
                             {message && message.type === 'error' && (
                                 <OverlayTrigger
                                     placement="top"
-                                    overlay={
-                                        <Tooltip id={`tooltip-checklist`}>
-                                            This URL is already in the checkbox list.
-                                        </Tooltip>
-                                    }
+                                    overlay={<Tooltip id="tooltip-dup">This URL is already in the checkbox list.</Tooltip>}
                                 >
-                                    <span
-                                        style={{
-                                            fontSize: '24px',
-                                            color: 'red',
-                                            cursor: 'pointer', // Changed to 'pointer' to indicate interactivity
-                                        }}
-                                    >
-                                        <GoChecklist />
+                                    <span style={{ ...ui.pill, ...ui.pillRed }}>
+                                        <GoChecklist style={{ fontSize: 16 }} />
+                                        Duplicate URL
                                     </span>
                                 </OverlayTrigger>
                             )}
+                        </div>
 
+                        <div style={ui.grow} />
+
+                        {/* Offline action buttons grouped, consistent sizing */}
+                        <div style={ui.group}>
                             <OverlayTrigger
                                 placement="top"
-                                overlay={
-                                    <Tooltip id={`tooltip-checklist`}>
-                                        Remove selectedUrl
-                                    </Tooltip>
-                                }
+                                overlay={<Tooltip id="tooltip-remove-all">Remove all versions of this model from Offline List</Tooltip>}
                             >
-                                <button
-                                    onClick={() => setSelectedUrl("")}
-                                    style={{
-                                        background: 'none',
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                        fontSize: '20px',
-                                        width: '24px',
-                                        height: '24px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                    }}
-                                    title="Remove selectedUrl"
-                                    aria-label="Remove selectedUrl"
-                                >
-                                    <MdRemove />
-                                </button>
+                                <span>
+                                    <IconBtn
+                                        title="Remove all offline versions for this model"
+                                        ariaLabel="Remove all offline versions for this model"
+                                        onClick={handleRemoveAllFromOfflineList}
+                                        disabled={offlineIdsInThisModel.length === 0 || isLoading}
+                                    >
+                                        <MdDeleteSweep />
+                                    </IconBtn>
+                                </span>
                             </OverlayTrigger>
+
+                            {shouldShowReplaceButtons && (
+                                <>
+                                    <OverlayTrigger
+                                        placement="top"
+                                        overlay={<Tooltip id="tooltip-replace-first">Replace Offline version with FIRST version</Tooltip>}
+                                    >
+                                        <span>
+                                            <IconBtn
+                                                title="Replace with first version"
+                                                ariaLabel="Replace with first version"
+                                                onClick={() => handleReplaceOfflineVersion(getFirstVersionId(), "first")}
+                                                disabled={isLoading}
+                                            >
+                                                <MdFirstPage />
+                                            </IconBtn>
+                                        </span>
+                                    </OverlayTrigger>
+
+                                    <OverlayTrigger
+                                        placement="top"
+                                        overlay={<Tooltip id="tooltip-replace-max">Replace Offline version with HIGHEST version ID</Tooltip>}
+                                    >
+                                        <span>
+                                            <IconBtn
+                                                title="Replace with highest version"
+                                                ariaLabel="Replace with highest version"
+                                                onClick={() => handleReplaceOfflineVersion(getMaxVersionId(), "highest")}
+                                                disabled={isLoading}
+                                            >
+                                                <MdLastPage />
+                                            </IconBtn>
+                                        </span>
+                                    </OverlayTrigger>
+                                </>
+                            )}
                         </div>
                     </div>
-
-                    {/* Carousel Overlay */}
-                    {/* Already handled within the dropdown's relative container */}
-
-                </div>
+                </>
             ) : (
-                <p>No data available.</p>
+                <p style={{ margin: 0 }}>No data available.</p>
             )}
         </div>
     );
+
 };
 
 interface CarouselProps {

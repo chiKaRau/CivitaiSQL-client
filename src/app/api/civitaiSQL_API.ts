@@ -89,6 +89,25 @@ export const fetchFullRecordFromAllTableModelIDandVersionID = async (modelID: st
 }
 
 //dispatch cannot be used inside the functional components or custoom hook, async function is not allowed.
+export const fetchGetOfflineRecordByModelAndVersion = async (modelNumber: string, versionNumber: string, dispatch: any) => {
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+        const { data, status } = await axios.post(
+            `${config.domain}/api/get-offline-record-by-model-and-version`,
+            { modelNumber, versionNumber }
+        );
+        if (status >= 200 && status < 300) return data?.payload ?? null;
+        return null;
+    } catch (error: any) {
+        // Handle other types of errors, e.g., network issues
+        console.error("Error during Civitai Info retrieval:", error.message);
+        // Optionally, you can throw an error or return a specific value
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+}
+
+//dispatch cannot be used inside the functional components or custoom hook, async function is not allowed.
 export const fetchCivitaiModelInfoFromCivitaiByVersionID = async (versionID: string, dispatch: any) => {
     try {
         // Clear any previous errors
