@@ -4448,7 +4448,26 @@ const OfflineWindow: React.FC = () => {
                                 whiteSpace: 'normal',    // allow wrapping onto next line
                             }}
                         >
-                            {selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'} selected
+                            {(isModifyMode) ? (
+                                <>
+                                    {selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'} selected <FaArrowRight />
+                                    "<span
+                                        style={{
+                                            display: 'inline-block',
+                                            maxWidth: '100%',
+                                            whiteSpace: 'normal',    // allow this span to wrap
+                                            wordBreak: 'break-all',  // break long paths anywhere
+                                        }}
+                                        title={modify_downloadFilePath} // When hovered, show full text
+                                    >
+                                        {modify_downloadFilePath}
+                                    </span>"
+                                </>
+                            ) : (
+                                <>
+                                    {selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'} selected
+                                </>
+                            )}
                         </div>
                     </div>
 
