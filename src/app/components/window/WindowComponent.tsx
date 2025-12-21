@@ -44,6 +44,25 @@ interface updateAvaliable {
 type Category = { name: string; value: string };
 type SelectedItem = { category: Category; display: boolean };
 
+type StagedItem = {
+    id: string;
+    url: string;
+    modelId: string;
+    versionId: string; // modelVersionId or "Selecting"
+
+    // snapshot fields
+    downloadFilePath: string;
+    selectedCategory: string;
+    downloadMethod: string;
+    hold: boolean;
+    downloadPriority: number;
+
+    action: "offline" | "bundle";
+    stagedAt: number;
+    status: "staged" | "running" | "done" | "failed";
+    error?: string;
+};
+
 //Apis
 import {
     fetchCivitaiModelInfoFromCivitaiByModelID,
@@ -76,6 +95,8 @@ import WindowFullInfoModelPanel from './WindowFullInfoModelPanel';
 import SetOriginalTabButton from './SetOriginalTabButton';
 import WindowShortcutPanel from './WindowShortcutPanel';
 import { FaEdit } from 'react-icons/fa';
+import { ColDef } from 'ag-grid-community';
+import { AgGridReact } from 'ag-grid-react';
 
 interface CreatorUrlItem {
     creatorUrl: string;
@@ -156,6 +177,8 @@ const WindowComponent: React.FC = () => {
 
     const [hold, setHold] = useState<boolean>(false);
     const [downloadPriority, setDownloadPriority] = useState<number>(5);
+
+    const [stagedItems, setStagedItems] = useState<StagedItem[]>([]);
 
     // Helper to toggle all on/off
     const toggleAllRatings = () => {
@@ -715,55 +738,230 @@ const WindowComponent: React.FC = () => {
 
 
     // Function to handle the API call and update the button state
-    const handleDownloadMultipleFile_v2 = async (civitaiData: any, civitaiUrl: string, modelId: string, versionIndex: any) => {
+    const handleDownloadMultipleFile_v2 = async (
+        civitaiData: any,
+        civitaiUrl: string,
+        modelId: string,
+        versionIndex: any,
+        overrides?: { downloadFilePath?: string; downloadMethod?: string }
+    ) => {
+        const downloadFilePathToUse = overrides?.downloadFilePath ?? downloadFilePath;
+        const downloadMethodToUse = overrides?.downloadMethod ?? downloadMethod;
 
         let civitaiVersionID = civitaiData?.modelVersions[versionIndex]?.id.toString();
         let civitaiModelID = modelId;
 
         let civitaiFileName = retrieveCivitaiFileName(civitaiData, civitaiVersionID);
-        //the fileList would contains the urls of all files such as safetensor, training data, ...
-        let civitaiModelFileList = retrieveCivitaiFilesList(civitaiData, civitaiVersionID)
+        let civitaiModelFileList = retrieveCivitaiFilesList(civitaiData, civitaiVersionID);
 
-        //Check for null or empty
         if (
-            civitaiUrl === null || civitaiUrl === "" ||
-            civitaiFileName === null || civitaiFileName === "" ||
-            civitaiModelID === null || civitaiModelID === "" ||
-            civitaiVersionID === null || civitaiVersionID === "" ||
-            downloadFilePath === null || downloadFilePath === "" ||
-            civitaiModelFileList === null || !civitaiModelFileList.length
+            !civitaiUrl ||
+            !civitaiFileName ||
+            !civitaiModelID ||
+            !civitaiVersionID ||
+            !downloadFilePathToUse ||
+            !civitaiModelFileList?.length
         ) {
-            console.log("fail")
+            console.log("fail");
             return;
         }
 
         let modelObject = {
-            downloadFilePath, civitaiFileName, civitaiModelID,
-            civitaiVersionID, civitaiModelFileList, civitaiUrl
-        }
+            downloadFilePath: downloadFilePathToUse,
+            civitaiFileName,
+            civitaiModelID,
+            civitaiVersionID,
+            civitaiModelFileList,
+            civitaiUrl
+        };
 
-        if (downloadMethod === "server") {
-            //If download Method is server, the server will download the file into server's folder
+        if (downloadMethodToUse === "server") {
             const isDownloadSuccessful = await fetchDownloadFilesByServer_v2(modelObject, dispatch);
             return isDownloadSuccessful;
         } else {
-            //if download Method is browser, the chrome browser will download the file into server's folder
-            await fetchDownloadFilesByBrowser_v2(civitaiUrl, downloadFilePath, dispatch);
+            await fetchDownloadFilesByBrowser_v2(civitaiUrl, downloadFilePathToUse, dispatch);
 
             const data = await fetchCivitaiModelInfoFromCivitaiByVersionID(civitaiVersionID, dispatch);
             if (data) {
-                chrome.storage.local.get('originalTabId', (result) => {
+                chrome.storage.local.get("originalTabId", (result) => {
                     if (result.originalTabId) {
                         chrome.tabs.sendMessage(result.originalTabId, {
-                            action: "browser-download_v2", data: { ...modelObject, modelVersionObject: data }
+                            action: "browser-download_v2",
+                            data: { ...modelObject, modelVersionObject: data }
                         });
                     }
                 });
             }
             return true;
         }
-
     };
+
+    const findVersionIndexFromStaged = (data: any, staged: StagedItem) => {
+        if (!staged.versionId || staged.versionId === "Selecting") return 0;
+        return data.modelVersions.findIndex((v: any) => String(v.id) === String(staged.versionId));
+    };
+
+    const runOneStagedOffline = async (item: StagedItem) => {
+        if (["/@scan@/ErrorPath/"].includes(item.downloadFilePath)) {
+            throw new Error("Invalid DownloadFilePath (staged)");
+        }
+
+        const data = await fetchCivitaiModelInfoFromCivitaiByModelID(item.modelId, dispatch);
+        if (!data) throw new Error("Failed to fetch model info");
+
+        const versionIndex = findVersionIndexFromStaged(data, item);
+        if (versionIndex === -1) throw new Error("Version not found in modelVersions");
+
+        const civitaiVersionID = data?.modelVersions[versionIndex]?.id.toString();
+        const civitaiFileName = retrieveCivitaiFileName(data, civitaiVersionID);
+        const civitaiModelFileList = retrieveCivitaiFilesList(data, civitaiVersionID);
+        const civitaiTags = data?.tags;
+
+        if (!civitaiFileName || !civitaiModelFileList?.length || !civitaiTags) {
+            throw new Error("Missing required fields for offline");
+        }
+
+        const modelObject = {
+            downloadFilePath: item.downloadFilePath,
+            civitaiFileName,
+            civitaiModelID: item.modelId,
+            civitaiVersionID,
+            civitaiModelFileList,
+            civitaiUrl: item.url,
+            selectedCategory: item.selectedCategory,
+            civitaiTags,
+            hold: item.hold,
+            downloadPriority: item.downloadPriority,
+        };
+
+        await fetchAddOfflineDownloadFileIntoOfflineDownloadList(modelObject, false, dispatch);
+    };
+
+    const runOneStagedBundle = async (item: StagedItem) => {
+        const data = await fetchCivitaiModelInfoFromCivitaiByModelID(item.modelId, dispatch);
+        if (!data) throw new Error("Failed to fetch model info");
+
+        const versionIndex = findVersionIndexFromStaged(data, item);
+        if (versionIndex === -1) throw new Error("Version not found in modelVersions");
+
+        const ok = await handleDownloadMultipleFile_v2(
+            data,
+            item.url,
+            item.modelId,
+            versionIndex,
+            { downloadFilePath: item.downloadFilePath, downloadMethod: item.downloadMethod }
+        );
+
+        if (!ok) throw new Error("Download failed");
+
+        // IMPORTANT: use staged snapshot here too
+        await fetchAddRecordToDatabase(item.selectedCategory, item.url, item.downloadFilePath, dispatch);
+
+        bookmarkThisUrl(
+            data.type,
+            item.url,
+            `${data.name} - ${data.id} | Stable Diffusion LoRA | Civitai`
+        );
+    };
+
+    const handleRunStagedQueue = async () => {
+        if (!stagedItems.length) return;
+
+        setIsLoading(true);
+
+        // snapshot to avoid issues while state updates remove items
+        const items = [...stagedItems];
+
+        const succeededBundleUrls: string[] = [];
+        const succeededOfflineUrls: string[] = [];
+
+        for (const item of items) {
+            setWorkingModelID(item.modelId);
+
+            try {
+                setStagedItems(prev =>
+                    prev.map(x => x.id === item.id ? { ...x, status: "running", error: "" } : x)
+                );
+
+                if (item.action === "offline") {
+                    await runOneStagedOffline(item);
+                    succeededOfflineUrls.push(item.url);
+                } else {
+                    await runOneStagedBundle(item);
+                    succeededBundleUrls.push(item.url);
+                }
+
+                // remove success from staging
+                setStagedItems(prev => prev.filter(x => x.id !== item.id));
+            } catch (e: any) {
+                setStagedItems(prev =>
+                    prev.map(x => x.id === item.id
+                        ? { ...x, status: "failed", error: String(e?.message || e) }
+                        : x
+                    )
+                );
+                // keep failed items for later edits
+            }
+        }
+
+        setWorkingModelID("");
+        setIsLoading(false);
+
+        // ✅ refresh content-script UI indicators (this is the “page update” you missed)
+        try {
+            if (succeededBundleUrls.length > 0) {
+                await checkIfUrlExistInDatabase(succeededBundleUrls);
+            }
+            if (succeededOfflineUrls.length > 0) {
+                await checkIfUrlExistInOfflineDownload(succeededOfflineUrls);
+            }
+
+            // optional: if your page relies on the creator button/UI, you can re-send it
+            addCreatorUrlButton();
+        } catch (err) {
+            console.error("Post-run refresh failed:", err);
+        }
+    };
+
+
+    const stagingColumnDefs: ColDef[] = [
+        { headerName: "ID", field: "idx", width: 60 },
+        { headerName: "Model", field: "modelId", width: 110 },
+        { headerName: "Ver", field: "versionId", width: 120 },
+        { headerName: "Action", field: "action", width: 90 },
+
+        { headerName: "Path", field: "downloadFilePath", flex: 1 },
+        { headerName: "Cat", field: "selectedCategory", width: 90 },
+        { headerName: "Method", field: "downloadMethod", width: 90 },
+        { headerName: "Hold", field: "hold", width: 80 },
+        { headerName: "Pri", field: "downloadPriority", width: 70 },
+
+        {
+            headerName: "StagedAt",
+            field: "stagedAt",
+            width: 170,
+            valueFormatter: (p) => p.value ? new Date(p.value).toLocaleString() : ""
+        },
+        { headerName: "Status", field: "status", width: 95 },
+        { headerName: "Err", field: "error", flex: 1 },
+
+        {
+            headerName: "X",
+            width: 60,
+            cellRenderer: (p: any) => (
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setStagedItems(prev => prev.filter(x => x.id !== p.data.id));
+                    }}
+                >
+                    X
+                </button>
+            ),
+        },
+    ];
+
+
 
     const handleOpenOfflineWindow = () => {
         console.log("open offline window")
@@ -1235,6 +1433,16 @@ const WindowComponent: React.FC = () => {
         // If none found, do nothing.
     };
 
+    const stagedModeLabel = useMemo(() => {
+        if (stagedItems.length === 0) {
+            return offlineMode ? "offline" : "online";
+        }
+        const hasOffline = stagedItems.some(i => i.action === "offline");
+        const hasBundle = stagedItems.some(i => i.action === "bundle");
+        if (hasOffline && hasBundle) return "mixed";
+        return hasOffline ? "offline" : "online";
+    }, [stagedItems, offlineMode]);
+
 
     // Conditionally disable buttons if no prev/next
     // That’s optional convenience
@@ -1554,6 +1762,75 @@ const WindowComponent: React.FC = () => {
                 : 'Oldest last-checked (new only): -',
         };
     }, [filteredCreatorUrlList, timeAgo]);
+
+    useEffect(() => {
+        chrome.storage.local.get("stagedItems", (r) => {
+            if (Array.isArray(r.stagedItems)) setStagedItems(r.stagedItems);
+        });
+    }, []);
+
+    useEffect(() => {
+        chrome.storage.local.set({ stagedItems });
+    }, [stagedItems]);
+
+    const parseModelAndVersion = (url: string) => {
+        const uri = new URL(url);
+        const modelId = uri.pathname.match(/\/models\/(\d+)/)?.[1] || "Unknown";
+        const versionId = uri.searchParams.get("modelVersionId") || "Selecting";
+        return { modelId, versionId };
+    };
+
+    const makeStageId = () => `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+    const handleStageAllFromInbox = () => {
+        if (!urlList.length) return;
+
+        const now = Date.now();
+        const action = offlineMode ? "offline" : "bundle";
+
+        setStagedItems((prev) => {
+            const existingUrls = new Set(prev.map(x => x.url));
+            const additions: StagedItem[] = [];
+
+            for (const url of urlList) {
+                if (existingUrls.has(url)) continue; // avoid duplicates by URL
+
+                const { modelId, versionId } = parseModelAndVersion(url);
+
+                additions.push({
+                    id: makeStageId(),
+                    url,
+                    modelId,
+                    versionId,
+
+                    downloadFilePath,
+                    selectedCategory,
+                    downloadMethod,
+                    hold,
+                    downloadPriority,
+
+                    action,
+                    stagedAt: now,
+                    status: "staged",
+                });
+            }
+
+            return [...prev, ...additions];
+        });
+
+        // Uncheck them on the page + clear inbox list
+        chrome.storage.local.get("originalTabId", (result) => {
+            if (result.originalTabId) {
+                for (const url of urlList) {
+                    chrome.tabs.sendMessage(result.originalTabId, { action: "uncheck-url", url });
+                }
+            }
+        });
+
+        setUrlList([]);
+        setSelectedUrl("");
+    };
+
 
 
     return (
@@ -2269,9 +2546,49 @@ const WindowComponent: React.FC = () => {
                             selectedUrl={selectedUrl}
                             onUrlSelect={setSelectedUrl}
                         />
+
+                        <OverlayTrigger
+                            placement={"top"}
+                            overlay={<Tooltip id="tooltip">Stage current inbox URLs into the Staging Queue (snapshot path/category/etc.)</Tooltip>}
+                        >
+                            <Button
+                                variant={"success"}
+                                onClick={handleStageAllFromInbox}
+                                disabled={isLoading || urlList.length === 0 || !checkboxMode}
+                                className="btn btn-success btn-lg w-100"
+                            >
+                                {`Stage (${offlineMode ? "offline" : "online"})`}
+                            </Button>
+                        </OverlayTrigger>
+
+
+                        <div style={{ marginTop: 10 }}>
+                            <h5 style={{ margin: "8px 0" }}>Staging Queue</h5>
+
+                            <div className="ag-theme-alpine" style={{ height: 220, width: "100%" }}>
+                                <AgGridReact
+                                    rowData={stagedItems.map((x, i) => ({ ...x, idx: i + 1 }))}
+                                    columnDefs={stagingColumnDefs}
+                                    defaultColDef={{ sortable: true, resizable: true }}
+                                />
+                            </div>
+
+                            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                                <Button
+                                    variant="primary"
+                                    onClick={handleRunStagedQueue}
+                                    disabled={isLoading || stagedItems.length === 0}
+                                    className="w-100"
+                                >
+                                    {`Run Staged Queue (${stagedModeLabel})`}
+                                </Button>
+                            </div>
+                        </div>
+
+
                     </div>
 
-                    <div>
+                    {/* <div>
                         {
                             offlineMode ? (
                                 <OverlayTrigger
@@ -2303,7 +2620,7 @@ const WindowComponent: React.FC = () => {
                                 </OverlayTrigger>
                             )
                         }
-                    </div>
+                    </div> */}
                 </div>
 
                 {/* RIGHT PANEL: Sticky Sidebar */}
