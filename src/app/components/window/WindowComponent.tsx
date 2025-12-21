@@ -1433,15 +1433,19 @@ const WindowComponent: React.FC = () => {
         // If none found, do nothing.
     };
 
-    const stagedModeLabel = useMemo(() => {
-        if (stagedItems.length === 0) {
-            return offlineMode ? "offline" : "online";
-        }
-        const hasOffline = stagedItems.some(i => i.action === "offline");
-        const hasBundle = stagedItems.some(i => i.action === "bundle");
-        if (hasOffline && hasBundle) return "mixed";
-        return hasOffline ? "offline" : "online";
-    }, [stagedItems, offlineMode]);
+    useEffect(() => {
+        const nextAction: StagedItem["action"] = offlineMode ? "offline" : "bundle";
+
+        // Convert queued items to current mode (skip ones currently running)
+        setStagedItems(prev =>
+            prev.map(it =>
+                it.status === "running"
+                    ? it
+                    : { ...it, action: nextAction, status: it.status === "done" ? "done" : "staged" }
+            )
+        );
+    }, [offlineMode]);
+
 
 
     // Conditionally disable buttons if no prev/next
@@ -1508,6 +1512,7 @@ const WindowComponent: React.FC = () => {
             if (activeTab && activeTab.id) {
                 // Step 4: Save the active tab's ID to chrome.storage.local
                 await chrome.storage.local.set({ originalTabId: activeTab.id });
+                sendStagedToTab(activeTab.id, stagedItems);
                 setTabCreator(activeTab?.title || "");
                 setResetMode(true);
                 setCheckboxMode(true); // Toggle the checkbox mode
@@ -1773,6 +1778,11 @@ const WindowComponent: React.FC = () => {
         chrome.storage.local.set({ stagedItems });
     }, [stagedItems]);
 
+    useEffect(() => {
+        syncStagedToOriginalTab(stagedItems);
+    }, [stagedItems]);
+
+
     const parseModelAndVersion = (url: string) => {
         const uri = new URL(url);
         const modelId = uri.pathname.match(/\/models\/(\d+)/)?.[1] || "Unknown";
@@ -1831,6 +1841,29 @@ const WindowComponent: React.FC = () => {
         setSelectedUrl("");
     };
 
+    const sendStagedToTab = (tabId: number, list: StagedItem[]) => {
+        chrome.tabs.sendMessage(
+            tabId,
+            {
+                action: "display-staged",
+                stagedList: list.map(x => ({ url: x.url, action: x.action })), // keep it minimal
+                // if you want: status: x.status
+            },
+            () => {
+                // avoid noisy console errors when content script isn't on that tab
+                const err = chrome.runtime.lastError;
+                if (err) console.debug("[display-staged] sendMessage:", err.message);
+            }
+        );
+    };
+
+    const syncStagedToOriginalTab = (list: StagedItem[]) => {
+        chrome.storage.local.get("originalTabId", (r) => {
+            const tabId = r?.originalTabId;
+            if (!tabId) return;
+            sendStagedToTab(tabId, list);
+        });
+    };
 
 
     return (
@@ -1840,7 +1873,7 @@ const WindowComponent: React.FC = () => {
             <ErrorAlert />
 
             <center>
-                <h1>Model List Mode</h1>
+                <h1>Window Mode</h1>
             </center>
 
             {/* Main Content: Left & Right Panels */}
@@ -2580,7 +2613,7 @@ const WindowComponent: React.FC = () => {
                                     disabled={isLoading || stagedItems.length === 0}
                                     className="w-100"
                                 >
-                                    {`Run Staged Queue (${stagedModeLabel})`}
+                                    {`Run Staged Queue (${offlineMode ? "offline" : "online"})`}
                                 </Button>
                             </div>
                         </div>

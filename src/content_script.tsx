@@ -4,6 +4,132 @@ console.log("Calling Content Script")
 const cardSelector =
   '.relative.flex.overflow-hidden.rounded-md.border-gray-3.bg-gray-0.shadow-gray-4.dark\\:border-dark-4.dark\\:bg-dark-6.dark\\:shadow-dark-8.flex-col';
 
+const stagedInfoMap: Map<string, { action: string }> = new Map();
+
+function normalizeUrl(url: string): string {
+  return (url || "").replace("-commission", "");
+}
+
+function upsertStagedBadge(card: HTMLElement, action: string) {
+  let badge = card.querySelector('.staged-badge') as HTMLDivElement | null;
+
+  const text = action ? `STAGED (${action.toUpperCase()})` : "STAGED";
+
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.classList.add('staged-badge');
+
+    Object.assign(badge.style, {
+      position: 'absolute',
+      top: '10px',
+      left: '10px',
+      zIndex: '1002',
+      backgroundColor: '#7c3aed', // purple
+      color: 'white',
+      textShadow: '0px 0px 3px black',
+      padding: '4px 8px',
+      borderRadius: '6px',
+      fontFamily: 'Arial, sans-serif',
+      fontSize: '12px',
+      fontWeight: 'bold',
+      letterSpacing: '0.5px',
+      pointerEvents: 'none',
+      userSelect: 'none',
+      whiteSpace: 'nowrap',
+    });
+
+    // make sure card is positioned
+    if (!card.style.position) card.style.position = 'relative';
+    card.appendChild(badge);
+  }
+
+  badge.textContent = text;
+
+  // optional: color by action
+  if (action === "offline") badge.style.backgroundColor = '#2563eb'; // blue
+  else if (action === "bundle") badge.style.backgroundColor = '#16a34a'; // green
+  else badge.style.backgroundColor = '#7c3aed'; // purple
+}
+
+function removeStagedBadge(card: HTMLElement) {
+  const badge = card.querySelector('.staged-badge') as HTMLElement | null;
+  if (badge) badge.remove();
+}
+
+function applyStagedForCard(card: HTMLElement) {
+  const a = card.querySelector('a') as HTMLAnchorElement | null;
+  if (!a?.href) return;
+
+  const url = normalizeUrl(a.href);
+  const info = stagedInfoMap.get(url);
+
+  if (info) upsertStagedBadge(card, info.action);
+  else removeStagedBadge(card);
+}
+
+function displayStagedBadges(): void {
+  const container = document.querySelector('.MasonryGrid_grid__6QtWa') as HTMLElement | null;
+  if (!container) return;
+
+  const cards = container.querySelectorAll(':scope > div') as NodeListOf<HTMLDivElement>;
+  cards.forEach((card) => applyStagedForCard(card));
+}
+
+function removeAllStagedBadges(): void {
+  const container = document.querySelector('.MasonryGrid_grid__6QtWa') as HTMLElement | null;
+  if (!container) return;
+
+  const cards = container.querySelectorAll(':scope > div') as NodeListOf<HTMLDivElement>;
+  cards.forEach((card) => removeStagedBadge(card));
+}
+
+chrome.runtime.onMessage.addListener(
+  async (
+    message: {
+      action: string;
+      stagedList?: Array<{ url: string; action: string }>;
+      url?: string;
+      stageAction?: string;
+    },
+    sender,
+    sendResponse
+  ) => {
+    if (message.action === "display-staged") {
+      if (!message.stagedList) return true;
+
+      stagedInfoMap.clear();
+      message.stagedList.forEach((x) => {
+        stagedInfoMap.set(normalizeUrl(x.url), { action: x.action });
+      });
+
+      displayStagedBadges();
+      return true;
+    }
+
+    if (message.action === "remove-staged") {
+      stagedInfoMap.clear();
+      removeAllStagedBadges();
+      return true;
+    }
+
+    // OPTIONAL incremental updates (nice UX)
+    if (message.action === "stage-url" && message.url) {
+      stagedInfoMap.set(normalizeUrl(message.url), { action: message.stageAction || "" });
+      displayStagedBadges();
+      return true;
+    }
+
+    if (message.action === "unstage-url" && message.url) {
+      stagedInfoMap.delete(normalizeUrl(message.url));
+      displayStagedBadges();
+      return true;
+    }
+
+    return true;
+  }
+);
+
+
 chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   if (message.action === "browser-download") {
     console.log("browser-download")
@@ -1211,6 +1337,8 @@ function initMutationObserver(parentContainer: HTMLElement) {
                     addCreatorButton(divParent);
                     addCardCheckbox(divParent as HTMLDivElement);   // NEW
 
+                    applyStagedForCard(divParent);
+
                   }
 
                 }
@@ -1305,6 +1433,8 @@ function observeCardItem(cardItem: HTMLElement) {
                 addCreatorButton(divParent);
                 addCardCheckbox(divParent as HTMLDivElement);   // NEW
 
+                applyStagedForCard(divParent);
+
               }
             }
           }
@@ -1339,6 +1469,7 @@ function processExistingCards(parentContainer: HTMLElement) {
     // console.log("Existing card item:", item);
     // Optionally, process each card item (e.g., extract URLs, apply labels)
     observeCardItem(item as HTMLElement);
+    applyStagedForCard(item as HTMLElement);
 
   });
 }
