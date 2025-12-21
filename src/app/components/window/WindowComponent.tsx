@@ -1839,6 +1839,7 @@ const WindowComponent: React.FC = () => {
 
         setUrlList([]);
         setSelectedUrl("");
+        dispatch(updateDownloadFilePath("/@scan@/ACG/Pending/"));
     };
 
     const sendStagedToTab = (tabId: number, list: StagedItem[]) => {
