@@ -1840,6 +1840,9 @@ const WindowComponent: React.FC = () => {
         setUrlList([]);
         setSelectedUrl("");
         dispatch(updateDownloadFilePath("/@scan@/ACG/Pending/"));
+        setIsLoading(false)
+        setHold(false);
+        setDownloadPriority(5);
     };
 
     const sendStagedToTab = (tabId: number, list: StagedItem[]) => {
@@ -2470,7 +2473,48 @@ const WindowComponent: React.FC = () => {
                                             </div>
                                         </div>
 
+                                        <div
+                                            style={{
+                                                display: 'flex',
+                                                flexDirection: 'column',   // ✅ each item on its own line
+                                                alignItems: 'flex-start',
+                                                gap: '8px',
+                                                margin: '10px 0',
+                                                width: '100%',
+                                            }}
+                                        >
+                                            {workingModelID !== "" && (
+                                                <p
+                                                    style={{
+                                                        margin: 0,
+                                                        width: '100%',
+                                                        whiteSpace: 'normal',
+                                                        overflowWrap: 'anywhere', // ✅ wrap long strings/paths
+                                                        wordBreak: 'break-word',
+                                                    }}
+                                                >
+                                                    <b>Processing Queue Model Name: </b> {processingModelName}
+                                                </p>
+                                            )}
 
+                                            <div style={{ width: '400px' }}>
+                                                <p style={{ margin: 0, width: '100%', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                                                    <b>Staging DownloadFilePath: </b> {downloadFilePath}
+                                                </p>
+                                            </div>
+
+                                            {countdown > 0 && (
+                                                <p style={{ margin: 0, width: '100%', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                                                    <b>Next request in: </b> {countdown} seconds
+                                                </p>
+                                            )}
+
+                                            {stagedItems.length > 0 && (
+                                                <p style={{ margin: 0, width: '100%', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                                                    <b>Total Staging Queue Item: </b> {stagedItems.length}
+                                                </p>
+                                            )}
+                                        </div>
 
                                     </div>
                                 }
@@ -2570,10 +2614,6 @@ const WindowComponent: React.FC = () => {
 
                     {/* URLGrid (Scrolls independently of the sticky header/buttons) */}
                     <div>
-
-                        {workingModelID !== "" && <p>Processing Model Name: {processingModelName}</p>}
-                        {countdown > 0 && <p>Next request in: {countdown} seconds</p>}
-
                         <URLGrid
                             urlList={urlList}
                             setUrlList={setUrlList}
