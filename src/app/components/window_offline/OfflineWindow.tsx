@@ -52,7 +52,8 @@ import {
     fetchOfflineDownloadListEarlyAccessActive,
     fetchUpdateDownloadFilePathFromOfflineDownloadList,
     fetchGetErrorModelList,
-    fetchCivitaiModelInfoFromCivitaiByVersionID
+    fetchCivitaiModelInfoFromCivitaiByVersionID,
+    fetchBulkPatchOfflineDownloadList
 } from "../../api/civitaiSQL_api"
 
 import {
@@ -77,6 +78,7 @@ import TitleNameToggle from './TitleNameToggle';
 import TopTagsDropdown from './TopTagsDropdown';
 import SimilarSearchPanel from './SimilarSearchPanel';
 import DownloadPathEditor from './DownloadPathEditor';
+import { setError } from '../../store/actions/errorsActions';
 
 type DownloadMethod = 'server' | 'browser';
 type DisplayMode = 'table'
@@ -331,8 +333,16 @@ const OfflineWindow: React.FC = () => {
     const modify_selectedCategory = chromeData.selectedCategory;
 
     // Bulk modify controls (for Modify Mode)
-    const [bulkHold, setBulkHold] = useState(false);
-    const [bulkDownloadPriority, setBulkDownloadPriority] = useState(5);
+    const ALL_PATCH_FIELDS = [
+        { key: "downloadFilePath", label: "Modify downloadFilePath" },
+        { key: "hold", label: "Hold" },
+        { key: "downloadPriority", label: "Download Priority" },
+    ];
+
+    const [selectedPatchFields, setSelectedPatchFields] = useState(new Set());
+    const [bulkHold, setBulkHold] = useState(true);
+    const [bulkDownloadPriority, setBulkDownloadPriority] = useState(5); // default 5 (1~10)
+
 
 
     // **Add Pagination State and Logic**
@@ -373,6 +383,128 @@ const OfflineWindow: React.FC = () => {
     const [allowTryEarlyAccess, setAllowTryEarlyAccess] = useState(false);
 
     const [editingPathId, setEditingPathId] = useState<string | null>(null);
+
+    // "Selected for patch" tracking (no new interfaces/files)
+    const [selectedKeySet, setSelectedKeySet] = React.useState(() => new Set());
+    const [draftByKey, setDraftByKey] = React.useState(() => new Map());
+    const [isPatching, setIsPatching] = React.useState(false);
+
+    // Make a stable key for each row (adjust as needed)
+    const rowKey = (row: any) => {
+        // Prefer a real id if you have it
+        if (row?.id != null) return String(row.id);
+
+        // Fallback: combine fields (adjust names to yours)
+        return `${row.modelNumber ?? ""}__${row.versionNumber ?? ""}`;
+    };
+
+    // Get draft values for UI controls (defaults to row’s current values)
+    const getDraft = (row: any) => {
+        const key = rowKey(row);
+        const existing = draftByKey.get(key);
+        if (existing) return existing;
+
+        return {
+            hold: !!row.hold,
+            downloadPriority: row.downloadPriority ?? 5, // default 5
+        };
+    };
+
+    // Update a single field in the draft map
+    const updateDraft = (row: any, patch: any) => {
+        const key = rowKey(row);
+
+        setDraftByKey((prev) => {
+            const next = new Map(prev);
+            const cur = next.get(key) ?? getDraft(row);
+            next.set(key, { ...cur, ...patch });
+            return next;
+        });
+    };
+
+    const selectRow = (row: any) => {
+        const key = rowKey(row);
+        setSelectedKeySet((prev) => {
+            const next = new Set(prev);
+            next.add(key);
+            return next;
+        });
+    };
+
+    const unselectRow = (row: any) => {
+        const key = rowKey(row);
+        setSelectedKeySet((prev) => {
+            const next = new Set(prev);
+            next.delete(key);
+            return next;
+        });
+    };
+
+    // Derived lists (renders as "moved" between blocks)
+    const availableRows = React.useMemo(() => {
+        return (offlineDownloadList ?? []).filter((r) => !selectedKeySet.has(rowKey(r)));
+    }, [offlineDownloadList, selectedKeySet]);
+
+    const selectedRows = React.useMemo(() => {
+        return (offlineDownloadList ?? []).filter((r) => selectedKeySet.has(rowKey(r)));
+    }, [offlineDownloadList, selectedKeySet]);
+
+    const handleBulkPatchSelected = async () => {
+        // 1) Targets = selected models (by versionID)
+        const modelObjects = filteredDownloadList
+            .filter((entry) => selectedIds.has(entry.civitaiVersionID))
+            .map((entry) => ({
+                civitaiModelID: entry.civitaiModelID,
+                civitaiVersionID: entry.civitaiVersionID,
+            }));
+
+        if (!modelObjects.length) return;
+
+        // 2) Patch = only fields in second block
+        const patch = {} as Parameters<typeof fetchBulkPatchOfflineDownloadList>[1];
+
+        if (selectedPatchFields.has("hold")) {
+            patch.hold = bulkHold;                 // boolean
+        }
+        if (selectedPatchFields.has("downloadPriority")) {
+            patch.downloadPriority = bulkDownloadPriority; // number 1~10
+        }
+
+        if (selectedPatchFields.has("downloadFilePath")) {
+            const v = (modify_downloadFilePath || "").trim();
+            if (!v) {
+                dispatch(setError({ hasError: true, errorMessage: "downloadFilePath is empty." }));
+                return;
+            }
+            patch.downloadFilePath = v;
+        }
+
+        setIsPatching(true);
+        try {
+            await fetchBulkPatchOfflineDownloadList(modelObjects, patch, dispatch);
+
+            // Optional UX:
+            // clear selected models after patch
+            // setSelectedIds(new Set());   <-- depends on how you store selectedIds
+        } finally {
+            setIsPatching(false);
+        }
+    };
+
+
+    const addPatchField = (key: any) => {
+        setSelectedPatchFields((prev) => new Set([...prev, key]));
+    };
+
+    const removePatchField = (key: any) => {
+        setSelectedPatchFields((prev) => {
+            const next = new Set(prev);
+            next.delete(key);
+            return next;
+        });
+    };
+
+    const availablePatchFields = ALL_PATCH_FIELDS.filter(f => !selectedPatchFields.has(f.key));
 
 
     // Replace /width=###/ in Civitai URLs; if missing, insert it before the filename.
@@ -3624,6 +3756,24 @@ const OfflineWindow: React.FC = () => {
         return filteredDownloadList;
     };
 
+    const blockStyle = {
+        border: "1px solid #ddd",
+        borderRadius: 10,
+        padding: 12,
+        minHeight: 120,
+        background: "#fff",
+    };
+
+    const rowStyle = {
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: "8px 0",
+        borderBottom: "1px solid #eee",
+    };
+
+    const labelStyle = { fontSize: 12, opacity: 0.75 };
+
     return (
         <div style={containerStyle}>
             {/* Scrollable Content Area */}
@@ -4203,6 +4353,138 @@ const OfflineWindow: React.FC = () => {
                                         Update Priority for Selected
                                     </Button>
                                 </div>
+
+                                <div style={{ display: "flex", gap: 12, marginTop: 10, marginBottom: 10 }}>
+                                    {/* Block 1: Available options */}
+                                    <div style={{ flex: 1, border: "1px solid #ccc", borderRadius: 8, padding: 10 }}>
+                                        <div style={{ fontWeight: 700, marginBottom: 8 }}>Available updates</div>
+
+                                        {availablePatchFields.map((f) => (
+                                            <div
+                                                key={f.key}
+                                                onClick={() => addPatchField(f.key)}
+                                                style={{
+                                                    cursor: "pointer",
+                                                    border: "1px dashed #aaa",
+                                                    borderRadius: 6,
+                                                    padding: 8,
+                                                    marginBottom: 8,
+                                                    userSelect: "none",
+                                                }}
+                                            >
+                                                <div style={{ fontWeight: 600 }}>+ {f.label}</div>
+
+                                                {f.key === "downloadFilePath" && (
+                                                    <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>
+                                                        Current: {modify_downloadFilePath || "(empty)"}
+                                                    </div>
+                                                )}
+                                                {f.key === "downloadPriority" && (
+                                                    <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>
+                                                        Range: 1 ~ 10 (default 5)
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+
+                                        {!availablePatchFields.length && (
+                                            <div style={{ fontSize: 12, opacity: 0.7 }}>No more fields.</div>
+                                        )}
+                                    </div>
+
+                                    {/* Block 2: Selected options */}
+                                    <div style={{ flex: 1, border: "1px solid #ccc", borderRadius: 8, padding: 10 }}>
+                                        <div style={{ fontWeight: 700, marginBottom: 8 }}>Selected updates</div>
+
+                                        {!selectedPatchFields.size && (
+                                            <div style={{ fontSize: 12, opacity: 0.7 }}>
+                                                Click an option on the left to add it here.
+                                            </div>
+                                        )}
+
+                                        {/* downloadFilePath */}
+                                        {selectedPatchFields.has("downloadFilePath") && (
+                                            <div style={{ border: "1px solid #ddd", borderRadius: 6, padding: 8, marginBottom: 8 }}>
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                                    <div style={{ fontWeight: 600 }}>Modify downloadFilePath</div>
+                                                    <button onClick={() => removePatchField("downloadFilePath")} style={{ cursor: "pointer" }}>
+                                                        ×
+                                                    </button>
+                                                </div>
+
+                                                <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>
+                                                    Will set to: {modify_downloadFilePath || "(empty)"} {/* uses your existing downloadFilePath */}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* hold */}
+                                        {selectedPatchFields.has("hold") && (
+                                            <div style={{ border: "1px solid #ddd", borderRadius: 6, padding: 8, marginBottom: 8 }}>
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                                    <div style={{ fontWeight: 600 }}>Hold</div>
+                                                    <button onClick={() => removePatchField("hold")} style={{ cursor: "pointer" }}>
+                                                        ×
+                                                    </button>
+                                                </div>
+
+                                                <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={bulkHold}
+                                                        onChange={(e) => setBulkHold(e.target.checked)}
+                                                    />
+                                                    <span>Set hold = {bulkHold ? "true" : "false"}</span>
+                                                </label>
+                                            </div>
+                                        )}
+
+                                        {/* downloadPriority */}
+                                        {selectedPatchFields.has("downloadPriority") && (
+                                            <div style={{ border: "1px solid #ddd", borderRadius: 6, padding: 8, marginBottom: 8 }}>
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                                    <div style={{ fontWeight: 600 }}>Download Priority</div>
+                                                    <button onClick={() => removePatchField("downloadPriority")} style={{ cursor: "pointer" }}>
+                                                        ×
+                                                    </button>
+                                                </div>
+
+                                                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+                                                    <span>Set to:</span>
+                                                    <select
+                                                        value={String(bulkDownloadPriority)}
+                                                        onChange={(e) => setBulkDownloadPriority(parseInt(e.target.value, 10))}
+                                                    >
+                                                        {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                                                            <option key={n} value={String(n)}>
+                                                                {n}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <button
+                                            onClick={handleBulkPatchSelected}
+                                            disabled={
+                                                isPatching ||
+                                                selectedIds.size === 0 ||
+                                                selectedPatchFields.size === 0
+                                            }
+                                            style={{
+                                                marginTop: 6,
+                                                padding: "8px 12px",
+                                                cursor: "pointer",
+                                                opacity: (isPatching || selectedIds.size === 0 || selectedPatchFields.size === 0) ? 0.6 : 1,
+                                            }}
+                                        >
+                                            {isPatching ? "Updating..." : `Update selected models (${selectedIds.size})`}
+                                        </button>
+                                    </div>
+                                </div>
+
+
                             </div>
                         )}
 

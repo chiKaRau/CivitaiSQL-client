@@ -1014,6 +1014,74 @@ export const fetchUpdateDownloadPriorityFromOfflineDownloadList = async (
     }
 };
 
+export const fetchBulkPatchOfflineDownloadList = async (
+    modelObjects: Array<{ civitaiModelID: string; civitaiVersionID: string }>,
+    patch: {
+        hold?: boolean | null;
+        downloadPriority?: number | null;
+        downloadFilePath?: string | null;
+    },
+    dispatch: any
+) => {
+    try {
+        dispatch(clearError());
+
+        // Optional: prevent sending an empty patch (backend also rejects this)
+        const hasAnyPatch =
+            patch?.hold !== undefined && patch?.hold !== null ||
+            patch?.downloadPriority !== undefined && patch?.downloadPriority !== null ||
+            patch?.downloadFilePath !== undefined && patch?.downloadFilePath !== null;
+
+        console.log(hasAnyPatch)
+
+        if (!hasAnyPatch) {
+            throw new Error("No fields selected to update.");
+        }
+
+        const targets = (modelObjects || []).map((m) => ({
+            modelNumber: m.civitaiModelID,
+            versionNumber: m.civitaiVersionID,
+        }));
+
+        console.log(targets)
+
+        const response = await axios.post(
+            `${config.domain}/api/bulk-patch-offline-download_list`,
+            {
+                targets,
+                patch: {
+                    // Only include the fields you want to update.
+                    // If a field is null/undefined, backend will keep old value.
+                    hold: patch.hold ?? null,
+                    downloadPriority: patch.downloadPriority ?? null,
+                    downloadFilePath: patch.downloadFilePath ?? null,
+                },
+            }
+        );
+
+        console.log(response)
+
+        // HTTP-level check
+        if (!(response.status >= 200 && response.status < 300)) {
+            throw new Error("Failed to bulk patch offline download records.");
+        }
+
+        // App-level check (adjust keys if your CustomResponse uses different names)
+        if (response.data?.success === false) {
+            throw new Error(response.data?.message || "Bulk patch failed.");
+        }
+
+        // If you want to use the result in UI:
+        // result looks like: { requested: number, updated: number }
+        return response.data?.data;
+    } catch (error: any) {
+        console.error("Error bulk patching offline records:", error?.message);
+        dispatch(setError({ hasError: true, errorMessage: error?.message || "Unknown error" }));
+        return null;
+    }
+};
+
+
 export const fetchRemoveFromErrorModelList = async (
     modelObject: {
         civitaiModelID: string,
