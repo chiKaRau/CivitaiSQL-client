@@ -219,7 +219,6 @@ interface SelectAllHeaderCheckboxProps {
     onChange: (checked: boolean) => void;
 }
 
-// put near your other helpers
 const PENDING_PATH_RE = /[/\\]@scan@[/\\]acg[/\\]pending([/\\]|$)/i;
 
 function isPendingEntry(entry: OfflineDownloadEntry): boolean {
@@ -385,69 +384,7 @@ const OfflineWindow: React.FC = () => {
     const [editingPathId, setEditingPathId] = useState<string | null>(null);
 
     // "Selected for patch" tracking (no new interfaces/files)
-    const [selectedKeySet, setSelectedKeySet] = React.useState(() => new Set());
-    const [draftByKey, setDraftByKey] = React.useState(() => new Map());
     const [isPatching, setIsPatching] = React.useState(false);
-
-    // Make a stable key for each row (adjust as needed)
-    const rowKey = (row: any) => {
-        // Prefer a real id if you have it
-        if (row?.id != null) return String(row.id);
-
-        // Fallback: combine fields (adjust names to yours)
-        return `${row.modelNumber ?? ""}__${row.versionNumber ?? ""}`;
-    };
-
-    // Get draft values for UI controls (defaults to row’s current values)
-    const getDraft = (row: any) => {
-        const key = rowKey(row);
-        const existing = draftByKey.get(key);
-        if (existing) return existing;
-
-        return {
-            hold: !!row.hold,
-            downloadPriority: row.downloadPriority ?? 5, // default 5
-        };
-    };
-
-    // Update a single field in the draft map
-    const updateDraft = (row: any, patch: any) => {
-        const key = rowKey(row);
-
-        setDraftByKey((prev) => {
-            const next = new Map(prev);
-            const cur = next.get(key) ?? getDraft(row);
-            next.set(key, { ...cur, ...patch });
-            return next;
-        });
-    };
-
-    const selectRow = (row: any) => {
-        const key = rowKey(row);
-        setSelectedKeySet((prev) => {
-            const next = new Set(prev);
-            next.add(key);
-            return next;
-        });
-    };
-
-    const unselectRow = (row: any) => {
-        const key = rowKey(row);
-        setSelectedKeySet((prev) => {
-            const next = new Set(prev);
-            next.delete(key);
-            return next;
-        });
-    };
-
-    // Derived lists (renders as "moved" between blocks)
-    const availableRows = React.useMemo(() => {
-        return (offlineDownloadList ?? []).filter((r) => !selectedKeySet.has(rowKey(r)));
-    }, [offlineDownloadList, selectedKeySet]);
-
-    const selectedRows = React.useMemo(() => {
-        return (offlineDownloadList ?? []).filter((r) => selectedKeySet.has(rowKey(r)));
-    }, [offlineDownloadList, selectedKeySet]);
 
     const handleBulkPatchSelected = async () => {
         // 1) Targets = selected models (by versionID)
@@ -718,26 +655,6 @@ const OfflineWindow: React.FC = () => {
         return sorted.map(([tag]) => tag);
     };
 
-
-
-
-
-    // Remove a tag by adding it to the backend and excludedTags
-    const handleRemoveTag = async (tag: string) => {
-        try {
-            // Call your API to add this tag to the "pending_remove_tags" in the backend
-            await fetchAddPendingRemoveTag(tag, dispatch);
-            // Then update local excludedTags, so it doesn't appear in subsequent rendering
-            setExcludedTags((prev) => [...prev, tag]);
-        } catch (error) {
-            console.error("Failed to remove tag:", error);
-        }
-    };
-    const handleSelectTag = (tag: string) => {
-        setFilterCondition("contains");
-        setFilterText(tag);
-    };
-
     // Additional states for progress and failed downloads
     const [downloadProgress, setDownloadProgress] = useState<{ completed: number; total: number }>({ completed: 0, total: 0 });
     const [failedEntries, setFailedEntries] = useState<OfflineDownloadEntry[]>([]);
@@ -880,27 +797,6 @@ const OfflineWindow: React.FC = () => {
 
     // Utility function to pause execution for a given number of milliseconds
     const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-    // // **New: Countdown Timer for delayTime**
-    // useEffect(() => {
-    //     let timer: NodeJS.Timeout;
-
-    //     if (delayTime > 0) {
-    //         timer = setInterval(() => {
-    //             setDelayTime(prev => {
-    //                 if (prev <= 1) {
-    //                     clearInterval(timer);
-    //                     return 0;
-    //                 }
-    //                 return prev - 1;
-    //             });
-    //         }, 1000);
-    //     }
-
-    //     return () => {
-    //         if (timer) clearInterval(timer);
-    //     };
-    // }, [delayTime]);
 
     useEffect(() => {
         let timer: NodeJS.Timeout;
@@ -1640,19 +1536,6 @@ const OfflineWindow: React.FC = () => {
         // Removed position: 'fixed', bottom: 0, left: 0
     };
 
-
-    // Define styles for the selection count display
-    const selectionCountStyle: React.CSSProperties = {
-        padding: '8px 12px',
-        borderRadius: '4px',
-        backgroundColor: isDarkMode ? '#444' : '#e0e0e0',
-        color: isDarkMode ? '#fff' : '#000',
-        marginTop: '10px', // Adds spacing from the buttons above
-        fontWeight: 'bold',
-        width: '100%', // Ensures it takes the full width for a new row
-        textAlign: 'center', // Centers the text
-    };
-
     const headerStyleContainer: React.CSSProperties = {
         display: 'flex',
         flexDirection: 'column', // Change from default 'row' to 'column'
@@ -1712,14 +1595,6 @@ const OfflineWindow: React.FC = () => {
         gap: '10px',
         marginBottom: '20px',
         flexWrap: 'wrap'
-    };
-
-    const filterInputStyle: React.CSSProperties = {
-        padding: '8px',
-        borderRadius: '4px',
-        border: '1px solid #ccc',
-        flex: '1',
-        minWidth: '200px',
     };
 
     const filterSelectStyle: React.CSSProperties = {
@@ -1882,59 +1757,6 @@ const OfflineWindow: React.FC = () => {
             setUiMode('idle');
         }
     };
-
-    const handleBulkPriorityUpdate = async () => {
-        const selectedEntries = filteredDownloadList.filter(entry =>
-            selectedIds.has(entry.civitaiVersionID)
-        );
-
-        if (selectedEntries.length === 0) {
-            alert("No items selected to update Priority.");
-            return;
-        }
-
-        // normalize to 1..10
-        const clampedPriority = Math.max(1, Math.min(10, bulkDownloadPriority | 0));
-
-        setBulkDownloadPriority(clampedPriority);
-        setIsLoading(true);
-        setUiMode('modifying');
-
-        try {
-            for (const entry of selectedEntries) {
-                const match = (e: OfflineDownloadEntry) =>
-                    e.civitaiModelID === entry.civitaiModelID &&
-                    e.civitaiVersionID === entry.civitaiVersionID;
-
-                const prevPriority = entry.downloadPriority ?? 10;
-
-                // optimistic update
-                updateEntryLocal(match, { downloadPriority: clampedPriority });
-
-                try {
-                    await fetchUpdateDownloadPriorityFromOfflineDownloadList(
-                        {
-                            civitaiModelID: entry.civitaiModelID,
-                            civitaiVersionID: entry.civitaiVersionID,
-                        },
-                        clampedPriority,
-                        dispatch
-                    );
-                } catch (err: any) {
-                    console.error("Failed to update priority for", entry.civitaiFileName, err?.message || err);
-                    // revert this one
-                    updateEntryLocal(match, { downloadPriority: prevPriority });
-                }
-            }
-
-            // sync with server
-            await refreshCurrentPage();
-        } finally {
-            setIsLoading(false);
-            setUiMode('idle');
-        }
-    };
-
 
     // Function to handle "Download Now" button click
     const handleDownloadNow = async () => {
@@ -2452,6 +2274,7 @@ const OfflineWindow: React.FC = () => {
     };
 
 
+    /*
     const handleProcessSelected = async () => {
         if (modify_downloadFilePath === "/@scan@/ErrorPath/") {
             alert("Invalid DownloadFilePath: ErrorPath is never allowed");
@@ -2515,11 +2338,11 @@ const OfflineWindow: React.FC = () => {
                     dispatch,
                     page0,
                     itemsPerPage,
-                    /* filterEmptyBaseModel */ false,
+                     false,
                     prefixes,
-                    /* search */ filterText.trim(),
-                    /* op */ filterCondition,
-                    /* status */ status,
+                    filterText.trim(),
+                   filterCondition,
+                   status,
                     showHoldEntries,              // NEW
                     showEarlyAccess,  // NEW
                     sortDir                       // NEW ("asc" | "desc")
@@ -2555,7 +2378,7 @@ const OfflineWindow: React.FC = () => {
             setUiMode('idle');
         }
     };
-
+    */
 
     const handleRemoveSelected = async () => {
         const userConfirmed = window.confirm("Are you sure you want to remove the selected items?");
