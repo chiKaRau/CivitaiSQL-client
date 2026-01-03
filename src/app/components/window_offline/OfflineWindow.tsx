@@ -7,7 +7,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { updateDownloadFilePath } from '../../store/actions/chromeActions';
 
 // Icons Components
-import { AiFillFolderOpen } from "react-icons/ai";
+import { AiFillFolderOpen, AiOutlineClose } from "react-icons/ai";
 import { BsCloudDownloadFill, BsDownload } from 'react-icons/bs';
 import { TbDatabaseSearch, TbDatabasePlus, TbDatabaseMinus } from "react-icons/tb";
 import { PiPlusMinusFill } from "react-icons/pi";
@@ -483,11 +483,39 @@ const OfflineWindow: React.FC = () => {
         try {
             await fetchBulkPatchOfflineDownloadList(modelObjects, patch, dispatch);
 
+            // ---------------------------
+            // ✅ Reset UI to defaults
+            // ---------------------------
+
+            // 1) Reset bulk controls
+            setBulkHold(true);                 // change to false if your "default" is false
+            setBulkDownloadPriority(5);
+
+            // reset modify_downloadFilePath to default
+            dispatch(updateDownloadFilePath("/@scan@/ACG/Pending/"));
+
+            // 2) Clear the patch-field selection blocks
+            setSelectedPatchFields(new Set());
+
+            // 3) Clear selected models
+            setSelectedIds(new Set());
+
+            // 4) Refresh list
+            await handleRefreshList();
+
             // Optional UX:
             // clear selected models after patch
             // setSelectedIds(new Set());   <-- depends on how you store selectedIds
+        } catch (err: any) {
+            console.error("Bulk patch failed:", err?.message || err);
+            dispatch(setError({
+                hasError: true,
+                errorMessage: `Bulk patch failed: ${err?.message || "Unknown error"}`
+            }));
         } finally {
             setIsPatching(false);
+            setIsLoading(false);
+            setUiMode("idle");
         }
     };
 
@@ -4269,95 +4297,25 @@ const OfflineWindow: React.FC = () => {
                         {isModifyMode && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
                                 {/* Existing: update path + remove */}
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                                    <Button
-                                        onClick={handleProcessSelected}
-                                        style={{
-                                            ...downloadButtonStyle,
-                                            backgroundColor: '#ffc107',
-                                            color: '#000',
-                                        }}
-                                        disabled={selectedIds.size === 0 || isLoading}
-                                    >
-                                        Update DownloadFilePath for Selected
-                                    </Button>
 
-                                    <Button
-                                        onClick={handleRemoveSelected}
-                                        style={{
-                                            ...downloadButtonStyle,
-                                            backgroundColor: '#dc3545',
-                                            color: '#fff',
-                                        }}
-                                        disabled={selectedIds.size === 0 || isLoading}
-                                    >
-                                        Remove Selected
-                                    </Button>
-                                </div>
 
-                                {/* Feature #1: bulk Hold */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                    <Form.Check
-                                        type="checkbox"
-                                        id="bulk-hold-checkbox"
-                                        label={<span style={{ color: isDarkMode ? '#fff' : '#000', fontWeight: 600 }}>
-                                            Hold
-                                        </span>}
-                                        checked={bulkHold}
-                                        onChange={e => setBulkHold(e.target.checked)}
-                                        disabled={isLoading}
-                                    />
-                                    <Button
-                                        onClick={handleBulkHoldUpdate}
-                                        style={{
-                                            ...downloadButtonStyle,
-                                            backgroundColor: '#0d6efd',
-                                            color: '#fff',
-                                        }}
-                                        disabled={selectedIds.size === 0 || isLoading}
-                                    >
-                                        Update Hold for Selected
-                                    </Button>
-                                </div>
-
-                                {/* Feature #2: bulk Priority */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                    <span style={{ fontSize: '.9rem', color: isDarkMode ? '#fff' : '#000', fontWeight: 600 }}>Download Priority</span>
-                                    <Form.Select
-                                        size="sm"
-                                        value={bulkDownloadPriority}
-                                        onChange={e => setBulkDownloadPriority(parseInt(e.target.value, 10) || 10)}
-                                        disabled={isLoading}
-                                        style={{
-                                            width: 90,
-                                            backgroundColor: isDarkMode ? '#555' : '#fff',
-                                            color: isDarkMode ? '#fff' : '#000',
-                                            border: '1px solid #ccc',
-                                        }}
-                                    >
-                                        {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
-                                            <option key={n} value={n}>
-                                                {n}
-                                            </option>
-                                        ))}
-                                    </Form.Select>
-                                    <Button
-                                        onClick={handleBulkPriorityUpdate}
-                                        style={{
-                                            ...downloadButtonStyle,
-                                            backgroundColor: '#198754', // green
-                                            color: '#fff',
-                                        }}
-                                        disabled={selectedIds.size === 0 || isLoading}
-                                    >
-                                        Update Priority for Selected
-                                    </Button>
-                                </div>
 
                                 <div style={{ display: "flex", gap: 12, marginTop: 10, marginBottom: 10 }}>
                                     {/* Block 1: Available options */}
-                                    <div style={{ flex: 1, border: "1px solid #ccc", borderRadius: 8, padding: 10 }}>
-                                        <div style={{ fontWeight: 700, marginBottom: 8 }}>Available updates</div>
+                                    <div
+                                        style={{
+                                            flex: 1,
+                                            border: `1px solid ${isDarkMode ? "#3a3a3a" : "#ccc"}`,
+                                            borderRadius: 8,
+                                            padding: 10,
+                                            backgroundColor: isDarkMode ? "#1f1f1f" : "#fff",
+                                            color: isDarkMode ? "#fff" : "#000",
+                                            minWidth: 0,
+                                        }}
+                                    >
+                                        <div style={{ fontWeight: 700, marginBottom: 8, color: isDarkMode ? "#fff" : "#111" }}>
+                                            Available updates
+                                        </div>
 
                                         {availablePatchFields.map((f) => (
                                             <div
@@ -4365,22 +4323,25 @@ const OfflineWindow: React.FC = () => {
                                                 onClick={() => addPatchField(f.key)}
                                                 style={{
                                                     cursor: "pointer",
-                                                    border: "1px dashed #aaa",
+                                                    border: `1px dashed ${isDarkMode ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.35)"}`,
                                                     borderRadius: 6,
                                                     padding: 8,
                                                     marginBottom: 8,
                                                     userSelect: "none",
+                                                    backgroundColor: isDarkMode ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                                                    color: isDarkMode ? "#fff" : "#000",
                                                 }}
                                             >
-                                                <div style={{ fontWeight: 600 }}>+ {f.label}</div>
+                                                <div style={{ fontWeight: 600, color: isDarkMode ? "#fff" : "#111" }}>+ {f.label}</div>
 
                                                 {f.key === "downloadFilePath" && (
-                                                    <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>
+                                                    <div style={{ fontSize: 12, opacity: isDarkMode ? 0.8 : 0.75, marginTop: 4 }}>
                                                         Current: {modify_downloadFilePath || "(empty)"}
                                                     </div>
                                                 )}
+
                                                 {f.key === "downloadPriority" && (
-                                                    <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>
+                                                    <div style={{ fontSize: 12, opacity: isDarkMode ? 0.8 : 0.75, marginTop: 4 }}>
                                                         Range: 1 ~ 10 (default 5)
                                                     </div>
                                                 )}
@@ -4388,43 +4349,111 @@ const OfflineWindow: React.FC = () => {
                                         ))}
 
                                         {!availablePatchFields.length && (
-                                            <div style={{ fontSize: 12, opacity: 0.7 }}>No more fields.</div>
+                                            <div style={{ fontSize: 12, opacity: isDarkMode ? 0.75 : 0.7 }}>No more fields.</div>
                                         )}
                                     </div>
 
                                     {/* Block 2: Selected options */}
-                                    <div style={{ flex: 1, border: "1px solid #ccc", borderRadius: 8, padding: 10 }}>
-                                        <div style={{ fontWeight: 700, marginBottom: 8 }}>Selected updates</div>
+                                    <div
+                                        style={{
+                                            flex: 1,
+                                            border: `1px solid ${isDarkMode ? "#3a3a3a" : "#ccc"}`,
+                                            borderRadius: 8,
+                                            padding: 10,
+                                            backgroundColor: isDarkMode ? "#1f1f1f" : "#fff",
+                                            color: isDarkMode ? "#fff" : "#000",
+                                            minWidth: 0,
+                                        }}
+                                    >
+                                        <div style={{ fontWeight: 700, marginBottom: 8, color: isDarkMode ? "#fff" : "#111" }}>
+                                            Selected updates
+                                        </div>
 
                                         {!selectedPatchFields.size && (
-                                            <div style={{ fontSize: 12, opacity: 0.7 }}>
+                                            <div style={{ fontSize: 12, opacity: isDarkMode ? 0.75 : 0.7 }}>
                                                 Click an option on the left to add it here.
                                             </div>
                                         )}
 
                                         {/* downloadFilePath */}
                                         {selectedPatchFields.has("downloadFilePath") && (
-                                            <div style={{ border: "1px solid #ddd", borderRadius: 6, padding: 8, marginBottom: 8 }}>
-                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                            <div
+                                                style={{
+                                                    border: `1px solid ${isDarkMode ? "#444" : "#ddd"}`,
+                                                    borderRadius: 6,
+                                                    padding: 8,
+                                                    marginBottom: 8,
+                                                    backgroundColor: isDarkMode ? "#2a2a2a" : "#fafafa",
+                                                    color: isDarkMode ? "#fff" : "#000",
+                                                }}
+                                            >
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                                                     <div style={{ fontWeight: 600 }}>Modify downloadFilePath</div>
-                                                    <button onClick={() => removePatchField("downloadFilePath")} style={{ cursor: "pointer" }}>
-                                                        ×
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removePatchField("downloadFilePath")}
+                                                        style={{
+                                                            cursor: "pointer",
+                                                            width: 28,
+                                                            height: 28,
+                                                            borderRadius: 8,
+                                                            border: `1px solid ${isDarkMode ? "#555" : "#ccc"}`,
+                                                            backgroundColor: isDarkMode ? "#333" : "#f6f6f6",
+                                                            color: isDarkMode ? "#fff" : "#111",
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            justifyContent: "center",
+                                                            padding: 0,
+                                                        }}
+                                                        aria-label="Remove downloadFilePath"
+                                                        title="Remove"
+                                                    >
+                                                        <AiOutlineClose />
                                                     </button>
                                                 </div>
 
-                                                <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>
-                                                    Will set to: {modify_downloadFilePath || "(empty)"} {/* uses your existing downloadFilePath */}
+                                                <div style={{ fontSize: 12, opacity: isDarkMode ? 0.8 : 0.75, marginTop: 4 }}>
+                                                    Will set to: {modify_downloadFilePath || "(empty)"}
                                                 </div>
                                             </div>
                                         )}
 
                                         {/* hold */}
                                         {selectedPatchFields.has("hold") && (
-                                            <div style={{ border: "1px solid #ddd", borderRadius: 6, padding: 8, marginBottom: 8 }}>
-                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                            <div
+                                                style={{
+                                                    border: `1px solid ${isDarkMode ? "#444" : "#ddd"}`,
+                                                    borderRadius: 6,
+                                                    padding: 8,
+                                                    marginBottom: 8,
+                                                    backgroundColor: isDarkMode ? "#2a2a2a" : "#fafafa",
+                                                    color: isDarkMode ? "#fff" : "#000",
+                                                }}
+                                            >
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                                                     <div style={{ fontWeight: 600 }}>Hold</div>
-                                                    <button onClick={() => removePatchField("hold")} style={{ cursor: "pointer" }}>
-                                                        ×
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removePatchField("hold")}
+                                                        style={{
+                                                            cursor: "pointer",
+                                                            width: 28,
+                                                            height: 28,
+                                                            borderRadius: 8,
+                                                            border: `1px solid ${isDarkMode ? "#555" : "#ccc"}`,
+                                                            backgroundColor: isDarkMode ? "#333" : "#f6f6f6",
+                                                            color: isDarkMode ? "#fff" : "#111",
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            justifyContent: "center",
+                                                            padding: 0,
+                                                        }}
+                                                        aria-label="Remove hold"
+                                                        title="Remove"
+                                                    >
+                                                        <AiOutlineClose />
                                                     </button>
                                                 </div>
 
@@ -4434,26 +4463,64 @@ const OfflineWindow: React.FC = () => {
                                                         checked={bulkHold}
                                                         onChange={(e) => setBulkHold(e.target.checked)}
                                                     />
-                                                    <span>Set hold = {bulkHold ? "true" : "false"}</span>
+                                                    <span style={{ opacity: isDarkMode ? 0.9 : 0.85 }}>
+                                                        Set hold = <b>{bulkHold ? "true" : "false"}</b>
+                                                    </span>
                                                 </label>
                                             </div>
                                         )}
 
                                         {/* downloadPriority */}
                                         {selectedPatchFields.has("downloadPriority") && (
-                                            <div style={{ border: "1px solid #ddd", borderRadius: 6, padding: 8, marginBottom: 8 }}>
-                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                            <div
+                                                style={{
+                                                    border: `1px solid ${isDarkMode ? "#444" : "#ddd"}`,
+                                                    borderRadius: 6,
+                                                    padding: 8,
+                                                    marginBottom: 8,
+                                                    backgroundColor: isDarkMode ? "#2a2a2a" : "#fafafa",
+                                                    color: isDarkMode ? "#fff" : "#000",
+                                                }}
+                                            >
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                                                     <div style={{ fontWeight: 600 }}>Download Priority</div>
-                                                    <button onClick={() => removePatchField("downloadPriority")} style={{ cursor: "pointer" }}>
-                                                        ×
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removePatchField("downloadPriority")}
+                                                        style={{
+                                                            cursor: "pointer",
+                                                            width: 28,
+                                                            height: 28,
+                                                            borderRadius: 8,
+                                                            border: `1px solid ${isDarkMode ? "#555" : "#ccc"}`,
+                                                            backgroundColor: isDarkMode ? "#333" : "#f6f6f6",
+                                                            color: isDarkMode ? "#fff" : "#111",
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            justifyContent: "center",
+                                                            padding: 0,
+                                                        }}
+                                                        aria-label="Remove downloadPriority"
+                                                        title="Remove"
+                                                    >
+                                                        <AiOutlineClose />
                                                     </button>
                                                 </div>
 
                                                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
-                                                    <span>Set to:</span>
+                                                    <span style={{ opacity: isDarkMode ? 0.9 : 0.85 }}>Set to:</span>
                                                     <select
                                                         value={String(bulkDownloadPriority)}
                                                         onChange={(e) => setBulkDownloadPriority(parseInt(e.target.value, 10))}
+                                                        style={{
+                                                            backgroundColor: isDarkMode ? "#2a2a2a" : "#fff",
+                                                            color: isDarkMode ? "#fff" : "#000",
+                                                            border: `1px solid ${isDarkMode ? "#555" : "#ccc"}`,
+                                                            borderRadius: 8,
+                                                            padding: "6px 8px",
+                                                            outline: "none",
+                                                        }}
                                                     >
                                                         {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
                                                             <option key={n} value={String(n)}>
@@ -4467,16 +4534,18 @@ const OfflineWindow: React.FC = () => {
 
                                         <button
                                             onClick={handleBulkPatchSelected}
-                                            disabled={
-                                                isPatching ||
-                                                selectedIds.size === 0 ||
-                                                selectedPatchFields.size === 0
-                                            }
+                                            disabled={isPatching || selectedIds.size === 0 || selectedPatchFields.size === 0}
                                             style={{
                                                 marginTop: 6,
-                                                padding: "8px 12px",
+                                                padding: "10px 12px",
+                                                width: "100%",
+                                                borderRadius: 10,
                                                 cursor: "pointer",
-                                                opacity: (isPatching || selectedIds.size === 0 || selectedPatchFields.size === 0) ? 0.6 : 1,
+                                                border: `1px solid ${isDarkMode ? "#555" : "#ccc"}`,
+                                                backgroundColor: isDarkMode ? "#0d6efd" : "#0d6efd",
+                                                color: "#fff",
+                                                fontWeight: 700,
+                                                opacity: isPatching || selectedIds.size === 0 || selectedPatchFields.size === 0 ? 0.6 : 1,
                                             }}
                                         >
                                             {isPatching ? "Updating..." : `Update selected models (${selectedIds.size})`}
@@ -4484,6 +4553,19 @@ const OfflineWindow: React.FC = () => {
                                     </div>
                                 </div>
 
+                                <div>
+                                    <Button
+                                        onClick={handleRemoveSelected}
+                                        style={{
+                                            ...downloadButtonStyle,
+                                            backgroundColor: '#dc3545',
+                                            color: '#fff',
+                                        }}
+                                        disabled={selectedIds.size === 0 || isLoading}
+                                    >
+                                        Remove Selected
+                                    </Button>
+                                </div>
 
                             </div>
                         )}
