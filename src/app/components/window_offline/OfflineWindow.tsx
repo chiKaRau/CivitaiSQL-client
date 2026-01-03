@@ -1402,25 +1402,6 @@ const OfflineWindow: React.FC = () => {
         color: '#fff',
     };
 
-
-    const removeBtnStyle: React.CSSProperties = {
-        position: 'absolute',
-        bottom: 8,
-        right: 50, // leave room for the preview button at right:8
-        width: 34,
-        height: 34,
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: '999px',
-        border: `1px solid ${isDarkMode ? '#7f1d1d' : '#f5c2c7'}`,
-        color: '#fff',
-        background: '#dc3545',
-        cursor: 'pointer',
-        boxShadow: isDarkMode ? '0 1px 4px rgba(0,0,0,0.5)' : '0 1px 4px rgba(0,0,0,0.2)'
-    };
-
-
     // Inline styles
     const containerStyle: React.CSSProperties = {
         display: 'flex',
@@ -3607,24 +3588,6 @@ const OfflineWindow: React.FC = () => {
         return filteredDownloadList;
     };
 
-    const blockStyle = {
-        border: "1px solid #ddd",
-        borderRadius: 10,
-        padding: 12,
-        minHeight: 120,
-        background: "#fff",
-    };
-
-    const rowStyle = {
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        padding: "8px 0",
-        borderBottom: "1px solid #eee",
-    };
-
-    const labelStyle = { fontSize: 12, opacity: 0.75 };
-
     return (
         <div style={containerStyle}>
             {/* Scrollable Content Area */}
@@ -3905,6 +3868,7 @@ const OfflineWindow: React.FC = () => {
 
                     <div style={{ display: 'flex', gap: '10px', margin: '10px 0', width: '100%' }}>
                         <TopTagsDropdown
+                            isDarkMode={isDarkMode}
                             filterText={filterText}
                             setFilterText={setFilterText}
                             tagSource={tagSource}
