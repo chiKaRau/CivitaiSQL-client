@@ -2735,7 +2735,51 @@ const OfflineWindow: React.FC = () => {
 
                     {Array.isArray(entry.civitaiTags) && entry.civitaiTags.length > 0 && (
                         <div data-no-select="true">
-                            <TagList tags={entry.civitaiTags} isDarkMode={isDarkMode} />
+                            <TagList
+                                tags={(() => {
+                                    const base = Array.isArray(entry.civitaiTags) ? entry.civitaiTags : [];
+
+                                    const tokenize = (s?: string) =>
+                                        (s || "")
+                                            .replace(/\.[^/.]+$/, "")
+                                            .split(/[^\p{L}\p{N}]+/gu)
+                                            .map(x => x.trim())
+                                            .filter(Boolean);
+
+                                    const fileTags = tokenize(entry.civitaiFileName);
+                                    const nameTags = tokenize(entry?.modelVersionObject?.model?.name);
+
+                                    const isValid = (t: string) => {
+                                        const clean = (t || "").trim();
+                                        if (clean.length < 2) return false;
+                                        if (/^\d+$/u.test(clean)) return false;                 // remove "12"
+                                        if (/^[A-Z]{2}$/u.test(clean)) return false;            // remove "IL"
+
+                                        const letterCount = (clean.match(/\p{L}/gu) || []).length;
+                                        if (letterCount < 2) return false;                      // needs >= 2 letters
+                                        return true;
+                                    };
+
+
+                                    const seen = new Set<string>();
+                                    const merged: string[] = [];
+
+                                    for (const t of [...base, ...fileTags, ...nameTags]) {
+                                        const clean = (t || "").trim();
+                                        if (!isValid(clean)) continue;
+
+                                        const key = clean.toLowerCase();
+                                        if (seen.has(key)) continue;
+
+                                        seen.add(key);
+                                        merged.push(clean);
+                                    }
+
+                                    return merged;
+                                })()}
+                                isDarkMode={isDarkMode}
+                            />
+
                         </div>
                     )}
 
@@ -3049,7 +3093,51 @@ const OfflineWindow: React.FC = () => {
                                     {/* Tags */}
                                     {Array.isArray(entry.civitaiTags) && entry.civitaiTags.length > 0 && (
                                         <div data-no-select="true">
-                                            <TagList tags={entry.civitaiTags} isDarkMode={isDarkMode} />
+                                            <TagList
+                                                tags={(() => {
+                                                    const base = Array.isArray(entry.civitaiTags) ? entry.civitaiTags : [];
+
+                                                    const tokenize = (s?: string) =>
+                                                        (s || "")
+                                                            .replace(/\.[^/.]+$/, "")
+                                                            .split(/[^\p{L}\p{N}]+/gu)
+                                                            .map(x => x.trim())
+                                                            .filter(Boolean);
+
+                                                    const fileTags = tokenize(entry.civitaiFileName);
+                                                    const nameTags = tokenize(entry?.modelVersionObject?.model?.name);
+
+                                                    const isValid = (t: string) => {
+                                                        const clean = (t || "").trim();
+                                                        if (clean.length < 2) return false;
+                                                        if (/^\d+$/u.test(clean)) return false;                 // remove "12"
+                                                        if (/^[A-Z]{2}$/u.test(clean)) return false;            // remove "IL"
+
+                                                        const letterCount = (clean.match(/\p{L}/gu) || []).length;
+                                                        if (letterCount < 2) return false;                      // needs >= 2 letters
+                                                        return true;
+                                                    };
+
+
+                                                    const seen = new Set<string>();
+                                                    const merged: string[] = [];
+
+                                                    for (const t of [...base, ...fileTags, ...nameTags]) {
+                                                        const clean = (t || "").trim();
+                                                        if (!isValid(clean)) continue;
+
+                                                        const key = clean.toLowerCase();
+                                                        if (seen.has(key)) continue;
+
+                                                        seen.add(key);
+                                                        merged.push(clean);
+                                                    }
+
+                                                    return merged;
+                                                })()}
+                                                isDarkMode={isDarkMode}
+                                            />
+
                                         </div>
                                     )}
 
