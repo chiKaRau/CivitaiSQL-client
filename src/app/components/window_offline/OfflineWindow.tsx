@@ -15,6 +15,7 @@ import { FaMagnifyingGlass, FaMagnifyingGlassPlus, FaSun, FaMoon, FaArrowRight }
 import { MdOutlineApps, MdOutlineTipsAndUpdates, MdOutlineDownloadForOffline, MdOutlineDownload, MdOutlinePendingActions } from "react-icons/md";
 import { FcDownload, FcGenericSortingAsc, FcGenericSortingDesc } from "react-icons/fc";
 import { PiTabsFill } from "react-icons/pi";
+import { TfiCheckBox } from "react-icons/tfi";
 import { LuPanelLeftOpen, LuPanelRightOpen } from "react-icons/lu";
 import { BsReverseLayoutTextWindowReverse } from "react-icons/bs";
 import { FaArrowUp, FaTrashAlt } from 'react-icons/fa';
@@ -492,6 +493,15 @@ const OfflineWindow: React.FC = () => {
             : { url: img.url, width: img.width, height: img.height };
     }
 
+    const isInteractiveClickTarget = (target: any) => {
+        if (!(target instanceof HTMLElement)) return false;
+
+        return Boolean(
+            target.closest(
+                'a,button,input,select,textarea,label,[data-no-select="true"]'
+            )
+        );
+    };
 
     // how many *entries* per page of tags:
     const TAG_ENTRIES_PER_PAGE = 100;
@@ -2718,10 +2728,17 @@ const OfflineWindow: React.FC = () => {
 
                 <div style={{ marginTop: 8, fontSize: '.9rem', lineHeight: 1.35 }}>
                     <div title={entry.modelVersionObject?.name ?? 'N/A'}><strong>Version:</strong> {entry.modelVersionObject?.name ?? 'N/A'}</div>
-                    <FileNameToggle fileName={entry.civitaiFileName ?? 'N/A'} truncateAfter={56} />
+
+                    <div data-no-select="true">
+                        <FileNameToggle fileName={entry.civitaiFileName ?? 'N/A'} truncateAfter={56} />
+                    </div>
+
                     {Array.isArray(entry.civitaiTags) && entry.civitaiTags.length > 0 && (
-                        <TagList tags={entry.civitaiTags} isDarkMode={isDarkMode} />
+                        <div data-no-select="true">
+                            <TagList tags={entry.civitaiTags} isDarkMode={isDarkMode} />
+                        </div>
                     )}
+
                     <div style={{ marginTop: 4, whiteSpace: 'normal', wordWrap: 'break-word' }}>
                         <strong>Download Path:</strong> {entry.downloadFilePath ?? 'N/A'}
                     </div>
@@ -2785,37 +2802,89 @@ const OfflineWindow: React.FC = () => {
                     }}
                 >
                     {filteredDownloadList.map((entry, cardIndex) => {
+
+                        const selectionDisabled =
+                            displayMode === "recentCard" ||
+                            displayMode === "holdCard" ||
+                            displayMode === "earlyAccessCard" ||
+                            displayMode === "errorCard";
+
+                        const canSelect = !selectionDisabled;
+
+                        const baseBg = isDarkMode ? "#333" : "#fff";
+                        const selectedBg = isDarkMode ? "#1f2937" : "#eaf2ff";
+                        const baseBorder = isDarkMode ? "#555" : "#ccc";
+                        const selectedBorder = isDarkMode ? "#60A5FA" : "#2563eb";
+
+                        const baseShadow = isDarkMode
+                            ? "2px 2px 8px rgba(255,255,255,0.1)"
+                            : "2px 2px 8px rgba(0,0,0,0.1)";
+
+                        const selectedShadow = isDarkMode
+                            ? "0 0 0 2px rgba(96,165,250,0.35), 2px 2px 10px rgba(255,255,255,0.12)"
+                            : "0 0 0 2px rgba(37,99,235,0.25), 2px 2px 10px rgba(0,0,0,0.12)";
+
+
                         const isSelected = selectedIds.has(entry.civitaiVersionID);
                         const showEA = isEntryEarlyAccess(entry);
                         return (
                             <Card
                                 key={cardIndex}
                                 style={{
-                                    width: '100%',
-                                    maxWidth: '380px',
-                                    border: '1px solid',
-                                    borderColor: isDarkMode ? '#555' : '#ccc',
-                                    borderRadius: '8px',
-                                    boxShadow: isDarkMode
-                                        ? '2px 2px 8px rgba(255,255,255,0.1)'
-                                        : '2px 2px 8px rgba(0,0,0,0.1)',
-                                    backgroundColor: isDarkMode ? '#333' : '#fff',
-                                    color: isDarkMode ? '#fff' : '#000',
-                                    position: 'relative',
-                                    cursor: isModifyMode ? 'pointer' : 'default',
-                                    opacity: isModifyMode && !isSelected ? 0.8 : 1,
+                                    width: "100%",
+                                    maxWidth: "380px",
+                                    border: "1px solid",
+                                    borderColor: isSelected ? selectedBorder : baseBorder,
+                                    borderRadius: "8px",
+                                    boxShadow: isSelected ? selectedShadow : baseShadow,
+                                    backgroundColor: isSelected ? selectedBg : baseBg,
+                                    color: isDarkMode ? "#fff" : "#000",
+                                    position: "relative",
+                                    cursor: canSelect ? "pointer" : "default",
+                                    opacity: isModifyMode && canSelect && !isSelected ? 0.8 : 1,
                                     transition:
-                                        'background-color 0.3s ease, color 0.3s ease, opacity 0.3s ease',
-                                    overflow: 'hidden',
-                                    margin: '0 auto',
-                                    padding: '10px'
+                                        "background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease",
+                                    overflow: "hidden",
+                                    margin: "0 auto",
+                                    padding: "10px",
                                 }}
                                 onClick={(e) => {
-                                    if (isModifyMode && e.ctrlKey) {
+                                    if (!canSelect) return;
+                                    if (isInteractiveClickTarget(e.target)) return;
+                                    toggleSelect(entry.civitaiVersionID);
+                                }}
+                                onKeyDown={(e) => {
+                                    if (!canSelect) return;
+                                    if (e.key === "Enter" || e.key === " ") {
+                                        e.preventDefault();
                                         toggleSelect(entry.civitaiVersionID);
                                     }
                                 }}
+                                role={canSelect ? "button" : undefined}
+                                tabIndex={canSelect ? 0 : -1}
+                                aria-pressed={canSelect ? isSelected : undefined}
                             >
+                                {/* Optional: small selected indicator (no checkbox) */}
+                                {isSelected && (
+                                    <div
+                                        style={{
+                                            position: "absolute",
+                                            top: 8,
+                                            left: 8,
+                                            background: isDarkMode ? "rgba(37,99,235,0.9)" : "#2563eb",
+                                            color: "#fff",
+                                            borderRadius: 999,
+                                            padding: "2px 8px",
+                                            fontSize: 12,
+                                            fontWeight: 700,
+                                            pointerEvents: "none",
+                                            zIndex: 2,
+                                        }}
+                                    >
+                                        <TfiCheckBox /> Selected
+                                    </div>
+                                )}
+
                                 {/* Early Access badge at the top-right */}
                                 {showEA && (
                                     <div
@@ -2839,30 +2908,6 @@ const OfflineWindow: React.FC = () => {
 
                                     </div>
                                 )}
-
-                                {/* Selection Checkbox at the top-left */}
-                                <Form.Check
-                                    type="checkbox"
-                                    checked={isSelected}
-                                    onChange={(e) => {
-                                        e.stopPropagation();
-                                        toggleSelect(entry.civitaiVersionID);
-                                    }}
-                                    disabled={
-                                        displayMode === "recentCard" ||
-                                        displayMode === "holdCard" ||
-                                        displayMode === "earlyAccessCard" ||
-                                        displayMode === "errorCard"
-                                    }
-                                    style={{
-                                        position: 'absolute',
-                                        top: '10px',
-                                        left: '10px',
-                                        transform: 'scale(1.2)',
-                                        cursor: isModifyMode ? 'pointer' : 'not-allowed',
-                                        accentColor: isDarkMode ? '#fff' : '#000',
-                                    }}
-                                />
 
                                 {/* ---- 1) BaseModel badge + Title ---- */}
                                 <div
@@ -2894,7 +2939,7 @@ const OfflineWindow: React.FC = () => {
                                     )}
 
                                     {/* wrap your toggle in a flex child so it can shrink & ellipsis properly */}
-                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ flex: 1, minWidth: 0 }} data-no-select="true">
                                         <TitleNameToggle
                                             titleName={entry?.modelVersionObject?.model?.name ?? 'N/A'}
                                             truncateAfter={30}
@@ -3003,7 +3048,9 @@ const OfflineWindow: React.FC = () => {
 
                                     {/* Tags */}
                                     {Array.isArray(entry.civitaiTags) && entry.civitaiTags.length > 0 && (
-                                        <TagList tags={entry.civitaiTags} isDarkMode={isDarkMode} />
+                                        <div data-no-select="true">
+                                            <TagList tags={entry.civitaiTags} isDarkMode={isDarkMode} />
+                                        </div>
                                     )}
 
                                     {/* 3) Show full download path with line wrapping */}
@@ -3050,6 +3097,7 @@ const OfflineWindow: React.FC = () => {
                                             <>
                                                 <strong>Download Path:</strong>{" "}
                                                 <span
+                                                    data-no-select="true"
                                                     onDoubleClick={(e) => {
                                                         e.stopPropagation();
                                                         setEditingPathId(entry.civitaiVersionID);
@@ -3281,39 +3329,93 @@ const OfflineWindow: React.FC = () => {
                             justifyContent: 'center',
                         }}
                     >
-                        {filteredDownloadList.map((entry, index) => {
+                        {filteredDownloadList.map((entry, cardIndex) => {
+
+                            const selectionDisabled =
+                                displayMode === "recentCard" ||
+                                displayMode === "holdCard" ||
+                                displayMode === "earlyAccessCard" ||
+                                displayMode === "errorCard";
+
+                            const canSelect = !selectionDisabled;
+
+                            const baseBg = isDarkMode ? "#333" : "#fff";
+                            const selectedBg = isDarkMode ? "#1f2937" : "#eaf2ff";
+                            const baseBorder = isDarkMode ? "#555" : "#ccc";
+                            const selectedBorder = isDarkMode ? "#60A5FA" : "#2563eb";
+
+                            const baseShadow = isDarkMode
+                                ? "2px 2px 8px rgba(255,255,255,0.1)"
+                                : "2px 2px 8px rgba(0,0,0,0.1)";
+
+                            const selectedShadow = isDarkMode
+                                ? "0 0 0 2px rgba(96,165,250,0.35), 2px 2px 10px rgba(255,255,255,0.12)"
+                                : "0 0 0 2px rgba(37,99,235,0.25), 2px 2px 10px rgba(0,0,0,0.12)";
+
+
                             const isSelected = selectedIds.has(entry.civitaiVersionID);
                             const showEA = isEntryEarlyAccess(entry);
                             const firstImageUrl = entry.imageUrlsArray?.[0] ?? null;
-                            const isFirstCard = index === 0;
+                            const isFirstCard = cardIndex === 0;
 
                             return (
                                 <Card
-                                    key={index}
+                                    key={cardIndex}
                                     style={{
-                                        border: '1px solid',
-                                        borderColor: isDarkMode ? '#555' : '#ccc',
-                                        borderRadius: '4px',
+                                        width: "100%",
                                         maxWidth: '180px',
-                                        boxShadow: isDarkMode
-                                            ? '1px 1px 6px rgba(255,255,255,0.1)'
-                                            : '1px 1px 6px rgba(0,0,0,0.1)',
-                                        backgroundColor: isDarkMode ? '#333' : '#fff',
-                                        color: isDarkMode ? '#fff' : '#000',
-                                        position: 'relative',
-                                        cursor: isModifyMode ? 'pointer' : 'default',
-                                        opacity: isModifyMode && !isSelected ? 0.8 : 1,
+                                        border: "1px solid",
+                                        borderColor: isSelected ? selectedBorder : baseBorder,
+                                        borderRadius: "8px",
+                                        boxShadow: isSelected ? selectedShadow : baseShadow,
+                                        backgroundColor: isSelected ? selectedBg : baseBg,
+                                        color: isDarkMode ? "#fff" : "#000",
+                                        position: "relative",
+                                        cursor: canSelect ? "pointer" : "default",
+                                        opacity: isModifyMode && canSelect && !isSelected ? 0.8 : 1,
                                         transition:
-                                            'background-color 0.3s ease, color 0.3s ease, opacity 0.3s ease',
-                                        overflow: 'hidden',
-                                        padding: '10px',
+                                            "background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease",
+                                        overflow: "hidden",
+                                        margin: "0 auto",
+                                        padding: "10px",
                                     }}
                                     onClick={(e) => {
-                                        if (isModifyMode && e.ctrlKey) {
+                                        if (!canSelect) return;
+                                        if (isInteractiveClickTarget(e.target)) return;
+                                        toggleSelect(entry.civitaiVersionID);
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (!canSelect) return;
+                                        if (e.key === "Enter" || e.key === " ") {
+                                            e.preventDefault();
                                             toggleSelect(entry.civitaiVersionID);
                                         }
                                     }}
+                                    role={canSelect ? "button" : undefined}
+                                    tabIndex={canSelect ? 0 : -1}
+                                    aria-pressed={canSelect ? isSelected : undefined}
                                 >
+                                    {/* Optional: small selected indicator (no checkbox) */}
+                                    {isSelected && (
+                                        <div
+                                            style={{
+                                                position: "absolute",
+                                                top: 8,
+                                                left: 8,
+                                                background: isDarkMode ? "rgba(37,99,235,0.9)" : "#2563eb",
+                                                color: "#fff",
+                                                borderRadius: 999,
+                                                padding: "2px 8px",
+                                                fontSize: 12,
+                                                fontWeight: 700,
+                                                pointerEvents: "none",
+                                                zIndex: 2,
+                                            }}
+                                        >
+                                            <TfiCheckBox /> Selected
+                                        </div>
+                                    )}
+
                                     {showEA && (
                                         <div
                                             style={{
@@ -3336,24 +3438,6 @@ const OfflineWindow: React.FC = () => {
 
                                         </div>
                                     )}
-
-                                    {/* Selection Checkbox */}
-                                    <Form.Check
-                                        type="checkbox"
-                                        checked={isSelected}
-                                        onChange={(e) => {
-                                            e.stopPropagation();
-                                            toggleSelect(entry.civitaiVersionID);
-                                        }}
-                                        style={{
-                                            position: 'absolute',
-                                            top: '10px',
-                                            left: '10px',
-                                            transform: 'scale(1.2)',
-                                            cursor: isModifyMode ? 'pointer' : 'not-allowed',
-                                            accentColor: isDarkMode ? '#fff' : '#000',
-                                        }}
-                                    />
 
                                     {/* Base Model Badge + Title */}
                                     <div
@@ -3421,7 +3505,7 @@ const OfflineWindow: React.FC = () => {
                                                 decoding="async"
                                                 width={width ?? undefined}                         // keeps aspect ratio if known
                                                 height={height ?? undefined}
-                                                alt={`Thumbnail ${index + 1}`}
+                                                alt={`Thumbnail ${cardIndex + 1}`}
                                                 style={{
                                                     width: '100%',
                                                     maxHeight: '100px',
