@@ -27,7 +27,7 @@ import { IoCloseOutline } from "react-icons/io5";
 import CategoriesListSelector from '../CategoriesListSelector';
 import DownloadFilePathOptionPanel from '../DownloadFilePathOptionPanel';
 import ButtonWrap from "../buttons/ButtonWrap";
-import { InputGroup, FormControl, Button, Spinner, OverlayTrigger, Tooltip, Form, Dropdown, ButtonGroup, Carousel, Card, Pagination, Accordion } from 'react-bootstrap';
+import { InputGroup, FormControl, Button, Spinner, OverlayTrigger, Tooltip, Form, Dropdown, ButtonGroup, Carousel, Card, Pagination, Accordion, Badge } from 'react-bootstrap';
 import ErrorAlert from '../ErrorAlert';
 import FolderDropdown from "../FolderDropdown"
 
@@ -351,6 +351,17 @@ const OfflineWindow: React.FC = () => {
     const [bulkHold, setBulkHold] = useState(true);
     const [bulkDownloadPriority, setBulkDownloadPriority] = useState(5); // default 5 (1~10)
 
+    type BatchStatus = "running" | "success" | "fail";
+
+    type BatchResult = {
+        batchNo: number;
+        start: number;
+        end: number;
+        status: BatchStatus;
+        msg?: string;
+    };
+
+    const [batchResults, setBatchResults] = React.useState<BatchResult[]>([]);
 
 
     // **Add Pagination State and Logic**
@@ -381,7 +392,18 @@ const OfflineWindow: React.FC = () => {
 
     const [showEarlyAccess, setShowEarlyAccess] = useState(true);
 
-    const [aiSuggestCountInput, setAiSuggestCountInput] = useState("25");
+    const AI_BATCH_SIZE = 10;
+    const AI_COOLDOWN_SECONDS = 90;
+    const DEFAULT_AI_SUGGEST_COUNT = 20;
+
+
+    // progress just for AI runs
+    const [aiSuggestProgress, setAiSuggestProgress] = useState({ completed: 0, total: 0 });
+    const [aiSuggestCountInput, setAiSuggestCountInput] = React.useState<string>(
+        String(DEFAULT_AI_SUGGEST_COUNT)
+    );
+    const [aiSuggestRunStatus, setAiSuggestRunStatus] = useState<null | "running" | "success" | "fail">(null);
+    const [aiSuggestRunMsg, setAiSuggestRunMsg] = useState("");
 
     // NEW: sort direction for date (server-side)
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc'); // if you hate the type, you can drop it
@@ -486,28 +508,108 @@ const OfflineWindow: React.FC = () => {
 
     const getAiSuggestCount = () => {
         const n = parseInt(aiSuggestCountInput, 10);
-        return clampInt(Number.isFinite(n) ? n : 20, 10, 25);
+        if (Number.isNaN(n)) return DEFAULT_AI_SUGGEST_COUNT;
+        return Math.max(10, Math.min(100, n));
     };
 
     const handleRunPendingAiSuggestions = async () => {
         if (isLoading) return;
 
-        const n = getAiSuggestCount();
+        setAiSuggestRunStatus("running");
+        setAiSuggestRunMsg("");
+
+        setBatchResults([]);
+
+        const total = getAiSuggestCount(); // your clamp 10~25
+        setAiSuggestProgress({ completed: 0, total });
 
         setIsLoading(true);
         setUiMode("modifying");
+
         try {
-            // Adjust argument order here if your helper is different:
-            // Option A:
-            await fetchRunPendingFromOfflineDownloadListAiSuggestion({ page: 0, size: n }, dispatch);
+            let remaining = total;
+            let processed = 0;
+            let batchIndex = 0;
 
-            // Option B (if your helper is dispatch-first):
-            // await fetchRunPendingFromOfflineDownloadListAiSuggestion(dispatch, n);
+            while (remaining > 0) {
+                const size = Math.min(AI_BATCH_SIZE, remaining);
 
-            // Refresh so you can immediately see updated suggestions
-            await handleRefreshList();
+                const start = processed + 1;
+                const end = processed + size;
+
+                const batchNo = batchIndex + 1;
+
+                setCurrentBatchRange(
+                    `AI Suggest: processing ${start} ~ ${end} (batch ${batchIndex + 1})`
+                );
+
+                setBatchResults(prev => [
+                    ...prev,
+                    { batchNo, start, end, status: "running" },
+                ]);
+
+                try {
+                    // IMPORTANT:
+                    // Use page: 0 each time so after the server updates items (no longer "pending"),
+                    // the next call grabs the next pending ones.
+                    const resp = await fetchRunPendingFromOfflineDownloadListAiSuggestion(
+                        { page: 0, size },
+                        dispatch
+                    );
+
+                    // If your helper returns a number of updated rows, you can stop early:
+                    // (safe optional handling)
+                    const updatedRows =
+                        typeof resp === "number"
+                            ? resp
+                            : (resp && typeof resp.updatedRows === "number" ? resp.updatedRows : null);
+
+                    setBatchResults(prev =>
+                        prev.map(b =>
+                            b.batchNo === batchNo
+                                ? { ...b, status: "success", msg: updatedRows !== null ? `updatedRows=${updatedRows}` : undefined }
+                                : b
+                        )
+                    );
+
+                    processed += size;
+                    remaining -= size;
+                    batchIndex += 1;
+
+                    setAiSuggestProgress({ completed: processed, total });
+
+                    // Refresh so you can immediately see updated suggestions
+                    await refreshCurrentPage();
+
+                    // If server says "nothing updated", break (optional, only if you actually get that signal)
+                    if (updatedRows !== null && updatedRows <= 0) {
+                        setAiSuggestRunMsg("No more pending items to process.");
+                        break;
+                    }
+
+                    // cooldown after EVERY batch (including last), as you requested
+                    setBatchCooldown(AI_COOLDOWN_SECONDS);
+                    await sleep(AI_COOLDOWN_SECONDS * 1000);
+                    setBatchCooldown(null);
+
+                } catch (err: any) {
+                    // ✅ NEW: mark THIS batch fail + store message
+                    const msg = err?.response?.data?.message || err?.message || "Unknown error";
+
+                    setBatchResults(prev =>
+                        prev.map(b => (b.batchNo === batchNo ? { ...b, status: "fail", msg } : b))
+                    );
+
+                    // ✅ keep your overall fail handling
+                    throw err;
+                }
+            }
+
+            setAiSuggestRunStatus("success");
         } catch (err: any) {
             console.error("Run AI suggestion failed:", err?.message || err);
+            setAiSuggestRunStatus("fail");
+            setAiSuggestRunMsg(err?.response?.data?.message || err?.message || "Unknown error");
             dispatch(
                 setError({
                     hasError: true,
@@ -515,10 +617,20 @@ const OfflineWindow: React.FC = () => {
                 })
             );
         } finally {
+            setCurrentBatchRange(null);
+            setBatchCooldown(null);
             setIsLoading(false);
             setUiMode("idle");
         }
     };
+
+
+    const onChangeAiSuggestCount = (e: any) => {
+        setAiSuggestCountInput(e.target.value);
+        setAiSuggestRunStatus(null);
+        setAiSuggestRunMsg("");
+    };
+
 
     // Replace /width=###/ in Civitai URLs; if missing, insert it before the filename.
     const IMG_WIDTH_RE = /\/width=\d+\//;
@@ -549,9 +661,6 @@ const OfflineWindow: React.FC = () => {
             )
         );
     };
-
-    // how many *entries* per page of tags:
-    const TAG_ENTRIES_PER_PAGE = 100;
 
     // how many tags per page
     const TAGS_PER_PAGE = 100;
@@ -4573,34 +4682,200 @@ const OfflineWindow: React.FC = () => {
                                     </Button>
                                 </div>
 
-                                <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
-                                    <Button
-                                        variant="warning"
-                                        onClick={handleRunPendingAiSuggestions}
-                                        disabled={isLoading || isPatching}
-                                        title="Run AI suggestions for pending entries"
-                                        style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                                <div
+                                    style={{
+                                        marginTop: 10,
+                                        padding: 10,
+                                        borderRadius: 10,
+                                        border: isDarkMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.12)",
+                                        background: isDarkMode ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+                                    }}
+                                >
+                                    {/* Title */}
+                                    <div
+                                        style={{
+                                            fontWeight: 700,
+                                            marginBottom: 8,
+                                            color: isDarkMode ? "#f0f0f0" : "#222",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: 8,
+                                        }}
                                     >
                                         <MdOutlineTipsAndUpdates />
-                                        Run AI Suggestion for downloadFilePath
-                                    </Button>
+                                        AI Suggestions
+                                    </div>
 
-                                    <Form.Control
-                                        as="select"
-                                        value={aiSuggestCountInput}
-                                        onChange={(e) => setAiSuggestCountInput(e.target.value)}
-                                        onBlur={() => setAiSuggestCountInput(String(getAiSuggestCount()))}
-                                        disabled={isLoading || isPatching}
-                                        style={{ width: 90 }}
-                                        aria-label="AI suggestion batch size (10 to 25)"
+                                    {/* Row 1: Button + dropdown on same line */}
+                                    <div
+                                        style={{
+                                            display: "flex",
+                                            gap: 10,
+                                            alignItems: "center",
+                                            flexWrap: "nowrap",
+                                            whiteSpace: "nowrap",
+                                            overflowX: "auto",
+                                            paddingBottom: 2,
+                                        }}
                                     >
-                                        {Array.from({ length: 16 }, (_, i) => 25 - i).map((n) => (
-                                            <option key={n} value={String(n)}>
-                                                {n}
-                                            </option>
-                                        ))}
-                                    </Form.Control>
+                                        <Button
+                                            variant="warning"
+                                            onClick={handleRunPendingAiSuggestions}
+                                            disabled={isLoading || isPatching || aiSuggestRunStatus === "running"}
+                                            title="Run AI suggestions for pending entries"
+                                            style={{
+                                                display: "inline-flex",
+                                                alignItems: "center",
+                                                gap: 6,
+                                                maxWidth: 320,
+                                                minWidth: 190,
+                                                overflow: "hidden",
+                                                flex: "1 1 auto",
+                                            }}
+                                        >
+                                            <MdOutlineTipsAndUpdates style={{ flex: "0 0 auto" }} />
 
+                                            <span
+                                                style={{
+                                                    whiteSpace: "normal",
+                                                    textOverflow: "clip",
+                                                    overflow: "visible",
+                                                    overflowWrap: "anywhere",
+                                                    wordBreak: "break-word",
+                                                    lineHeight: 1.1,
+                                                    textAlign: "left",
+                                                    flex: "1 1 auto",
+                                                    minWidth: 0,
+                                                }}
+                                            >
+                                                Run AI Suggestion for downloadFilePath
+                                            </span>
+                                        </Button>
+
+                                        <Form.Control
+                                            as="select"
+                                            value={aiSuggestCountInput}
+                                            onChange={onChangeAiSuggestCount}
+                                            onBlur={() => setAiSuggestCountInput(String(getAiSuggestCount()))}
+                                            disabled={isLoading || isPatching || aiSuggestRunStatus === "running"}
+                                            style={{ width: 90, flex: "0 0 auto" }}
+                                            aria-label="AI suggestion total count (10 to 100)"
+                                        >
+                                            {Array.from({ length: 10 }, (_, i) => 100 - i * 10).map((n) => (
+                                                <option key={n} value={String(n)}>
+                                                    {n}
+                                                </option>
+                                            ))}
+
+                                        </Form.Control>
+
+                                    </div>
+
+                                    {/* Row 2: Status line (running/success/fail) */}
+                                    <div
+                                        style={{
+                                            marginTop: 10,
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: 10,
+                                            flexWrap: "wrap",
+                                            minHeight: 22,
+                                            color: isDarkMode ? "#e6e6e6" : "#333",
+                                        }}
+                                    >
+                                        {aiSuggestRunStatus === "running" && (
+                                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                                <Spinner
+                                                    animation="border"
+                                                    size="sm"
+                                                    variant={isDarkMode ? "light" : "dark"}
+                                                />
+                                                Running...
+                                            </span>
+                                        )}
+
+                                        {/* Optional overall summary (you can delete this if you don't want it) */}
+                                        {aiSuggestRunStatus === "success" && (
+                                            <Badge bg="success" style={{ flex: "0 0 auto" }}>
+                                                Done
+                                            </Badge>
+                                        )}
+
+                                        {aiSuggestRunStatus === "fail" && (
+                                            <Badge bg="danger" style={{ flex: "0 0 auto" }}>
+                                                Stopped
+                                            </Badge>
+                                        )}
+
+                                        {/* ✅ Per-batch results */}
+                                        {batchResults.length > 0 && (
+                                            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+                                                {batchResults.map((b) => (
+                                                    <div key={b.batchNo} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                                        <span>
+                                                            <strong>Batch #{b.batchNo}</strong> ({b.start} ~ {b.end})
+                                                        </span>
+
+                                                        {b.status === "success" && <Badge bg="success">Success</Badge>}
+                                                        {b.status === "fail" && <Badge bg="danger">Fail</Badge>}
+                                                        {b.status === "running" && (
+                                                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                                                <Spinner animation="border" size="sm" variant={isDarkMode ? "light" : "dark"} />
+                                                                Running...
+                                                            </span>
+                                                        )}
+
+                                                        {!!b.msg && b.status !== "running" && (
+                                                            <small
+                                                                style={{
+                                                                    opacity: isDarkMode ? 0.95 : 0.9,
+                                                                    color: isDarkMode ? "#e6e6e6" : "#333",
+                                                                    maxWidth: 520,
+                                                                    overflow: "hidden",
+                                                                    textOverflow: "ellipsis",
+                                                                    whiteSpace: "nowrap",
+                                                                }}
+                                                                title={b.msg}
+                                                            >
+                                                                {b.msg}
+                                                            </small>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+
+                                        {/* Optional: show nothing when idle, but keep line height stable */}
+                                        {!aiSuggestRunStatus && <small style={{ opacity: 0.75 }}> </small>}
+                                    </div>
+
+                                    {/* Row 3: Progress + cooldown */}
+                                    {aiSuggestRunStatus === "running" && (
+                                        <div
+                                            style={{
+                                                marginTop: 6,
+                                                display: "flex",
+                                                flexDirection: "column",
+                                                gap: 4,
+                                                color: isDarkMode ? "#e6e6e6" : "#333",
+                                            }}
+                                        >
+                                            {currentBatchRange && (
+                                                <div style={{ fontWeight: 600 }}>{currentBatchRange}</div>
+                                            )}
+
+                                            <div>
+                                                Progress: {aiSuggestProgress.completed}/{aiSuggestProgress.total}
+                                            </div>
+
+                                            {batchCooldown !== null && (
+                                                <div>
+                                                    Cooldown: <strong>{batchCooldown}s</strong>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
 
                             </div>
