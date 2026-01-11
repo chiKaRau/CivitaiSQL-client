@@ -54,7 +54,8 @@ import {
     fetchUpdateDownloadFilePathFromOfflineDownloadList,
     fetchGetErrorModelList,
     fetchCivitaiModelInfoFromCivitaiByVersionID,
-    fetchBulkPatchOfflineDownloadList
+    fetchBulkPatchOfflineDownloadList,
+    fetchRunPendingFromOfflineDownloadListAiSuggestion
 } from "../../api/civitaiSQL_api"
 
 import {
@@ -194,6 +195,13 @@ export interface OfflineDownloadEntry {
     hold?: boolean;
     downloadPriority?: number;           // 1..10
     earlyAccessEndsAt?: string | null;
+
+    aiSuggestedArtworkTitle?: string | null;
+    jikanNormalizedArtworkTitle?: string | null;
+
+    aiSuggestedDownloadFilePath?: string[];      // e.g. ["/@scan@/ACG/.../", "@scan@/Update/.../"]
+    jikanSuggestedDownloadFilePath?: string[];   // same shape
+    localSuggestedDownloadFilePath?: string[];   // can be [] in your sample
 }
 
 interface BigCardModeProps {
@@ -373,6 +381,7 @@ const OfflineWindow: React.FC = () => {
 
     const [showEarlyAccess, setShowEarlyAccess] = useState(true);
 
+    const [aiSuggestCountInput, setAiSuggestCountInput] = useState("25");
 
     // NEW: sort direction for date (server-side)
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc'); // if you hate the type, you can drop it
@@ -472,6 +481,44 @@ const OfflineWindow: React.FC = () => {
 
     const availablePatchFields = ALL_PATCH_FIELDS.filter(f => !selectedPatchFields.has(f.key));
 
+    const clampInt = (n: number, min: number, max: number) =>
+        Math.max(min, Math.min(max, n));
+
+    const getAiSuggestCount = () => {
+        const n = parseInt(aiSuggestCountInput, 10);
+        return clampInt(Number.isFinite(n) ? n : 20, 10, 25);
+    };
+
+    const handleRunPendingAiSuggestions = async () => {
+        if (isLoading) return;
+
+        const n = getAiSuggestCount();
+
+        setIsLoading(true);
+        setUiMode("modifying");
+        try {
+            // Adjust argument order here if your helper is different:
+            // Option A:
+            await fetchRunPendingFromOfflineDownloadListAiSuggestion({ page: 0, size: n }, dispatch);
+
+            // Option B (if your helper is dispatch-first):
+            // await fetchRunPendingFromOfflineDownloadListAiSuggestion(dispatch, n);
+
+            // Refresh so you can immediately see updated suggestions
+            await handleRefreshList();
+        } catch (err: any) {
+            console.error("Run AI suggestion failed:", err?.message || err);
+            dispatch(
+                setError({
+                    hasError: true,
+                    errorMessage: `Run AI suggestion failed: ${err?.message || "Unknown error"}`,
+                })
+            );
+        } finally {
+            setIsLoading(false);
+            setUiMode("idle");
+        }
+    };
 
     // Replace /width=###/ in Civitai URLs; if missing, insert it before the filename.
     const IMG_WIDTH_RE = /\/width=\d+\//;
@@ -4524,6 +4571,36 @@ const OfflineWindow: React.FC = () => {
                                     >
                                         Remove Selected
                                     </Button>
+                                </div>
+
+                                <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
+                                    <Button
+                                        variant="warning"
+                                        onClick={handleRunPendingAiSuggestions}
+                                        disabled={isLoading || isPatching}
+                                        title="Run AI suggestions for pending entries"
+                                        style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                                    >
+                                        <MdOutlineTipsAndUpdates />
+                                        Run AI Suggestion for downloadFilePath
+                                    </Button>
+
+                                    <Form.Control
+                                        as="select"
+                                        value={aiSuggestCountInput}
+                                        onChange={(e) => setAiSuggestCountInput(e.target.value)}
+                                        onBlur={() => setAiSuggestCountInput(String(getAiSuggestCount()))}
+                                        disabled={isLoading || isPatching}
+                                        style={{ width: 90 }}
+                                        aria-label="AI suggestion batch size (10 to 25)"
+                                    >
+                                        {Array.from({ length: 16 }, (_, i) => 25 - i).map((n) => (
+                                            <option key={n} value={String(n)}>
+                                                {n}
+                                            </option>
+                                        ))}
+                                    </Form.Control>
+
                                 </div>
 
                             </div>

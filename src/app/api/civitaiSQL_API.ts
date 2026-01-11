@@ -1408,7 +1408,7 @@ export const fetchRunPendingFromOfflineDownloadListAiSuggestion = async (
         dispatch(clearError());
 
         const page = typeof params?.page === "number" ? params.page : 0;
-        const size = typeof params?.size === "number" ? params.size : 100;
+        const size = typeof params?.size === "number" ? params.size : 25;
 
         const response = await axios.post(
             `${config.domain}/api/run_pending_from_offline_download_list-ai_suggestion`,
@@ -1419,6 +1419,8 @@ export const fetchRunPendingFromOfflineDownloadListAiSuggestion = async (
         if (!(response.status >= 200 && response.status < 300)) {
             throw new Error("Failed running pending AI suggestion batch.");
         }
+
+        console.log(response.data);
 
         // payload will be List<string> (civitaiVersionID)
         return response.data;
