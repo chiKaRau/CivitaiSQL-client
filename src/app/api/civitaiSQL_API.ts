@@ -1399,3 +1399,33 @@ export const fetchUpdateFullRecord = async (dispatch: any, dto: any) => {
         dispatch(setError({ hasError: true, errorMessage: error?.message || String(error) }));
     }
 };
+
+export const fetchRunPendingFromOfflineDownloadListAiSuggestion = async (
+    params: { page?: number; size?: number },
+    dispatch: any
+) => {
+    try {
+        dispatch(clearError());
+
+        const page = typeof params?.page === "number" ? params.page : 0;
+        const size = typeof params?.size === "number" ? params.size : 100;
+
+        const response = await axios.post(
+            `${config.domain}/api/run_pending_from_offline_download_list-ai_suggestion`,
+            null,
+            { params: { page, size } }
+        );
+
+        if (!(response.status >= 200 && response.status < 300)) {
+            throw new Error("Failed running pending AI suggestion batch.");
+        }
+
+        // payload will be List<string> (civitaiVersionID)
+        return response.data;
+
+    } catch (error: any) {
+        console.error("Error during pending AI suggestion batch:", error.message);
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+        return null;
+    }
+};

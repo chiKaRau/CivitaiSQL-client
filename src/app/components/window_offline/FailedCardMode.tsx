@@ -29,6 +29,10 @@ interface ModelVersionObject {
         rating: number;
         thumbsUpCount: number;
     };
+    creator: {
+        username: string;
+        image: string;
+    };
     model: {
         name: string;
         type: string;
@@ -414,6 +418,9 @@ const FailedCardMode: React.FC<FailedCardModeProps> = ({
                                     ) : (
                                         'N/A'
                                     )}
+                                </p>
+                                <p style={{ margin: '4px 0' }}>
+                                    <strong>Creator:</strong> {entry.modelVersionObject?.creator?.username ?? 'N/A'}
                                 </p>
                                 <p style={{ margin: '4px 0' }}>
                                     <strong>File Size:</strong>{' '}
