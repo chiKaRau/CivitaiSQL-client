@@ -9,15 +9,11 @@ import { updateDownloadFilePath } from '../../store/actions/chromeActions';
 // Icons Components
 import { AiFillFolderOpen, AiOutlineClose } from "react-icons/ai";
 import { BsCloudDownloadFill, BsDownload } from 'react-icons/bs';
-import { TbDatabaseSearch, TbDatabasePlus, TbDatabaseMinus } from "react-icons/tb";
-import { PiPlusMinusFill } from "react-icons/pi";
 import { FaMagnifyingGlass, FaMagnifyingGlassPlus, FaSun, FaMoon, FaArrowRight } from "react-icons/fa6"; // Added FaSun and FaMoon
 import { MdOutlineApps, MdOutlineTipsAndUpdates, MdOutlineDownloadForOffline, MdOutlineDownload, MdOutlinePendingActions } from "react-icons/md";
 import { FcDownload, FcGenericSortingAsc, FcGenericSortingDesc } from "react-icons/fc";
-import { PiTabsFill } from "react-icons/pi";
 import { TfiCheckBox } from "react-icons/tfi";
 import { LuPanelLeftOpen, LuPanelRightOpen } from "react-icons/lu";
-import { BsReverseLayoutTextWindowReverse } from "react-icons/bs";
 import { FaArrowUp, FaTrashAlt } from 'react-icons/fa';
 import { FaTimes } from 'react-icons/fa'; // Import the '×' icon
 import { FaAngleDoubleLeft, FaAngleLeft, FaAngleRight, FaAngleDoubleRight } from 'react-icons/fa';
@@ -33,15 +29,10 @@ import FolderDropdown from "../FolderDropdown"
 
 // APIs
 import {
-    fetchOfflineDownloadList,
     fetchAddRecordToDatabase,
-    fetchDownloadFilesByServer,
     fetchDownloadFilesByServer_v2,
-    fetchAddOfflineDownloadFileIntoOfflineDownloadList,
     fetchRemoveOfflineDownloadFileIntoOfflineDownloadList,
-    fetchBackupOfflineDownloadList,
     fetchGetPendingRemoveTagsList,
-    fetchAddPendingRemoveTag,
     fetchGetCategoriesPrefixsList,
     fetchOpenDownloadDirectory,
     fetchOpenModelDownloadDirectory,
@@ -58,12 +49,10 @@ import {
     fetchRunPendingFromOfflineDownloadListAiSuggestion
 } from "../../api/civitaiSQL_api"
 
+import { makeOfflineWindowStyles } from "./OfflineWindow.styles";
+
 import {
     bookmarkThisUrl,
-    updateDownloadMethodIntoChromeStorage,
-    callChromeBrowserDownload,
-    removeBookmarkByUrl,
-    updateOfflineModeIntoChromeStorage
 } from "../../utils/chromeUtils"
 
 // Ag-Grid Imports
@@ -73,7 +62,6 @@ import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
 import { AppState } from '../../store/configureStore';
 import FailedCardMode from './FailedCardMode';
-import ErrorCardMode from './ErrorCardMode';
 import FileNameToggle from './FileNameToggle';
 import TagList from './TagList';
 import TitleNameToggle from './TitleNameToggle';
@@ -81,7 +69,10 @@ import TopTagsDropdown from './TopTagsDropdown';
 import SimilarSearchPanel from './SimilarSearchPanel';
 import DownloadPathEditor from './DownloadPathEditor';
 import { setError } from '../../store/actions/errorsActions';
+import { darkTheme, lightTheme } from './OfflineWindow.theme';
 
+
+//TYPE
 type DownloadMethod = 'server' | 'browser';
 type DisplayMode = 'table'
     | 'bigCard'
@@ -92,6 +83,18 @@ type DisplayMode = 'table'
     | 'recentCard'
     | 'holdCard'
     | 'earlyAccessCard';
+
+type BatchStatus = "running" | "success" | "fail";
+
+type BatchResult = {
+    batchNo: number;
+    start: number;
+    end: number;
+    status: BatchStatus;
+    msg?: string;
+};
+
+type StatusFilter = 'pending' | 'non-pending' | 'both';
 
 // TypeScript Interfaces
 interface CivitaiModelFile {
@@ -297,12 +300,27 @@ class Semaphore {
     }
 }
 
+// Bulk modify controls (for Modify Mode)
+const ALL_PATCH_FIELDS = [
+    { key: "downloadFilePath", label: "Modify downloadFilePath" },
+    { key: "hold", label: "Hold" },
+    { key: "downloadPriority", label: "Download Priority" },
+];
+
+const AI_BATCH_SIZE = 10;
+const AI_COOLDOWN_SECONDS = 90;
+const DEFAULT_AI_SUGGEST_COUNT = 20;
+
 const OfflineWindow: React.FC = () => {
 
     const leftPanelRef = useRef<HTMLDivElement>(null);
     const rightContentRef = useRef<HTMLDivElement>(null);
     const rightInnerRef = useRef<HTMLDivElement>(null);
 
+    const chromeData = useSelector((state: AppState) => state.chrome);
+
+    const modify_downloadFilePath = chromeData.downloadFilePath;
+    const modify_selectedCategory = chromeData.selectedCategory;
 
     const dispatch = useDispatch();
     const [isLoading, setIsLoading] = useState(false);
@@ -319,7 +337,6 @@ const OfflineWindow: React.FC = () => {
         | 'earlyAccessCard'
     >('bigCard');
 
-
     // States for filtering
     const [filterText, setFilterText] = useState('');
     const [filterCondition, setFilterCondition] = useState<'contains' | 'does not contain' | 'equals' | 'does not equal' | 'begins with' | 'ends with'>('contains');
@@ -335,34 +352,11 @@ const OfflineWindow: React.FC = () => {
 
     const [isHandleRefresh, setIsHandleRefresh] = useState(false);
 
-    const chromeData = useSelector((state: AppState) => state.chrome);
-
-    const modify_downloadFilePath = chromeData.downloadFilePath;
-    const modify_selectedCategory = chromeData.selectedCategory;
-
-    // Bulk modify controls (for Modify Mode)
-    const ALL_PATCH_FIELDS = [
-        { key: "downloadFilePath", label: "Modify downloadFilePath" },
-        { key: "hold", label: "Hold" },
-        { key: "downloadPriority", label: "Download Priority" },
-    ];
-
     const [selectedPatchFields, setSelectedPatchFields] = useState(new Set());
     const [bulkHold, setBulkHold] = useState(true);
     const [bulkDownloadPriority, setBulkDownloadPriority] = useState(5); // default 5 (1~10)
 
-    type BatchStatus = "running" | "success" | "fail";
-
-    type BatchResult = {
-        batchNo: number;
-        start: number;
-        end: number;
-        status: BatchStatus;
-        msg?: string;
-    };
-
     const [batchResults, setBatchResults] = React.useState<BatchResult[]>([]);
-
 
     // **Add Pagination State and Logic**
     const [currentPage, setCurrentPage] = useState(1);
@@ -382,7 +376,6 @@ const OfflineWindow: React.FC = () => {
     // force reload for special card lists (hold/earlyAccess/error)
     const [specialReloadToken, setSpecialReloadToken] = useState(0);
 
-
     // Add this in your component's top-level state:
     const [showPending, setShowPending] = useState(true);
     const [showNonPending, setShowNonPending] = useState(true);
@@ -391,11 +384,6 @@ const OfflineWindow: React.FC = () => {
     const [showHoldEntries, setShowHoldEntries] = useState(false);
 
     const [showEarlyAccess, setShowEarlyAccess] = useState(true);
-
-    const AI_BATCH_SIZE = 10;
-    const AI_COOLDOWN_SECONDS = 90;
-    const DEFAULT_AI_SUGGEST_COUNT = 20;
-
 
     // progress just for AI runs
     const [aiSuggestProgress, setAiSuggestProgress] = useState({ completed: 0, total: 0 });
@@ -417,6 +405,47 @@ const OfflineWindow: React.FC = () => {
 
     // "Selected for patch" tracking (no new interfaces/files)
     const [isPatching, setIsPatching] = React.useState(false);
+
+    // Additional states for progress and failed downloads
+    const [downloadProgress, setDownloadProgress] = useState<{ completed: number; total: number }>({ completed: 0, total: 0 });
+    const [failedEntries, setFailedEntries] = useState<OfflineDownloadEntry[]>([]);
+
+    // State for tracking the 60s cooldown between batches
+    const [batchCooldown, setBatchCooldown] = useState<number | null>(null);
+
+    // In your OfflineWindow component
+    const [isPaused, setIsPaused] = useState(false);
+
+    const [selectCount, setSelectCount] = useState(20);
+
+    const [currentBatchRange, setCurrentBatchRange] = useState<string | null>(null);
+
+    // Add this alongside your existing useState hooks
+    const [initiationDelay, setInitiationDelay] = useState<number | null>(null);
+
+    // New state for selecting the tag source (defaulting to 'all')
+    const [tagSource, setTagSource] = useState<'all' | 'tags' | 'fileName' | 'titles' | 'other'>('all');
+
+    // Recompute mostFrequentPendingTags when offlineDownloadList, excludedTags, or tagSource changes
+    const [allTags, setAllTags] = useState<string[]>([]);
+
+    // current page index, 0-based
+    const [tagPage, setTagPage] = useState(0);
+
+    const [excludedTags, setExcludedTags] = useState<string[]>([]);
+
+    const [isCancelled, setIsCancelled] = useState(false);
+
+    const [preventPendingPaths, setPreventPendingPaths] = useState(true);
+
+    // LEFT OVERLAY (preview) state
+    const [leftOverlayEntry, setLeftOverlayEntry] = useState<OfflineDownloadEntry | null>(null);
+
+    const [goToPageInput, setGoToPageInput] = useState<string>('');
+
+    // NEW: toggle AI Suggestions block (only used in Modify Mode UI)
+    const [showAiSuggestionsPanel, setShowAiSuggestionsPanel] = useState(false);
+
 
     const handleBulkPatchSelected = async () => {
         // 1) Targets = selected models (by versionID)
@@ -502,9 +531,6 @@ const OfflineWindow: React.FC = () => {
     };
 
     const availablePatchFields = ALL_PATCH_FIELDS.filter(f => !selectedPatchFields.has(f.key));
-
-    const clampInt = (n: number, min: number, max: number) =>
-        Math.max(min, Math.min(max, n));
 
     const getAiSuggestCount = () => {
         const n = parseInt(aiSuggestCountInput, 10);
@@ -664,8 +690,6 @@ const OfflineWindow: React.FC = () => {
 
     // how many tags per page
     const TAGS_PER_PAGE = 100;
-    // current page index, 0-based
-    const [tagPage, setTagPage] = useState(0);
 
     // 1) On mount, fetch the initial list of excluded tags from the server
     useEffect(() => {
@@ -732,10 +756,6 @@ const OfflineWindow: React.FC = () => {
             setExcludedTags(serverTags);
         }
     }
-
-    const [excludedTags, setExcludedTags] = useState<string[]>([]);
-
-    type StatusFilter = 'pending' | 'non-pending' | 'both';
 
     function deriveStatus(showPending: boolean, showNonPending: boolean): StatusFilter {
         if (showPending && showNonPending) return 'both';
@@ -820,28 +840,6 @@ const OfflineWindow: React.FC = () => {
 
         return sorted.map(([tag]) => tag);
     };
-
-    // Additional states for progress and failed downloads
-    const [downloadProgress, setDownloadProgress] = useState<{ completed: number; total: number }>({ completed: 0, total: 0 });
-    const [failedEntries, setFailedEntries] = useState<OfflineDownloadEntry[]>([]);
-
-    // **New: State for Cooldown Management**
-    // const [completedCount, setCompletedCount] = useState<number>(0);
-    // const [delayTime, setDelayTime] = useState<number>(0);
-
-    // State for tracking the 60s cooldown between batches
-    const [batchCooldown, setBatchCooldown] = useState<number | null>(null);
-
-    // In your OfflineWindow component
-    const [isPaused, setIsPaused] = useState(false);
-
-    const [selectCount, setSelectCount] = useState(20);
-
-    const [currentBatchRange, setCurrentBatchRange] = useState<string | null>(null);
-
-    // Add this alongside your existing useState hooks
-    const [initiationDelay, setInitiationDelay] = useState<number | null>(null);
-
 
     const SENTINELS = {
         NONE: "__NONE__",                 // means “no results” (service already supports this one)
@@ -932,8 +930,6 @@ const OfflineWindow: React.FC = () => {
         isPausedRef.current = isPaused;
     }, [isPaused]);
 
-    const [isCancelled, setIsCancelled] = useState(false);
-
     const isCancelledRef = useRef(isCancelled);
     useEffect(() => {
         isCancelledRef.current = isCancelled;
@@ -947,7 +943,9 @@ const OfflineWindow: React.FC = () => {
     const toggleModifyMode = () => {
         setIsModifyMode(prev => {
             const next = !prev;
+
             if (next) {
+                setShowAiSuggestionsPanel(true);
                 setShowPending(true);
                 setShowNonPending(false);
             } else {
@@ -956,10 +954,10 @@ const OfflineWindow: React.FC = () => {
             }
             return next;
         });
+
         setSelectedIds(new Set());
         setFilterText("");
     };
-
 
     // Utility function to pause execution for a given number of milliseconds
     const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -1124,77 +1122,6 @@ const OfflineWindow: React.FC = () => {
         }
     };
 
-
-    // Function to determine if an entry matches the filter condition (OR logic)
-    const doesEntryMatch = (entry: OfflineDownloadEntry): boolean => {
-        const fieldsToCheck = [
-            entry.civitaiFileName,
-            entry.modelVersionObject?.name, //version name
-            entry.civitaiUrl,
-            entry.modelVersionObject?.model?.name, //This should be the title
-            entry.modelVersionObject?.creator?.username,
-            entry.civitaiTags,
-            entry.civitaiModelID,
-            entry.civitaiVersionID,
-            entry.downloadFilePath
-        ];
-
-        // Iterate through each field using OR logic
-        return fieldsToCheck.some(field => {
-            if (!field) return false; // Skip if the field is null or undefined
-
-            const text = filterText.toLowerCase(); // Normalize filter text for case-insensitive comparison
-
-            // If the field is an array, iterate through each item
-            if (Array.isArray(field)) {
-                return field.some(item => {
-                    const fieldValue = item.toLowerCase(); // Normalize item for comparison
-
-                    switch (filterCondition) {
-                        case 'contains':
-                            return fieldValue.includes(text);
-                        case 'does not contain':
-                            return !fieldValue.includes(text);
-                        case 'equals':
-                            return fieldValue === text;
-                        case 'does not equal':
-                            return fieldValue !== text;
-                        case 'begins with':
-                            return fieldValue.startsWith(text);
-                        case 'ends with':
-                            return fieldValue.endsWith(text);
-                        default:
-                            return false;
-                    }
-                });
-            }
-            // If the field is a string, apply the filtering logic directly
-            else if (typeof field === 'string') {
-                const fieldValue = field.toLowerCase(); // Normalize field value for comparison
-
-                switch (filterCondition) {
-                    case 'contains':
-                        return fieldValue.includes(text);
-                    case 'does not contain':
-                        return !fieldValue.includes(text);
-                    case 'equals':
-                        return fieldValue === text;
-                    case 'does not equal':
-                        return fieldValue !== text;
-                    case 'begins with':
-                        return fieldValue.startsWith(text);
-                    case 'ends with':
-                        return fieldValue.endsWith(text);
-                    default:
-                        return false;
-                }
-            }
-
-            // If the field is neither an array nor a string, do not consider it a match
-            return false;
-        });
-    };
-
     const filteredDownloadList = useMemo(() => {
         const base = offlineDownloadList;
 
@@ -1228,13 +1155,6 @@ const OfflineWindow: React.FC = () => {
         setSelectedIds(new Set());
     }, [filterText, filterCondition]);
 
-
-    // New state for selecting the tag source (defaulting to 'all')
-    const [tagSource, setTagSource] = useState<'all' | 'tags' | 'fileName' | 'titles' | 'other'>('all');
-
-
-    // Recompute mostFrequentPendingTags when offlineDownloadList, excludedTags, or tagSource changes
-    const [allTags, setAllTags] = useState<string[]>([]);
     useEffect(() => {
         const data = tagSource === 'other'
             ? filteredDownloadList
@@ -1270,10 +1190,6 @@ const OfflineWindow: React.FC = () => {
         }
     }, [serverTotalPages, currentPage]);
 
-    const [preventPendingPaths, setPreventPendingPaths] = useState(true);
-
-    // LEFT OVERLAY (preview) state
-    const [leftOverlayEntry, setLeftOverlayEntry] = useState<OfflineDownloadEntry | null>(null);
 
     // Toggle: click the same card again to close; different card swaps the content
     const toggleLeftOverlay = useCallback((entry: OfflineDownloadEntry) => {
@@ -1289,30 +1205,6 @@ const OfflineWindow: React.FC = () => {
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
     }, [leftOverlayEntry, closeLeftOverlay]);
-
-
-    // Define themes
-    const darkTheme = {
-        headerBackgroundColor: '#333',
-        headerFontColor: '#fff',
-        rowBackgroundColor: '#444',
-        rowFontColor: '#fff',
-        evenRowBackgroundColor: '#555',
-        oddRowBackgroundColor: '#444',
-        gridBackgroundColor: '#2b2b2b',
-    };
-
-    const lightTheme = {
-        headerBackgroundColor: '#f0f0f0',
-        headerFontColor: '#000',
-        rowBackgroundColor: '#fff',
-        rowFontColor: '#000',
-        evenRowBackgroundColor: '#fafafa',
-        oddRowBackgroundColor: '#fff',
-        gridBackgroundColor: '#ffffff',
-    };
-
-    const currentTheme = isDarkMode ? darkTheme : lightTheme;
 
     // Function to style rows
     const getRowStyle = (params: any) => {
@@ -1502,6 +1394,15 @@ const OfflineWindow: React.FC = () => {
             cellStyle: cellStyle,
         }
     ];
+    const currentTheme = React.useMemo(
+        () => (isDarkMode ? darkTheme : lightTheme),
+        [isDarkMode]
+    );
+
+    const styles = React.useMemo(
+        () => makeOfflineWindowStyles({ isDarkMode, currentTheme, leftOverlayEntry }),
+        [isDarkMode, currentTheme, leftOverlayEntry]
+    );
 
     // Prepare row data by extracting necessary fields and computing file size
     const rowData = useMemo(() => {
@@ -1537,235 +1438,7 @@ const OfflineWindow: React.FC = () => {
         cellStyle: cellStyle,
     };
 
-    const controlRowStyle: React.CSSProperties = {
-        marginTop: 8,
-        paddingTop: 8,
-        paddingBottom: 8,
-        borderTop: `1px solid ${isDarkMode ? '#555' : '#ddd'}`,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        flexWrap: 'nowrap',        // keep on a single line
-    };
-
-    const inlineIconBtnStyle: React.CSSProperties = {
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 32,
-        height: 32,
-        borderRadius: 8,
-        border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
-        background: isDarkMode ? '#111' : '#fff',
-        color: isDarkMode ? '#fff' : '#000',
-        cursor: 'pointer',
-    };
-
-    const inlineDangerBtnStyle: React.CSSProperties = {
-        ...inlineIconBtnStyle,
-        border: `1px solid ${isDarkMode ? '#7f1d1d' : '#f5c2c7'}`,
-        background: '#dc3545',
-        color: '#fff',
-    };
-
-    // Inline styles
-    const containerStyle: React.CSSProperties = {
-        display: 'flex',
-        flexDirection: 'row',
-        width: '100%',
-        height: '100vh',         // full viewport height
-        overflowX: 'hidden',
-        fontFamily: 'Arial, sans-serif',
-        backgroundColor: currentTheme.gridBackgroundColor,
-        transition: 'background-color 0.3s ease',
-    };
-
-    const leftPanelStyle: React.CSSProperties = {
-        position: 'sticky',
-        top: 0,
-        alignSelf: 'flex-start',
-        width: '500px',
-        height: '100vh',
-        overflowY: 'auto',      // <--- enable vertical scrolling if content is tall
-        overflowX: 'hidden',
-        backgroundColor: isDarkMode ? '#333' : '#fff',
-        borderRight: isDarkMode ? '1px solid #777' : '1px solid #ccc',
-        zIndex: 1000,
-        padding: '20px',
-        boxSizing: 'border-box',
-    };
-
-    const leftPanelComputedStyle: React.CSSProperties = {
-        ...leftPanelStyle,
-        overflowY: leftOverlayEntry ? 'hidden' : leftPanelStyle.overflowY
-    };
-
-    const leftOverlayBackdropStyle: React.CSSProperties = {
-        position: 'absolute',
-        inset: 0,
-        background: 'rgba(0,0,0,0.45)',  // dims ONLY the left panel
-        display: 'flex',
-        zIndex: 1100
-    };
-
-    const leftOverlayDrawerStyle: React.CSSProperties = {
-        width: '95%',  // covers ~95% of the left panel
-        height: '100%',
-        backgroundColor: isDarkMode ? '#1f2937' : '#ffffff',
-        color: isDarkMode ? '#fff' : '#000',
-        boxShadow: '2px 0 10px rgba(0,0,0,0.4)',
-        overflowY: 'auto',
-        boxSizing: 'border-box',
-        padding: 14,
-        position: 'relative',
-        transform: 'translateX(0)',
-        transition: 'transform 180ms ease'
-    };
-
-    const closeBtnStyle: React.CSSProperties = {
-        position: 'absolute',
-        top: 8, right: 8,
-        background: 'transparent',
-        border: 'none',
-        cursor: 'pointer'
-    };
-
-    const previewBtnStyle: React.CSSProperties = {
-        position: 'absolute',
-        bottom: 8,
-        right: 8,
-        width: 34,
-        height: 34,
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: '999px',
-        border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
-        color: isDarkMode ? '#fff' : '#111',
-        background: isDarkMode ? '#111' : '#fff',
-        cursor: 'pointer',
-        boxShadow: isDarkMode ? '0 1px 4px rgba(0,0,0,0.5)' : '0 1px 4px rgba(0,0,0,0.2)'
-    };
-
-    const previewBtnActiveStyle: React.CSSProperties = {
-        ...previewBtnStyle,
-        background: '#2563eb',
-        borderColor: isDarkMode ? '#60A5FA' : '#93c5fd',
-        color: '#fff',
-        boxShadow: isDarkMode ? '0 0 0 3px rgba(37,99,235,.35)' : '0 0 0 3px rgba(37,99,235,.2)'
-    };
-
-
-    const rightContentStyle: React.CSSProperties = {
-        flex: 1,
-        minWidth: 0,                        // <- allow this flex child to get narrower than its contents
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '20px',
-        boxSizing: 'border-box',
-        height: '100vh',
-        overflowY: 'auto',                  // vertical scroll for tall content
-        overflowX: 'auto',                  // horizontal scroll for wide content
-    };
-
-    const contentStyle: React.CSSProperties = {
-        flex: 1, // Take up remaining space
-        overflowY: 'auto', // Enable vertical scrolling
-        paddingBottom: '60px', // Space for the fixed pagination
-    };
-
-    const footerStyle: React.CSSProperties = {
-        backgroundColor: isDarkMode ? '#333' : '#f8f9fa',
-        padding: '10px 20px',
-        boxShadow: '0 -2px 4px rgba(0, 0, 0, 0.1)',
-        zIndex: 1000,
-        width: '100%', // Ensures the footer spans the entire width of the right panel
-        // Removed position: 'fixed', bottom: 0, left: 0
-    };
-
-    const headerStyleContainer: React.CSSProperties = {
-        display: 'flex',
-        flexDirection: 'column', // Change from default 'row' to 'column'
-        alignItems: 'flex-start', // Align items to the start for better wrapping
-        marginBottom: '20px',
-    };
-
-
-    const buttonGroupStyle: React.CSSProperties = {
-        display: 'flex',
-        gap: '10px',
-        marginTop: '10px',
-        flexWrap: 'wrap', // Allow buttons to wrap to the next line
-        width: '100%', // Ensure the button group takes full width for better wrapping
-    };
-
-    // Example Button Style Adjustments
-    const responsiveButtonStyle: React.CSSProperties = {
-        flex: '1 1 auto', // Allow buttons to grow and shrink as needed
-        minWidth: '100px', // Set a minimum width to maintain readability
-        padding: '8px 12px', // Adjust padding for better fit
-        borderRadius: '4px',
-        border: 'none',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-    };
-
-    const badgeStyle: React.CSSProperties = {
-        position: 'absolute',
-        top: -6,
-        right: -6,
-        background: 'red',
-        color: 'white',
-        borderRadius: '999px',
-        padding: '2px 6px',
-        fontSize: '0.75rem',
-        lineHeight: 1,
-        zIndex: 1
-    };
-
     const badgeCount = (n: number) => (String(n));
-
-
-    const agGridStyle: React.CSSProperties = {
-        height: '1000px',
-        width: '100%',
-        transition: 'background-color 0.3s ease, color 0.3s ease',
-        paddingBottom: '60px', // Space for the fixed pagination if needed
-    };
-
-
-    const filterContainerStyle: React.CSSProperties = {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px',
-        marginBottom: '20px',
-        flexWrap: 'wrap'
-    };
-
-    const filterSelectStyle: React.CSSProperties = {
-        padding: '8px',
-        borderRadius: '4px',
-        border: '1px solid #ccc',
-        minWidth: '150px',
-    };
-
-    const downloadButtonStyle: React.CSSProperties = {
-        padding: '10px 20px',
-        borderRadius: '4px',
-        border: 'none',
-        backgroundColor: '#28a745',
-        color: '#fff',
-        cursor: 'pointer',
-        fontSize: '16px',
-    };
-
-    const downloadButtonDisabledStyle: React.CSSProperties = {
-        ...downloadButtonStyle,
-        backgroundColor: '#6c757d',
-        cursor: 'not-allowed',
-    };
 
     // Function to toggle selection
     const toggleSelect = useCallback((id: string) => {
@@ -1803,8 +1476,6 @@ const OfflineWindow: React.FC = () => {
                 showEarlyAccess,  // NEW
                 sortDir                       // NEW ("asc" | "desc")
             );
-
-
 
             setOfflineDownloadList(Array.isArray(p.content) ? p.content : []);
             setServerTotalItems(p.totalElements ?? 0);
@@ -1857,64 +1528,9 @@ const OfflineWindow: React.FC = () => {
         }
     };
 
-    const handleBulkHoldUpdate = async () => {
-        const selectedEntries = filteredDownloadList.filter(entry =>
-            selectedIds.has(entry.civitaiVersionID)
-        );
-
-        if (selectedEntries.length === 0) {
-            alert("No items selected to update Hold.");
-            return;
-        }
-
-        setIsLoading(true);
-        setUiMode('modifying');
-
-        try {
-            for (const entry of selectedEntries) {
-                const match = (e: OfflineDownloadEntry) =>
-                    e.civitaiModelID === entry.civitaiModelID &&
-                    e.civitaiVersionID === entry.civitaiVersionID;
-
-                const prevHold = entry.hold ?? false;
-
-                // optimistic update
-                updateEntryLocal(match, { hold: bulkHold });
-
-                try {
-                    await fetchUpdateHoldFromOfflineDownloadList(
-                        {
-                            civitaiModelID: entry.civitaiModelID,
-                            civitaiVersionID: entry.civitaiVersionID,
-                        },
-                        bulkHold,
-                        dispatch
-                    );
-                } catch (err: any) {
-                    console.error("Failed to update hold for", entry.civitaiFileName, err?.message || err);
-                    // revert this one
-                    updateEntryLocal(match, { hold: prevHold });
-                }
-            }
-
-            // One refresh at the end so server + client are in sync
-            await refreshCurrentPage();
-        } finally {
-            setIsLoading(false);
-            setUiMode('idle');
-        }
-    };
-
     // Function to handle "Download Now" button click
     const handleDownloadNow = async () => {
         console.log("Download Now button clicked");
-
-
-        // const isBackupSuccessful = await fetchBackupOfflineDownloadList(dispatch);
-        // if (!isBackupSuccessful) {
-        //     alert("Backup failed. Cannot proceed with the download.");
-        //     return;
-        // }
 
         // Collect selected entries from the filtered list
         const entriesToDownload = filteredDownloadList.filter(entry => {
@@ -2021,8 +1637,6 @@ const OfflineWindow: React.FC = () => {
         () => buildOtherTagCounts(filteredDownloadList, excludedTags.map(s => s.toLowerCase())),
         [filteredDownloadList, excludedTags, buildOtherTagCounts]
     );
-
-
 
     const handleErrorCardDownload = React.useCallback(
         async (entry: any, method: DownloadMethod) => {
@@ -2420,113 +2034,6 @@ const OfflineWindow: React.FC = () => {
         }
     };
 
-
-    /*
-    const handleProcessSelected = async () => {
-        if (modify_downloadFilePath === "/@scan@/ErrorPath/") {
-            alert("Invalid DownloadFilePath: ErrorPath is never allowed");
-            return;
-        }
-
-        const pendingPaths = ["/@scan@/ACG/Pending", "/@scan@/ACG/Pending/"];
-        if (preventPendingPaths && pendingPaths.includes(modify_downloadFilePath)) {
-            alert("Invalid DownloadFilePath: pending paths are blocked");
-            return;
-        }
-
-        // Use the currently visible list (respects filters/modify mode & server paging)
-        const selectedEntries = filteredDownloadList.filter(entry =>
-            selectedIds.has(entry.civitaiVersionID)
-        );
-
-        if (selectedEntries.length === 0) {
-            console.log("No entries selected for processing.");
-            return;
-        }
-
-        try {
-            setIsLoading(true);
-            setUiMode('modifying');
-            for (const entry of selectedEntries) {
-                try {
-                    const {
-                        civitaiUrl,
-                        civitaiFileName,
-                        civitaiModelID,
-                        civitaiVersionID,
-                        civitaiModelFileList,
-                        civitaiTags
-                    } = entry;
-
-                    const modelObject = {
-                        downloadFilePath: modify_downloadFilePath,
-                        civitaiFileName,
-                        civitaiModelID,
-                        civitaiVersionID,
-                        civitaiModelFileList,
-                        civitaiUrl,
-                        selectedCategory: modify_selectedCategory,
-                        civitaiTags
-                    };
-
-                    await fetchAddOfflineDownloadFileIntoOfflineDownloadList(modelObject, true, dispatch);
-                    console.log(`Processed entry: ${civitaiFileName}`);
-                } catch (entryError: any) {
-                    console.error(`Failed to process entry ${entry.civitaiFileName}:`, entryError.message);
-                }
-            }
-
-            const page0 = Math.max(0, currentPage - 1); // UI is 1-based
-            try {
-                const prefixes = getActivePrefixes();
-                const status: StatusFilter = deriveStatus(showPending, showNonPending);
-
-                const p = await fetchOfflineDownloadListPage(
-                    dispatch,
-                    page0,
-                    itemsPerPage,
-                     false,
-                    prefixes,
-                    filterText.trim(),
-                   filterCondition,
-                   status,
-                    showHoldEntries,              // NEW
-                    showEarlyAccess,  // NEW
-                    sortDir                       // NEW ("asc" | "desc")
-                );
-
-                if (Array.isArray(p.content)) {
-                    setOfflineDownloadList(p.content);
-                    setSelectedIds(new Set());
-                    setServerTotalItems(p.totalElements ?? 0);
-                    setServerTotalPages(p.totalPages ?? 1);
-                } else {
-                    console.warn("paged fetch returned non-array content:", p.content);
-                    setOfflineDownloadList([]);
-                    setSelectedIds(new Set());
-                    setServerTotalItems(0);
-                    setServerTotalPages(1);
-                }
-            } catch (e: any) {
-                console.error("Failed to refresh current page after processing:", e.message);
-                setOfflineDownloadList([]);
-                setSelectedIds(new Set());
-                setServerTotalItems(0);
-                setServerTotalPages(1);
-            }
-
-
-            console.log("All selected entries have been processed.");
-        } catch (error: any) {
-            console.error("An unexpected error occurred during processing:", error.message);
-        } finally {
-            dispatch(updateDownloadFilePath("/@scan@/ACG/Pending/"));
-            setIsLoading(false);
-            setUiMode('idle');
-        }
-    };
-    */
-
     const handleRemoveSelected = async () => {
         const userConfirmed = window.confirm("Are you sure you want to remove the selected items?");
         if (!userConfirmed) {
@@ -2654,8 +2161,6 @@ const OfflineWindow: React.FC = () => {
         }
     };
 
-
-
     const handleSelectFirstN = () => {
         // Create a Set of combined civitaiVersionID and civitaiModelID for efficient lookup
         const failedIds = new Set(
@@ -2705,43 +2210,9 @@ const OfflineWindow: React.FC = () => {
         // setDelayTime(0);
     };
 
-    // Similar to doesEntryMatch(), but using the provided tag (always with 'contains' logic)
-    const doesEntryMatchWithTag = (entry: OfflineDownloadEntry, tag: string): boolean => {
-        const lowerTag = tag.toLowerCase();
-        const fieldsToCheck = [
-            entry.civitaiFileName,
-            entry.modelVersionObject?.name,        // version name
-            entry.civitaiUrl,
-            entry.modelVersionObject?.model?.name,   // model title
-            entry.civitaiTags,
-            entry.civitaiModelID,
-            entry.civitaiVersionID,
-        ];
-
-        return fieldsToCheck.some((field) => {
-            if (!field) return false;
-            if (Array.isArray(field)) {
-                return field.some((item) => item.toLowerCase().includes(lowerTag));
-            }
-            if (typeof field === "string") {
-                return field.toLowerCase().includes(lowerTag);
-            }
-            return false;
-        });
-    };
-
     useEffect(() => {
         setTagPage(0);
     }, [tagSource, filteredDownloadList]);
-
-    const paginatedTags = allTags.slice(
-        tagPage * TAGS_PER_PAGE,
-        (tagPage + 1) * TAGS_PER_PAGE
-    );
-
-    const totalTagPages = Math.max(1, Math.ceil(allTags.length / TAGS_PER_PAGE));
-
-    const [goToPageInput, setGoToPageInput] = useState<string>('');
 
     const handleGoToPage = () => {
         const n = Math.floor(Number(goToPageInput));
@@ -3360,51 +2831,62 @@ const OfflineWindow: React.FC = () => {
                                         )}
                                     </div>
 
-                                    {/* Category */}
-                                    <p style={{ margin: '4px 0' }}>
-                                        <strong>Category:</strong> {entry.selectedCategory ?? 'N/A'}
-                                    </p>
+                                    {showAiSuggestionsPanel ? (
+                                        <div style={{ marginTop: 8 }}>
+                                            <strong>AI suggestion</strong>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            {/* Category */}
+                                            <p style={{ margin: '4px 0' }}>
+                                                <strong>Category:</strong> {entry.selectedCategory ?? 'N/A'}
+                                            </p>
 
-                                    <p style={{ margin: '4px 0' }}>
-                                        <strong>Version ID:</strong> {entry.modelVersionObject?.id ?? 'N/A'}
-                                    </p>
-                                    <p style={{ margin: '4px 0' }}>
-                                        <strong>Model ID:</strong> {entry.modelVersionObject?.modelId ?? 'N/A'}
-                                    </p>
-                                    <p style={{ margin: '4px 0' }}>
-                                        <strong>URL:</strong>{' '}
-                                        {entry.civitaiUrl ? (
-                                            <a
-                                                href={entry.civitaiUrl}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                style={{ color: isDarkMode ? '#1e90ff' : '#007bff' }}
-                                            >
-                                                Visit Model
-                                            </a>
-                                        ) : (
-                                            'N/A'
-                                        )}
-                                    </p>
-                                    <p style={{ margin: '4px 0' }}>
-                                        <strong>Creator:</strong> {entry.modelVersionObject?.creator?.username ?? 'N/A'}
-                                    </p>
-                                    <p style={{ margin: '4px 0' }}>
-                                        <strong>File Size:</strong>{' '}
-                                        {(() => {
-                                            const safetensorFile =
-                                                entry.modelVersionObject?.files?.find(file =>
-                                                    file.name.endsWith('.safetensors')
-                                                );
-                                            return safetensorFile
-                                                ? `${(safetensorFile.sizeKB / 1024).toFixed(2)} MB`
-                                                : 'N/A';
-                                        })()}
-                                    </p>
+                                            <p style={{ margin: '4px 0' }}>
+                                                <strong>Version ID:</strong> {entry.modelVersionObject?.id ?? 'N/A'}
+                                            </p>
+                                            <p style={{ margin: '4px 0' }}>
+                                                <strong>Model ID:</strong> {entry.modelVersionObject?.modelId ?? 'N/A'}
+                                            </p>
+                                            <p style={{ margin: '4px 0' }}>
+                                                <strong>URL:</strong>{' '}
+                                                {entry.civitaiUrl ? (
+                                                    <a
+                                                        href={entry.civitaiUrl}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        style={{ color: isDarkMode ? '#1e90ff' : '#007bff' }}
+                                                    >
+                                                        Visit Model
+                                                    </a>
+                                                ) : (
+                                                    'N/A'
+                                                )}
+                                            </p>
+
+                                            <p style={{ margin: '4px 0' }}>
+                                                <strong>Creator:</strong> {entry.modelVersionObject?.creator?.username ?? 'N/A'}
+                                            </p>
+
+                                            <p style={{ margin: '4px 0' }}>
+                                                <strong>File Size:</strong>{' '}
+                                                {(() => {
+                                                    const safetensorFile =
+                                                        entry.modelVersionObject?.files?.find(file =>
+                                                            file.name.endsWith('.safetensors')
+                                                        );
+                                                    return safetensorFile
+                                                        ? `${(safetensorFile.sizeKB / 1024).toFixed(2)} MB`
+                                                        : 'N/A';
+                                                })()}
+                                            </p>
+
+                                        </>
+                                    )}
                                 </div>
 
                                 {/* --- Hold, Priority, Remove, Preview (one line) --- */}
-                                <div style={controlRowStyle}>
+                                <div style={styles.controlRowStyle}>
                                     {/* Hold checkbox */}
                                     <Form.Check
                                         type="checkbox"
@@ -3452,7 +2934,7 @@ const OfflineWindow: React.FC = () => {
                                             onClick={(e) => { e.stopPropagation(); handleRemoveOne(entry); }}
                                             title="Remove from list"
                                             aria-label="Remove from list"
-                                            style={inlineDangerBtnStyle}
+                                            style={styles.inlineDangerBtnStyle}
                                             disabled={isLoading}
                                         >
                                             <FaTrashAlt size={14} />
@@ -3464,7 +2946,7 @@ const OfflineWindow: React.FC = () => {
                                             onClick={(e) => { e.stopPropagation(); onToggleOverlay(entry); }}
                                             title="Preview in left panel"
                                             aria-label="Preview in left panel"
-                                            style={inlineIconBtnStyle}
+                                            style={styles.inlineIconBtnStyle}
                                             disabled={isLoading}
                                         >
                                             <LuPanelLeftOpen size={18} />
@@ -3829,7 +3311,7 @@ const OfflineWindow: React.FC = () => {
                                         onClick={(e) => { e.stopPropagation(); onToggleOverlay(entry); }}
                                         title="Preview in left panel"
                                         aria-label="Preview in left panel"
-                                        style={activePreviewId === entry.civitaiVersionID ? previewBtnActiveStyle : previewBtnStyle}
+                                        style={activePreviewId === entry.civitaiVersionID ? styles.previewBtnActiveStyle : styles.previewBtnStyle}
                                     >
                                         <LuPanelLeftOpen size={18} />
                                     </button>
@@ -3917,19 +3399,19 @@ const OfflineWindow: React.FC = () => {
     };
 
     return (
-        <div style={containerStyle}>
+        <div style={styles.containerStyle}>
             {/* Scrollable Content Area */}
             <>
-                <div style={leftPanelComputedStyle} ref={leftPanelRef}>
-                    <div style={headerStyleContainer}>
+                <div style={styles.leftPanelComputedStyle} ref={leftPanelRef}>
+                    <div style={styles.headerStyleContainer}>
                         <h3 style={{ color: isDarkMode ? '#fff' : '#000' }}>Offline Download List</h3>
 
-                        <div style={buttonGroupStyle}>
+                        <div style={styles.buttonGroupStyle}>
                             {/* Refresh List Button */}
                             <Button
                                 onClick={handleRefreshList}
                                 style={{
-                                    ...responsiveButtonStyle,
+                                    ...styles.responsiveButtonStyle,
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
@@ -3964,7 +3446,7 @@ const OfflineWindow: React.FC = () => {
                             {/* Existing Display Mode Buttons */}
                             <Button
                                 style={{
-                                    ...responsiveButtonStyle
+                                    ...styles.responsiveButtonStyle
                                 }}
                                 variant={displayMode === 'table' ? 'primary' : 'secondary'}
                                 onClick={() => handleDisplayModeClick('table')}
@@ -3973,7 +3455,7 @@ const OfflineWindow: React.FC = () => {
                             </Button>
                             <Button
                                 style={{
-                                    ...responsiveButtonStyle
+                                    ...styles.responsiveButtonStyle
                                 }}
                                 variant={displayMode === 'bigCard' ? 'primary' : 'secondary'}
                                 onClick={() => handleDisplayModeClick('bigCard')}
@@ -3982,23 +3464,16 @@ const OfflineWindow: React.FC = () => {
                             </Button>
                             <Button
                                 style={{
-                                    ...responsiveButtonStyle
+                                    ...styles.responsiveButtonStyle
                                 }}
                                 variant={displayMode === 'smallCard' ? 'primary' : 'secondary'}
                                 onClick={() => handleDisplayModeClick('smallCard')}
                             >
                                 Small Card Mode
                             </Button>
-                            {/* <Button
-                                style={responsiveButtonStyle}
-                                variant={displayMode === 'updateCard' ? 'primary' : 'secondary'}
-                                onClick={() => handleDisplayModeClick('updateCard')}
-                            >
-                                Update Card Mode
-                            </Button> */}
 
                             <Button
-                                style={{ ...responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
+                                style={{ ...styles.responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
                                 variant={displayMode === 'recentCard' ? 'primary' : 'secondary'}
                                 onClick={() => handleDisplayModeClick('recentCard')}
                                 aria-label={`Recently Downloaded (${recentlyDownloaded.length})`}
@@ -4007,7 +3482,7 @@ const OfflineWindow: React.FC = () => {
                                 {recentlyDownloaded.length > 0 && (
                                     <span
                                         style={{
-                                            ...badgeStyle,
+                                            ...styles.badgeStyle,
                                             background: '#28a745' // green for "recent/success"
                                         }}
                                     >
@@ -4018,7 +3493,7 @@ const OfflineWindow: React.FC = () => {
 
                             {/* NEW: Hold list mode */}
                             <Button
-                                style={{ ...responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
+                                style={{ ...styles.responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
                                 variant={displayMode === 'holdCard' ? 'primary' : 'secondary'}
                                 onClick={() => handleDisplayModeClick('holdCard')}
                                 aria-label={`Hold entries (${holdEntries.length})`}
@@ -4027,7 +3502,7 @@ const OfflineWindow: React.FC = () => {
                                 {holdEntries.length > 0 && (
                                     <span
                                         style={{
-                                            ...badgeStyle,
+                                            ...styles.badgeStyle,
                                             background: '#f97316', // orange-ish
                                         }}
                                     >
@@ -4038,7 +3513,7 @@ const OfflineWindow: React.FC = () => {
 
                             {/* NEW: Early Access mode */}
                             <Button
-                                style={{ ...responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
+                                style={{ ...styles.responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
                                 variant={displayMode === 'earlyAccessCard' ? 'primary' : 'secondary'}
                                 onClick={() => handleDisplayModeClick('earlyAccessCard')}
                                 aria-label={`Early Access entries (${earlyAccessEntries.length})`}
@@ -4047,7 +3522,7 @@ const OfflineWindow: React.FC = () => {
                                 {earlyAccessEntries.length > 0 && (
                                     <span
                                         style={{
-                                            ...badgeStyle,
+                                            ...styles.badgeStyle,
                                             background: '#ef4444', // red-ish
                                         }}
                                     >
@@ -4060,25 +3535,25 @@ const OfflineWindow: React.FC = () => {
                             <Button
                                 variant={displayMode === 'failedCard' ? 'primary' : 'secondary'}
                                 onClick={() => handleDisplayModeClick('failedCard')}
-                                style={{ ...responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
+                                style={{ ...styles.responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
                             >
                                 Failed Card Mode
                                 {failedEntries.length > 0 && (
-                                    <span style={badgeStyle}>{badgeCount(failedEntries.length)}</span>
+                                    <span style={styles.badgeStyle}>{badgeCount(failedEntries.length)}</span>
                                 )}
                             </Button>
 
                             <Button
                                 variant={displayMode === 'errorCard' ? 'primary' : 'secondary'}
                                 onClick={() => handleDisplayModeClick('errorCard')}
-                                style={{ ...responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
+                                style={{ ...styles.responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
                                 aria-label={`Error entries (${errorEntries.length})`}
                             >
                                 Error Card Mode
                                 {errorEntries.length > 0 && (
                                     <span
                                         style={{
-                                            ...badgeStyle,
+                                            ...styles.badgeStyle,
                                             background: '#ef4444',  // red badge for errors
                                         }}
                                     >
@@ -4092,7 +3567,7 @@ const OfflineWindow: React.FC = () => {
                             <Button
                                 onClick={toggleModifyMode}
                                 style={{
-                                    ...responsiveButtonStyle,
+                                    ...styles.responsiveButtonStyle,
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
@@ -4113,7 +3588,7 @@ const OfflineWindow: React.FC = () => {
                             <Button
                                 onClick={toggleTheme}
                                 style={{
-                                    ...responsiveButtonStyle,
+                                    ...styles.responsiveButtonStyle,
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
@@ -4156,7 +3631,7 @@ const OfflineWindow: React.FC = () => {
                             </Button>
 
                             <Button
-                                style={responsiveButtonStyle}
+                                style={styles.responsiveButtonStyle}
                                 variant={showGalleries ? 'primary' : 'secondary'}
                                 onClick={() => setShowGalleries(v => !v)}
                             >
@@ -4210,10 +3685,8 @@ const OfflineWindow: React.FC = () => {
 
                     </div>
 
-
-
                     {/* Filter Section */}
-                    <div style={filterContainerStyle}>
+                    <div style={styles.filterContainerStyle}>
 
                         <div
                             style={{
@@ -4259,7 +3732,7 @@ const OfflineWindow: React.FC = () => {
                                 disabled={isLoading}
                                 onChange={(e) => setFilterCondition(e.target.value as any)}
                                 style={{
-                                    ...filterSelectStyle,
+                                    ...styles.filterSelectStyle,
                                     backgroundColor: isDarkMode ? '#555' : '#fff',
                                     color: isDarkMode ? '#fff' : '#000',
                                     border: '1px solid',
@@ -4273,6 +3746,7 @@ const OfflineWindow: React.FC = () => {
                                 <option value="begins with">Begins with</option>
                                 <option value="ends with">Ends with</option>
                             </select>
+
                             <div style={{ margin: '1rem 0', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                 {/* Pending */}
                                 <Form.Check
@@ -4371,7 +3845,7 @@ const OfflineWindow: React.FC = () => {
                             <Button
                                 onClick={handleSelectFirstN}
                                 style={{
-                                    ...downloadButtonStyle,
+                                    ...styles.downloadButtonStyle,
                                     backgroundColor: '#007bff',
                                     color: '#fff',
                                 }}
@@ -4672,7 +4146,7 @@ const OfflineWindow: React.FC = () => {
                                     <Button
                                         onClick={handleRemoveSelected}
                                         style={{
-                                            ...downloadButtonStyle,
+                                            ...styles.downloadButtonStyle,
                                             backgroundColor: '#dc3545',
                                             color: '#fff',
                                         }}
@@ -4705,6 +4179,22 @@ const OfflineWindow: React.FC = () => {
                                         <MdOutlineTipsAndUpdates />
                                         AI Suggestions
                                     </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowAiSuggestionsPanel(v => !v)}
+                                        style={{
+                                            border: "none",
+                                            borderRadius: 8,
+                                            padding: "4px 10px",
+                                            cursor: "pointer",
+                                            fontWeight: 600,
+                                            background: isDarkMode ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.08)",
+                                            color: isDarkMode ? "#fff" : "#111",
+                                        }}
+                                    >
+                                        {showAiSuggestionsPanel ? "Hide AI Suggestion" : "Show AI Suggestion"}
+                                    </button>
 
                                     {/* Row 1: Button + dropdown on same line */}
                                     <div
@@ -4895,7 +4385,7 @@ const OfflineWindow: React.FC = () => {
                             }}>
                             <Button
                                 onClick={handleDownloadNow}
-                                style={selectedIds.size > 0 ? downloadButtonStyle : downloadButtonDisabledStyle}
+                                style={selectedIds.size > 0 ? styles.downloadButtonStyle : styles.downloadButtonDisabledStyle}
                                 disabled={selectedIds.size === 0 || isLoading || isModifyMode}
                             >
                                 {isLoading ? (
@@ -4977,9 +4467,9 @@ const OfflineWindow: React.FC = () => {
                     )}
 
                     {leftOverlayEntry && (
-                        <div style={leftOverlayBackdropStyle} onClick={closeLeftOverlay}>
-                            <div style={leftOverlayDrawerStyle} onClick={(e) => e.stopPropagation()}>
-                                <button onClick={closeLeftOverlay} style={closeBtnStyle} aria-label="Close overlay">
+                        <div style={styles.leftOverlayBackdropStyle} onClick={closeLeftOverlay}>
+                            <div style={styles.leftOverlayDrawerStyle} onClick={(e) => e.stopPropagation()}>
+                                <button onClick={closeLeftOverlay} style={styles.closeBtnStyle} aria-label="Close overlay">
                                     <IoCloseOutline size={22} />
                                 </button>
 
@@ -4999,7 +4489,7 @@ const OfflineWindow: React.FC = () => {
 
 
                 {/* Main Content */}
-                <div style={rightContentStyle}>
+                <div style={styles.rightContentStyle}>
                     {/* Header within Right Panel */}
                     <div style={{
                         marginBottom: '5px',
@@ -5174,7 +4664,7 @@ const OfflineWindow: React.FC = () => {
                         ) : (
                             <>
                                 {displayMode === 'table' && (
-                                    <div className="ag-theme-alpine" style={agGridStyle}>
+                                    <div className="ag-theme-alpine" style={styles.agGridStyle}>
                                         <AgGridReact
                                             rowData={rowData}
                                             columnDefs={columnDefs}
@@ -5264,17 +4754,6 @@ const OfflineWindow: React.FC = () => {
                                     />
                                 )}
 
-                                {/* {displayMode === 'updateCard' && (
-                                    <UpdateCardMode
-                                        filteredDownloadList={paginatedDownloadList} // or your full filtered list if preferred
-                                        isDarkMode={isDarkMode}
-                                        isModifyMode={isModifyMode}
-                                        selectedIds={selectedIds}
-                                        toggleSelect={toggleSelect}
-                                        handleSelectAll={handleSelectAll}
-                                    />
-                                )} */}
-
                                 {displayMode === 'failedCard' && (
                                     <FailedCardMode
                                         failedEntries={failedEntries}
@@ -5307,7 +4786,7 @@ const OfflineWindow: React.FC = () => {
 
                     {/* Footer Area */}
                     {(displayMode === 'bigCard' || displayMode === 'smallCard') && (
-                        <div style={footerStyle}>
+                        <div style={styles.footerStyle}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
                                 {/* Range Display */}
                                 <div style={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>
