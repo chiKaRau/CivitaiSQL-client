@@ -750,7 +750,8 @@ export const fetchOfflineDownloadListPage = async (
     status?: 'pending' | 'non-pending' | 'both',
     includeHold?: boolean,
     includeEarlyAccess?: boolean,
-    sortDir?: 'asc' | 'desc'
+    sortDir?: 'asc' | 'desc',
+    includeErrors: boolean = true
 ) => {
     try {
         const params = new URLSearchParams();
@@ -778,7 +779,8 @@ export const fetchOfflineDownloadListPage = async (
 
         params.set('includeHold', String(includeHold));
         params.set('includeEarlyAccess', String(includeEarlyAccess));
-        params.set('sortDir', String(sortDir)); // "asc" or "desc"
+        params.set('sortDir', String(sortDir));
+        params.set('includeErrors', String(includeErrors));
 
         const url = `${config.domain}/api/get_offline_download_list-in-page?${params.toString()}`;
         const response = await axios.get(url);

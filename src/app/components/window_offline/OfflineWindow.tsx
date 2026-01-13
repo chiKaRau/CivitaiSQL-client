@@ -196,6 +196,7 @@ export interface OfflineDownloadEntry {
     selectedCategory: string;
     civitaiTags: string[];
     hold?: boolean;
+    isError?: boolean;
     downloadPriority?: number;           // 1..10
     earlyAccessEndsAt?: string | null;
 
@@ -384,6 +385,8 @@ const OfflineWindow: React.FC = () => {
     const [showHoldEntries, setShowHoldEntries] = useState(false);
 
     const [showEarlyAccess, setShowEarlyAccess] = useState(true);
+
+    const [showErrorEntries, setShowErrorEntries] = useState(true);
 
     // progress just for AI runs
     const [aiSuggestProgress, setAiSuggestProgress] = useState({ completed: 0, total: 0 });
@@ -1035,8 +1038,8 @@ const OfflineWindow: React.FC = () => {
               /* status */ status,
                     showHoldEntries,              // NEW
                     showEarlyAccess,  // NEW
-                    sortDir                       // NEW ("asc" | "desc")
-
+                    sortDir,
+                    showErrorEntries
                 );
 
                 if (!cancelled) {
@@ -1071,7 +1074,8 @@ const OfflineWindow: React.FC = () => {
         showNonPending,
         showHoldEntries,   // add
         showEarlyAccess,   // add
-        sortDir            // add
+        sortDir,
+        showErrorEntries
     ]);
 
     useEffect(() => {
@@ -1149,7 +1153,7 @@ const OfflineWindow: React.FC = () => {
         }
         return extraFiltered;
     }, [offlineDownloadList, selectedIds, isModifyMode, showPending, showNonPending,
-        showHoldEntries, showEarlyAccess]);
+        showHoldEntries, showEarlyAccess, showErrorEntries]);
 
     useEffect(() => {
         setSelectedIds(new Set());
@@ -1474,7 +1478,8 @@ const OfflineWindow: React.FC = () => {
                 /* status */ status,
                 showHoldEntries,              // NEW
                 showEarlyAccess,  // NEW
-                sortDir                       // NEW ("asc" | "desc")
+                sortDir,
+                showErrorEntries
             );
 
             setOfflineDownloadList(Array.isArray(p.content) ? p.content : []);
@@ -1513,7 +1518,8 @@ const OfflineWindow: React.FC = () => {
                 status,
                 showHoldEntries,              // NEW
                 showEarlyAccess,  // NEW
-                sortDir                       // NEW ("asc" | "desc")
+                sortDir,
+                showErrorEntries
             );
 
             setOfflineDownloadList(Array.isArray(p.content) ? p.content : []);
@@ -1937,7 +1943,8 @@ const OfflineWindow: React.FC = () => {
                 /* status */ status,
                 showHoldEntries,              // NEW
                 showEarlyAccess,  // NEW
-                sortDir                       // NEW ("asc" | "desc")
+                sortDir,
+                showErrorEntries
             );
 
             if (Array.isArray(p.content)) {
@@ -2080,7 +2087,8 @@ const OfflineWindow: React.FC = () => {
                 /* status */ status,
                 showHoldEntries,              // NEW
                 showEarlyAccess,  // NEW
-                sortDir                       // NEW ("asc" | "desc")
+                sortDir,
+                showErrorEntries
             );
 
             // If current page is now past the end, jump to last page
@@ -2146,7 +2154,8 @@ const OfflineWindow: React.FC = () => {
             /* status */ status,
                 showHoldEntries,              // NEW
                 showEarlyAccess,  // NEW
-                sortDir                       // NEW ("asc" | "desc")
+                sortDir,
+                showErrorEntries
             );
 
             setOfflineDownloadList(Array.isArray(p?.content) ? p.content : []);
@@ -3777,6 +3786,15 @@ const OfflineWindow: React.FC = () => {
                                     checked={showHoldEntries}
                                     disabled={isLoading}
                                     onChange={e => setShowHoldEntries(e.target.checked)}
+                                />
+
+                                <Form.Check
+                                    type="checkbox"
+                                    id="show-error-checkbox"
+                                    label={<span style={{ color: isDarkMode ? '#fff' : '#000', fontWeight: 600 }}>Includes Errors</span>}
+                                    checked={showErrorEntries}
+                                    disabled={isLoading}
+                                    onChange={e => setShowErrorEntries(e.target.checked)}
                                 />
 
                                 {/* NEW: EarlyAccessEndsAt filter */}
