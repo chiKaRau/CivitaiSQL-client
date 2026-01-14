@@ -452,6 +452,8 @@ const OfflineWindow: React.FC = () => {
     // NEW: keep what the user clicked in the AI suggestion list (per versionID)
     const [selectedSuggestedPathByVid, setSelectedSuggestedPathByVid] = useState({} as Record<string, string>);
 
+    const [aiSuggestedOnly, setAiSuggestedOnly] = useState(false);
+
     const handleBulkPatchSelected = async () => {
         // 1) Targets = selected models (by versionID)
         const modelObjects = filteredDownloadList
@@ -1089,7 +1091,8 @@ const OfflineWindow: React.FC = () => {
                     showHoldEntries,              // NEW
                     showEarlyAccess,  // NEW
                     sortDir,
-                    showErrorEntries
+                    showErrorEntries,
+                    aiSuggestedOnly
                 );
 
                 if (!cancelled) {
@@ -1125,7 +1128,8 @@ const OfflineWindow: React.FC = () => {
         showHoldEntries,   // add
         showEarlyAccess,   // add
         sortDir,
-        showErrorEntries
+        showErrorEntries,
+        aiSuggestedOnly
     ]);
 
     useEffect(() => {
@@ -1203,7 +1207,7 @@ const OfflineWindow: React.FC = () => {
         }
         return extraFiltered;
     }, [offlineDownloadList, selectedIds, isModifyMode, showPending, showNonPending,
-        showHoldEntries, showEarlyAccess, showErrorEntries]);
+        showHoldEntries, showEarlyAccess, showErrorEntries, aiSuggestedOnly]);
 
     useEffect(() => {
         setSelectedIds(new Set());
@@ -1529,7 +1533,8 @@ const OfflineWindow: React.FC = () => {
                 showHoldEntries,              // NEW
                 showEarlyAccess,  // NEW
                 sortDir,
-                showErrorEntries
+                showErrorEntries,
+                aiSuggestedOnly
             );
 
             setOfflineDownloadList(Array.isArray(p.content) ? p.content : []);
@@ -1569,7 +1574,8 @@ const OfflineWindow: React.FC = () => {
                 showHoldEntries,              // NEW
                 showEarlyAccess,  // NEW
                 sortDir,
-                showErrorEntries
+                showErrorEntries,
+                aiSuggestedOnly
             );
 
             setOfflineDownloadList(Array.isArray(p.content) ? p.content : []);
@@ -1994,7 +2000,8 @@ const OfflineWindow: React.FC = () => {
                 showHoldEntries,              // NEW
                 showEarlyAccess,  // NEW
                 sortDir,
-                showErrorEntries
+                showErrorEntries,
+                aiSuggestedOnly
             );
 
             if (Array.isArray(p.content)) {
@@ -2138,7 +2145,8 @@ const OfflineWindow: React.FC = () => {
                 showHoldEntries,              // NEW
                 showEarlyAccess,  // NEW
                 sortDir,
-                showErrorEntries
+                showErrorEntries,
+                aiSuggestedOnly
             );
 
             // If current page is now past the end, jump to last page
@@ -2205,7 +2213,8 @@ const OfflineWindow: React.FC = () => {
                 showHoldEntries,              // NEW
                 showEarlyAccess,  // NEW
                 sortDir,
-                showErrorEntries
+                showErrorEntries,
+                aiSuggestedOnly
             );
 
             setOfflineDownloadList(Array.isArray(p?.content) ? p.content : []);
@@ -2473,8 +2482,8 @@ const OfflineWindow: React.FC = () => {
                         <strong>Download Path:</strong> {entry.downloadFilePath ?? 'N/A'}
                     </div>
                     <div><strong>Category:</strong> {entry.selectedCategory ?? 'N/A'}</div>
-                    <div><strong>Version ID:</strong> {entry.modelVersionObject?.id ?? 'N/A'}</div>
                     <div><strong>Model ID:</strong> {entry.modelVersionObject?.modelId ?? 'N/A'}</div>
+                    <div><strong>Version ID:</strong> {entry.modelVersionObject?.id ?? 'N/A'}</div>
                     <div>
                         <strong>URL:</strong>{' '}
                         {entry.civitaiUrl ? (
@@ -2888,6 +2897,12 @@ const OfflineWindow: React.FC = () => {
                                                 >
                                                     {entry.downloadFilePath ?? "N/A"}
                                                 </span>
+                                                <p style={{ margin: '4px 0' }}>
+                                                    <strong>Model ID:</strong> {entry.modelVersionObject?.modelId ?? 'N/A'}
+                                                </p>
+                                                <p style={{ margin: '4px 0' }}>
+                                                    <strong>Version ID:</strong> {entry.modelVersionObject?.id ?? 'N/A'}
+                                                </p>
                                             </>
                                         )}
                                     </div>
@@ -2895,6 +2910,38 @@ const OfflineWindow: React.FC = () => {
                                     {showAiSuggestionsPanel ? (
                                         <div style={{ marginTop: 8 }}>
                                             <strong>AI suggestion</strong>
+
+                                            <p>
+                                                <strong>Gemini Suggested Title:</strong>
+                                                <span
+                                                    title={entry.aiSuggestedArtworkTitle || ""}
+                                                    style={{
+                                                        flex: 1,
+                                                        whiteSpace: "normal",
+                                                        overflowWrap: "anywhere",   // best for long paths with no spaces
+                                                        wordBreak: "break-word",    // fallback behavior
+                                                        opacity: entry.aiSuggestedArtworkTitle ? 1 : 0.7,
+                                                    }}
+                                                >
+                                                    {entry.aiSuggestedArtworkTitle || "(none)"}
+                                                </span>
+                                            </p>
+
+                                            <p>
+                                                <strong>Jikan Normalized Title:</strong>
+                                                <span
+                                                    title={entry.jikanNormalizedArtworkTitle || ""}
+                                                    style={{
+                                                        flex: 1,
+                                                        whiteSpace: "normal",
+                                                        overflowWrap: "anywhere",   // best for long paths with no spaces
+                                                        wordBreak: "break-word",    // fallback behavior
+                                                        opacity: entry.jikanNormalizedArtworkTitle ? 1 : 0.7,
+                                                    }}
+                                                >
+                                                    {entry.jikanNormalizedArtworkTitle || "(none)"}
+                                                </span>
+                                            </p>
 
                                             {(() => {
                                                 const suggestedPaths = mergeSuggestedPathsForEntry(entry);
@@ -2922,6 +2969,7 @@ const OfflineWindow: React.FC = () => {
 
                                                 return (
                                                     <div style={{ marginTop: 6 }}>
+
                                                         {/* Selected path (defaults to the top suggestion) */}
                                                         <div
                                                             style={{
@@ -3040,12 +3088,11 @@ const OfflineWindow: React.FC = () => {
                                             <p style={{ margin: '4px 0' }}>
                                                 <strong>Category:</strong> {entry.selectedCategory ?? 'N/A'}
                                             </p>
-
-                                            <p style={{ margin: '4px 0' }}>
-                                                <strong>Version ID:</strong> {entry.modelVersionObject?.id ?? 'N/A'}
-                                            </p>
                                             <p style={{ margin: '4px 0' }}>
                                                 <strong>Model ID:</strong> {entry.modelVersionObject?.modelId ?? 'N/A'}
+                                            </p>
+                                            <p style={{ margin: '4px 0' }}>
+                                                <strong>Version ID:</strong> {entry.modelVersionObject?.id ?? 'N/A'}
                                             </p>
                                             <p style={{ margin: '4px 0' }}>
                                                 <strong>URL:</strong>{' '}
@@ -4390,7 +4437,10 @@ const OfflineWindow: React.FC = () => {
 
                                     <button
                                         type="button"
-                                        onClick={() => setShowAiSuggestionsPanel(v => !v)}
+                                        onClick={() => {
+                                            setShowAiSuggestionsPanel(v => !v)
+                                            setAiSuggestedOnly(x => !x)
+                                        }}
                                         style={{
                                             border: "none",
                                             borderRadius: 8,
