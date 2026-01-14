@@ -693,51 +693,6 @@ const WindowComponent: React.FC = () => {
     };
 
     // Function to handle the API call and update the button state
-    const handleDownloadMultipleFile = async (civitaiData: any, civitaiUrl: string) => {
-        let civitaiVersionID = civitaiData?.modelVersions[0]?.id.toString();
-        let civitaiModelID = civitaiData?.id.toString();
-        let civitaiFileName = retrieveCivitaiFileName(civitaiData, civitaiVersionID);
-        let filesList = retrieveCivitaiFilesList(civitaiData, civitaiVersionID)
-        //Check for null or empty
-        if (
-            civitaiUrl === null || civitaiUrl === "" ||
-            civitaiFileName === null || civitaiFileName === "" ||
-            civitaiModelID === null || civitaiModelID === "" ||
-            civitaiVersionID === null || civitaiVersionID === "" ||
-            downloadFilePath === null || downloadFilePath === "" ||
-            filesList === null || !filesList.length
-        ) {
-            console.log("fail")
-            return;
-        }
-
-        let data = null;
-
-        if (downloadMethod === "server") {
-            //If download Method is server, the server will download the file into server's folder
-            await fetchDownloadFilesByServer(civitaiUrl, civitaiFileName, civitaiModelID,
-                civitaiVersionID, downloadFilePath, filesList, dispatch);
-        } else {
-            //if download Method is browser, the chrome browser will download the file into server's folder
-            await fetchDownloadFilesByBrowser(civitaiUrl, downloadFilePath, dispatch);
-
-            chrome.storage.local.get('originalTabId', (result) => {
-                if (result.originalTabId) {
-                    chrome.tabs.sendMessage(result.originalTabId, {
-                        action: "browser-download", data: {
-                            name: retrieveCivitaiFileName(civitaiData, civitaiVersionID), modelID: civitaiModelID,
-                            versionID: civitaiVersionID, downloadFilePath: downloadFilePath, filesList: filesList
-                        }
-                    });
-                }
-            });
-        }
-
-        return data;
-    };
-
-
-    // Function to handle the API call and update the button state
     const handleDownloadMultipleFile_v2 = async (
         civitaiData: any,
         civitaiUrl: string,
@@ -763,6 +718,12 @@ const WindowComponent: React.FC = () => {
             !civitaiModelFileList?.length
         ) {
             console.log("fail");
+            return;
+        }
+
+        //FIX HERE
+        if (["/Pending/"].includes(downloadFilePathToUse)) {
+            alert("DownloadFilePath cannot be Pending");
             return;
         }
 

@@ -3,6 +3,7 @@ import axios from 'axios';
 import WindowUpdateModelPanel from './WindowUpdateModelPanel';
 import { fetchFindVersionNumbersForModel } from '../../api/civitaiSQL_api';
 import { useDispatch } from 'react-redux';
+import { updateDownloadFilePath } from '../../store/actions/chromeActions';
 
 interface Version {
     id: number;
@@ -60,6 +61,7 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, on
                 }
             });
             setHasUpdated(false);
+            dispatch(updateDownloadFilePath("/@scan@/ACG/Pending/"));
             setIsFullInfoModelPanelVisible(false)
         }
     }, [hasUpdated]);

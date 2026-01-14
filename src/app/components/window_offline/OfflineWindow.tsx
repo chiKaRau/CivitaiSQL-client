@@ -449,6 +449,8 @@ const OfflineWindow: React.FC = () => {
     // NEW: toggle AI Suggestions block (only used in Modify Mode UI)
     const [showAiSuggestionsPanel, setShowAiSuggestionsPanel] = useState(false);
 
+    // NEW: keep what the user clicked in the AI suggestion list (per versionID)
+    const [selectedSuggestedPathByVid, setSelectedSuggestedPathByVid] = useState({} as Record<string, string>);
 
     const handleBulkPatchSelected = async () => {
         // 1) Targets = selected models (by versionID)
@@ -673,6 +675,55 @@ const OfflineWindow: React.FC = () => {
     function buildSrcSet(url: string, widths: number[]) {
         return widths.map(w => `${withWidth(url, w)} ${w}w`).join(', ');
     }
+
+    // Helpers for AI suggestions display
+    const normalizePathKey = (p: string) =>
+        (p || "")
+            .trim()
+            .replace(/\\/g, "/")
+            .replace(/\/+/g, "/")
+            .replace(/^\/+/, "")
+            .replace(/\/+$/, "")
+            .toLowerCase();
+
+    const isCharactersPath = (p: string) => normalizePathKey(p).includes("/acg/characters");
+
+    // Merge + dedupe suggested paths, while:
+    // 1) keeping AI suggestions first,
+    // 2) prioritizing any "/ACG/Characters" paths to the top within each source list.
+    const mergeSuggestedPathsForEntry = (entry: OfflineDownloadEntry): string[] => {
+        const cleanArr = (arr?: string[] | null) =>
+            (Array.isArray(arr) ? arr : [])
+                .map((x) => (x ?? "").trim())
+                .filter(Boolean);
+
+        const prioritize = (arr: string[]) => {
+            const pri: string[] = [];
+            const rest: string[] = [];
+            for (const p of arr) (isCharactersPath(p) ? pri : rest).push(p);
+            return [...pri, ...rest];
+        };
+
+        const sources = [
+            prioritize(cleanArr(entry.aiSuggestedDownloadFilePath)),
+            prioritize(cleanArr(entry.jikanSuggestedDownloadFilePath)),
+            prioritize(cleanArr(entry.localSuggestedDownloadFilePath)),
+        ];
+
+        const seen = new Set<string>();
+        const out: string[] = [];
+
+        for (const src of sources) {
+            for (const p of src) {
+                const key = normalizePathKey(p);
+                if (!key) continue;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                out.push(p);
+            }
+        }
+        return out;
+    };
 
     // Accept either a string URL or an {url,width,height} object.
     function normalizeImg(img: string | { url: string; width?: number; height?: number }) {
@@ -948,7 +999,6 @@ const OfflineWindow: React.FC = () => {
             const next = !prev;
 
             if (next) {
-                setShowAiSuggestionsPanel(true);
                 setShowPending(true);
                 setShowNonPending(false);
             } else {
@@ -2507,6 +2557,8 @@ const OfflineWindow: React.FC = () => {
 
                         const isSelected = selectedIds.has(entry.civitaiVersionID);
                         const showEA = isEntryEarlyAccess(entry);
+
+
                         return (
                             <Card
                                 key={cardIndex}
@@ -2843,6 +2895,144 @@ const OfflineWindow: React.FC = () => {
                                     {showAiSuggestionsPanel ? (
                                         <div style={{ marginTop: 8 }}>
                                             <strong>AI suggestion</strong>
+
+                                            {(() => {
+                                                const suggestedPaths = mergeSuggestedPathsForEntry(entry);
+                                                const vidKey = entry.civitaiVersionID;
+
+                                                const hasUserPick = Object.prototype.hasOwnProperty.call(selectedSuggestedPathByVid, vidKey);
+                                                const selectedPath = hasUserPick
+                                                    ? (selectedSuggestedPathByVid[vidKey] ?? "")
+                                                    : (suggestedPaths[0] ?? "");
+
+                                                const selectedKey = normalizePathKey(selectedPath);
+
+                                                const clearSelected = (e: React.MouseEvent) => {
+                                                    e.stopPropagation();
+                                                    setSelectedSuggestedPathByVid((prev) => ({ ...prev, [vidKey]: "" }));
+                                                };
+
+                                                if (suggestedPaths.length === 0) {
+                                                    return (
+                                                        <div style={{ marginTop: 6, opacity: 0.85 }}>
+                                                            N/A
+                                                        </div>
+                                                    );
+                                                }
+
+                                                return (
+                                                    <div style={{ marginTop: 6 }}>
+                                                        {/* Selected path (defaults to the top suggestion) */}
+                                                        <div
+                                                            style={{
+                                                                display: "flex",
+                                                                alignItems: "center",
+                                                                gap: 8,
+                                                                marginBottom: 6,
+                                                            }}
+                                                        >
+                                                            <strong>Selected:</strong>
+                                                            <span
+                                                                title={selectedPath || ""}
+                                                                style={{
+                                                                    flex: 1,
+                                                                    whiteSpace: "normal",
+                                                                    overflowWrap: "anywhere",   // best for long paths with no spaces
+                                                                    wordBreak: "break-word",    // fallback behavior
+                                                                    opacity: selectedPath ? 1 : 0.7,
+
+                                                                    padding: "6px 10px",
+                                                                    borderRadius: 10,
+                                                                    border: `1px solid ${isDarkMode ? "rgba(96,165,250,0.45)" : "rgba(13,110,253,0.35)"}`,
+                                                                    background: isDarkMode ? "rgba(96,165,250,0.12)" : "rgba(13,110,253,0.08)",
+                                                                    boxShadow: isDarkMode ? "0 0 0 2px rgba(96,165,250,0.10)" : "0 0 0 2px rgba(13,110,253,0.06)",
+                                                                    fontWeight: 600,
+                                                                }}
+                                                            >
+                                                                {selectedPath || "(none)"}
+                                                            </span>
+
+                                                            <button
+                                                                type="button"
+                                                                onClick={clearSelected}
+                                                                disabled={!selectedPath}
+                                                                style={{
+                                                                    borderRadius: 8,
+                                                                    padding: "4px 10px",
+                                                                    cursor: selectedPath ? "pointer" : "not-allowed",
+                                                                    border: isDarkMode ? "1px solid rgba(255,255,255,0.18)" : "1px solid rgba(0,0,0,0.18)",
+                                                                    background: "transparent",
+                                                                    color: isDarkMode ? "#fff" : "#000",
+                                                                    opacity: selectedPath ? 1 : 0.5,
+                                                                }}
+                                                            >
+                                                                Clear
+                                                            </button>
+                                                        </div>
+
+                                                        <div style={{ fontWeight: 700, marginBottom: 6 }}>
+                                                            Suggested paths ({suggestedPaths.length})
+                                                        </div>
+
+                                                        {/* Limit to ~3 visible items; scroll for more */}
+                                                        <div style={{ maxHeight: 132, overflowY: "auto", paddingRight: 6 }}>
+                                                            <ul
+                                                                style={{
+                                                                    margin: 0,
+                                                                    padding: 0,
+                                                                    listStyle: "none",
+                                                                    display: "flex",
+                                                                    flexDirection: "column",
+                                                                    gap: 8,
+                                                                }}
+                                                            >
+                                                                {suggestedPaths.map((p) => {
+                                                                    const isSelected = selectedKey && normalizePathKey(p) === selectedKey;
+                                                                    return (
+                                                                        <li key={p}>
+                                                                            <button
+                                                                                type="button"
+                                                                                title={p} // hover shows full path
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    setSelectedSuggestedPathByVid((prev) => ({ ...prev, [vidKey]: p }));
+                                                                                }}
+                                                                                style={{
+                                                                                    width: "100%",
+                                                                                    borderRadius: 10,
+                                                                                    padding: "8px 10px",
+                                                                                    cursor: "pointer",
+                                                                                    textAlign: "left",
+                                                                                    border: isSelected
+                                                                                        ? (isDarkMode ? "1px solid rgba(96,165,250,0.9)" : "1px solid rgba(37,99,235,0.9)")
+                                                                                        : (isDarkMode ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(0,0,0,0.14)"),
+                                                                                    background: isSelected
+                                                                                        ? (isDarkMode ? "rgba(96,165,250,0.14)" : "rgba(37,99,235,0.10)")
+                                                                                        : (isDarkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.03)"),
+                                                                                    color: isDarkMode ? "#fff" : "#000",
+                                                                                }}
+                                                                            >
+                                                                                <span
+                                                                                    style={{
+                                                                                        display: "block",
+                                                                                        overflow: "hidden",
+                                                                                        textOverflow: "ellipsis",
+                                                                                        whiteSpace: "nowrap",
+                                                                                    }}
+                                                                                >
+                                                                                    {p}
+                                                                                </span>
+                                                                            </button>
+                                                                        </li>
+                                                                    );
+                                                                })}
+                                                            </ul>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
+
+
                                         </div>
                                     ) : (
                                         <>
