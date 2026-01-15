@@ -573,7 +573,7 @@ const OfflineWindow: React.FC = () => {
                 const batchNo = batchIndex + 1;
 
                 setCurrentBatchRange(
-                    `AI Suggest: processing ${start} ~ ${end} (batch ${batchIndex + 1})`
+                    `Now processing ${start} ~ ${end} (batch ${batchIndex + 1})`
                 );
 
                 setBatchResults(prev => [
@@ -995,6 +995,13 @@ const OfflineWindow: React.FC = () => {
     const toggleTheme = () => {
         setIsDarkMode(prevMode => !prevMode);
     };
+
+    const toggleAiSuggestionsPanel = () => {
+        const next = !showAiSuggestionsPanel; // header controls open/close
+        setShowAiSuggestionsPanel(next);
+        setAiSuggestedOnly(next);
+    };
+
 
     const toggleModifyMode = () => {
         setIsModifyMode(prev => {
@@ -4413,218 +4420,222 @@ const OfflineWindow: React.FC = () => {
 
                                 <div
                                     style={{
-                                        marginTop: 10,
-                                        padding: 10,
                                         borderRadius: 10,
-                                        border: isDarkMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.12)",
-                                        background: isDarkMode ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+                                        padding: 10,
+                                        background: isDarkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                                        border: isDarkMode ? "1px solid rgba(255,255,255,0.10)" : "1px solid rgba(0,0,0,0.08)",
                                     }}
                                 >
-                                    {/* Title */}
+                                    {/* ✅ Header (click to expand/collapse) */}
                                     <div
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-expanded={showAiSuggestionsPanel}
+                                        onClick={toggleAiSuggestionsPanel}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter" || e.key === " ") {
+                                                e.preventDefault();
+                                                toggleAiSuggestionsPanel();
+                                            }
+                                        }}
                                         style={{
-                                            fontWeight: 700,
-                                            marginBottom: 8,
-                                            color: isDarkMode ? "#f0f0f0" : "#222",
                                             display: "flex",
                                             alignItems: "center",
-                                            gap: 8,
+                                            justifyContent: "space-between",
+                                            gap: 10,
+                                            cursor: "pointer",
+                                            userSelect: "none",
+                                            fontWeight: 700,
+                                            color: isDarkMode ? "#f0f0f0" : "#222",
+                                            padding: "6px 8px",
+                                            borderRadius: 8,
                                         }}
+                                        title={showAiSuggestionsPanel ? "Click to collapse" : "Click to expand"}
                                     >
-                                        <MdOutlineTipsAndUpdates />
-                                        AI Suggestions
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                            <MdOutlineTipsAndUpdates />
+                                            <span>AI Suggestions</span>
+
+                                            {/* Optional quick status hint in header */}
+                                            {aiSuggestRunStatus === "running" && (
+                                                <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 600, opacity: 0.9 }}>
+                                                    <Spinner animation="border" size="sm" variant={isDarkMode ? "light" : "dark"} />
+                                                    Running ...
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <div style={{ fontWeight: 600, opacity: 0.9 }}>
+                                            {showAiSuggestionsPanel ? "Hide" : "Show"}
+                                        </div>
                                     </div>
 
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setShowAiSuggestionsPanel(v => !v)
-                                            setAiSuggestedOnly(x => !x)
-                                        }}
-                                        style={{
-                                            border: "none",
-                                            borderRadius: 8,
-                                            padding: "4px 10px",
-                                            cursor: "pointer",
-                                            fontWeight: 600,
-                                            background: isDarkMode ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.08)",
-                                            color: isDarkMode ? "#fff" : "#111",
-                                        }}
-                                    >
-                                        {showAiSuggestionsPanel ? "Hide AI Suggestion" : "Show AI Suggestion"}
-                                    </button>
-
-                                    {/* Row 1: Button + dropdown on same line */}
+                                    {/* ✅ Collapsible body */}
                                     <div
                                         style={{
-                                            display: "flex",
-                                            gap: 10,
-                                            alignItems: "center",
-                                            flexWrap: "nowrap",
-                                            whiteSpace: "nowrap",
-                                            overflowX: "auto",
-                                            paddingBottom: 2,
+                                            maxHeight: showAiSuggestionsPanel ? 1200 : 0, // large enough for your content
+                                            overflow: "hidden",
+                                            opacity: showAiSuggestionsPanel ? 1 : 0,
+                                            transition: "max-height 200ms ease, opacity 200ms ease",
+                                            pointerEvents: showAiSuggestionsPanel ? "auto" : "none",
                                         }}
                                     >
-                                        <Button
-                                            variant="warning"
-                                            onClick={handleRunPendingAiSuggestions}
-                                            disabled={isLoading || isPatching || aiSuggestRunStatus === "running"}
-                                            title="Run AI suggestions for pending entries"
-                                            style={{
-                                                display: "inline-flex",
-                                                alignItems: "center",
-                                                gap: 6,
-                                                maxWidth: 320,
-                                                minWidth: 190,
-                                                overflow: "hidden",
-                                                flex: "1 1 auto",
-                                            }}
-                                        >
-                                            <MdOutlineTipsAndUpdates style={{ flex: "0 0 auto" }} />
-
-                                            <span
+                                        <div style={{ paddingTop: 10 }}>
+                                            {/* Row 1: Button + dropdown on same line */}
+                                            <div
                                                 style={{
-                                                    whiteSpace: "normal",
-                                                    textOverflow: "clip",
-                                                    overflow: "visible",
-                                                    overflowWrap: "anywhere",
-                                                    wordBreak: "break-word",
-                                                    lineHeight: 1.1,
-                                                    textAlign: "left",
-                                                    flex: "1 1 auto",
-                                                    minWidth: 0,
+                                                    display: "flex",
+                                                    gap: 10,
+                                                    alignItems: "center",
+                                                    flexWrap: "nowrap",
+                                                    whiteSpace: "nowrap",
+                                                    overflowX: "auto",
+                                                    paddingBottom: 2,
                                                 }}
                                             >
-                                                Run AI Suggestion for downloadFilePath
-                                            </span>
-                                        </Button>
+                                                <Button
+                                                    variant="warning"
+                                                    onClick={handleRunPendingAiSuggestions}
+                                                    disabled={isLoading || isPatching || aiSuggestRunStatus === "running"}
+                                                    title="Run AI suggestions for pending entries"
+                                                    style={{
+                                                        display: "inline-flex",
+                                                        alignItems: "center",
+                                                        gap: 6,
+                                                        maxWidth: 320,
+                                                        minWidth: 190,
+                                                        overflow: "hidden",
+                                                        flex: "1 1 auto",
+                                                    }}
+                                                >
+                                                    <MdOutlineTipsAndUpdates style={{ flex: "0 0 auto" }} />
 
-                                        <Form.Control
-                                            as="select"
-                                            value={aiSuggestCountInput}
-                                            onChange={onChangeAiSuggestCount}
-                                            onBlur={() => setAiSuggestCountInput(String(getAiSuggestCount()))}
-                                            disabled={isLoading || isPatching || aiSuggestRunStatus === "running"}
-                                            style={{ width: 90, flex: "0 0 auto" }}
-                                            aria-label="AI suggestion total count (10 to 100)"
-                                        >
-                                            {Array.from({ length: 10 }, (_, i) => 100 - i * 10).map((n) => (
-                                                <option key={n} value={String(n)}>
-                                                    {n}
-                                                </option>
-                                            ))}
+                                                    <span
+                                                        style={{
+                                                            whiteSpace: "normal",
+                                                            textOverflow: "clip",
+                                                            overflow: "visible",
+                                                            overflowWrap: "anywhere",
+                                                            wordBreak: "break-word",
+                                                            lineHeight: 1.1,
+                                                            textAlign: "left",
+                                                            flex: "1 1 auto",
+                                                            minWidth: 0,
+                                                        }}
+                                                    >
+                                                        Run AI Suggestion for downloadFilePath
+                                                    </span>
+                                                </Button>
 
-                                        </Form.Control>
+                                                <Form.Control
+                                                    as="select"
+                                                    value={aiSuggestCountInput}
+                                                    onChange={onChangeAiSuggestCount}
+                                                    onBlur={() => setAiSuggestCountInput(String(getAiSuggestCount()))}
+                                                    disabled={isLoading || isPatching || aiSuggestRunStatus === "running"}
+                                                    style={{ width: 90, flex: "0 0 auto" }}
+                                                    aria-label="AI suggestion total count (10 to 100)"
+                                                >
+                                                    {Array.from({ length: 10 }, (_, i) => 100 - i * 10).map((n) => (
+                                                        <option key={n} value={String(n)}>
+                                                            {n}
+                                                        </option>
+                                                    ))}
+                                                </Form.Control>
+                                            </div>
 
-                                    </div>
+                                            {/* Row 2: Status line */}
+                                            <div
+                                                style={{
+                                                    marginTop: 10,
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: 10,
+                                                    flexWrap: "wrap",
+                                                    minHeight: 22,
+                                                    color: isDarkMode ? "#e6e6e6" : "#333",
+                                                }}
+                                            >
+                                                {aiSuggestRunStatus === "success" && (
+                                                    <Badge bg="success" style={{ flex: "0 0 auto" }}>
+                                                        Done
+                                                    </Badge>
+                                                )}
 
-                                    {/* Row 2: Status line (running/success/fail) */}
-                                    <div
-                                        style={{
-                                            marginTop: 10,
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: 10,
-                                            flexWrap: "wrap",
-                                            minHeight: 22,
-                                            color: isDarkMode ? "#e6e6e6" : "#333",
-                                        }}
-                                    >
-                                        {aiSuggestRunStatus === "running" && (
-                                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                                                <Spinner
-                                                    animation="border"
-                                                    size="sm"
-                                                    variant={isDarkMode ? "light" : "dark"}
-                                                />
-                                                Running...
-                                            </span>
-                                        )}
+                                                {aiSuggestRunStatus === "fail" && (
+                                                    <Badge bg="danger" style={{ flex: "0 0 auto" }}>
+                                                        Stopped
+                                                    </Badge>
+                                                )}
 
-                                        {/* Optional overall summary (you can delete this if you don't want it) */}
-                                        {aiSuggestRunStatus === "success" && (
-                                            <Badge bg="success" style={{ flex: "0 0 auto" }}>
-                                                Done
-                                            </Badge>
-                                        )}
+                                                {batchResults.length > 0 && (
+                                                    <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+                                                        {batchResults.map((b) => (
+                                                            <div key={b.batchNo} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                                                <span>
+                                                                    <strong>Batch #{b.batchNo}</strong> ({b.start} ~ {b.end})
+                                                                </span>
 
-                                        {aiSuggestRunStatus === "fail" && (
-                                            <Badge bg="danger" style={{ flex: "0 0 auto" }}>
-                                                Stopped
-                                            </Badge>
-                                        )}
+                                                                {b.status === "success" && <Badge bg="success">Success</Badge>}
+                                                                {b.status === "fail" && <Badge bg="danger">Fail</Badge>}
+                                                                {b.status === "running" && (
+                                                                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                                                        <Spinner animation="border" size="sm" variant={isDarkMode ? "light" : "dark"} />
+                                                                        Processing...
+                                                                    </span>
+                                                                )}
 
-                                        {/* ✅ Per-batch results */}
-                                        {batchResults.length > 0 && (
-                                            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-                                                {batchResults.map((b) => (
-                                                    <div key={b.batchNo} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                                        <span>
-                                                            <strong>Batch #{b.batchNo}</strong> ({b.start} ~ {b.end})
-                                                        </span>
-
-                                                        {b.status === "success" && <Badge bg="success">Success</Badge>}
-                                                        {b.status === "fail" && <Badge bg="danger">Fail</Badge>}
-                                                        {b.status === "running" && (
-                                                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                                                                <Spinner animation="border" size="sm" variant={isDarkMode ? "light" : "dark"} />
-                                                                Running...
-                                                            </span>
-                                                        )}
-
-                                                        {!!b.msg && b.status !== "running" && (
-                                                            <small
-                                                                style={{
-                                                                    opacity: isDarkMode ? 0.95 : 0.9,
-                                                                    color: isDarkMode ? "#e6e6e6" : "#333",
-                                                                    maxWidth: 520,
-                                                                    overflow: "hidden",
-                                                                    textOverflow: "ellipsis",
-                                                                    whiteSpace: "nowrap",
-                                                                }}
-                                                                title={b.msg}
-                                                            >
-                                                                {b.msg}
-                                                            </small>
-                                                        )}
+                                                                {!!b.msg && b.status !== "running" && (
+                                                                    <small
+                                                                        style={{
+                                                                            opacity: isDarkMode ? 0.95 : 0.9,
+                                                                            color: isDarkMode ? "#e6e6e6" : "#333",
+                                                                            maxWidth: 520,
+                                                                            overflow: "hidden",
+                                                                            textOverflow: "ellipsis",
+                                                                            whiteSpace: "nowrap",
+                                                                        }}
+                                                                        title={b.msg}
+                                                                    >
+                                                                        {b.msg}
+                                                                    </small>
+                                                                )}
+                                                            </div>
+                                                        ))}
                                                     </div>
-                                                ))}
-                                            </div>
-                                        )}
+                                                )}
 
-
-                                        {/* Optional: show nothing when idle, but keep line height stable */}
-                                        {!aiSuggestRunStatus && <small style={{ opacity: 0.75 }}> </small>}
-                                    </div>
-
-                                    {/* Row 3: Progress + cooldown */}
-                                    {aiSuggestRunStatus === "running" && (
-                                        <div
-                                            style={{
-                                                marginTop: 6,
-                                                display: "flex",
-                                                flexDirection: "column",
-                                                gap: 4,
-                                                color: isDarkMode ? "#e6e6e6" : "#333",
-                                            }}
-                                        >
-                                            {currentBatchRange && (
-                                                <div style={{ fontWeight: 600 }}>{currentBatchRange}</div>
-                                            )}
-
-                                            <div>
-                                                Progress: {aiSuggestProgress.completed}/{aiSuggestProgress.total}
+                                                {!aiSuggestRunStatus && <small style={{ opacity: 0.75 }}> </small>}
                                             </div>
 
-                                            {batchCooldown !== null && (
-                                                <div>
-                                                    Cooldown: <strong>{batchCooldown}s</strong>
+                                            {/* Row 3: Progress + cooldown */}
+                                            {aiSuggestRunStatus === "running" && (
+                                                <div
+                                                    style={{
+                                                        marginTop: 6,
+                                                        display: "flex",
+                                                        flexDirection: "column",
+                                                        gap: 4,
+                                                        color: isDarkMode ? "#e6e6e6" : "#333",
+                                                    }}
+                                                >
+                                                    {currentBatchRange && <div style={{ fontWeight: 600 }}>{currentBatchRange}</div>}
+
+                                                    <div>
+                                                        Progress: {aiSuggestProgress.completed}/{aiSuggestProgress.total}
+                                                    </div>
+
+                                                    {batchCooldown !== null && (
+                                                        <div>
+                                                            Cooldown: <strong>{batchCooldown}s</strong>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
-                                    )}
+                                    </div>
                                 </div>
+
 
                             </div>
                         )}
