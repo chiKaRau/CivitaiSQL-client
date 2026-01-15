@@ -46,7 +46,8 @@ import {
     fetchGetErrorModelList,
     fetchCivitaiModelInfoFromCivitaiByVersionID,
     fetchBulkPatchOfflineDownloadList,
-    fetchRunPendingFromOfflineDownloadListAiSuggestion
+    fetchRunPendingFromOfflineDownloadListAiSuggestion,
+    fetchBulkUpdateDownloadFilePath
 } from "../../api/civitaiSQL_api"
 
 import { makeOfflineWindowStyles } from "./OfflineWindow.styles";
@@ -453,6 +454,8 @@ const OfflineWindow: React.FC = () => {
     const [selectedSuggestedPathByVid, setSelectedSuggestedPathByVid] = useState({} as Record<string, string>);
 
     const [aiSuggestedOnly, setAiSuggestedOnly] = useState(false);
+
+    const [isBulkUpdatingDownloadPaths, setIsBulkUpdatingDownloadPaths] = React.useState(false);
 
     const handleBulkPatchSelected = async () => {
         // 1) Targets = selected models (by versionID)
@@ -1000,6 +1003,7 @@ const OfflineWindow: React.FC = () => {
         const next = !showAiSuggestionsPanel; // header controls open/close
         setShowAiSuggestionsPanel(next);
         setAiSuggestedOnly(next);
+        setSelectedIds(new Set());
     };
 
 
@@ -1018,6 +1022,8 @@ const OfflineWindow: React.FC = () => {
         });
 
         setSelectedIds(new Set());
+        setShowAiSuggestionsPanel(false)
+        setAiSuggestedOnly(false);
         setFilterText("");
     };
 
@@ -2031,6 +2037,79 @@ const OfflineWindow: React.FC = () => {
             setServerTotalPages(1);
         }
     };
+
+    const handleApplySelectedAiPathsToDownloadFilePath = async () => {
+        // selectedIds contains civitaiVersionID keys in your app :contentReference[oaicite:6]{index=6}
+        const selectedEntries = filteredDownloadList.filter((e) =>
+            selectedIds.has(e.civitaiVersionID)
+        );
+
+        // Build payload:
+        // - pick user's clicked path first (selectedSuggestedPathByVid)
+        // - else default to top suggestion from mergeSuggestedPathsForEntry()
+        // - skip null/empty/"UNKNOWN"
+        const items = selectedEntries
+            .map((entry) => {
+                const vidKey = entry.civitaiVersionID;
+
+                const suggestedPaths = mergeSuggestedPathsForEntry(entry); // :contentReference[oaicite:7]{index=7}
+                const picked = (selectedSuggestedPathByVid[vidKey] || "").trim(); // :contentReference[oaicite:8]{index=8}
+                const top = (suggestedPaths[0] || "").trim();
+
+                const selectedPath = (picked || top).trim();
+
+                if (!selectedPath) return null;
+                if (selectedPath.toUpperCase() === "UNKNOWN") return null;
+
+                return {
+                    civitaiModelID: entry.civitaiModelID,
+                    civitaiVersionID: entry.civitaiVersionID,
+                    selectedPath,
+                };
+            })
+            .filter(Boolean) as { civitaiModelID: string; civitaiVersionID: string; selectedPath: string }[];
+
+        if (!items.length) {
+            dispatch(
+                setError({
+                    hasError: true,
+                    errorMessage:
+                        "No valid selectedPath to apply. (Empty / null / UNKNOWN were skipped.)",
+                })
+            );
+            return;
+        }
+
+        setIsBulkUpdatingDownloadPaths(true);
+        setUiMode("modifying");
+
+        try {
+            const resp = await fetchBulkUpdateDownloadFilePath(items, dispatch);
+
+            // refresh list so you immediately see updated downloadFilePath
+            await refreshCurrentPage(); // already used elsewhere :contentReference[oaicite:9]{index=9}
+
+            // optional: show some feedback in your existing AI msg line
+            const updatedPairs = resp?.updatedPairs ?? resp?.savedEntities ?? null;
+            setAiSuggestRunMsg(
+                updatedPairs !== null
+                    ? `Applied downloadFilePath for ${updatedPairs} item(s).`
+                    : "Applied downloadFilePath."
+            );
+        } catch (err: any) {
+            dispatch(
+                setError({
+                    hasError: true,
+                    errorMessage: `Bulk update downloadFilePath failed: ${err?.response?.data?.message || err?.message || "Unknown error"
+                        }`,
+                })
+            );
+        } finally {
+            setIsBulkUpdatingDownloadPaths(false);
+            setUiMode("idle");
+        }
+    };
+
 
     // ---- Early Access helpers ----
     function pad2(n: number) { return n < 10 ? `0${n}` : `${n}`; }
@@ -4542,6 +4621,36 @@ const OfflineWindow: React.FC = () => {
                                                         </option>
                                                     ))}
                                                 </Form.Control>
+                                            </div>
+
+
+                                            {/* ✅ Row 1.5: Apply selected paths to downloadFilePath */}
+                                            <div style={{ marginTop: 10 }}>
+                                                <Button
+                                                    variant="primary"
+                                                    onClick={handleApplySelectedAiPathsToDownloadFilePath}
+                                                    disabled={
+                                                        isLoading ||
+                                                        isPatching ||
+                                                        isBulkUpdatingDownloadPaths ||
+                                                        aiSuggestRunStatus === "running" ||
+                                                        selectedIds.size === 0
+                                                    }
+                                                    title="Update downloadFilePath for selected models using the AI selectedPath"
+                                                    style={{
+                                                        display: "inline-flex",
+                                                        alignItems: "center",
+                                                        gap: 8,
+                                                        fontWeight: 700,
+                                                    }}
+                                                >
+                                                    {isBulkUpdatingDownloadPaths && (
+                                                        <Spinner animation="border" size="sm" variant="light" />
+                                                    )}
+                                                    {isBulkUpdatingDownloadPaths
+                                                        ? "Updating downloadFilePath..."
+                                                        : `Apply selectedPath -> downloadFilePath (${selectedIds.size})`}
+                                                </Button>
                                             </div>
 
                                             {/* Row 2: Status line */}

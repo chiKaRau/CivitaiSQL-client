@@ -1435,3 +1435,21 @@ export const fetchRunPendingFromOfflineDownloadListAiSuggestion = async (
         return null;
     }
 };
+
+export const fetchBulkUpdateDownloadFilePath = async (
+    items: { civitaiModelID: string; civitaiVersionID: string; selectedPath: string }[],
+    dispatch: any
+) => {
+    try {
+        const url = `${config.domain}/api/bulk-update-download-file-path`;
+        const response = await axios.put(url, items);
+
+        if (response.status >= 200 && response.status < 300) {
+            return response.data?.payload;
+        }
+        throw new Error("Unexpected response status: " + response.status);
+    } catch (error: any) {
+        console.error("Bulk update downloadFilePath error:", error?.message || error);
+        throw error;
+    }
+};
