@@ -2121,15 +2121,34 @@ const OfflineWindow: React.FC = () => {
     }
 
     function getEarlyAccessEndsAt(entry: OfflineDownloadEntry): Date | null {
-        if (!entry.earlyAccessEndsAt) return null;
-        const d = new Date(entry.earlyAccessEndsAt);
-        return Number.isNaN(d.getTime()) ? null : d;
+        const s = entry.earlyAccessEndsAt?.trim();
+        if (!s) return null;
+
+        // Has timezone info -> safe to let Date parse it
+        if (/[zZ]$/.test(s) || /[+-]\d{2}:\d{2}$/.test(s)) {
+            const d = new Date(s);
+            return Number.isNaN(d.getTime()) ? null : d;
+        }
+
+        // No timezone info -> FORCE UTC parsing
+        // Supports "YYYY-MM-DDTHH:mm:ss" or "YYYY-MM-DD HH:mm:ss" and optional .fraction
+        const m = s.match(
+            /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?$/
+        );
+        if (!m) return null;
+
+        const [, y, mo, d, h, mi, se, frac] = m;
+
+        // take first 3 digits as milliseconds
+        const ms = frac ? Number(frac.padEnd(3, "0").slice(0, 3)) : 0;
+
+        const dt = new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi, +se, ms));
+        return Number.isNaN(dt.getTime()) ? null : dt;
     }
 
-    function isEarlyAccessActive(entry: OfflineDownloadEntry, now = new Date()): boolean {
+    function isEarlyAccessActive(entry: OfflineDownloadEntry): boolean {
         const ends = getEarlyAccessEndsAt(entry);
-        if (!ends) return false;              // no date -> treat as Public
-        return ends.getTime() > now.getTime(); // only active if in the future
+        return !!ends && ends.getTime() > Date.now();
     }
 
 
