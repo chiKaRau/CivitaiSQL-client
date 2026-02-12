@@ -84,7 +84,8 @@ import {
     fetchUpdateCreatorUrlList,
     fetchGetCreatorUrlList,
     fetchGetFoldersList,
-    fetchRemoveFromCreatorUrlList
+    fetchRemoveFromCreatorUrlList,
+    fetchGetRatingList
 } from "../../api/civitaiSQL_api"
 
 //utils
@@ -165,15 +166,74 @@ const WindowComponent: React.FC = () => {
     const [isHandleRefresh, setIsHandleRefresh] = useState(false);
 
     // at the top of your component
-    const ratingOrder = ["EX", "SSS", "SS", "S", "A", "B", "C", "D", "E", "F", "N/A"];
+    type RatingCfg = { rating: string; expectedMax: number };
+
+    // Optional fallback so UI doesn't go blank if API fails.
+    // If you truly want zero hardcode, set this to [] and handle empty UI states.
+    const DEFAULT_RATING_CFG: RatingCfg[] = [
+        { rating: "EX", expectedMax: 10 },
+        { rating: "SSS", expectedMax: 25 },
+        { rating: "SS", expectedMax: 50 },
+        { rating: "S", expectedMax: 100 },
+        { rating: "A", expectedMax: 150 },
+        { rating: "B", expectedMax: 200 },
+        { rating: "C", expectedMax: 500 },
+        { rating: "D", expectedMax: 500 },
+        { rating: "E", expectedMax: 500 },
+        { rating: "F", expectedMax: 500 },
+        { rating: "N/A", expectedMax: 500 },
+    ];
+
+    const [ratingConfigList, setRatingConfigList] = useState<RatingCfg[]>(DEFAULT_RATING_CFG);
+
+    const ratingOrder = useMemo(
+        () => ratingConfigList.map(x => x.rating),
+        [ratingConfigList]
+    );
+
+    const expectedMaxByRating = useMemo(() => {
+        const m: Record<string, number> = {};
+        for (const x of ratingConfigList) m[x.rating] = x.expectedMax;
+        return m;
+    }, [ratingConfigList]);
+
+    useEffect(() => {
+        (async () => {
+            const list = await fetchGetRatingList(dispatch);
+
+            if (Array.isArray(list) && list.length > 0) {
+                const normalized: RatingCfg[] = list
+                    .filter((x: any) => x && typeof x.rating === "string")
+                    .map((x: any) => ({
+                        rating: String(x.rating),
+                        expectedMax: Number(x.expectedMax) || 0,
+                    }));
+
+                setRatingConfigList(normalized);
+            }
+        })();
+    }, [dispatch]);
+
+
     const [selectedRating, setSelectedRating] = useState<string>("N/A");
 
     // after const [selectedRating,…]
-    const [ratingFilters, setRatingFilters] = useState<Record<string, boolean>>(
-        () => ratingOrder.reduce((acc, r) => ({ ...acc, [r]: true }), {})
-    );
+    const [ratingFilters, setRatingFilters] = useState<Record<string, boolean>>({});
 
-    const allSelected = ratingOrder.every(r => ratingFilters[r]);
+    useEffect(() => {
+        if (!ratingOrder.length) return;
+
+        setRatingFilters(prev => {
+            const next: Record<string, boolean> = {};
+            for (const r of ratingOrder) {
+                next[r] = prev[r] ?? true; // keep old choice, default true for new ratings
+            }
+            return next;
+        });
+    }, [ratingOrder]);
+
+
+    const allSelected = ratingOrder.length > 0 && ratingOrder.every(r => ratingFilters[r]);
 
     const [hold, setHold] = useState<boolean>(false);
     const [downloadPriority, setDownloadPriority] = useState<number>(5);
@@ -921,6 +981,17 @@ const WindowComponent: React.FC = () => {
             ),
         },
     ];
+
+    // which rating checkboxes are currently ON?
+    const selectedRatings = useMemo(
+        () => ratingOrder.filter(r => ratingFilters[r]),
+        [ratingOrder, ratingFilters]
+    );
+
+    // label text: only “(New) XX:” when exactly one rating is selected
+    const newLabel = selectedRatings.length === 1
+        ? `(New) ${selectedRatings[0]}:`
+        : `(New):`;
 
 
 
@@ -1729,6 +1800,16 @@ const WindowComponent: React.FC = () => {
         };
     }, [filteredCreatorUrlList, timeAgo]);
 
+    const selectedOne = selectedRatings.length === 1 ? selectedRatings[0] : null;
+    const expectedMax = selectedOne ? expectedMaxByRating[selectedOne] : undefined;
+
+    const showRatio = selectedOne && typeof expectedMax === "number" && expectedMax > 0;
+    const overExpected = showRatio && creatorAgeHints.newCount > (expectedMax as number);
+
+    const newCountText = showRatio
+        ? `${creatorAgeHints.newCount}/${expectedMax}`
+        : `${creatorAgeHints.newCount}`;
+
     useEffect(() => {
         chrome.storage.local.get("stagedItems", (r) => {
             if (Array.isArray(r.stagedItems)) setStagedItems(r.stagedItems);
@@ -2173,7 +2254,19 @@ const WindowComponent: React.FC = () => {
                                                                 boxShadow: '0 2px 4px rgba(0,0,0,0.06)',
                                                             }}
                                                         >
-                                                            <div><strong>(New):</strong> {creatorAgeHints.newCount}</div>
+                                                            <div>
+                                                                <strong>{newLabel}</strong>{" "}
+                                                                <span
+                                                                    style={
+                                                                        overExpected
+                                                                            ? { color: "red", fontWeight: 700 } // inline CSS
+                                                                            : undefined
+                                                                    }
+                                                                >
+                                                                    {newCountText}
+                                                                </span>
+                                                            </div>
+
                                                             <div><strong>(New) - Null:</strong> {creatorAgeHints.nullNewCount}</div>
                                                             <div>{creatorAgeHints.oldestNewLine}</div>
                                                         </div>
