@@ -463,6 +463,22 @@ export const fetchGetCreatorUrlList = async (dispatch: any) => {
     }
 }
 
+export const fetchGetRatingList = async (dispatch: any) => {
+    try {
+        dispatch(clearError());
+
+        const response = await axios.get(`${config.domain}/api/get_rating_list`);
+        if (response.status >= 200 && response.status < 300) {
+            return response.data.payload.ratingList;
+        } else {
+            throw new Error("Retriving Rating List from Database failed.");
+        }
+    } catch (error: any) {
+        console.error("Error during Rating List retrieval:", error.message);
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+};
+
 export const fetchAddPendingRemoveTag = async (pendingRemoveTag: string, dispatch: any) => {
     try {
         // Clear any previous errors
