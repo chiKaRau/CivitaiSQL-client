@@ -531,26 +531,22 @@ export const fetchGetTagsList = async (dispatch: any, selectedPrefix: string) =>
 }
 
 
-export const fetchGetCategoriesPrefixsList = async (dispatch: any) => {
+export const fetchGetCategoryPrefixesList = async (dispatch: any) => {
     try {
-        // Clear any previous errors
         dispatch(clearError());
 
-        const response = await axios.get(`${config.domain}/api/get_categories_prefix_list`);
+        const response = await axios.get(`${config.domain}/api/get_category_prefixes_list`);
 
         if (response.status >= 200 && response.status < 300) {
-            return response.data.payload.categoriesPrefixsList;
+            return response.data.payload.categoryPrefixesList;
         } else {
-            // Handle the case when response status is not successful
-            throw new Error("Retrieving Categories Prefixs List from Database failed.");
+            throw new Error("Retrieving Category Prefixes List from Database failed.");
         }
     } catch (error: any) {
-        // Handle other types of errors, e.g., network issues
-        console.error("Error during Categories Prefixs List retrieval:", error.message);
-        // Dispatch the error to the state
+        console.error("Error during Category Prefixes List retrieval:", error.message);
         dispatch(setError({ hasError: true, errorMessage: error.message }));
     }
-}
+};
 
 export const fetchGetFilePathCategoriesList = async (dispatch: any) => {
     try {

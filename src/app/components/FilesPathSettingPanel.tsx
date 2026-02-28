@@ -10,7 +10,7 @@ import {
 import { updateSelectedFilteredCategoriesListIntoChromeStorage } from '../utils/chromeUtils';
 import FilesPathTagsListSelector from './FilesPathTagsListSelector';
 import {
-    fetchGetCategoriesPrefixsList,
+    fetchGetCategoryPrefixesList,
     fetchGetFilePathCategoriesList
 } from '../api/civitaiSQL_api';
 import { QuickModeControls } from './QuickModeControls';
@@ -30,7 +30,14 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
     const chrome = useSelector((s: AppState) => s.chrome);
 
     const [open, setOpen] = useState(false);
-    const [prefixsList, setPrefixsList] = useState<{ name: string; value: string }[]>([]);
+    const [prefixsList, setPrefixsList] = useState<{
+        id: number;
+        prefixName: string;
+        downloadFilePath: string;
+        downloadPriority: number;
+        createdAt?: string;
+        updatedAt?: string;
+    }[]>([]);
     const [filePathCategoriesList, setFilePathCategoriesList] = useState<
         { name: string; value: string }[]
     >([]);
@@ -84,7 +91,7 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
             }
 
             // C) fetch your prefixes in parallel or sequence
-            const prefixes = await fetchGetCategoriesPrefixsList(dispatch);
+            const prefixes = await fetchGetCategoryPrefixesList(dispatch);
             if (prefixes) {
                 setPrefixsList(prefixes);
             }
@@ -171,16 +178,16 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
                         <center> Prefix Suggestions</center>
                         <hr />
                         {prefixsList.map((el, i) => (
-                            <OverlayTrigger key={i} placement="bottom" overlay={<Tooltip>{el.value}</Tooltip>}>
+                            <OverlayTrigger key={i} placement="bottom" overlay={<Tooltip>{el.downloadFilePath}</Tooltip>}>
                                 <label
-                                    className={`panel-tag-button ${selectedPrefix === el.value ? 'panel-tag-default' : 'panel-tag-selected'
+                                    className={`panel-tag-button ${selectedPrefix === el.downloadFilePath ? 'panel-tag-default' : 'panel-tag-selected'
                                         }`}
                                     onClick={() => {
-                                        setSelectedPrefix(el.value);
-                                        dispatch(updateDownloadFilePath(`${el.value}${selectedSuffix}`));
+                                        setSelectedPrefix(el.downloadFilePath);
+                                        dispatch(updateDownloadFilePath(`${el.downloadFilePath}${selectedSuffix}`));
                                     }}
                                 >
-                                    {el.name}
+                                    {el.prefixName}
                                 </label>
                             </OverlayTrigger>
                         ))}

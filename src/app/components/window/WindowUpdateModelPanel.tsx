@@ -9,7 +9,7 @@ import FolderDropdown from "../FolderDropdown"
 
 //utils
 import { bookmarkThisModel, initializeDatafromChromeStorage, updateDownloadFilePathIntoChromeStorage, updateSelectedCategoryIntoChromeStorage, callChromeBrowserDownload_v2 } from "../../utils/chromeUtils"
-import { fetchAddOfflineDownloadFileIntoOfflineDownloadList, fetchCheckCartList, fetchCivitaiModelInfoFromCivitaiByModelID, fetchCivitaiModelInfoFromCivitaiByVersionID, fetchDatabaseModelInfoByModelID, fetchDownloadFilesByBrowser_v2, fetchDownloadFilesByServer_v2, fetchGetCategoriesList, fetchGetCategoriesPrefixsList, fetchGetFilePathCategoriesList, fetchGetFoldersList, fetchGetTagsList, fetchUpdateRecordAtDatabase } from '../../api/civitaiSQL_api';
+import { fetchAddOfflineDownloadFileIntoOfflineDownloadList, fetchCheckCartList, fetchCivitaiModelInfoFromCivitaiByModelID, fetchCivitaiModelInfoFromCivitaiByVersionID, fetchDatabaseModelInfoByModelID, fetchDownloadFilesByBrowser_v2, fetchDownloadFilesByServer_v2, fetchGetCategoriesList, fetchGetCategoryPrefixesList, fetchGetFilePathCategoriesList, fetchGetFoldersList, fetchGetTagsList, fetchUpdateRecordAtDatabase } from '../../api/civitaiSQL_api';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppState } from '../../store/configureStore';
 import TextField from '@mui/material/TextField';
@@ -305,7 +305,14 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
 
     const [open, setOpen] = useState(false);
 
-    const [prefixsList, setPrefixsList] = useState<{ name: string; value: string; }[]>([]);
+    const [prefixsList, setPrefixsList] = useState<{
+        id: number;
+        prefixName: string;
+        downloadFilePath: string;
+        downloadPriority: number;
+        createdAt?: string;
+        updatedAt?: string;
+    }[]>([]);
     const [suffixsList, setSuffixsList] = useState<{ name: string; value: string; }[]>(modelTagsList);
 
     const [selectedPrefix, setSelectedPrefix] = useState("");
@@ -323,7 +330,7 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
     useEffect(() => {
         const fetchPrefixsList = async () => {
             try {
-                const data = await fetchGetCategoriesPrefixsList(dispatch);
+                const data = await fetchGetCategoryPrefixesList(dispatch);
                 if (data) {
                     setPrefixsList(data);
                 }
@@ -392,14 +399,14 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
                     <center> Prefix Suggestions</center>
                     <hr />
                     {prefixsList?.map((element, index) => (
-                        <OverlayTrigger placement="bottom" overlay={<Tooltip id="tooltip">{element.value}</Tooltip>}>
+                        <OverlayTrigger placement="bottom" overlay={<Tooltip id="tooltip">{element.downloadFilePath}</Tooltip>}>
                             <label key={index}
-                                className={`panel-tag-button ${selectedPrefix === element.value ? 'panel-tag-default' : 'panel-tag-selected'}`}
+                                className={`panel-tag-button ${selectedPrefix === element.downloadFilePath ? 'panel-tag-default' : 'panel-tag-selected'}`}
                                 onClick={() => {
-                                    setSelectedPrefix(element.value)
-                                    dispatch(updateDownloadFilePath(`${element.value}${selectedSuffix}`));
+                                    setSelectedPrefix(element.downloadFilePath)
+                                    dispatch(updateDownloadFilePath(`${element.downloadFilePath}${selectedSuffix}`));
                                 }}>
-                                {element.name}
+                                {element.prefixName}
                             </label>
                         </OverlayTrigger>
                     ))}

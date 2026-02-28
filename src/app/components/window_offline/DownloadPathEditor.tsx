@@ -5,7 +5,7 @@ import { InputGroup, FormControl, Button, Form } from "react-bootstrap";
 import { useDispatch } from "react-redux";
 import {
     fetchGetFoldersList,
-    fetchGetCategoriesPrefixsList,
+    fetchGetCategoryPrefixesList,
 } from "../../api/civitaiSQL_api";
 
 interface DownloadPathEditorProps {
@@ -30,7 +30,14 @@ const DownloadPathEditor: React.FC<DownloadPathEditorProps> = ({
     const [builderValue, setBuilderValue] = useState("");
 
     const [suggestions, setSuggestions] = useState<string[]>([]);
-    const [prefixsList, setPrefixsList] = useState<{ name: string; value: string }[]>([]);
+    const [prefixsList, setPrefixsList] = useState<{
+        id: number;
+        prefixName: string;
+        downloadFilePath: string;
+        downloadPriority: number;
+        createdAt?: string;
+        updatedAt?: string;
+    }[]>([]);
     const [selectedPrefix, setSelectedPrefix] = useState("");
 
     const [builderError, setBuilderError] = useState<string | null>(null);
@@ -67,7 +74,7 @@ const DownloadPathEditor: React.FC<DownloadPathEditorProps> = ({
             try {
                 const [folders, prefixes] = await Promise.all([
                     fetchGetFoldersList(dispatch),
-                    fetchGetCategoriesPrefixsList(dispatch),
+                    fetchGetCategoryPrefixesList(dispatch),
                 ]);
 
                 if (Array.isArray(folders)) {
@@ -204,8 +211,8 @@ const DownloadPathEditor: React.FC<DownloadPathEditorProps> = ({
                     >
                         <option value="">(No prefix)</option>
                         {prefixsList.map((p) => (
-                            <option key={`${p.name}-${p.value}`} value={p.value}>
-                                {p.name}
+                            <option key={`${p.prefixName}-${p.downloadFilePath}`} value={p.downloadFilePath}>
+                                {p.prefixName}
                             </option>
                         ))}
                     </Form.Select>

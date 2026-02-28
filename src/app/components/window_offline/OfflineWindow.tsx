@@ -33,7 +33,7 @@ import {
     fetchDownloadFilesByServer_v2,
     fetchRemoveOfflineDownloadFileIntoOfflineDownloadList,
     fetchGetPendingRemoveTagsList,
-    fetchGetCategoriesPrefixsList,
+    fetchGetCategoryPrefixesList,
     fetchOpenDownloadDirectory,
     fetchOpenModelDownloadDirectory,
     fetchOfflineDownloadListPage,
@@ -416,7 +416,14 @@ const OfflineWindow: React.FC = () => {
     // NEW: sort direction for date (server-side)
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc'); // if you hate the type, you can drop it
 
-    const [categoriesPrefixsList, setCategoriesPrefixsList] = useState<{ name: string; value: string; }[]>([]);
+    const [categoriesPrefixsList, setCategoriesPrefixsList] = useState<{
+        id: number;
+        prefixName: string;
+        downloadFilePath: string;
+        downloadPriority: number;
+        createdAt?: string;
+        updatedAt?: string;
+    }[]>([]);
     const [selectedPrefixes, setSelectedPrefixes] = useState<Set<string>>(new Set());
 
     const [allowTryEarlyAccess, setAllowTryEarlyAccess] = useState(false);
@@ -951,40 +958,68 @@ const OfflineWindow: React.FC = () => {
 
     useEffect(() => {
         const loadPrefixes = async () => {
+            const list = await fetchGetCategoryPrefixesList(dispatch);
 
-            const list = await fetchGetCategoriesPrefixsList(dispatch);
             if (Array.isArray(list)) {
-                // remove the “Default” / empty‐value entry
-                const filtered = list.filter(p => p.value !== "");
+                // remove any empty-path entries (if any exist)
+                const filtered: {
+                    id: number;
+                    prefixName: string;
+                    downloadFilePath: string;
+                    downloadPriority: number;
+                    createdAt?: string;
+                    updatedAt?: string;
+                }[] = list.filter(
+                    (p: {
+                        id: number;
+                        prefixName: string;
+                        downloadFilePath: string;
+                        downloadPriority: number;
+                        createdAt?: string;
+                        updatedAt?: string;
+                    }) => (p.downloadFilePath ?? "").trim() !== ""
+                );
 
                 // Add a virtual “Updates” option that matches ANY path containing /@scan@/Update/
-                const enhanced = [
-                    ...filtered,
-                    { name: 'Updates (any folder)', value: '/@scan@/Update/' },
-                ];
+                const enhanced: {
+                    id: number;
+                    prefixName: string;
+                    downloadFilePath: string;
+                    downloadPriority: number;
+                    createdAt?: string;
+                    updatedAt?: string;
+                }[] = [
+                        ...filtered,
+                        {
+                            id: -1,
+                            prefixName: "Updates (any folder)",
+                            downloadFilePath: "/@scan@/Update/",
+                            downloadPriority: 10,
+                        },
+                    ];
 
                 setCategoriesPrefixsList(enhanced);
 
                 // Start with everything selected EXCEPT '/@scan@/' and the virtual Updates option
-                const DEFAULT_UNCHECKED = new Set<string>(['/@scan@/', '/@scan@/Update/']);
+                const DEFAULT_UNCHECKED = new Set<string>(["/@scan@/", "/@scan@/Update/"]);
                 const initialChecked = enhanced
-                    .filter(p => !DEFAULT_UNCHECKED.has(p.value))
-                    .map(p => p.value);
+                    .filter((p) => !DEFAULT_UNCHECKED.has(p.downloadFilePath))
+                    .map((p) => p.downloadFilePath);
 
                 defaultPrefixesRef.current = initialChecked;
 
                 setSelectedPrefixes(new Set(initialChecked));
 
                 // ✅ set initial applied query to match defaults
-                setAppliedQuery(q => ({
+                setAppliedQuery((q) => ({
                     ...q,
                     selectedPrefixes: initialChecked,
                 }));
 
                 setFiltersReady(true);
-
             }
         };
+
         loadPrefixes();
     }, [dispatch]);
 
@@ -4912,7 +4947,7 @@ const OfflineWindow: React.FC = () => {
                                     checked={selectedPrefixes.size === categoriesPrefixsList.length}
                                     onChange={e => {
                                         if (e.target.checked) {
-                                            setSelectedPrefixes(new Set(categoriesPrefixsList.map(p => p.value)));
+                                            setSelectedPrefixes(new Set(categoriesPrefixsList.map(p => p.downloadFilePath)));
                                         } else {
                                             setSelectedPrefixes(new Set());
                                         }
@@ -4928,16 +4963,16 @@ const OfflineWindow: React.FC = () => {
                                 {/* ── INDIVIDUAL PREFIXES ── */}
                                 {categoriesPrefixsList.map(prefix => (
                                     <Form.Check
-                                        key={prefix.value}
+                                        key={prefix.downloadFilePath}
                                         type="checkbox"
-                                        id={`prefix-${prefix.value}`}
-                                        label={prefix.value}
-                                        checked={selectedPrefixes.has(prefix.value)}
+                                        id={`prefix-${prefix.downloadFilePath}`}
+                                        label={prefix.downloadFilePath}
+                                        checked={selectedPrefixes.has(prefix.downloadFilePath)}
                                         onChange={e =>
                                             setSelectedPrefixes(prev => {
                                                 const next = new Set(prev);
-                                                if (e.target.checked) next.add(prefix.value);
-                                                else next.delete(prefix.value);
+                                                if (e.target.checked) next.add(prefix.downloadFilePath);
+                                                else next.delete(prefix.downloadFilePath);
                                                 return next;
                                             })
                                         }
