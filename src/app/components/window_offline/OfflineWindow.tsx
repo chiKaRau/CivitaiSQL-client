@@ -339,6 +339,22 @@ const OfflineWindow: React.FC = () => {
         | 'earlyAccessCard'
     >('bigCard');
 
+    const [filtersReady, setFiltersReady] = useState(false);
+
+    // This is the ONLY thing your backend fetch should use.
+    const [appliedQuery, setAppliedQuery] = useState(() => ({
+        filterText: "",
+        filterCondition: "contains",
+        showPending: true,
+        showNonPending: true,
+        showHoldEntries: false,
+        showEarlyAccess: true,
+        showErrorEntries: true,
+        sortDir: "desc",
+        aiSuggestedOnly: false,
+        selectedPrefixes: [] as string[],  // store as array (stable)
+    }));
+
     // States for filtering
     const [filterText, setFilterText] = useState('');
     const [filterCondition, setFilterCondition] = useState<'contains' | 'does not contain' | 'equals' | 'does not equal' | 'begins with' | 'ends with'>('contains');
@@ -435,6 +451,8 @@ const OfflineWindow: React.FC = () => {
 
     // current page index, 0-based
     const [tagPage, setTagPage] = useState(0);
+
+    const defaultPrefixesRef = React.useRef<string[]>([]);
 
     const [excludedTags, setExcludedTags] = useState<string[]>([]);
 
@@ -908,38 +926,32 @@ const OfflineWindow: React.FC = () => {
     const PENDING_PATHS = ["/@scan@/ACG/Pending", "/@scan@/ACG/Pending/"];
 
     const getActivePrefixes = useCallback(() => {
-        const selected = Array.from(selectedPrefixes ?? []);
+        const selected = appliedQuery.selectedPrefixes ?? [];
+
         const isPendingPrefix = (p: string) =>
             PENDING_PATHS.includes(p) || /\/@scan@\/ACG\/Pending\/?$/.test(p);
 
         const onlyPending = selected.filter(isPendingPrefix);
         const onlyNonPending = selected.filter(p => !isPendingPrefix(p));
 
-        // Both toggles on → whatever user selected (or nothing → means "no server filter")
-        if (showPending && showNonPending) {
-            return selected.length ? selected : []; // ← let server include all
+        if (appliedQuery.showPending && appliedQuery.showNonPending) {
+            return selected.length ? selected : []; // no server filter
         }
 
-        // Pending only
-        if (showPending && !showNonPending) {
+        if (appliedQuery.showPending && !appliedQuery.showNonPending) {
             return onlyPending.length ? onlyPending : PENDING_PATHS;
         }
 
-        // Non-Pending only
-        if (!showPending && showNonPending) {
-            // If user picked some non-pending prefixes, use them.
-            // If not, ask server for “everything except pending”.
+        if (!appliedQuery.showPending && appliedQuery.showNonPending) {
             return onlyNonPending.length ? onlyNonPending : [SENTINELS.EXCLUDE_PENDING];
         }
 
-        // Neither checked → explicitly zero results
         return [SENTINELS.NONE];
-    }, [selectedPrefixes, showPending, showNonPending]);
-
-
+    }, [appliedQuery]);
 
     useEffect(() => {
         const loadPrefixes = async () => {
+
             const list = await fetchGetCategoriesPrefixsList(dispatch);
             if (Array.isArray(list)) {
                 // remove the “Default” / empty‐value entry
@@ -959,7 +971,18 @@ const OfflineWindow: React.FC = () => {
                     .filter(p => !DEFAULT_UNCHECKED.has(p.value))
                     .map(p => p.value);
 
+                defaultPrefixesRef.current = initialChecked;
+
                 setSelectedPrefixes(new Set(initialChecked));
+
+                // ✅ set initial applied query to match defaults
+                setAppliedQuery(q => ({
+                    ...q,
+                    selectedPrefixes: initialChecked,
+                }));
+
+                setFiltersReady(true);
+
             }
         };
         loadPrefixes();
@@ -1006,6 +1029,32 @@ const OfflineWindow: React.FC = () => {
         setSelectedIds(new Set());
     };
 
+    const resetDraftFilters = () => {
+        // Draft-only resets (do NOT touch appliedQuery)
+        setFilterText("");
+        setFilterCondition("contains");
+
+        setShowPending(true);
+        setShowNonPending(true);
+
+        setShowHoldEntries(false);
+        setShowErrorEntries(true);
+        setShowEarlyAccess(true);
+
+        setSortDir("desc");
+        setAiSuggestedOnly(false);
+
+        // Optional: if you consider these part of “default”
+        setShowAiSuggestionsPanel(false);
+        setSelectedSuggestedPathByVid({});
+        setGoToPageInput("");
+
+        // Reset prefixes to your initial default selection
+        const defaults = defaultPrefixesRef.current;
+        if (defaults && defaults.length) {
+            setSelectedPrefixes(new Set(defaults));
+        }
+    };
 
     const toggleModifyMode = () => {
         setIsModifyMode(prev => {
@@ -1068,13 +1117,15 @@ const OfflineWindow: React.FC = () => {
     }, [batchCooldown]);
 
     useEffect(() => {
+        if (!filtersReady) return;
+
         let cancelled = false;
 
         const timer = setTimeout(async () => {
             if (cancelled) return;
 
-            // If neither is selected, clear and bail
-            if (!showPending && !showNonPending) {
+            // If neither is selected, clear and bail (NO server call)
+            if (!appliedQuery.showPending && !appliedQuery.showNonPending) {
                 setUiMode('idle');
                 setOfflineDownloadList([]);
                 setServerTotalItems(0);
@@ -1083,7 +1134,7 @@ const OfflineWindow: React.FC = () => {
                 return;
             }
 
-            const status: StatusFilter = deriveStatus(showPending, showNonPending);
+            const status: StatusFilter = deriveStatus(appliedQuery.showPending, appliedQuery.showNonPending);
 
             setUiMode('paging');
             setIsLoading(true);
@@ -1096,16 +1147,16 @@ const OfflineWindow: React.FC = () => {
                     dispatch,
                     page0,
                     itemsPerPage,
-              /* filterEmptyBaseModel */ false,
+                    false,
                     prefixes,
-              /* search */ filterText.trim(),
-              /* op */ filterCondition,
-              /* status */ status,
-                    showHoldEntries,              // NEW
-                    showEarlyAccess,  // NEW
-                    sortDir,
-                    showErrorEntries,
-                    aiSuggestedOnly
+                    appliedQuery.filterText.trim(),
+                    appliedQuery.filterCondition as any,
+                    status,
+                    appliedQuery.showHoldEntries,
+                    appliedQuery.showEarlyAccess,
+                    appliedQuery.sortDir as any,
+                    appliedQuery.showErrorEntries,
+                    appliedQuery.aiSuggestedOnly
                 );
 
                 if (!cancelled) {
@@ -1129,26 +1180,7 @@ const OfflineWindow: React.FC = () => {
         }, 200);
 
         return () => { cancelled = true; clearTimeout(timer); };
-    }, [
-        dispatch,
-        currentPage,
-        itemsPerPage,
-        getActivePrefixes,
-        filterText,
-        filterCondition,
-        showPending,
-        showNonPending,
-        showHoldEntries,   // add
-        showEarlyAccess,   // add
-        sortDir,
-        showErrorEntries,
-        aiSuggestedOnly
-    ]);
-
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [getActivePrefixes]);
-
+    }, [dispatch, currentPage, itemsPerPage, appliedQuery, getActivePrefixes, filtersReady]);
 
     useEffect(() => {
         // Reset the selection when filterText or filterCondition changes
@@ -1530,29 +1562,8 @@ const OfflineWindow: React.FC = () => {
         setFailedEntries([]);
         try {
             setIsLoading(true);
-            const page0 = Math.max(0, currentPage - 1);
-            const prefixes = getActivePrefixes();
-            const status: StatusFilter = deriveStatus(showPending, showNonPending);
-
-            const p = await fetchOfflineDownloadListPage(
-                dispatch,
-                page0,
-                itemsPerPage,
-                /* filterEmptyBaseModel */ false,
-                prefixes,
-                /* search */ filterText.trim(),
-                /* op */ filterCondition,
-                /* status */ status,
-                showHoldEntries,              // NEW
-                showEarlyAccess,  // NEW
-                sortDir,
-                showErrorEntries,
-                aiSuggestedOnly
-            );
-
-            setOfflineDownloadList(Array.isArray(p.content) ? p.content : []);
-            setServerTotalItems(p.totalElements ?? 0);
-            setServerTotalPages(p.totalPages ?? 1);
+            const p = await fetchPageWithApplied(currentPage);
+            applyPagedResultToState(p);
         } catch (error: any) {
             console.error("Failed to refresh the download list:", error.message);
             alert("Failed to refresh the download list. Please try again later.");
@@ -1571,29 +1582,8 @@ const OfflineWindow: React.FC = () => {
     // Refresh helper: re-fetch the current page from the server
     const refreshCurrentPage = async () => {
         try {
-            const page0 = Math.max(0, currentPage - 1); // UI 1-based → server 0-based
-            const prefixes = getActivePrefixes();
-            const status: StatusFilter = deriveStatus(showPending, showNonPending);
-
-            const p = await fetchOfflineDownloadListPage(
-                dispatch,
-                page0,
-                itemsPerPage,
-                false,
-                prefixes,
-                filterText.trim(),
-                filterCondition,
-                status,
-                showHoldEntries,              // NEW
-                showEarlyAccess,  // NEW
-                sortDir,
-                showErrorEntries,
-                aiSuggestedOnly
-            );
-
-            setOfflineDownloadList(Array.isArray(p.content) ? p.content : []);
-            setServerTotalItems(p.totalElements ?? 0);
-            setServerTotalPages(p.totalPages ?? 1);
+            const p = await fetchPageWithApplied(currentPage);
+            applyPagedResultToState(p);
         } catch (error: any) {
             console.error("Failed to fetch updated download list:", error.message);
             setOfflineDownloadList([]);
@@ -1996,46 +1986,9 @@ const OfflineWindow: React.FC = () => {
         setCurrentBatchRange(null);
 
         // FINAL REFRESH: re-fetch the current server page (not the whole list)
-        try {
-            const page0 = Math.max(0, currentPage - 1); // UI 1-based → server 0-based
-            const prefixes = getActivePrefixes();
-            const status: StatusFilter = deriveStatus(showPending, showNonPending);
-
-            const p = await fetchOfflineDownloadListPage(
-                dispatch,
-                page0,
-                itemsPerPage,
-                /* filterEmptyBaseModel */ false,
-                prefixes,
-                /* search */ filterText.trim(),
-                /* op */ filterCondition,
-                /* status */ status,
-                showHoldEntries,              // NEW
-                showEarlyAccess,  // NEW
-                sortDir,
-                showErrorEntries,
-                aiSuggestedOnly
-            );
-
-            if (Array.isArray(p.content)) {
-                setOfflineDownloadList(p.content);
-                setSelectedIds(new Set());
-                setServerTotalItems(p.totalElements ?? 0);
-                setServerTotalPages(p.totalPages ?? 1);
-            } else {
-                console.warn("paged fetch returned non-array content:", p.content);
-                setOfflineDownloadList([]);
-                setSelectedIds(new Set());
-                setServerTotalItems(0);
-                setServerTotalPages(1);
-            }
-        } catch (error: any) {
-            console.error("Failed to refresh current page after all batches:", error.message);
-            setOfflineDownloadList([]);
-            setSelectedIds(new Set());
-            setServerTotalItems(0);
-            setServerTotalPages(1);
-        }
+        const p = await fetchPageWithApplied(currentPage);
+        applyPagedResultToState(p);
+        setSelectedIds(new Set());
     };
 
     const handleApplySelectedAiPathsToDownloadFilePath = async () => {
@@ -2110,6 +2063,36 @@ const OfflineWindow: React.FC = () => {
         }
     };
 
+    const fetchPageWithApplied = React.useCallback(
+        async (page1Based?: number) => {
+            const page0 = Math.max(0, (page1Based ?? currentPage) - 1);
+            const prefixes = getActivePrefixes(); // <-- your refactored one uses appliedQuery
+            const status: StatusFilter = deriveStatus(appliedQuery.showPending, appliedQuery.showNonPending);
+
+            return await fetchOfflineDownloadListPage(
+                dispatch,
+                page0,
+                itemsPerPage,
+            /* filterEmptyBaseModel */ false,
+                prefixes,
+                appliedQuery.filterText.trim(),
+                appliedQuery.filterCondition as any,
+                status,
+                appliedQuery.showHoldEntries,
+                appliedQuery.showEarlyAccess,
+                appliedQuery.sortDir as any,
+                appliedQuery.showErrorEntries,
+                appliedQuery.aiSuggestedOnly
+            );
+        },
+        [dispatch, currentPage, itemsPerPage, appliedQuery, getActivePrefixes]
+    );
+
+    const applyPagedResultToState = (p: any) => {
+        setOfflineDownloadList(Array.isArray(p?.content) ? p.content : []);
+        setServerTotalItems(p?.totalElements ?? 0);
+        setServerTotalPages(p?.totalPages ?? 1);
+    };
 
     // ---- Early Access helpers ----
     function pad2(n: number) { return n < 10 ? `0${n}` : `${n}`; }
@@ -2238,32 +2221,15 @@ const OfflineWindow: React.FC = () => {
             const prefixes = getActivePrefixes();
             const status: StatusFilter = deriveStatus(showPending, showNonPending);
 
-            const p = await fetchOfflineDownloadListPage(
-                dispatch,
-                page0,
-                itemsPerPage,
-                /* filterEmptyBaseModel */ false,
-                prefixes,
-                /* search */ filterText.trim(),
-                /* op */ filterCondition,
-                /* status */ status,
-                showHoldEntries,              // NEW
-                showEarlyAccess,  // NEW
-                sortDir,
-                showErrorEntries,
-                aiSuggestedOnly
-            );
+            const p = await fetchPageWithApplied(currentPage);
 
-            // If current page is now past the end, jump to last page
-            const newTotalPages = Math.max(1, p.totalPages || 1);
-            if ((p.content?.length ?? 0) === 0 && (p.totalElements ?? 0) > 0 && currentPage > newTotalPages) {
-                setCurrentPage(newTotalPages);
+            // If current page empty and there are items, move to last page
+            const newTotalPages = Math.max(1, p?.totalPages || 1);
+            if ((p?.content?.length ?? 0) === 0 && (p?.totalElements ?? 0) > 0 && currentPage > newTotalPages) {
+                setCurrentPage(newTotalPages); // this will trigger fetch effect (or you can fetch again)
             } else {
-                setOfflineDownloadList(Array.isArray(p.content) ? p.content : []);
-                setServerTotalItems(p.totalElements ?? 0);
-                setServerTotalPages(newTotalPages);
+                applyPagedResultToState(p);
             }
-
             setSelectedIds(new Set());
 
         } catch (error: any) {
@@ -2282,13 +2248,17 @@ const OfflineWindow: React.FC = () => {
         );
         if (!ok) return;
 
-        setUiMode('removing');
+        setUiMode("removing");
         setIsLoading(true);
 
         // optimistic remove
         const key = `${entry.civitaiModelID}|${entry.civitaiVersionID}`;
         const prevList = offlineDownloadList;
-        setOfflineDownloadList(prev => prev.filter(e => `${e.civitaiModelID}|${e.civitaiVersionID}` !== key));
+
+        setOfflineDownloadList(prev =>
+            prev.filter(e => `${e.civitaiModelID}|${e.civitaiVersionID}` !== key)
+        );
+
         setSelectedIds(prev => {
             const next = new Set(prev);
             next.delete(entry.civitaiVersionID);
@@ -2301,36 +2271,16 @@ const OfflineWindow: React.FC = () => {
                 dispatch
             );
 
-            // refresh current page so totals/paging stay correct
-            const page0 = Math.max(0, currentPage - 1);
-            const prefixes = getActivePrefixes();
-            const status: StatusFilter = deriveStatus(showPending, showNonPending);
+            // ✅ refresh using appliedQuery
+            const p = await fetchPageWithApplied(currentPage);
+            applyPagedResultToState(p);
 
-            const p = await fetchOfflineDownloadListPage(
-                dispatch,
-                page0,
-                itemsPerPage,
-            /* filterEmptyBaseModel */ false,
-                prefixes,
-            /* search */ filterText.trim(),
-            /* op */ filterCondition,
-            /* status */ status,
-                showHoldEntries,              // NEW
-                showEarlyAccess,  // NEW
-                sortDir,
-                showErrorEntries,
-                aiSuggestedOnly
-            );
-
-            setOfflineDownloadList(Array.isArray(p?.content) ? p.content : []);
-            setServerTotalItems(p?.totalElements ?? 0);
-            setServerTotalPages(p?.totalPages ?? 1);
         } catch (err: any) {
-            alert(`Failed to remove: ${err?.message || 'Unknown error'}`);
-            setOfflineDownloadList(prevList); // revert
+            alert(`Failed to remove: ${err?.message || "Unknown error"}`);
+            setOfflineDownloadList(prevList); // revert list
         } finally {
             setIsLoading(false);
-            setUiMode('idle');
+            setUiMode("idle");
         }
     };
 
@@ -4097,6 +4047,41 @@ const OfflineWindow: React.FC = () => {
                                 <option value="begins with">Begins with</option>
                                 <option value="ends with">Ends with</option>
                             </select>
+                            <div style={{ display: "flex", gap: 10, width: "100%" }}>
+                                <Button
+                                    size="sm"
+                                    variant="primary"
+                                    disabled={isLoading}
+                                    onClick={() => {
+                                        setAppliedQuery({
+                                            filterText: filterText.trim(),
+                                            filterCondition,
+                                            showPending,
+                                            showNonPending,
+                                            showHoldEntries,
+                                            showEarlyAccess,
+                                            showErrorEntries,
+                                            sortDir,
+                                            aiSuggestedOnly,
+                                            selectedPrefixes: Array.from(selectedPrefixes),
+                                        });
+                                        setCurrentPage(1);
+                                    }}
+                                    style={{ flex: 1 }}
+                                >
+                                    Apply Filters
+                                </Button>
+
+                                <Button
+                                    size="sm"
+                                    variant="outline-secondary"
+                                    disabled={isLoading}
+                                    onClick={resetDraftFilters}
+                                    style={{ flex: 1 }}
+                                >
+                                    Reset (Draft)
+                                </Button>
+                            </div>
 
                             <div style={{ margin: '1rem 0', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                 {/* Pending */}
