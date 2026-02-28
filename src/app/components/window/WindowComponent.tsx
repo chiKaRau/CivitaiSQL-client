@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState, version } from 'react';
 //Store
 import { useSelector, useDispatch } from 'react-redux';
 import { AppState } from '../../store/configureStore';
-import { updateDownloadFilePath } from "../../store/actions/chromeActions"
+import { updateDownloadFilePath, updateDownloadPriority } from "../../store/actions/chromeActions"
 
 //Icons Components
 import { AiFillFolderOpen, AiOutlineArrowUp, AiOutlineArrowDown } from "react-icons/ai"
@@ -128,7 +128,7 @@ const WindowComponent: React.FC = () => {
     const [workingModelID, setWorkingModelID] = useState("");
 
     const chromeData = useSelector((state: AppState) => state.chrome);
-    const { downloadMethod, downloadFilePath, selectedCategory, offlineMode, selectedFilteredCategoriesList } = chromeData;
+    const { downloadMethod, downloadFilePath, selectedCategory, offlineMode, selectedFilteredCategoriesList, downloadPriority: storeDownloadPriority } = chromeData;
 
     const [sortedandFilteredfoldersList, setSortedandFilteredfoldersList] = useState<string[]>([]);
     const [foldersList, setFoldersList] = useState([])
@@ -232,6 +232,11 @@ const WindowComponent: React.FC = () => {
         });
     }, [ratingOrder]);
 
+    useEffect(() => {
+        if (typeof storeDownloadPriority === "number") {
+            setDownloadPriority(storeDownloadPriority);
+        }
+    }, [storeDownloadPriority]);
 
     const allSelected = ratingOrder.length > 0 && ratingOrder.every(r => ratingFilters[r]);
 
@@ -1217,6 +1222,7 @@ const WindowComponent: React.FC = () => {
         setResetMode(true)
         setHold(false);
         setDownloadPriority(5);
+        dispatch(updateDownloadPriority(5));
     };
 
     // Function to handle the API call and update the button state
@@ -1885,6 +1891,7 @@ const WindowComponent: React.FC = () => {
         setIsLoading(false)
         setHold(false);
         setDownloadPriority(5);
+        dispatch(updateDownloadPriority(5));
     };
 
     const sendStagedToTab = (tabId: number, list: StagedItem[]) => {
@@ -2515,7 +2522,8 @@ const WindowComponent: React.FC = () => {
                                                     onChange={(e) => {
                                                         const val = Number(e.target.value);
                                                         if (!Number.isNaN(val)) {
-                                                            setDownloadPriority(val);
+                                                            setDownloadPriority(val);                 // local UI updates immediately
+                                                            dispatch(updateDownloadPriority(val));    // ✅ store updates (so other components sync)
                                                         }
                                                     }}
                                                     style={{ width: 80 }}

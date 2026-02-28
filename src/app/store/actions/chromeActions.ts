@@ -2,7 +2,7 @@
 import {
     UPDATE_BOOKMARKID, SET_ISBOOKMARKED,
     UPDATE_SELECTED_CATEGORY, UPDATE_CATEGORIES_LIST,
-    UPDATE_DOWNLOAD_FILEPATH, UPDATE_DOWNLOAD_METHOD,
+    UPDATE_DOWNLOAD_FILEPATH, UPDATE_DOWNLOAD_METHOD, UPDATE_DOWNLOAD_PRIORITY,
     UPDATE_SELECTED_FILTERED_CATEGORIES_LIST,
     UPDATE_OFFLINEMODE
 } from '../constants/ChromeActionTypes';
@@ -35,6 +35,11 @@ export const updateDownloadFilePath = (newDownloadFilePath: string) => ({
 export const updateDownloadMethod = (newDownloadMethod: string) => ({
     type: UPDATE_DOWNLOAD_METHOD,
     payload: newDownloadMethod,
+});
+
+export const updateDownloadPriority = (newDownloadPriority: number) => ({
+    type: UPDATE_DOWNLOAD_PRIORITY,
+    payload: newDownloadPriority,
 });
 
 export const updateSelectedFilteredCategoriesList = (newSelectedFilteredCategoriesList: string) => ({

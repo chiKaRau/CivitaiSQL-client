@@ -5,6 +5,7 @@ import { Collapse, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { AppState } from '../store/configureStore';
 import {
     updateDownloadFilePath,
+    updateDownloadPriority,
     updateSelectedFilteredCategoriesList
 } from '../store/actions/chromeActions';
 import { updateSelectedFilteredCategoriesListIntoChromeStorage } from '../utils/chromeUtils';
@@ -184,6 +185,11 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
                                         }`}
                                     onClick={() => {
                                         setSelectedPrefix(el.downloadFilePath);
+
+                                        // ✅ store priority from this prefix row
+                                        dispatch(updateDownloadPriority(el.downloadPriority ?? 0));
+
+                                        // keep existing behavior
                                         dispatch(updateDownloadFilePath(`${el.downloadFilePath}${selectedSuffix}`));
                                     }}
                                 >
