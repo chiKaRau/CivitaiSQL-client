@@ -10,7 +10,7 @@ import { updateDownloadFilePath } from '../../store/actions/chromeActions';
 import { AiFillFolderOpen, AiOutlineClose } from "react-icons/ai";
 import { BsCloudDownloadFill, BsDownload } from 'react-icons/bs';
 import { FaMagnifyingGlass, FaMagnifyingGlassPlus, FaSun, FaMoon, FaArrowRight } from "react-icons/fa6"; // Added FaSun and FaMoon
-import { MdOutlineApps, MdOutlineTipsAndUpdates, MdOutlineDownloadForOffline, MdOutlineDownload, MdOutlinePendingActions } from "react-icons/md";
+import { MdOutlineApps, MdOutlineTipsAndUpdates, MdOutlineDownloadForOffline, MdOutlineDownload, MdOutlinePendingActions, MdRefresh } from "react-icons/md";
 import { FcDownload, FcGenericSortingAsc, FcGenericSortingDesc } from "react-icons/fc";
 import { TfiCheckBox } from "react-icons/tfi";
 import { LuPanelLeftOpen, LuPanelRightOpen } from "react-icons/lu";
@@ -47,7 +47,8 @@ import {
     fetchCivitaiModelInfoFromCivitaiByVersionID,
     fetchBulkPatchOfflineDownloadList,
     fetchRunPendingFromOfflineDownloadListAiSuggestion,
-    fetchBulkUpdateDownloadFilePath
+    fetchBulkUpdateDownloadFilePath,
+    fetchRefreshOfflineDownloadRecord
 } from "../../api/civitaiSQL_api"
 
 import { makeOfflineWindowStyles } from "./OfflineWindow.styles";
@@ -218,6 +219,7 @@ interface BigCardModeProps {
     handleSelectAll: (entries: OfflineDownloadEntry[]) => void;
     showGalleries: boolean;
     onToggleOverlay: (entry: OfflineDownloadEntry) => void;
+    onRefreshRecord?: (entry: OfflineDownloadEntry) => void;
     activePreviewId: string | null;
 
     // ⬇️ NEW props
@@ -2199,6 +2201,42 @@ const OfflineWindow: React.FC = () => {
         return () => document.removeEventListener('click', onDocClick);
     }, [leftOverlayEntry, closeLeftOverlay]);
 
+    const handleRefreshOneRecord = async (entry: OfflineDownloadEntry) => {
+        if (isLoading) return;
+
+        const ok = window.confirm("Do you want to refresh/update this record?");
+        if (!ok) return;
+
+        setIsLoading(true);
+        setUiMode("modifying");
+
+        try {
+            await fetchRefreshOfflineDownloadRecord(
+                {
+                    civitaiModelID: entry.civitaiModelID,
+                    civitaiVersionID: entry.civitaiVersionID,
+                },
+                dispatch
+            );
+
+            // ✅ Refresh what the user is currently looking at
+            if (displayMode === "holdCard" || displayMode === "earlyAccessCard" || displayMode === "errorCard") {
+                setSpecialReloadToken((t) => t + 1); // triggers special-list reload effect
+            } else {
+                await refreshCurrentPage();          // re-fetch current server page
+            }
+        } catch (err: any) {
+            console.error("Refresh record failed:", err?.message || err);
+            // fetchRefreshOfflineDownloadRecord already dispatches setError, so this is optional:
+            dispatch(setError({
+                hasError: true,
+                errorMessage: `Refresh record failed: ${err?.message || "Unknown error"}`
+            }));
+        } finally {
+            setIsLoading(false);
+            setUiMode("idle");
+        }
+    };
 
     const handleDisplayModeClick = (mode: DisplayMode) => {
         if (displayMode === mode) {
@@ -2606,6 +2644,7 @@ const OfflineWindow: React.FC = () => {
         handleSelectAll,
         showGalleries,
         onToggleOverlay,
+        onRefreshRecord,
         activePreviewId,
         displayMode,
         onErrorCardDownload,
@@ -2695,50 +2734,125 @@ const OfflineWindow: React.FC = () => {
                                 tabIndex={canSelect ? 0 : -1}
                                 aria-pressed={canSelect ? isSelected : undefined}
                             >
-                                {/* Optional: small selected indicator (no checkbox) */}
-                                {isSelected && (
-                                    <div
-                                        style={{
-                                            position: "absolute",
-                                            top: 8,
-                                            left: 8,
-                                            background: isDarkMode ? "rgba(37,99,235,0.9)" : "#2563eb",
-                                            color: "#fff",
-                                            borderRadius: 999,
-                                            padding: "2px 8px",
-                                            fontSize: 12,
-                                            fontWeight: 700,
-                                            pointerEvents: "none",
-                                            zIndex: 2,
-                                        }}
-                                    >
-                                        <TfiCheckBox /> Selected
-                                    </div>
-                                )}
 
-                                {/* Early Access badge at the top-right */}
-                                {showEA && (
-                                    <div
-                                        style={{
-                                            position: 'absolute',
-                                            top: '5px',
-                                            right: '5px',
-                                            color: 'red',
-                                            fontWeight: 'bold',
-                                            fontSize: '0.8rem',
-                                            backgroundColor: isDarkMode ? '#444' : '#fff',
-                                            padding: '2px 4px',
-                                            borderRadius: '4px',
-                                            border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
-                                        }}
-                                    >
-                                        {(() => {
-                                            const ends = getEarlyAccessEndsAt(entry);
-                                            return ends ? formatLocalDateTime(ends) : 'Early Access Only';
-                                        })()}
+                                <div
+                                    style={{
+                                        position: "absolute",
+                                        top: 8,
+                                        left: 8,
+                                        right: 8,
+                                        zIndex: 3,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "space-between",
+                                        pointerEvents: "none", // IMPORTANT: children that need clicks set to auto
+                                    }}
+                                >
+                                    {/* LEFT */}
+                                    <div style={{ display: "flex", alignItems: "center", pointerEvents: "auto" }}>
+                                        {/* Optional: small selected indicator (no checkbox) */}
+                                        {isSelected && (
+                                            <div
+                                                style={{
+                                                    position: "absolute",
+                                                    top: 8,
+                                                    left: 8,
+                                                    background: isDarkMode ? "rgba(37,99,235,0.9)" : "#2563eb",
+                                                    color: "#fff",
+                                                    borderRadius: 999,
+                                                    padding: "2px 8px",
+                                                    fontSize: 12,
+                                                    fontWeight: 700,
+                                                    pointerEvents: "none",
+                                                    zIndex: 2,
+                                                }}
+                                            >
+                                                <TfiCheckBox /> Selected
+                                            </div>
+                                        )}
 
                                     </div>
-                                )}
+
+                                    {/* CENTER */}
+                                    <div style={{ flex: 1, display: "flex", justifyContent: "center", pointerEvents: "none" }}>
+                                        <div style={{ pointerEvents: "auto" }}>
+                                            <div
+                                                style={{
+                                                    display: "inline-flex",
+                                                    alignItems: "center",
+                                                    gap: 6,
+                                                    padding: "2px 8px",
+                                                    borderRadius: 999,
+                                                    background: isDarkMode ? "rgba(0,0,0,0.45)" : "rgba(255,255,255,0.85)",
+                                                    border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.15)"}`,
+                                                    backdropFilter: "blur(2px)",
+                                                    fontSize: 12,
+                                                    fontWeight: 800,
+                                                    color: isDarkMode ? "#fff" : "#111",
+                                                    pointerEvents: "auto",
+                                                }}
+                                            >
+                                                <span style={{ minWidth: 18, textAlign: "center" }}>
+                                                    {cardIndex + 1}
+                                                </span>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onRefreshRecord?.(entry);
+                                                    }}
+                                                    disabled={isLoading}
+                                                    title="Refresh/update this record"
+                                                    aria-label="Refresh/update this record"
+                                                    style={{
+                                                        display: "inline-flex",
+                                                        alignItems: "center",
+                                                        justifyContent: "center",
+                                                        width: 22,
+                                                        height: 22,
+                                                        borderRadius: 8,
+                                                        border: isDarkMode ? "1px solid rgba(255,255,255,0.18)" : "1px solid rgba(0,0,0,0.18)",
+                                                        background: "transparent",
+                                                        color: "inherit",
+                                                        cursor: isLoading ? "not-allowed" : "pointer",
+                                                        padding: 0,
+                                                        opacity: isLoading ? 0.6 : 1,
+                                                    }}
+                                                >
+                                                    <MdRefresh size={16} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* RIGHT */}
+                                    <div style={{ display: "flex", alignItems: "center", pointerEvents: "auto" }}>
+                                        {/* Early Access badge at the top-right */}
+                                        {showEA && (
+                                            <div
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: '5px',
+                                                    right: '5px',
+                                                    color: 'red',
+                                                    fontWeight: 'bold',
+                                                    fontSize: '0.8rem',
+                                                    backgroundColor: isDarkMode ? '#444' : '#fff',
+                                                    padding: '2px 4px',
+                                                    borderRadius: '4px',
+                                                    border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
+                                                }}
+                                            >
+                                                {(() => {
+                                                    const ends = getEarlyAccessEndsAt(entry);
+                                                    return ends ? formatLocalDateTime(ends) : 'Early Access Only';
+                                                })()}
+
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
 
                                 {/* ---- 1) BaseModel badge + Title ---- */}
                                 <div
@@ -2987,12 +3101,6 @@ const OfflineWindow: React.FC = () => {
                                                 >
                                                     {entry.downloadFilePath ?? "N/A"}
                                                 </span>
-                                                <p style={{ margin: '4px 0' }}>
-                                                    <strong>Model ID:</strong> {entry.modelVersionObject?.modelId ?? 'N/A'}
-                                                </p>
-                                                <p style={{ margin: '4px 0' }}>
-                                                    <strong>Version ID:</strong> {entry.modelVersionObject?.id ?? 'N/A'}
-                                                </p>
                                             </>
                                         )}
                                     </div>
@@ -5113,6 +5221,7 @@ const OfflineWindow: React.FC = () => {
                                         showGalleries={showGalleries}
                                         onToggleOverlay={toggleLeftOverlay}
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
+                                        onRefreshRecord={handleRefreshOneRecord}
                                     />
                                 )}
 

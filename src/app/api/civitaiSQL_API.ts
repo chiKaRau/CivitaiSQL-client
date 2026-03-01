@@ -919,6 +919,38 @@ export const fetchAddOfflineDownloadFileIntoOfflineDownloadList = async (
     }
 }
 
+export const fetchRefreshOfflineDownloadRecord = async (
+    modelObject: {
+        civitaiModelID: string;
+        civitaiVersionID: string;
+    },
+    dispatch: any
+) => {
+    try {
+        // Clear any previous errors
+        dispatch(clearError());
+
+        // IMPORTANT: this endpoint expects civitaiModelID + civitaiVersionID at the TOP level (not inside modelObject)
+        const response = await axios.post(
+            `${config.domain}/api/refresh-offline-download-record`,
+            {
+                civitaiModelID: modelObject.civitaiModelID,
+                civitaiVersionID: modelObject.civitaiVersionID,
+            }
+        );
+
+        if (!(response.status >= 200 && response.status < 300)) {
+            throw new Error("Failed to refresh offline download record.");
+        }
+
+        // Return payload so caller can read: updated / changedFields / ids
+        return response.data?.payload;
+    } catch (error: any) {
+        console.error("Error during refresh offline download record:", error.message);
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+};
+
 export const fetchRemoveOfflineDownloadFileIntoOfflineDownloadList = async (
     modelObject: {
         civitaiModelID: string,
