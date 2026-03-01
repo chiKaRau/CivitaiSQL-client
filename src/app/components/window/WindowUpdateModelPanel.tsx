@@ -317,10 +317,26 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
 
     const [selectedPrefix, setSelectedPrefix] = useState("");
     const [selectedSuffix, setSelectedSuffix] = useState("");
-    const [filePathCategoriesList, setFilePathCategoriesList] = useState<{ name: string; value: string; }[]>([]);
+    const [filePathCategoriesList, setFilePathCategoriesList] = useState<{
+        id: number;
+        prefixName: string;
+        downloadFilePath: string;
+        downloadPriority: number;
+        createdAt?: string;
+        updatedAt?: string;
+    }[]>([]);
 
     // Initializing state with the entire object and display property
-    const [selectedFilteredCategoriesList, setSelectedFilteredCategoriesList] = useState<{ category: { name: string, value: string }, display: boolean }[]>(
+    const [selectedFilteredCategoriesList, setSelectedFilteredCategoriesList] = useState<{
+        category: {
+            id: number;
+            prefixName: string;
+            downloadFilePath: string;
+            downloadPriority: number;
+            createdAt?: string;
+            updatedAt?: string;
+        }, display: boolean
+    }[]>(
         filePathCategoriesList.map((category) => ({
             category: category,
             display: true
@@ -453,7 +469,7 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
                                     checked={item.display}
                                     onChange={() => handleToggleBaseModelCheckbox(index)}
                                 />
-                                {item.category.name}
+                                {item.category.prefixName}
                             </label>
                         ))}
 
@@ -575,7 +591,7 @@ const DownloadFilePathOptionPanel: React.FC<DownloadFilePathOptionPanelProps> = 
 
         const filteredFolderList = (foldersList as any[]).filter(folder => {
             const isIncluded = (selectedFilteredCategoriesList as any[]).some(item => {
-                return item.display && folder.toLowerCase().includes(item.category.value.toLowerCase());
+                return item.display && folder.toLowerCase().includes(item.category.prefixName.toLowerCase());
             });
 
             if (!isIncluded) {
@@ -583,13 +599,13 @@ const DownloadFilePathOptionPanel: React.FC<DownloadFilePathOptionPanelProps> = 
             }
 
             // Additional checks for specific exceptions
-            const isCharactersSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "Characters" && item.display);
-            const isRealSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "Real" && item.display);
-            const isPosesSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "Poses" && item.display);
-            const isMalesSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "Males" && item.display);
-            const isSFWSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "SFW" && item.display);
-            const isNSFWSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "NSFW" && item.display);
-            const isEXSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.name === "EX" && item.display);
+            const isCharactersSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.prefixName === "Characters" && item.display);
+            const isRealSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.prefixName === "Real" && item.display);
+            const isPosesSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.prefixName === "Poses" && item.display);
+            const isMalesSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.prefixName === "Males" && item.display);
+            const isSFWSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.prefixName === "SFW" && item.display);
+            const isNSFWSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.prefixName === "NSFW" && item.display);
+            const isEXSelected = (selectedFilteredCategoriesList as any[]).some(item => item.category.prefixName === "EX" && item.display);
 
             // Check exceptions
             if (isCharactersSelected && !isMalesSelected && folder.toLowerCase().includes("(males)")) {

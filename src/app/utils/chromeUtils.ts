@@ -162,6 +162,7 @@ export const updateSelectedFilteredCategoriesListIntoChromeStorage = (selectedFi
     chrome.storage.sync.set({ selectedFilteredCategoriesList: JSON.stringify(selectedFilteredCategoriesList) });
     //chrome.storage.sync.set({ selectedFilteredCategoriesList: null });
     //if doesn't update, uncomment above code
+    //or try dlete the dist folder
 }
 
 export const callChromeBrowserDownload = (data: any) => {

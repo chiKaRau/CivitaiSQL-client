@@ -41,7 +41,14 @@ interface updateAvaliable {
     isEarlyAccess: any;
 }
 
-type Category = { name: string; value: string };
+type Category = {
+    id: number;
+    prefixName: string;
+    downloadFilePath: string;
+    downloadPriority: number;
+    createdAt?: string;
+    updatedAt?: string;
+};
 type SelectedItem = { category: Category; display: boolean };
 
 type StagedItem = {
@@ -1633,21 +1640,21 @@ const WindowComponent: React.FC = () => {
 
         // Prefix-style categories (the path-like ones)
         const allowPrefixes = selected
-            .filter(i => i.display && i.category.value.startsWith("/@scan@/"))
-            .map(i => lc(i.category.value));
+            .filter(i => i.display && i.category.downloadFilePath.startsWith("/@scan@/"))
+            .map(i => lc(i.category.downloadFilePath));
 
         const denyPrefixes = selected
-            .filter(i => !i.display && i.category.value.startsWith("/@scan@/"))
-            .map(i => lc(i.category.value));
+            .filter(i => !i.display && i.category.downloadFilePath.startsWith("/@scan@/"))
+            .map(i => lc(i.category.downloadFilePath));
 
         // Toggle-style flags (not path prefixes)
-        const isCharactersSelected = selected.some(i => i.category.name === "Characters" && i.display);
-        const isRealSelected = selected.some(i => i.category.name === "Real" && i.display);
-        const isPosesSelected = selected.some(i => i.category.name === "Poses" && i.display);
-        const isMalesSelected = selected.some(i => i.category.name === "Males" && i.display);
-        const isSFWSelected = selected.some(i => i.category.name === "SFW" && i.display);
-        const isNSFWSelected = selected.some(i => i.category.name === "NSFW" && i.display);
-        const isEXSelected = selected.some(i => i.category.name === "EX" && i.display);
+        const isCharactersSelected = selected.some(i => i.category.prefixName === "Characters" && i.display);
+        const isRealSelected = selected.some(i => i.category.prefixName === "Real" && i.display);
+        const isPosesSelected = selected.some(i => i.category.prefixName === "Poses" && i.display);
+        const isMalesSelected = selected.some(i => i.category.prefixName === "Males" && i.display);
+        const isSFWSelected = selected.some(i => i.category.prefixName === "SFW" && i.display);
+        const isNSFWSelected = selected.some(i => i.category.prefixName === "NSFW" && i.display);
+        const isEXSelected = selected.some(i => i.category.prefixName === "EX" && i.display);
 
         const filteredFolderList = (foldersList as string[])
             .filter(raw => {
@@ -1662,15 +1669,15 @@ const WindowComponent: React.FC = () => {
                 if (denyPrefixes.some(p => folder.startsWith(p))) return false;
 
                 // Extra exception logic
-                if (isCharactersSelected && !isMalesSelected && folder.includes("(males)")) return false;
+                // if (isCharactersSelected && !isMalesSelected && folder.includes("(males)")) return false;
 
-                if (isPosesSelected && !isNSFWSelected && folder.includes("/nsfw/")) return false;
-                if (isPosesSelected && !isSFWSelected && folder.includes("/sfw/")) return false;
-                if (isPosesSelected && !isRealSelected && folder.includes("/real/")) return false;
+                // if (isPosesSelected && !isNSFWSelected && folder.includes("/nsfw/")) return false;
+                // if (isPosesSelected && !isSFWSelected && folder.includes("/sfw/")) return false;
+                // if (isPosesSelected && !isRealSelected && folder.includes("/real/")) return false;
 
-                if (isSFWSelected && !isNSFWSelected && folder.includes("/nsfw/")) return false;
+                // if (isSFWSelected && !isNSFWSelected && folder.includes("/nsfw/")) return false;
 
-                if (!isEXSelected && folder.includes("/ex/")) return false;
+                // if (!isEXSelected && folder.includes("/ex/")) return false;
 
                 return true;
             })

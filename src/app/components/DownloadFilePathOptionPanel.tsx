@@ -95,41 +95,41 @@ const DownloadFilePathOptionPanel: React.FC<DownloadFilePathOptionPanelProps> = 
                     !parsedCategories.some(
                         (item: any) =>
                             item.display &&
-                            lower.includes(item.category.value.toLowerCase())
+                            lower.includes(item.category.prefixName.toLowerCase())
                     )
                 ) {
                     return false
                 }
                 // exception flags
-                const isChars = parsedCategories.some(
-                    (i: any) => i.category.name === 'Characters' && i.display
-                )
-                const isReal = parsedCategories.some(
-                    (i: any) => i.category.name === 'Real' && i.display
-                )
-                const isPoses = parsedCategories.some(
-                    (i: any) => i.category.name === 'Poses' && i.display
-                )
-                const isMales = parsedCategories.some(
-                    (i: any) => i.category.name === 'Males' && i.display
-                )
-                const isSFW = parsedCategories.some(
-                    (i: any) => i.category.name === 'SFW' && i.display
-                )
-                const isNSFW = parsedCategories.some(
-                    (i: any) => i.category.name === 'NSFW' && i.display
-                )
-                const isEX = parsedCategories.some(
-                    (i: any) => i.category.name === 'EX' && i.display
-                )
+                // const isChars = parsedCategories.some(
+                //     (i: any) => i.category.prefixName === 'Characters' && i.display
+                // )
+                // const isReal = parsedCategories.some(
+                //     (i: any) => i.category.prefixName === 'Real' && i.display
+                // )
+                // const isPoses = parsedCategories.some(
+                //     (i: any) => i.category.prefixName === 'Poses' && i.display
+                // )
+                // const isMales = parsedCategories.some(
+                //     (i: any) => i.category.prefixName === 'Males' && i.display
+                // )
+                // const isSFW = parsedCategories.some(
+                //     (i: any) => i.category.prefixName === 'SFW' && i.display
+                // )
+                // const isNSFW = parsedCategories.some(
+                //     (i: any) => i.category.prefixName === 'NSFW' && i.display
+                // )
+                // const isEX = parsedCategories.some(
+                //     (i: any) => i.category.prefixName === 'EX' && i.display
+                // )
 
-                // apply same exceptions
-                if (isChars && !isMales && lower.includes('(males)')) return false
-                if (isPoses && !isNSFW && lower.includes('/nsfw/')) return false
-                if (isPoses && !isSFW && lower.includes('/sfw/')) return false
-                if (isPoses && !isReal && lower.includes('/real/')) return false
-                if (isSFW && !isNSFW && lower.includes('/nsfw/')) return false
-                if (!isEX && lower.includes('/ex/')) return false
+                // // apply same exceptions
+                // if (isChars && !isMales && lower.includes('(males)')) return false
+                // if (isPoses && !isNSFW && lower.includes('/nsfw/')) return false
+                // if (isPoses && !isSFW && lower.includes('/sfw/')) return false
+                // if (isPoses && !isReal && lower.includes('/real/')) return false
+                // if (isSFW && !isNSFW && lower.includes('/nsfw/')) return false
+                // if (!isEX && lower.includes('/ex/')) return false
 
                 return true
             })

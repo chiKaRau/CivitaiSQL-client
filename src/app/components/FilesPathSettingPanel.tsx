@@ -40,10 +40,26 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
         updatedAt?: string;
     }[]>([]);
     const [filePathCategoriesList, setFilePathCategoriesList] = useState<
-        { name: string; value: string }[]
+        {
+            id: number;
+            prefixName: string;
+            downloadFilePath: string;
+            downloadPriority: number;
+            createdAt?: string;
+            updatedAt?: string;
+        }[]
     >([]);
     const [selectedFilteredCategoriesList, setSelectedFilteredCategoriesList] = useState<
-        { category: { name: string; value: string }; display: boolean }[]
+        {
+            category: {
+                id: number;
+                prefixName: string;
+                downloadFilePath: string;
+                downloadPriority: number;
+                createdAt?: string;
+                updatedAt?: string;
+            }; display: boolean
+        }[]
     >([]);
     const [selectedPrefix, setSelectedPrefix] = useState('');
     const [selectedSuffix, setSelectedSuffix] = useState('');
@@ -74,14 +90,21 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
                 setSelectedFilteredCategoriesList(saved);
             } else {
                 // B) else fetch the list from your API
-                const cats = await fetchGetFilePathCategoriesList(dispatch);
+                const cats = await fetchGetCategoryPrefixesList(dispatch);
                 if (cats) {
                     setFilePathCategoriesList(cats);
 
                     // seed defaults
-                    const initial = cats.map((category: any) => ({
+                    const initial = cats.map((category: {
+                        id: number;
+                        prefixName: string;
+                        downloadFilePath: string;
+                        downloadPriority: number;
+                        createdAt?: string;
+                        updatedAt?: string;
+                    }) => ({
                         category,
-                        display: !DEFAULT_OFF.has(String(category.name).trim().toLowerCase())
+                        display: !DEFAULT_OFF.has(String(category.prefixName).trim().toLowerCase())
                     }));
                     setSelectedFilteredCategoriesList(initial);
 
@@ -227,7 +250,7 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
                                         checked={item.display}
                                         onChange={() => handleToggleBaseModelCheckbox(idx)}
                                     />
-                                    {item.category.name}
+                                    {item.category.prefixName}
                                 </label>
                             ))}
                         </div>
