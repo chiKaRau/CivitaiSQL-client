@@ -1209,38 +1209,6 @@ const WindowComponent: React.FC = () => {
         }
     };
 
-    const ensureUrlMeta = async (url: string) => {
-        const { modelId, versionId: versionFromUrl } = parseModelAndVersionFromUrl(url);
-        if (!modelId) return;
-
-        // if URL already has versionId, we still use it
-        const data = await getModelInfoCached(modelId);
-        if (!data?.modelVersions?.length) return;
-
-        const firstVersionId = String(data.modelVersions[0]?.id ?? "");
-        const effectiveVersionId = versionFromUrl || firstVersionId;
-
-        // 1) versionId map (so URLGrid can display versionId even when URL has no param)
-        setUrlVersionIdMap(prev => {
-            if (prev[url] === effectiveVersionId) return prev;
-            return { ...prev, [url]: effectiveVersionId };
-        });
-
-        // 2) image map (fill only if missing)
-        setUrlImgSrcMap(prev => {
-            if (prev[url]) return prev;
-
-            const v =
-                data.modelVersions.find((x: any) => String(x.id) === String(effectiveVersionId)) ||
-                data.modelVersions[0];
-
-            const img = v?.images?.[0]?.url || "";
-            if (!img) return prev;
-
-            return { ...prev, [url]: img };
-        });
-    };
-
     const handleToggleCollapseButton = (panelId: any) => {
         setCollapseButtonStates((prevStates) => ({
             ...prevStates,
