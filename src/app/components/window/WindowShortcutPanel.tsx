@@ -35,6 +35,8 @@ interface PanelProps {
     setSelectedUrl: (selectedUrl: string) => void;
     setUrlList: (updater: (prevUrlList: string[]) => string[]) => void; // Callback to update the URL list
     urlList: string[]; // Pass the list of URLs to check for duplicates
+    setUrlImgSrcMap?: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+    setUrlVersionIdMap?: React.Dispatch<React.SetStateAction<Record<string, string>>>;
 }
 
 const ui = {
@@ -133,7 +135,7 @@ const IconBtn: React.FC<{
 };
 
 
-const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, setSelectedUrl }) => {
+const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, setSelectedUrl, setUrlImgSrcMap, setUrlVersionIdMap }) => {
     const dispatch = useDispatch();
 
     const [modelData, setModelData] = useState<Model | null>(null);
@@ -164,6 +166,55 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
             console.log("test-fetchModelInfo");
             const response = await axios.post(`https://civitai.com/api/v1/models/${modelId}`);
             const data = response.data;
+
+            // --- Backfill URLGrid display + thumbnails using THIS ONE API CALL ---
+            try {
+                const firstVersionId = data?.modelVersions?.[0]?.id ? String(data.modelVersions[0].id) : "";
+                const firstImg = data?.modelVersions?.[0]?.images?.[0]?.url || "";
+
+                const urlHasParam = new URL(url).searchParams.has("modelVersionId");
+
+                // 1) If the selected URL is the "plain" one, store its versionId so URLGrid can display it
+                if (!urlHasParam && firstVersionId && setUrlVersionIdMap) {
+                    setUrlVersionIdMap(prev => ({ ...prev, [url]: firstVersionId }));
+                }
+
+                // 2) Fill image map for any URLs from this model that are in urlList but missing images
+                if (setUrlImgSrcMap) {
+                    setUrlImgSrcMap(prev => {
+                        const next = { ...prev };
+
+                        // helper to build the version URL format your panel uses
+                        const makeUrl = (vid: string) => `https://civitai.com/models/${modelId}?modelVersionId=${vid}`;
+
+                        for (const v of data.modelVersions || []) {
+                            const vid = String(v.id);
+                            const img = v?.images?.[0]?.url || "";
+                            if (!img) continue;
+
+                            // the "plain" url represents first version when it has no param
+                            const candidateUrl =
+                                !urlHasParam && vid === firstVersionId ? url : makeUrl(vid);
+
+                            // only fill if it exists in the current list AND missing in map
+                            if (urlList.includes(candidateUrl) && !next[candidateUrl]) {
+                                next[candidateUrl] = img;
+                            }
+                        }
+
+                        // also fill plain-url image if missing
+                        if (!urlHasParam && firstImg && urlList.includes(url) && !next[url]) {
+                            next[url] = firstImg;
+                        }
+
+                        return next;
+                    });
+                }
+            } catch {
+                // ignore
+            }
+            // --- end backfill ---
+
             console.log(response);
 
             setModelData(data);
@@ -201,6 +252,50 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
             console.error('Error fetching model info:', error);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const hasUrlParam = (() => {
+        try {
+            return new URL(url).searchParams.has("modelVersionId");
+        } catch {
+            return false;
+        }
+    })();
+
+    const firstVersionId = modelData?.modelVersions?.[0]?.id
+        ? String(modelData.modelVersions[0].id)
+        : "";
+
+    const buildVersionUrl = (vid: string) => `https://civitai.com/models/${modelId}?modelVersionId=${vid}`;
+
+    // Given a version object, compute the EXACT URL format your app uses
+    const computeUrlForVersion = (vid: string) => {
+        // if this panel was opened from a "plain" model URL (no modelVersionId),
+        // then the first version uses the plain url
+        if (!hasUrlParam && firstVersionId && vid === firstVersionId) return url;
+        return buildVersionUrl(vid);
+    };
+
+    // Fill maps from already-fetched modelData (NO API)
+    const upsertMetaForUrls = (pairs: Array<{ targetUrl: string; vid: string; img?: string }>) => {
+        if (setUrlVersionIdMap) {
+            // only needed for the plain url row to display a version id
+            if (!hasUrlParam && firstVersionId) {
+                setUrlVersionIdMap(prev => ({ ...prev, [url]: firstVersionId }));
+            }
+        }
+
+        if (setUrlImgSrcMap) {
+            setUrlImgSrcMap(prev => {
+                const next = { ...prev };
+                for (const p of pairs) {
+                    if (p.img && !next[p.targetUrl]) {
+                        next[p.targetUrl] = p.img;
+                    }
+                }
+                return next;
+            });
         }
     };
 
@@ -277,63 +372,72 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
     const handleAdd = () => {
         if (!selectedVersion || !modelData) return;
 
+        const vid = String(selectedVersion.id);
         const formattedUrl =
-            (selectedVersion.id === modelData?.modelVersions[0].id && !(new URL(url).searchParams.has('modelVersionId')))
+            (vid === String(modelData.modelVersions[0]?.id) && !hasUrlParam)
                 ? url
-                : `https://civitai.com/models/${modelId}?modelVersionId=${selectedVersion.id}`;
+                : `https://civitai.com/models/${modelId}?modelVersionId=${vid}`;
 
         setUrlList(prevUrlList => {
             if (prevUrlList.includes(formattedUrl)) {
-                setMessage({ text: 'This URL is already in the list.', type: 'error' });
-                return prevUrlList; // Return the original list if duplicate
+                setMessage({ text: "This URL is already in the list.", type: "error" });
+                return prevUrlList;
             }
-
-            setMessage({ text: 'URL added successfully!', type: 'success' });
-            return [...prevUrlList, formattedUrl]; // Add the new URL if it's not a duplicate
+            setMessage({ text: "URL added successfully!", type: "success" });
+            return [...prevUrlList, formattedUrl];
         });
 
-        console.log("check-url")
-        chrome.storage.local.get('originalTabId', (result) => {
+        // ✅ NEW: fill image map immediately using already-fetched modelData
+        const img = selectedVersion?.images?.[0]?.url || "";
+        upsertMetaForUrls([{ targetUrl: formattedUrl, vid, img }]);
+
+        chrome.storage.local.get("originalTabId", (result) => {
             if (result.originalTabId) {
                 chrome.tabs.sendMessage(result.originalTabId, { action: "check-url", url: formattedUrl });
             }
         });
-
     };
 
     // Handle Add All Button Click
     const handleAddAll = () => {
         if (!modelData) return;
 
-        const modelVersions = modelData.modelVersions;
+        const metaPairs: Array<{ targetUrl: string; vid: string; img?: string }> = [];
         const newUrls: string[] = [];
 
-        modelVersions.forEach((version) => {
-            const formattedUrl =
-                (version.id === modelData.modelVersions[0].id &&
-                    !(new URL(url).searchParams.has('modelVersionId')))
-                    ? url
-                    : `https://civitai.com/models/${modelId}?modelVersionId=${version.id}`;
+        for (const v of modelData.modelVersions) {
+            const vid = String(v.id);
 
+            const formattedUrl =
+                (vid === String(modelData.modelVersions[0]?.id) && !hasUrlParam)
+                    ? url
+                    : `https://civitai.com/models/${modelId}?modelVersionId=${vid}`;
+
+            // Keep your existing "only add if not already in list"
             if (!urlList.includes(formattedUrl)) {
                 newUrls.push(formattedUrl);
             }
-        });
+
+            // ✅ NEW: always prepare meta (even if URL already exists but image missing)
+            const img = v?.images?.[0]?.url || "";
+            metaPairs.push({ targetUrl: formattedUrl, vid, img });
+        }
 
         if (newUrls.length === 0) {
-            setMessage({ text: 'All URLs are already in the list.', type: 'error' });
+            setMessage({ text: "All URLs are already in the list.", type: "error" });
+            // still backfill images for any missing ones
+            upsertMetaForUrls(metaPairs);
             return;
         }
 
-        setUrlList(prevUrlList => {
-            const updatedList = [...prevUrlList, ...newUrls];
-            return updatedList;
-        });
+        setUrlList(prev => [...prev, ...newUrls]);
+        setMessage({ text: `${newUrls.length} URL(s) added successfully!`, type: "success" });
 
-        setMessage({ text: `${newUrls.length} URL(s) added successfully!`, type: 'success' });
+        // ✅ NEW: backfill images + plain-url versionId mapping right now
+        upsertMetaForUrls(metaPairs);
 
         newUrls.forEach((formattedUrl) => {
-            chrome.storage.local.get('originalTabId', (result) => {
+            chrome.storage.local.get("originalTabId", (result) => {
                 if (result.originalTabId) {
                     chrome.tabs.sendMessage(result.originalTabId, { action: "check-url", url: formattedUrl });
                 }

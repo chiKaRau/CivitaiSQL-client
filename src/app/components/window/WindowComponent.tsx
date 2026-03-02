@@ -129,6 +129,13 @@ const WindowComponent: React.FC = () => {
     const [resetMode, setResetMode] = useState(false);
 
     const [urlList, setUrlList] = useState<string[]>([]);
+    const [urlImgSrcMap, setUrlImgSrcMap] = useState<Record<string, string>>({});
+    const [urlVersionIdMap, setUrlVersionIdMap] = useState<Record<string, string>>({});
+
+    // cache model info so we don’t refetch for the same modelId
+    const modelInfoCacheRef = useRef<Map<string, any>>(new Map());
+    const inflightRef = useRef<Map<string, Promise<any>>>(new Map());
+
     const [checkedUrlList, setCheckedUrlList] = useState<string[]>([]);
 
     //const [originalTabId, setOriginalTabId] = useState(0);
@@ -280,13 +287,51 @@ const WindowComponent: React.FC = () => {
         //console.log('Updated checkedUrlList:', checkedUrlList.length);
     }, [checkedUrlList]);
 
+    useEffect(() => {
+        const keep = new Set(urlList);
+
+        setUrlImgSrcMap(prev => {
+            const next: Record<string, string> = {};
+            for (const k of Object.keys(prev)) if (keep.has(k)) next[k] = prev[k];
+            return next;
+        });
+
+        setUrlVersionIdMap(prev => {
+            const next: Record<string, string> = {};
+            for (const k of Object.keys(prev)) if (keep.has(k)) next[k] = prev[k];
+            return next;
+        });
+    }, [urlList]);
+
     //Message Listener
     useEffect(() => {
         const messageListener = (message: any, sender: any, sendResponse: any) => {
             if (message.action === "addUrl") {
-                setUrlList(prevUrlList => [...prevUrlList, message.url]);
+                const url = message.url as string;
+
+                setUrlList(prev => (prev.includes(url) ? prev : [...prev, url]));
+
+                // NEW: store DOM thumbnail immediately if provided
+                if (message.imgSrc) {
+                    setUrlImgSrcMap(prev => ({ ...prev, [url]: message.imgSrc }));
+                }
+
             } else if (message.action === "removeUrl") {
-                setUrlList(prevUrlList => prevUrlList.filter(url => url !== message.url));
+                const url = message.url as string;
+
+                setUrlList(prev => prev.filter(u => u !== url));
+
+                // NEW: cleanup maps
+                setUrlImgSrcMap(prev => {
+                    const next = { ...prev };
+                    delete next[url];
+                    return next;
+                });
+                setUrlVersionIdMap(prev => {
+                    const next = { ...prev };
+                    delete next[url];
+                    return next;
+                });
             } else if (message.action === "checkUrlsInDatabase") {
 
                 //console.log("newUrlList: ", message.newUrlList.length)
@@ -1126,186 +1171,74 @@ const WindowComponent: React.FC = () => {
         setResetMode(true)
     };
 
-    const handleAddOfflineDownloadFileintoOfflineDownloadList = async () => {
-
-        if (["/@scan@/ErrorPath/"].includes(downloadFilePath)) {
-            alert("Invalid DownloadFilePath");
-            return;
+    const parseModelAndVersionFromUrl = (url: string) => {
+        try {
+            const u = new URL(url);
+            const modelId = u.pathname.match(/\/models\/(\d+)/)?.[1] || "";
+            const versionId = u.searchParams.get("modelVersionId") || "";
+            return { modelId, versionId };
+        } catch {
+            // fallback regex if URL() fails
+            const modelId = url.match(/\/models\/(\d+)/)?.[1] || "";
+            const versionId = url.match(/[?&]modelVersionId=(\d+)/)?.[1] || "";
+            return { modelId, versionId };
         }
-
-        setStartModelName(urlList[0].split('/').pop() || "");
-        setProcessingModelName("");
-        setEndModelName(urlList[urlList.length - 1].split('/').pop() || "");
-
-        setIsLoading(true)
-        // Utility function to delay execution
-        const delay = async (ms: any) => {
-            for (let i = ms / 1000; i > 0; i--) {
-                setCountdown(i);
-                await new Promise(res => setTimeout(res, 1000));
-            }
-            setCountdown(0);
-        };
-        for (let url of urlList) {
-            //Fetch Civitai ModelInfo
-            const modelId = url.match(/\/models\/(\d+)/)?.[1] || '';
-            setWorkingModelID(modelId)
-            setProcessingModelName(url.split('/').pop() || "");
-            // Fetch data with error handling
-            try {
-                const data = await fetchCivitaiModelInfoFromCivitaiByModelID(modelId, dispatch);
-                if (data) {
-                    //Download File
-                    let civitaiUrl = url;
-                    let versionIndex = 0;
-                    const uri = new URL(url);
-
-                    if (uri.searchParams.has('modelVersionId')) {
-                        let modelVersionId = uri.searchParams.get('modelVersionId');
-                        versionIndex = data.modelVersions.findIndex((version: any) => {
-                            return version.id == modelVersionId
-                        });
-                    }
-
-                    if (versionIndex === -1) {
-                        continue;
-                    }
-
-                    let civitaiVersionID = data?.modelVersions[versionIndex]?.id.toString();
-                    let civitaiModelID = modelId;
-
-                    let civitaiFileName = retrieveCivitaiFileName(data, civitaiVersionID);
-                    //the fileList would contains the urls of all files such as safetensor, training data, ...
-                    let civitaiModelFileList = retrieveCivitaiFilesList(data, civitaiVersionID)
-
-                    let civitaiTags = data?.tags;
-
-                    //Check for null or empty
-                    if (
-                        civitaiUrl === null || civitaiUrl === "" ||
-                        civitaiFileName === null || civitaiFileName === "" ||
-                        civitaiModelID === null || civitaiModelID === "" ||
-                        civitaiVersionID === null || civitaiVersionID === "" ||
-                        downloadFilePath === null || downloadFilePath === "" ||
-                        selectedCategory === null || selectedCategory === "" ||
-                        civitaiModelFileList === null || !civitaiModelFileList.length ||
-                        civitaiTags === null
-                    ) {
-                        console.log("fail in handleAddOfflineDownloadFileintoOfflineDownloadList()")
-                        return;
-                    }
-
-                    let modelObject = {
-                        downloadFilePath, civitaiFileName, civitaiModelID,
-                        civitaiVersionID, civitaiModelFileList, civitaiUrl,
-                        selectedCategory, civitaiTags, hold,
-                        downloadPriority,
-                    }
-
-                    await fetchAddOfflineDownloadFileIntoOfflineDownloadList(modelObject, false, dispatch);
-
-                    // Remove the processed URL from the urlList
-                    setUrlList(currentUrls => currentUrls.filter(currentUrl => currentUrl !== url));
-
-                    chrome.storage.local.get('originalTabId', (result) => {
-                        if (result.originalTabId) {
-                            chrome.tabs.sendMessage(result.originalTabId, { action: "uncheck-url", url: url });
-                        }
-                    });
-
-                }
-
-            } catch (error) {
-                console.error(error);
-                setProcessingModelName(url.split('/').pop() || "");
-                break;
-            }
-            // Throttle requests
-            await delay(1000);
-        }
-        setWorkingModelID("")
-        setIsLoading(false)
-        dispatch(updateDownloadFilePath("/@scan@/ACG/Pending/"));
-        setResetMode(true)
-        setHold(false);
-        setDownloadPriority(5);
-        dispatch(updateDownloadPriority(5));
     };
 
-    // Function to handle the API call and update the button state
-    const handleMultipleBundle_v2 = async () => {
+    const getModelInfoCached = async (modelId: string) => {
+        if (!modelId) return null;
 
-        setStartModelName(urlList[0].split('/').pop() || "");
-        setProcessingModelName("");
-        setEndModelName(urlList[urlList.length - 1].split('/').pop() || "");
+        const cached = modelInfoCacheRef.current.get(modelId);
+        if (cached) return cached;
 
-        setIsLoading(true)
-        // Utility function to delay execution
-        const delay = async (ms: any) => {
-            for (let i = ms / 1000; i > 0; i--) {
-                setCountdown(i);
-                await new Promise(res => setTimeout(res, 1000));
-            }
-            setCountdown(0);
-        };
-        for (let url of urlList) {
-            //Fetch Civitai ModelInfo
-            const modelId = url.match(/\/models\/(\d+)/)?.[1] || '';
-            setWorkingModelID(modelId)
-            setProcessingModelName(url.split('/').pop() || "");
-            // Fetch data with error handling
-            try {
-                const data = await fetchCivitaiModelInfoFromCivitaiByModelID(modelId, dispatch);
-                if (data) {
-                    //Download File
+        const inflight = inflightRef.current.get(modelId);
+        if (inflight) return inflight;
 
-                    let versionIndex = 0;
-                    const uri = new URL(url);
+        const p = (async () => {
+            const data = await fetchCivitaiModelInfoFromCivitaiByModelID(modelId, dispatch);
+            if (data) modelInfoCacheRef.current.set(modelId, data);
+            return data;
+        })();
 
-                    if (uri.searchParams.has('modelVersionId')) {
-                        let modelVersionId = uri.searchParams.get('modelVersionId');
-                        versionIndex = data.modelVersions.findIndex((version: any) => {
-                            return version.id == modelVersionId
-                        });
-                    }
+        inflightRef.current.set(modelId, p);
 
-                    if (versionIndex === -1) {
-                        continue;
-                    }
-
-                    const isDownloadSuccessful = await handleDownloadMultipleFile_v2(data, url, modelId, versionIndex);
-
-                    if (isDownloadSuccessful) {
-                        //Add to database
-                        handleAddModeltoDatabase(url);
-
-                        //Bookmark this url
-                        bookmarkThisUrl(data.type, url, `${data.name} - ${data.id} | Stable Diffusion LoRA | Civitai`)
-
-                        // Remove the processed URL from the urlList
-                        setUrlList(currentUrls => currentUrls.filter(currentUrl => currentUrl !== url));
-
-                        chrome.storage.local.get('originalTabId', (result) => {
-                            if (result.originalTabId) {
-                                chrome.tabs.sendMessage(result.originalTabId, { action: "uncheck-url", url: url });
-                            }
-                        });
-                    }
-
-                }
-
-            } catch (error) {
-                console.error(error);
-                setProcessingModelName(url.split('/').pop() || "");
-                break;
-            }
-            // Throttle requests
-            await delay(2000);
+        try {
+            return await p;
+        } finally {
+            inflightRef.current.delete(modelId);
         }
-        setWorkingModelID("")
-        setSelectedUrl("");
-        setIsLoading(false)
-        setResetMode(true)
+    };
+
+    const ensureUrlMeta = async (url: string) => {
+        const { modelId, versionId: versionFromUrl } = parseModelAndVersionFromUrl(url);
+        if (!modelId) return;
+
+        // if URL already has versionId, we still use it
+        const data = await getModelInfoCached(modelId);
+        if (!data?.modelVersions?.length) return;
+
+        const firstVersionId = String(data.modelVersions[0]?.id ?? "");
+        const effectiveVersionId = versionFromUrl || firstVersionId;
+
+        // 1) versionId map (so URLGrid can display versionId even when URL has no param)
+        setUrlVersionIdMap(prev => {
+            if (prev[url] === effectiveVersionId) return prev;
+            return { ...prev, [url]: effectiveVersionId };
+        });
+
+        // 2) image map (fill only if missing)
+        setUrlImgSrcMap(prev => {
+            if (prev[url]) return prev;
+
+            const v =
+                data.modelVersions.find((x: any) => String(x.id) === String(effectiveVersionId)) ||
+                data.modelVersions[0];
+
+            const img = v?.images?.[0]?.url || "";
+            if (!img) return prev;
+
+            return { ...prev, [url]: img };
+        });
     };
 
     const handleToggleCollapseButton = (panelId: any) => {
@@ -1313,15 +1246,6 @@ const WindowComponent: React.FC = () => {
             ...prevStates,
             [panelId]: !prevStates[panelId],
         }));
-    };
-
-    const handleUpdateCountInputChange = (e: any) => {
-        const value = Number(e.target.value);
-        if (!isNaN(value) && value > 0) {
-            setUpdateCount(value);
-        } else if (value <= 0) {
-            setUpdateCount(1); // Set to minimum valid value if input is zero or negative
-        }
     };
 
     const toggleFullInfoModelPanel = () => {
@@ -2620,8 +2544,10 @@ const WindowComponent: React.FC = () => {
                                     <WindowShortcutPanel
                                         url={selectedUrl}
                                         setSelectedUrl={setSelectedUrl}
-                                        urlList={urlList}
                                         setUrlList={setUrlList}
+                                        urlList={urlList}
+                                        setUrlImgSrcMap={setUrlImgSrcMap}
+                                        setUrlVersionIdMap={setUrlVersionIdMap}
                                     />
                                 )}
                             </div>
@@ -2688,8 +2614,9 @@ const WindowComponent: React.FC = () => {
                             setUrlList={setUrlList}
                             selectedUrl={selectedUrl}
                             onUrlSelect={setSelectedUrl}
+                            urlImgSrcMap={urlImgSrcMap}
+                            urlVersionIdMap={urlVersionIdMap}
                         />
-
                         <OverlayTrigger
                             placement={"top"}
                             overlay={<Tooltip id="tooltip">Stage current inbox URLs into the Staging Queue (snapshot path/category/etc.)</Tooltip>}

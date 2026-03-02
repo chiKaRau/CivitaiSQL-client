@@ -395,9 +395,14 @@ function addCardCheckbox(item: HTMLDivElement, index?: number) {
     const linkElement: HTMLAnchorElement | null = item.querySelector('a');
     if (linkElement?.href) {
       const url = linkElement.href;
+
+      // NEW: preview image inside the same <a> (avoids grabbing avatar)
+      const imgEl = linkElement.querySelector('img') as HTMLImageElement | null;
+      const imgSrc = imgEl?.currentSrc || imgEl?.src || "";
+
       if (checkbox.checked) {
         item.style.border = '2px solid yellow';
-        chrome.runtime.sendMessage({ action: 'addUrl', url });
+        chrome.runtime.sendMessage({ action: 'addUrl', url, imgSrc }); // NEW
       } else {
         item.style.border = '';
         chrome.runtime.sendMessage({ action: 'removeUrl', url });

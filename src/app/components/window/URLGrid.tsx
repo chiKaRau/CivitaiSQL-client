@@ -1,135 +1,229 @@
-import React from 'react';
-import { AgGridReact } from 'ag-grid-react';
-import { ColDef, RowStyle } from 'ag-grid-community';
-import 'ag-grid-community/styles/ag-grid.css';
-import 'ag-grid-community/styles/ag-theme-alpine.css';
+import React, { useMemo } from "react";
+import { AgGridReact } from "ag-grid-react";
+import { ColDef, RowStyle } from "ag-grid-community";
+import "ag-grid-community/styles/ag-grid.css";
+import "ag-grid-community/styles/ag-theme-alpine.css";
 
 interface URLGridProps {
     urlList: string[];
-    setUrlList: (updater: (prevUrlList: string[]) => string[]) => void; // Callback to update the URL list
-    selectedUrl: string | null; // Selected URL passed down from the parent
-    onUrlSelect: (url: string) => void; // Callback to update the selected URL
+    setUrlList: (updater: (prevUrlList: string[]) => string[]) => void;
+    selectedUrl: string | null;
+    onUrlSelect: (url: string) => void;
+
+    // url -> imgSrc map
+    urlImgSrcMap?: Record<string, string>;
+
+    // NEW: url -> versionId map (filled ONLY by ShortcutPanel after it fetches API)
+    urlVersionIdMap?: Record<string, string>;
 }
 
-const URLGrid: React.FC<URLGridProps> = ({ urlList, setUrlList, selectedUrl, onUrlSelect }) => {
-    // Prepare the data for the grid
-    const rowData = urlList.map((url, index) => {
-        const uri = new URL(url);
-        const modelId = uri.pathname.match(/\/models\/(\d+)/)?.[1] || 'Unknown'; // Extract modelId
-        const versionId = uri.searchParams.get('modelVersionId') || 'Selecting'; // Extract versionId
-        return {
-            id: index + 1,
-            url,
-            modelId,
-            versionId,
-        };
-    });
+// Tooltip that shows a larger image
+const ImageTooltip: React.FC<any> = (props) => {
+    const src: string = props?.value || "";
+    if (!src) return null;
 
-    // Define the column structure
-    const columnDefs: ColDef[] = [
-        {
-            headerName: 'ID',
-            field: 'id',
-            width: 60,
-            cellStyle: { textAlign: 'center', padding: '5px' } // Center-align ID column 
-        },
-        {
-            headerName: 'Model ID',
-            field: 'modelId',
-            width: 120,
-            cellStyle: { textAlign: 'center', padding: '5px' } // Center-align Model ID column
-        },
-        {
-            headerName: 'Version ID',
-            field: 'versionId',
-            width: 150,
-            cellStyle: { textAlign: 'center', padding: '5px' } // Center-align Version ID column
-        },
-        {
-            headerName: 'URL',
-            field: 'url',
-            flex: 2, // URL column takes more space
-            tooltipField: 'url', // Tooltip displays the full URL
-            cellStyle: { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', padding: '5px' },
-            cellRenderer: (params: any) => {
-                return (
-                    <span
-                        style={{
-                            display: 'inline-block',
-                            width: '100%',
-                            userSelect: 'text', // Allow text selection
-                        }}
-                    >
-                        {params.value}
-                    </span>
-                );
-            },
-        },
-        {
-            headerName: 'Actions',
-            field: 'actions',
-            width: 100, // Fixed size for the actions column
-            cellRenderer: (params: any) => {
-                return (
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation(); // Prevent row selection on button click
-                            handleDelete(params.data.url); // Call delete handler
-                        }}
-                        style={{
-                            cursor: 'pointer',
-                            background: '#ff4d4f',
-                            color: 'white',
-                            border: 'none',
-                            padding: '5px 10px',
-                            borderRadius: '4px',
-                        }}
-                    >
-                        Delete
-                    </button>
-                );
-            },
-        },
-    ];
+    return (
+        <div
+            style={{
+                padding: 6,
+                background: "rgba(0,0,0,0.85)",
+                borderRadius: 8,
+                boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+                maxWidth: 340,
+            }}
+        >
+            <img
+                src={src}
+                alt="preview"
+                style={{
+                    display: "block",
+                    maxWidth: 320,
+                    maxHeight: 420,
+                    borderRadius: 6,
+                }}
+            />
+        </div>
+    );
+};
 
-    // Handle row deletion
+const URLGrid: React.FC<URLGridProps> = ({
+    urlList,
+    setUrlList,
+    selectedUrl,
+    onUrlSelect,
+    urlImgSrcMap = {},
+    urlVersionIdMap = {},
+}) => {
+    const rowData = useMemo(() => {
+        const seenModelIds = new Set<string>();
+
+        return urlList.map((url) => {
+            let modelId = "Unknown";
+            let versionFromUrl = "";
+
+            try {
+                const uri = new URL(url);
+                modelId = uri.pathname.match(/\/models\/(\d+)/)?.[1] || "Unknown";
+                versionFromUrl = uri.searchParams.get("modelVersionId") || "";
+            } catch {
+                // ignore parsing errors
+            }
+
+            const isPrimary = !seenModelIds.has(modelId);
+            seenModelIds.add(modelId);
+
+            // versionId is either from URL param OR from map (filled by ShortcutPanel)
+            const effectiveVersionId = versionFromUrl || urlVersionIdMap[url] || "";
+
+            // IMPORTANT: if we still don't know versionId, show ONLY modelId (your request)
+            const modelVersionDisplay = effectiveVersionId
+                ? `${modelId}_${effectiveVersionId}${isPrimary ? " *" : ""}`
+                : `${modelId}${isPrimary ? " *" : ""}`;
+
+            const imgSrc = urlImgSrcMap[url] || "";
+
+            return {
+                url,
+                modelId,
+                versionId: effectiveVersionId,
+                isPrimary,
+                modelVersionDisplay,
+                imgSrc,
+            };
+        });
+    }, [urlList, urlImgSrcMap, urlVersionIdMap]);
+
     const handleDelete = (urlToRemove: string) => {
-        setUrlList((prevUrlList) => prevUrlList.filter((url) => url !== urlToRemove));
+        setUrlList((prev) => prev.filter((u) => u !== urlToRemove));
 
-        chrome.storage.local.get('originalTabId', (result) => {
+        chrome.storage.local.get("originalTabId", (result) => {
             if (result.originalTabId) {
-                chrome.tabs.sendMessage(result.originalTabId, { action: 'uncheck-url', url: urlToRemove });
+                chrome.tabs.sendMessage(result.originalTabId, {
+                    action: "uncheck-url",
+                    url: urlToRemove,
+                });
             }
         });
     };
 
-    return (
-        <div
-            className="ag-theme-alpine"
+    const TrashButton = ({ onClick }: { onClick: (e: any) => void }) => (
+        <button
+            type="button"
+            onClick={onClick}
+            title="Delete"
             style={{
-                height: 300,
-                width: '100%',
+                cursor: "pointer",
+                background: "transparent",
+                border: "none",
+                padding: 6,
+                borderRadius: 6,
+                lineHeight: 0,
             }}
         >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path
+                    d="M9 3h6m-8 4h10m-9 0 1 14h6l1-14M10 11v7M14 11v7"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                />
+            </svg>
+        </button>
+    );
+
+    const columnDefs: ColDef[] = [
+        {
+            headerName: "Model & Version",
+            field: "modelVersionDisplay",
+            width: 240,
+            cellStyle: { textAlign: "left", padding: "5px" },
+            cellRenderer: (params: any) => {
+                const isPrimary = !!params?.data?.isPrimary;
+                return <span style={{ fontWeight: isPrimary ? 800 : 600 }}>{params.value}</span>;
+            },
+        },
+        {
+            headerName: "URL",
+            field: "url",
+            flex: 2,
+            tooltipField: "url",
+            cellStyle: {
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                padding: "5px",
+            },
+            cellRenderer: (params: any) => (
+                <span style={{ display: "inline-block", width: "100%", userSelect: "text" }}>
+                    {params.value}
+                </span>
+            ),
+        },
+        {
+            headerName: "Image",
+            field: "imgSrc",
+            width: 110,
+            sortable: false,
+            resizable: false,
+            tooltipField: "imgSrc",
+            tooltipComponent: "imageTooltip",
+            cellStyle: { padding: "5px", textAlign: "center" },
+            cellRenderer: (params: any) => {
+                const src = params.value as string;
+                if (!src) return <span style={{ opacity: 0.5 }}>—</span>;
+
+                return (
+                    <img
+                        src={src}
+                        alt="thumb"
+                        style={{
+                            width: 52,
+                            height: 52,
+                            objectFit: "cover",
+                            borderRadius: 8,
+                            display: "inline-block",
+                        }}
+                    />
+                );
+            },
+        },
+        {
+            headerName: "Actions",
+            field: "actions",
+            width: 90,
+            sortable: false,
+            resizable: false,
+            cellStyle: { textAlign: "center", padding: "5px" },
+            cellRenderer: (params: any) => (
+                <TrashButton
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(params.data.url);
+                    }}
+                />
+            ),
+        },
+    ];
+
+    const components = useMemo(() => ({ imageTooltip: ImageTooltip }), []);
+
+    return (
+        <div className="ag-theme-alpine" style={{ height: 300, width: "100%" }}>
             <AgGridReact
-                rowData={rowData} // Set rows for the grid
-                columnDefs={columnDefs} // Set columns for the grid
-                defaultColDef={{
-                    sortable: true,
-                    resizable: true,
-                }}
-                tooltipShowDelay={500} // Add slight delay before showing tooltips
-                getRowStyle={(params): RowStyle => {
-                    return params.data.url === selectedUrl
-                        ? { backgroundColor: '#d1e7fd', padding: '5px' } // Highlight selected row with padding
-                        : { backgroundColor: '', padding: '5px' }; // Default style with padding
-                }}
+                rowData={rowData}
+                columnDefs={columnDefs}
+                components={components}
+                rowHeight={64}
+                defaultColDef={{ sortable: true, resizable: true }}
+                tooltipShowDelay={250}
+                getRowStyle={(params): RowStyle =>
+                    params.data.url === selectedUrl
+                        ? { backgroundColor: "#d1e7fd", padding: "5px" }
+                        : { backgroundColor: "", padding: "5px" }
+                }
                 onCellClicked={(params) => {
-                    // Update the selected URL when a cell is clicked
-                    if (params.colDef.field === 'url') {
-                        const url = params.value;
-                        onUrlSelect(url);
-                    }
+                    if (params.colDef.field !== "actions") onUrlSelect(params.data.url);
                 }}
             />
         </div>
