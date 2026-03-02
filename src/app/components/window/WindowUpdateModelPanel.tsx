@@ -489,7 +489,7 @@ interface FilesPathTagsListSelectorProps {
 
 const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({ downloadFilePath, selectedPrefix, setDownloadFilePath }) => {
     const [topTags, setTopTags] = useState<any[]>([]);
-    const [recentTags, setRecentTags] = useState<any[]>([]);
+    const [recentAddedTags, setRecentAddedTags] = useState<any[]>([]);
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
     const dispatch = useDispatch();
 
@@ -498,8 +498,8 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({ d
         const loadTags = async () => {
             const result = await fetchGetTagsList(dispatch, selectedPrefix);
             if (result) {
-                setTopTags(result.topTags || []);
-                setRecentTags(result.recentTags || []);
+                setTopTags(result?.topTags || []);
+                setRecentAddedTags(result?.recentAddedTags || []);
             }
         };
 
@@ -536,7 +536,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({ d
             <h6>Recently Added 10 Tags</h6>
             <div style={{ maxHeight: '100px', overflowY: 'auto', border: '1px solid #ccc', padding: '3px', marginBottom: "10px" }}>
                 <ul style={{ listStyle: 'none', padding: 0 }}>
-                    {recentTags.map((tag, index) => (
+                    {recentAddedTags.map((tag, index) => (
                         <li
                             key={index}
                             style={{

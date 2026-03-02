@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { fetchGetTagsList } from '../api/civitaiSQL_api';
+import { fetchGetTagsList, fetchDeleteDownloadPathCountRecord } from '../api/civitaiSQL_api';
 import { useDispatch } from 'react-redux';
 import { updateDownloadFilePath } from '../store/actions/chromeActions';
 
@@ -16,15 +16,38 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
 }) => {
     const dispatch = useDispatch();
 
-    // UI state
     const [topTags, setTopTags] = useState<any[]>([]);
-    const [recentTags, setRecentTags] = useState<any[]>([]);
+    const [recentAddedTags, setRecentAddedTags] = useState<any[]>([]);
+    const [recentUpdatedTags, setRecentUpdatedTags] = useState<any[]>([]);
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
+
     const [loading, setLoading] = useState(false);
+    const [deletingPath, setDeletingPath] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    // Simple in-component cache: { [prefix]: { top: any[], recent: any[] } }
-    const cacheRef = useRef<Record<string, { top: any[]; recent: any[] }>>({});
+    // cache by prefix
+    const cacheRef = useRef<Record<string, { top: any[]; recent: any[]; updated: any[] }>>({});
+
+    const applyResultToState = (result: any) => {
+        const nextTop = result?.topTags || [];
+        const nextRecentAdded = result?.recentAddedTags || [];
+        const nextRecentUpdated = result?.recentUpdatedTags || [];
+
+        cacheRef.current[selectedPrefix] = {
+            top: nextTop,
+            recent: nextRecentAdded,
+            updated: nextRecentUpdated
+        };
+
+        setTopTags(nextTop);
+        setRecentAddedTags(nextRecentAdded);
+        setRecentUpdatedTags(nextRecentUpdated);
+    };
+
+    const fetchAndSet = async () => {
+        const result = await fetchGetTagsList(dispatch, selectedPrefix);
+        applyResultToState(result);
+    };
 
     useEffect(() => {
         let cancelled = false;
@@ -34,33 +57,26 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
 
             if (!selectedPrefix) {
                 setTopTags([]);
-                setRecentTags([]);
+                setRecentAddedTags([]);
+                setRecentUpdatedTags([]);
                 if (isHandleRefresh) setIsHandleRefresh(false);
                 return;
             }
 
-            // Use cached tags if we have them and we're not forcing a refresh
             const cached = cacheRef.current[selectedPrefix];
             if (cached && !isHandleRefresh) {
                 setTopTags(cached.top);
-                setRecentTags(cached.recent);
-                // make sure to clear the refresh flag if parent toggled it
+                setRecentAddedTags(cached.recent);
+                setRecentUpdatedTags(cached.updated);
                 if (isHandleRefresh) setIsHandleRefresh(false);
                 return;
             }
 
-            // Fetch from backend
             try {
                 setLoading(true);
                 const result = await fetchGetTagsList(dispatch, selectedPrefix);
                 if (cancelled) return;
-
-                const nextTop = result?.topTags || [];
-                const nextRecent = result?.recentTags || [];
-
-                cacheRef.current[selectedPrefix] = { top: nextTop, recent: nextRecent };
-                setTopTags(nextTop);
-                setRecentTags(nextRecent);
+                applyResultToState(result);
             } catch (e) {
                 if (!cancelled) setError('Failed to load tags.');
             } finally {
@@ -77,56 +93,112 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
 
     const handleTagClick = (tag: string) => {
         setSelectedTag(tag);
-        // keep your existing behavior:
         dispatch(updateDownloadFilePath(tag));
-        // If you actually want prefix + tag, use this instead:
+        // if needed:
         // dispatch(updateDownloadFilePath(`${selectedPrefix}${tag}`));
+    };
+
+    const handleDelete = async (downloadFilePath: string) => {
+        if (!downloadFilePath?.trim()) return;
+
+        const ok = window.confirm(`Delete this record?\n\n${downloadFilePath}`);
+        if (!ok) return;
+
+        setError(null);
+        setDeletingPath(downloadFilePath);
+
+        try {
+            const res = await fetchDeleteDownloadPathCountRecord(dispatch, downloadFilePath);
+            if (!res?.deleted) {
+                setError(res?.message || 'Delete failed.');
+                return;
+            }
+
+            // Clear cache for this prefix so we don't show stale results
+            delete cacheRef.current[selectedPrefix];
+
+            // If the deleted tag was selected, clear highlight
+            setSelectedTag(prev => (prev === downloadFilePath ? null : prev));
+
+            // Re-fetch lists to fill back to 10 items correctly
+            setLoading(true);
+            await fetchAndSet();
+        } catch (e: any) {
+            setError(e?.message || 'Delete failed.');
+        } finally {
+            setDeletingPath(null);
+            setLoading(false);
+        }
+    };
+
+    const renderList = (title: string, tags: any[], numberLabel: (index: number) => string) => {
+        return (
+            <>
+                <h6>{title}</h6>
+                <div style={{ maxHeight: '100px', overflowY: 'auto', border: '1px solid #ccc', padding: '3px', marginBottom: '10px' }}>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                        {tags.map((tag, index) => {
+                            const value = tag?.string_value ?? '';
+                            const isSelected = selectedTag === value;
+                            const isDeletingThis = deletingPath === value;
+
+                            return (
+                                <li
+                                    key={`${value}-${index}`}
+                                    onClick={() => handleTagClick(value)}
+                                    style={{
+                                        margin: '5px 0',
+                                        cursor: 'pointer',
+                                        backgroundColor: isSelected ? '#d3d3d3' : 'transparent',
+                                        fontWeight: isSelected ? 'bold' : 'normal',
+                                        padding: '4px 6px',
+                                        borderRadius: 6,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: 8
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', minWidth: 0, flex: 1 }}>
+                                        <span style={{ whiteSpace: 'nowrap', opacity: 0.8 }}>{numberLabel(index)}#</span>
+                                        <span style={{ wordBreak: 'break-word' }}>{value}</span>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation(); // don't trigger handleTagClick
+                                            handleDelete(value);
+                                        }}
+                                        disabled={!!deletingPath || isDeletingThis}
+                                        title="Delete"
+                                        style={{
+                                            padding: '2px 8px',
+                                            borderRadius: 6,
+                                            border: '1px solid #bbb',
+                                            cursor: !!deletingPath ? 'not-allowed' : 'pointer',
+                                            opacity: isDeletingThis ? 0.7 : 1
+                                        }}
+                                    >
+                                        {isDeletingThis ? 'Deleting…' : 'Delete'}
+                                    </button>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </div>
+            </>
+        );
     };
 
     return (
         <div>
-            <h6>Top 10 Tags by Count</h6>
             {loading && <div style={{ opacity: 0.7 }}>Loading…</div>}
             {error && <div style={{ color: 'red' }}>{error}</div>}
 
-            <div style={{ maxHeight: '100px', overflowY: 'auto', border: '1px solid #ccc', padding: '3px' }}>
-                <ul style={{ listStyle: 'none', padding: 0 }}>
-                    {topTags.map((tag, index) => (
-                        <li
-                            key={index}
-                            style={{
-                                margin: '5px 0',
-                                cursor: 'pointer',
-                                backgroundColor: selectedTag === tag.string_value ? '#d3d3d3' : 'transparent',
-                                fontWeight: selectedTag === tag.string_value ? 'bold' : 'normal'
-                            }}
-                            onClick={() => handleTagClick(tag.string_value)}
-                        >
-                            {index + 1}# {tag.string_value}
-                        </li>
-                    ))}
-                </ul>
-            </div>
-
-            <h6>Recently Added 10 Tags</h6>
-            <div style={{ maxHeight: '100px', overflowY: 'auto', border: '1px solid #ccc', padding: '3px', marginBottom: '10px' }}>
-                <ul style={{ listStyle: 'none', padding: 0 }}>
-                    {recentTags.map((tag, index) => (
-                        <li
-                            key={index}
-                            style={{
-                                margin: '5px 0',
-                                cursor: 'pointer',
-                                backgroundColor: selectedTag === tag.string_value ? '#d3d3d3' : 'transparent',
-                                fontWeight: selectedTag === tag.string_value ? 'bold' : 'normal'
-                            }}
-                            onClick={() => handleTagClick(tag.string_value)}
-                        >
-                            {10 - index}# {tag.string_value}
-                        </li>
-                    ))}
-                </ul>
-            </div>
+            {renderList('Top 10 Tags by Count', topTags, (i) => String(i + 1))}
+            {renderList('Recently Added 10 Tags', recentAddedTags, (i) => String(10 - i))}
+            {renderList('Recently Updated 10 Tags', recentUpdatedTags, (i) => String(10 - i))}
         </div>
     );
 };

@@ -500,13 +500,11 @@ export const fetchAddPendingRemoveTag = async (pendingRemoveTag: string, dispatc
 
 export const fetchGetTagsList = async (dispatch: any, selectedPrefix: string) => {
     try {
-        // Clear any previous errors
         dispatch(clearError());
 
-        // Construct the URL with the prefix as a query parameter if it's provided
-        let url = `${config.domain}/api/get_tags_list`;
+        // New endpoint (match your controller)
+        let url = `${config.domain}/api/get_download_file_path_count_list`;
         if (selectedPrefix) {
-            // Encode the prefix to handle special characters
             const encodedPrefix = encodeURIComponent(selectedPrefix);
             url += `?prefix=${encodedPrefix}`;
         }
@@ -514,21 +512,21 @@ export const fetchGetTagsList = async (dispatch: any, selectedPrefix: string) =>
         const response = await axios.get(url);
 
         if (response.status >= 200 && response.status < 300) {
-            const { topTags, recentTags } = response.data.payload;
+            const payload = response.data?.payload || {};
 
-            // Return both topTags and recentTags
-            return { topTags, recentTags };
+            const topTags = payload.topTags ?? [];
+            const recentAddedTags = payload.recentAddedTags ?? [];
+            const recentUpdatedTags = payload.recentUpdatedTags ?? [];
+
+            return { topTags, recentAddedTags, recentUpdatedTags };
         } else {
-            // Handle the case when response status is not successful
-            throw new Error("Retrieving Tags List from Database failed.");
+            throw new Error("Retrieving Download Path Counts from Database failed.");
         }
     } catch (error: any) {
-        // Handle other types of errors, e.g., network issues
-        console.error("Error during Tags List retrieval:", error.message);
-        // Dispatch the error to the state
+        console.error("Error during Download Path Counts retrieval:", error.message);
         dispatch(setError({ hasError: true, errorMessage: error.message }));
     }
-}
+};
 
 
 export const fetchGetCategoryPrefixesList = async (dispatch: any) => {
@@ -730,6 +728,39 @@ export const fetchTopTagsPage = async (
     } catch (err: any) {
         console.error('fetchTopTagsPage error:', err?.message || err);
         throw err;
+    }
+};
+
+export const fetchDeleteDownloadPathCountRecord = async (
+    dispatch: any,
+    downloadFilePath: string
+) => {
+    try {
+        dispatch(clearError());
+
+        if (!downloadFilePath?.trim()) {
+            throw new Error("downloadFilePath is required");
+        }
+
+        const url = `${config.domain}/api/delete-download-path-counts`;
+
+        // axios.delete supports query params via the config object
+        const response = await axios.delete(url, {
+            params: { downloadFilePath: downloadFilePath.trim() },
+        });
+
+        if (response.status >= 200 && response.status < 300) {
+            if (response.data?.success) {
+                return response.data.payload; // { downloadFilePath, deleted }
+            } else {
+                throw new Error(response.data?.message || "Delete failed.");
+            }
+        } else {
+            throw new Error("Delete request failed.");
+        }
+    } catch (error: any) {
+        console.error("Error during delete download path count:", error.message);
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
     }
 };
 
