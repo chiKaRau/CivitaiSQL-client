@@ -51,13 +51,21 @@ type Category = {
 };
 type SelectedItem = { category: Category; display: boolean };
 
+type StagedGridRow = StagedItem & {
+    idx: number;
+    imgSrc: string;
+    isPrimary: boolean;
+    modelVersionDisplay: string;
+};
+
 type StagedItem = {
     id: string;
     url: string;
     modelId: string;
     versionId: string; // modelVersionId or "Selecting"
 
-    // snapshot fields
+    imgSrc?: string;   // ✅ add this
+
     downloadFilePath: string;
     selectedCategory: string;
     downloadMethod: string;
@@ -449,6 +457,31 @@ const WindowComponent: React.FC = () => {
             .sort((a, b) => new Date(a.item.lastCheckedDate!).getTime() - new Date(b.item.lastCheckedDate!).getTime()) // oldest→newest
             .map(({ i }) => i);
     }, [creatorUrlList, ratingFilters]);
+
+
+    const stagedRowData = useMemo(() => {
+        const seenModelIds = new Set<string>();
+
+        return stagedItems.map((it, i) => {
+            const isPrimary = !seenModelIds.has(it.modelId);
+            seenModelIds.add(it.modelId);
+
+            const effectiveVersionId =
+                it.versionId && it.versionId !== "Selecting" ? it.versionId : "";
+
+            const modelVersionDisplay = effectiveVersionId
+                ? `${it.modelId}_${effectiveVersionId}${isPrimary ? " *" : ""}`
+                : `${it.modelId}${isPrimary ? " *" : ""}`;
+
+            return {
+                ...it,
+                idx: i + 1,
+                isPrimary,
+                modelVersionDisplay,
+                imgSrc: it.imgSrc || "",
+            };
+        });
+    }, [stagedItems]);
 
 
     const pickByNullThenAge = (direction: 1 | -1): number | null => {
@@ -1001,31 +1034,75 @@ const WindowComponent: React.FC = () => {
         }
     };
 
+    const ImageTooltip: React.FC<any> = (props) => {
+        const src: string = props?.value || "";
+        if (!src) return null;
+
+        return (
+            <div style={{
+                padding: 6,
+                background: "rgba(0,0,0,0.85)",
+                borderRadius: 8,
+                boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+                maxWidth: 340,
+            }}>
+                <img
+                    src={src}
+                    alt="preview"
+                    style={{ display: "block", maxWidth: 320, maxHeight: 420, borderRadius: 6 }}
+                />
+            </div>
+        );
+    };
+
+    const stagingComponents = useMemo(() => ({ imageTooltip: ImageTooltip }), []);
 
     const stagingColumnDefs: ColDef[] = [
-        { headerName: "ID", field: "idx", width: 60 },
-        { headerName: "Model", field: "modelId", width: 110 },
-        { headerName: "Ver", field: "versionId", width: 120 },
-        { headerName: "Action", field: "action", width: 90 },
-
-        { headerName: "Path", field: "downloadFilePath", flex: 1 },
-        { headerName: "Cat", field: "selectedCategory", width: 90 },
-        { headerName: "Method", field: "downloadMethod", width: 90 },
-        { headerName: "Hold", field: "hold", width: 80 },
-        { headerName: "Pri", field: "downloadPriority", width: 70 },
-
         {
-            headerName: "StagedAt",
-            field: "stagedAt",
-            width: 170,
-            valueFormatter: (p) => p.value ? new Date(p.value).toLocaleString() : ""
+            headerName: "Model & Version",
+            field: "modelVersionDisplay",
+            width: 240,
+            cellRenderer: (p: any) => (
+                <span style={{ fontWeight: p?.data?.isPrimary ? 800 : 600 }}>
+                    {p.value}
+                </span>
+            ),
         },
-        { headerName: "Status", field: "status", width: 95 },
-        { headerName: "Err", field: "error", flex: 1 },
-
+        {
+            headerName: "URL",
+            field: "url",
+            flex: 2,
+            tooltipField: "url",
+            cellStyle: { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+        },
+        {
+            headerName: "Image",
+            field: "imgSrc",
+            width: 110,
+            sortable: false,
+            tooltipField: "imgSrc",
+            tooltipComponent: "imageTooltip",
+            cellStyle: { textAlign: "center" },
+            cellRenderer: (p: any) => {
+                const src = p.value as string;
+                if (!src) return <span style={{ opacity: 0.5 }}>—</span>;
+                return (
+                    <img
+                        src={src}
+                        alt="thumb"
+                        style={{ width: 52, height: 52, objectFit: "cover", borderRadius: 8 }}
+                    />
+                );
+            },
+        },
+        { headerName: "Path", field: "downloadFilePath", flex: 1, minWidth: 180 },
+        { headerName: "Cat", field: "selectedCategory", width: 90 },
+        { headerName: "Hold", field: "hold", width: 70, cellRenderer: (p: any) => (p.value ? "Y" : "") },
+        { headerName: "Pri", field: "downloadPriority", width: 70 },
         {
             headerName: "X",
             width: 60,
+            sortable: false,
             cellRenderer: (p: any) => (
                 <button
                     onClick={(e) => {
@@ -1709,8 +1786,17 @@ const WindowComponent: React.FC = () => {
     const parseModelAndVersion = (url: string) => {
         const uri = new URL(url);
         const modelId = uri.pathname.match(/\/models\/(\d+)/)?.[1] || "Unknown";
-        const versionId = uri.searchParams.get("modelVersionId") || "Selecting";
-        return { modelId, versionId };
+
+        const versionFromUrl = uri.searchParams.get("modelVersionId") || "";
+        const versionFromMap = urlVersionIdMap[url] || "";
+
+        // ✅ snapshot the best known version at staging time
+        const versionId = versionFromUrl || versionFromMap || "Selecting";
+
+        // ✅ snapshot image at staging time (so staging grid can always show it later)
+        const imgSrc = urlImgSrcMap[url] || "";
+
+        return { modelId, versionId, imgSrc };
     };
 
     const makeStageId = () => `${Date.now()}_${Math.random().toString(16).slice(2)}`;
@@ -1728,13 +1814,14 @@ const WindowComponent: React.FC = () => {
             for (const url of urlList) {
                 if (existingUrls.has(url)) continue; // avoid duplicates by URL
 
-                const { modelId, versionId } = parseModelAndVersion(url);
+                const { modelId, versionId, imgSrc } = parseModelAndVersion(url);
 
                 additions.push({
                     id: makeStageId(),
                     url,
                     modelId,
                     versionId,
+                    imgSrc, // ✅
 
                     downloadFilePath,
                     selectedCategory,
@@ -2581,9 +2668,12 @@ const WindowComponent: React.FC = () => {
 
                             <div className="ag-theme-alpine" style={{ height: 220, width: "100%" }}>
                                 <AgGridReact
-                                    rowData={stagedItems.map((x, i) => ({ ...x, idx: i + 1 }))}
+                                    rowData={stagedRowData}
                                     columnDefs={stagingColumnDefs}
+                                    components={stagingComponents}
+                                    rowHeight={64}                 // ✅ this fixes “images not showing”
                                     defaultColDef={{ sortable: true, resizable: true }}
+                                    tooltipShowDelay={250}
                                 />
                             </div>
 
