@@ -1185,30 +1185,6 @@ const WindowComponent: React.FC = () => {
         }
     };
 
-    const getModelInfoCached = async (modelId: string) => {
-        if (!modelId) return null;
-
-        const cached = modelInfoCacheRef.current.get(modelId);
-        if (cached) return cached;
-
-        const inflight = inflightRef.current.get(modelId);
-        if (inflight) return inflight;
-
-        const p = (async () => {
-            const data = await fetchCivitaiModelInfoFromCivitaiByModelID(modelId, dispatch);
-            if (data) modelInfoCacheRef.current.set(modelId, data);
-            return data;
-        })();
-
-        inflightRef.current.set(modelId, p);
-
-        try {
-            return await p;
-        } finally {
-            inflightRef.current.delete(modelId);
-        }
-    };
-
     const handleToggleCollapseButton = (panelId: any) => {
         setCollapseButtonStates((prevStates) => ({
             ...prevStates,
