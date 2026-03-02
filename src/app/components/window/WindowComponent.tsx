@@ -1069,13 +1069,6 @@ const WindowComponent: React.FC = () => {
             ),
         },
         {
-            headerName: "URL",
-            field: "url",
-            flex: 2,
-            tooltipField: "url",
-            cellStyle: { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
-        },
-        {
             headerName: "Image",
             field: "imgSrc",
             width: 110,
@@ -1095,7 +1088,27 @@ const WindowComponent: React.FC = () => {
                 );
             },
         },
-        { headerName: "Path", field: "downloadFilePath", flex: 1, minWidth: 180 },
+        {
+            headerName: "Path",
+            field: "downloadFilePath",
+            flex: 1,
+            minWidth: 240,
+
+            // ✅ wrap + row grows with text
+            wrapText: true,
+            autoHeight: true,
+
+            // keep text selectable + nice spacing
+            cellStyle: {
+                whiteSpace: "normal",
+                lineHeight: "1.25",
+                paddingTop: "8px",
+                paddingBottom: "8px",
+                userSelect: "text",
+            },
+
+            tooltipField: "downloadFilePath", // optional
+        },
         { headerName: "Cat", field: "selectedCategory", width: 90 },
         { headerName: "Hold", field: "hold", width: 70, cellRenderer: (p: any) => (p.value ? "Y" : "") },
         { headerName: "Pri", field: "downloadPriority", width: 70 },
@@ -1105,12 +1118,30 @@ const WindowComponent: React.FC = () => {
             sortable: false,
             cellRenderer: (p: any) => (
                 <button
+                    type="button"
                     onClick={(e) => {
                         e.stopPropagation();
                         setStagedItems(prev => prev.filter(x => x.id !== p.data.id));
                     }}
+                    title="Delete"
+                    style={{
+                        cursor: "pointer",
+                        background: "transparent",
+                        border: "none",
+                        padding: 6,
+                        borderRadius: 6,
+                        lineHeight: 0,
+                    }}
                 >
-                    X
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                        <path
+                            d="M9 3h6m-8 4h10m-9 0 1 14h6l1-14M10 11v7M14 11v7"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        />
+                    </svg>
                 </button>
             ),
         },
@@ -2672,6 +2703,7 @@ const WindowComponent: React.FC = () => {
                                     columnDefs={stagingColumnDefs}
                                     components={stagingComponents}
                                     rowHeight={64}                 // ✅ this fixes “images not showing”
+                                    suppressRowTransform={true}
                                     defaultColDef={{ sortable: true, resizable: true }}
                                     tooltipShowDelay={250}
                                 />
