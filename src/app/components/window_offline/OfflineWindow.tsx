@@ -2748,15 +2748,76 @@ const OfflineWindow: React.FC = () => {
                                         pointerEvents: "none", // IMPORTANT: children that need clicks set to auto
                                     }}
                                 >
-                                    {/* LEFT */}
+                                    {/* LEFT (was CENTER) */}
                                     <div style={{ display: "flex", alignItems: "center", pointerEvents: "auto" }}>
-                                        {/* Optional: small selected indicator (no checkbox) */}
+                                        <div
+                                            style={{
+                                                display: "inline-flex",
+                                                alignItems: "center",
+                                                gap: 6,
+                                                padding: "2px 8px",
+                                                borderRadius: 999,
+                                                background: isDarkMode ? "rgba(0,0,0,0.45)" : "rgba(255,255,255,0.85)",
+                                                border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.15)"
+                                                    }`,
+                                                backdropFilter: "blur(2px)",
+                                                fontSize: 12,
+                                                fontWeight: 800,
+                                                color: isDarkMode ? "#fff" : "#111",
+                                                pointerEvents: "auto",
+                                            }}
+                                        >
+                                            <span style={{ minWidth: 18, textAlign: "center" }}>
+                                                {cardIndex + 1}
+                                            </span>
+
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onRefreshRecord?.(entry);
+                                                }}
+                                                disabled={isLoading}
+                                                title="Refresh/update this record"
+                                                aria-label="Refresh/update this record"
+                                                style={{
+                                                    display: "inline-flex",
+                                                    alignItems: "center",
+                                                    justifyContent: "center",
+                                                    width: 22,
+                                                    height: 22,
+                                                    borderRadius: 8,
+                                                    border: isDarkMode
+                                                        ? "1px solid rgba(255,255,255,0.18)"
+                                                        : "1px solid rgba(0,0,0,0.18)",
+                                                    background: "transparent",
+                                                    color: "inherit",
+                                                    cursor: isLoading ? "not-allowed" : "pointer",
+                                                    padding: 0,
+                                                    opacity: isLoading ? 0.6 : 1,
+                                                }}
+                                            >
+                                                <MdRefresh size={16} />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* CENTER (was LEFT) */}
+                                    <div
+                                        style={{
+                                            flex: 1,
+                                            display: "flex",
+                                            justifyContent: "center",
+                                            marginLeft: -100,
+                                            pointerEvents: "none",
+                                        }}
+                                    >
                                         {isSelected && (
                                             <div
                                                 style={{
-                                                    position: "absolute",
-                                                    top: 8,
-                                                    left: 8,
+                                                    display: "inline-flex",
+                                                    alignItems: "center",
+                                                    gap: 6,
                                                     background: isDarkMode ? "rgba(37,99,235,0.9)" : "#2563eb",
                                                     color: "#fff",
                                                     borderRadius: 999,
@@ -2764,66 +2825,11 @@ const OfflineWindow: React.FC = () => {
                                                     fontSize: 12,
                                                     fontWeight: 700,
                                                     pointerEvents: "none",
-                                                    zIndex: 2,
                                                 }}
                                             >
                                                 <TfiCheckBox /> Selected
                                             </div>
                                         )}
-
-                                    </div>
-
-                                    {/* CENTER */}
-                                    <div style={{ flex: 1, display: "flex", justifyContent: "center", pointerEvents: "none" }}>
-                                        <div style={{ pointerEvents: "auto" }}>
-                                            <div
-                                                style={{
-                                                    display: "inline-flex",
-                                                    alignItems: "center",
-                                                    gap: 6,
-                                                    padding: "2px 8px",
-                                                    borderRadius: 999,
-                                                    background: isDarkMode ? "rgba(0,0,0,0.45)" : "rgba(255,255,255,0.85)",
-                                                    border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.15)"}`,
-                                                    backdropFilter: "blur(2px)",
-                                                    fontSize: 12,
-                                                    fontWeight: 800,
-                                                    color: isDarkMode ? "#fff" : "#111",
-                                                    pointerEvents: "auto",
-                                                }}
-                                            >
-                                                <span style={{ minWidth: 18, textAlign: "center" }}>
-                                                    {cardIndex + 1}
-                                                </span>
-
-                                                <button
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        onRefreshRecord?.(entry);
-                                                    }}
-                                                    disabled={isLoading}
-                                                    title="Refresh/update this record"
-                                                    aria-label="Refresh/update this record"
-                                                    style={{
-                                                        display: "inline-flex",
-                                                        alignItems: "center",
-                                                        justifyContent: "center",
-                                                        width: 22,
-                                                        height: 22,
-                                                        borderRadius: 8,
-                                                        border: isDarkMode ? "1px solid rgba(255,255,255,0.18)" : "1px solid rgba(0,0,0,0.18)",
-                                                        background: "transparent",
-                                                        color: "inherit",
-                                                        cursor: isLoading ? "not-allowed" : "pointer",
-                                                        padding: 0,
-                                                        opacity: isLoading ? 0.6 : 1,
-                                                    }}
-                                                >
-                                                    <MdRefresh size={16} />
-                                                </button>
-                                            </div>
-                                        </div>
                                     </div>
 
                                     {/* RIGHT */}
