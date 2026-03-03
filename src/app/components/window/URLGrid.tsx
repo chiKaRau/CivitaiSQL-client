@@ -15,6 +15,11 @@ interface URLGridProps {
 
     // NEW: url -> versionId map (filled ONLY by ShortcutPanel after it fetches API)
     urlVersionIdMap?: Record<string, string>;
+
+    modelPrimaryVersionIdMap?: Record<string, string>;
+
+    urlBadgeMap?: Record<string, string>;
+
 }
 
 // Tooltip that shows a larger image
@@ -53,6 +58,9 @@ const URLGrid: React.FC<URLGridProps> = ({
     onUrlSelect,
     urlImgSrcMap = {},
     urlVersionIdMap = {},
+    modelPrimaryVersionIdMap = {},
+    urlBadgeMap = {}
+
 }) => {
     const rowData = useMemo(() => {
         const seenModelIds = new Set<string>();
@@ -69,16 +77,18 @@ const URLGrid: React.FC<URLGridProps> = ({
                 // ignore parsing errors
             }
 
-            const isPrimary = !seenModelIds.has(modelId);
-            seenModelIds.add(modelId);
-
-            // versionId is either from URL param OR from map (filled by ShortcutPanel)
+            const primaryVid = modelPrimaryVersionIdMap[modelId] || "";
             const effectiveVersionId = versionFromUrl || urlVersionIdMap[url] || "";
 
+            const isPrimary =
+                !!primaryVid && !!effectiveVersionId && effectiveVersionId === primaryVid;
+
             // IMPORTANT: if we still don't know versionId, show ONLY modelId (your request)
+            const badge = urlBadgeMap?.[url] || "";
+
             const modelVersionDisplay = effectiveVersionId
-                ? `${modelId}_${effectiveVersionId}${isPrimary ? " *" : ""}`
-                : `${modelId}${isPrimary ? " *" : ""}`;
+                ? `${modelId}_${effectiveVersionId}${isPrimary ? " (main)" : ""}${badge}`
+                : `${modelId}${isPrimary ? " (main)" : ""}${badge}`;
 
             const imgSrc = urlImgSrcMap[url] || "";
 
@@ -91,7 +101,7 @@ const URLGrid: React.FC<URLGridProps> = ({
                 imgSrc,
             };
         });
-    }, [urlList, urlImgSrcMap, urlVersionIdMap]);
+    }, [urlList, urlImgSrcMap, urlVersionIdMap, modelPrimaryVersionIdMap, urlBadgeMap]);
 
     const handleDelete = (urlToRemove: string) => {
         setUrlList((prev) => prev.filter((u) => u !== urlToRemove));
@@ -135,9 +145,17 @@ const URLGrid: React.FC<URLGridProps> = ({
     const columnDefs: ColDef[] = [
         {
             headerName: "Model & Version",
-            field: "modelVersionDisplay",
-            width: 240,
-            cellStyle: { textAlign: "left", padding: "5px" },
+            field: "modelVersionDisplay",   // <-- use your real field name
+            width: 170,                     // <-- shorter (tweak 150~220)
+            minWidth: 140,
+            wrapText: true,
+            autoHeight: true,
+            cellStyle: {
+                whiteSpace: "normal",
+                wordBreak: "break-word",
+                textAlign: "left",
+                padding: "5px"
+            },
             cellRenderer: (params: any) => {
                 const isPrimary = !!params?.data?.isPrimary;
                 return <span style={{ fontWeight: isPrimary ? 800 : 600 }}>{params.value}</span>;

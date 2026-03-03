@@ -142,6 +142,7 @@ const WindowComponent: React.FC = () => {
     const [urlList, setUrlList] = useState<string[]>([]);
     const [urlImgSrcMap, setUrlImgSrcMap] = useState<Record<string, string>>({});
     const [urlVersionIdMap, setUrlVersionIdMap] = useState<Record<string, string>>({});
+    const [urlBadgeMap, setUrlBadgeMap] = useState<Record<string, string>>({});
 
     // cache model info so we don’t refetch for the same modelId
     const modelInfoCacheRef = useRef<Map<string, any>>(new Map());
@@ -175,6 +176,9 @@ const WindowComponent: React.FC = () => {
     const [currentTabUrl, setCurrentTabUrl] = useState("");
     const [currentTabCreator, setCurrentTabCreator] = useState("");
     const [isCurrentCreatorInList, setIsCurrentCreatorInList] = useState(false);
+
+    const [modelPrimaryVersionIdMap, setModelPrimaryVersionIdMap] =
+        useState<Record<string, string>>({});
 
     const [collapseButtonStates, setCollapseButtonStates] = useState<{ [key: string]: boolean }>({
         checkDatabaseButton: false,
@@ -466,15 +470,18 @@ const WindowComponent: React.FC = () => {
         const seenModelIds = new Set<string>();
 
         return stagedItems.map((it, i) => {
-            const isPrimary = !seenModelIds.has(it.modelId);
-            seenModelIds.add(it.modelId);
-
+            const primaryVid = modelPrimaryVersionIdMap[it.modelId] || "";
             const effectiveVersionId =
                 it.versionId && it.versionId !== "Selecting" ? it.versionId : "";
 
+            const isPrimary =
+                !!primaryVid && !!effectiveVersionId && effectiveVersionId === primaryVid;
+
+            const badge = urlBadgeMap[it.url] || "";
+
             const modelVersionDisplay = effectiveVersionId
-                ? `${it.modelId}_${effectiveVersionId}${isPrimary ? " *" : ""}`
-                : `${it.modelId}${isPrimary ? " *" : ""}`;
+                ? `${it.modelId}_${effectiveVersionId}${isPrimary ? " (main)" : ""}${badge}`
+                : `${it.modelId}${isPrimary ? " (main)" : ""}${badge}`;
 
             return {
                 ...it,
@@ -484,7 +491,7 @@ const WindowComponent: React.FC = () => {
                 imgSrc: it.imgSrc || "",
             };
         });
-    }, [stagedItems]);
+    }, [stagedItems, modelPrimaryVersionIdMap, urlBadgeMap]);
 
 
     const pickByNullThenAge = (direction: 1 | -1): number | null => {
@@ -1069,8 +1076,17 @@ const WindowComponent: React.FC = () => {
     const stagingColumnDefs: ColDef[] = [
         {
             headerName: "Model & Version",
-            field: "modelVersionDisplay",
-            width: 240,
+            field: "modelVersionDisplay",   // <-- use your real field name
+            width: 170,                     // <-- shorter (tweak 150~220)
+            minWidth: 140,
+            wrapText: true,
+            autoHeight: true,
+            cellStyle: {
+                whiteSpace: "normal",
+                wordBreak: "break-word",
+                textAlign: "left",
+                padding: "5px"
+            },
             cellRenderer: (p: any) => (
                 <span style={{ fontWeight: p?.data?.isPrimary ? 800 : 600 }}>
                     {p.value}
@@ -2639,6 +2655,8 @@ const WindowComponent: React.FC = () => {
                                         urlList={urlList}
                                         setUrlImgSrcMap={setUrlImgSrcMap}
                                         setUrlVersionIdMap={setUrlVersionIdMap}
+                                        setModelPrimaryVersionIdMap={setModelPrimaryVersionIdMap}
+                                        setUrlBadgeMap={setUrlBadgeMap}
                                     />
                                 )}
                             </div>
@@ -2707,6 +2725,8 @@ const WindowComponent: React.FC = () => {
                             onUrlSelect={setSelectedUrl}
                             urlImgSrcMap={urlImgSrcMap}
                             urlVersionIdMap={urlVersionIdMap}
+                            modelPrimaryVersionIdMap={modelPrimaryVersionIdMap}
+                            urlBadgeMap={urlBadgeMap}
                         />
                         <OverlayTrigger
                             placement={"top"}

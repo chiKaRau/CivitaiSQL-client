@@ -37,6 +37,10 @@ interface PanelProps {
     urlList: string[]; // Pass the list of URLs to check for duplicates
     setUrlImgSrcMap?: React.Dispatch<React.SetStateAction<Record<string, string>>>;
     setUrlVersionIdMap?: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+    setModelPrimaryVersionIdMap?: React.Dispatch<
+        React.SetStateAction<Record<string, string>>
+    >;
+    setUrlBadgeMap?: React.Dispatch<React.SetStateAction<Record<string, string>>>;
 }
 
 const ui = {
@@ -135,7 +139,9 @@ const IconBtn: React.FC<{
 };
 
 
-const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, setSelectedUrl, setUrlImgSrcMap, setUrlVersionIdMap }) => {
+const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, setSelectedUrl, setUrlImgSrcMap,
+    setUrlVersionIdMap, setModelPrimaryVersionIdMap, setUrlBadgeMap }) => {
+
     const dispatch = useDispatch();
 
     const [modelData, setModelData] = useState<Model | null>(null);
@@ -159,6 +165,13 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
     useEffect(() => {
         fetchModelInfo();
     }, [renderKey]); // Add renderKey as a dependency
+
+    const computeBadgeForVid = (vid: string) => {
+        const star = existingVersions.includes(vid) ? " *" : "";
+        const caret = existingOfflineVersions.includes(vid) ? " ^" : "";
+        return `${star}${caret}`;
+    };
+
     // Fetch the model information
     const fetchModelInfo = async () => {
         setIsLoading(true);
@@ -170,6 +183,14 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
             // --- Backfill URLGrid display + thumbnails using THIS ONE API CALL ---
             try {
                 const firstVersionId = data?.modelVersions?.[0]?.id ? String(data.modelVersions[0].id) : "";
+
+                if (firstVersionId && setModelPrimaryVersionIdMap) {
+                    setModelPrimaryVersionIdMap(prev => ({
+                        ...prev,
+                        [String(modelId)]: firstVersionId
+                    }));
+                }
+
                 const firstImg = data?.modelVersions?.[0]?.images?.[0]?.url || "";
 
                 const urlHasParam = new URL(url).searchParams.has("modelVersionId");
@@ -278,12 +299,22 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
     };
 
     // Fill maps from already-fetched modelData (NO API)
-    const upsertMetaForUrls = (pairs: Array<{ targetUrl: string; vid: string; img?: string }>) => {
+    const upsertMetaForUrls = (pairs: Array<{ targetUrl: string; vid: string; img?: string; badge?: string }>) => {
         if (setUrlVersionIdMap) {
             // only needed for the plain url row to display a version id
             if (!hasUrlParam && firstVersionId) {
                 setUrlVersionIdMap(prev => ({ ...prev, [url]: firstVersionId }));
             }
+        }
+
+        if (setUrlBadgeMap) {
+            setUrlBadgeMap(prev => {
+                const next = { ...prev };
+                for (const p of pairs) {
+                    next[p.targetUrl] = p.badge ?? "";
+                }
+                return next;
+            });
         }
 
         if (setUrlImgSrcMap) {
@@ -389,7 +420,8 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
 
         // ✅ NEW: fill image map immediately using already-fetched modelData
         const img = selectedVersion?.images?.[0]?.url || "";
-        upsertMetaForUrls([{ targetUrl: formattedUrl, vid, img }]);
+        const badge = computeBadgeForVid(vid);
+        upsertMetaForUrls([{ targetUrl: formattedUrl, vid, img, badge }]);
 
         chrome.storage.local.get("originalTabId", (result) => {
             if (result.originalTabId) {
@@ -402,7 +434,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
     const handleAddAll = () => {
         if (!modelData) return;
 
-        const metaPairs: Array<{ targetUrl: string; vid: string; img?: string }> = [];
+        const metaPairs: Array<{ targetUrl: string; vid: string; img?: string; badge?: string }> = [];
         const newUrls: string[] = [];
 
         for (const v of modelData.modelVersions) {
@@ -420,7 +452,8 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
 
             // ✅ NEW: always prepare meta (even if URL already exists but image missing)
             const img = v?.images?.[0]?.url || "";
-            metaPairs.push({ targetUrl: formattedUrl, vid, img });
+            const badge = computeBadgeForVid(vid);
+            metaPairs.push({ targetUrl: formattedUrl, vid, img, badge });
         }
 
         if (newUrls.length === 0) {
