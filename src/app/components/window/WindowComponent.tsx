@@ -113,6 +113,9 @@ import WindowShortcutPanel from './WindowShortcutPanel';
 import { FaEdit } from 'react-icons/fa';
 import { ColDef } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
+import { SelectEditor } from './SelectEditor';
+import { PathAutocompleteEditor } from './PathAutocompleteEditor';
+import { HoldEditor } from './HoldEditor';
 
 interface CreatorUrlItem {
     creatorUrl: string;
@@ -573,6 +576,10 @@ const WindowComponent: React.FC = () => {
         if (!normalWindow) return null;
         const [activeTab] = await chrome.tabs.query({ active: true, windowId: normalWindow.id });
         return activeTab || null;
+    };
+
+    const patchStagedById = (id: string, patch: Partial<StagedItem>) => {
+        setStagedItems(prev => prev.map(it => (it.id === id ? { ...it, ...patch } : it)));
     };
 
     // Read current tab, extract creator if URL matches /user/<creator>/models
@@ -1057,6 +1064,8 @@ const WindowComponent: React.FC = () => {
 
     const stagingComponents = useMemo(() => ({ imageTooltip: ImageTooltip }), []);
 
+    const priorityOptions = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
     const stagingColumnDefs: ColDef[] = [
         {
             headerName: "Model & Version",
@@ -1093,12 +1102,8 @@ const WindowComponent: React.FC = () => {
             field: "downloadFilePath",
             flex: 1,
             minWidth: 240,
-
-            // ✅ wrap + row grows with text
             wrapText: true,
             autoHeight: true,
-
-            // keep text selectable + nice spacing
             cellStyle: {
                 whiteSpace: "normal",
                 lineHeight: "1.25",
@@ -1106,12 +1111,36 @@ const WindowComponent: React.FC = () => {
                 paddingBottom: "8px",
                 userSelect: "text",
             },
+            tooltipField: "downloadFilePath",
 
-            tooltipField: "downloadFilePath", // optional
+            editable: true,
+            cellEditor: PathAutocompleteEditor,
+            cellEditorPopup: true,
+            cellEditorParams: () => ({ options: sortedandFilteredfoldersList })
         },
+
         { headerName: "Cat", field: "selectedCategory", width: 90 },
-        { headerName: "Hold", field: "hold", width: 70, cellRenderer: (p: any) => (p.value ? "Y" : "") },
-        { headerName: "Pri", field: "downloadPriority", width: 70 },
+
+        {
+            headerName: "Hold",
+            field: "hold",
+            width: 70,
+            valueFormatter: (p) => (p.value ? "Y" : ""),
+            editable: true,
+            cellEditor: HoldEditor,
+            cellEditorPopup: true,
+        },
+
+        {
+            headerName: "Pri",
+            field: "downloadPriority",
+            width: 70,
+
+            editable: true,
+            cellEditor: SelectEditor,
+            cellEditorPopup: true,
+            cellEditorParams: () => ({ options: priorityOptions })
+        },
         {
             headerName: "X",
             width: 60,
@@ -2702,9 +2731,34 @@ const WindowComponent: React.FC = () => {
                                     rowData={stagedRowData}
                                     columnDefs={stagingColumnDefs}
                                     components={stagingComponents}
-                                    rowHeight={64}                 // ✅ this fixes “images not showing”
+                                    rowHeight={64}
                                     suppressRowTransform={true}
                                     defaultColDef={{ sortable: true, resizable: true }}
+                                    stopEditingWhenCellsLoseFocus={true}
+                                    singleClickEdit={false}
+                                    context={{ patchStagedById }}
+                                    getRowId={(p) => p.data.id}
+                                    onCellValueChanged={(e: any) => {
+                                        const id = e?.data?.id;
+                                        const field = e?.colDef?.field;
+                                        console.log("CHANGED", field, "old=", e.oldValue, "new=", e.newValue, "dataFieldNow=", e.data?.[field]);
+                                        if (!id || !field) return;
+
+                                        if (field === "downloadFilePath") {
+                                            patchStagedById(id, { downloadFilePath: String(e.newValue ?? "") });
+                                            return;
+                                        }
+                                        if (field === "hold") {
+                                            patchStagedById(id, { hold: !!e.newValue });
+                                            return;
+                                        }
+                                        if (field === "downloadPriority") {
+                                            const n = Number(e.newValue);
+                                            patchStagedById(id, { downloadPriority: Number.isFinite(n) ? n : 0 });
+                                            return;
+                                        }
+                                    }}
+
                                     tooltipShowDelay={250}
                                 />
                             </div>
