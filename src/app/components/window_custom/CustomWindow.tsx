@@ -47,7 +47,7 @@ const CustomWindow: React.FC = () => {
     const [flag, setFlag] = useState(false);
     const [urlAccessable, setUrlAccessable] = useState(true);
 
-    const [downloadUrlInput, setDownloadUrlInput] = useState('');
+    const [downloadUrlInput, setDownloadUrlInput] = useState('https://huggingface.co/Ukado/Cream/resolve/main/easynegative.safetensors');
 
     const [prevData, setPrevData] = useState<any>(null);
 

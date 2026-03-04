@@ -221,8 +221,7 @@ interface BigCardModeProps {
     onToggleOverlay: (entry: OfflineDownloadEntry) => void;
     onRefreshRecord?: (entry: OfflineDownloadEntry) => void;
     activePreviewId: string | null;
-
-    // ⬇️ NEW props
+    canChangeSelection: boolean;
     displayMode?: string;
     onErrorCardDownload?: (entry: OfflineDownloadEntry, method: 'server' | 'browser') => void;
 }
@@ -316,6 +315,7 @@ const AI_COOLDOWN_SECONDS = 90;
 const DEFAULT_AI_SUGGEST_COUNT = 20;
 
 const OfflineWindow: React.FC = () => {
+
 
     const leftPanelRef = useRef<HTMLDivElement>(null);
     const rightContentRef = useRef<HTMLDivElement>(null);
@@ -483,6 +483,21 @@ const OfflineWindow: React.FC = () => {
     const [aiSuggestedOnly, setAiSuggestedOnly] = useState(false);
 
     const [isBulkUpdatingDownloadPaths, setIsBulkUpdatingDownloadPaths] = React.useState(false);
+
+    // near the top of OfflineWindow.tsx (after DisplayMode type)
+    const DOWNLOAD_NOW_ALLOWED_MODES = new Set<DisplayMode>([
+        "table",
+        "bigCard",
+        "smallCard",
+        "failedCard",
+        "holdCard",
+        "errorCard"  // if you want retry-from-failed
+        // do NOT include: "earlyAccessCard", "holdCard", "recentCard", "errorCard"
+    ]);
+
+    const canUseDownloadNow = !isModifyMode && DOWNLOAD_NOW_ALLOWED_MODES.has(displayMode);
+
+    const canChangeSelection = uiMode === "idle" && !isLoading;
 
     const handleBulkPatchSelected = async () => {
         // 1) Targets = selected models (by versionID)
@@ -1224,6 +1239,19 @@ const OfflineWindow: React.FC = () => {
         setSelectedIds(new Set());
     }, [filterText, filterCondition]);
 
+    useEffect(() => {
+        // Don’t clear selection while the app is busy (prevents “disselect during download”)
+        if (uiMode !== "idle") return;
+
+        // If you also want to prevent clearing during any loading flag:
+        if (isLoading) return;
+
+        setSelectedIds(new Set());
+
+        // optional: clear per-card AI picks when changing mode
+        setSelectedSuggestedPathByVid({});
+    }, [displayMode, uiMode, isLoading]);
+
     const handleDownloadPathSave = async (
         entry: OfflineDownloadEntry,
         nextPath: string
@@ -1367,9 +1395,40 @@ const OfflineWindow: React.FC = () => {
         color: currentTheme.rowFontColor,
     });
 
+    const visibleEntries = React.useMemo(() => {
+        switch (displayMode) {
+            case "failedCard":
+                return failedEntries;
+            case "recentCard":
+                return recentlyDownloaded;
+            case "holdCard":
+                return holdEntries;
+            case "earlyAccessCard":
+                return earlyAccessEntries;
+            case "errorCard":
+                return errorEntries;
+            default:
+                return filteredDownloadList; // bigCard / smallCard / table (your main list)
+        }
+    }, [
+        displayMode,
+        failedEntries,
+        recentlyDownloaded,
+        holdEntries,
+        earlyAccessEntries,
+        errorEntries,
+        filteredDownloadList,
+    ]);
+
+
     // **2. Compute Select All Checkbox State**
-    const isAllSelected = filteredDownloadList.length > 0 && filteredDownloadList.every(entry => selectedIds.has(entry.civitaiVersionID));
-    const isIndeterminate = filteredDownloadList.some(entry => selectedIds.has(entry.civitaiVersionID)) && !isAllSelected;
+    const isAllSelected =
+        visibleEntries.length > 0 &&
+        visibleEntries.every(e => selectedIds.has(e.civitaiVersionID));
+
+    const isIndeterminate =
+        visibleEntries.some(e => selectedIds.has(e.civitaiVersionID)) && !isAllSelected;
+
 
     // **3. Define column definitions for Ag-Grid with dynamic styles**
     const columnDefs: ColDef[] = [
@@ -1407,6 +1466,7 @@ const OfflineWindow: React.FC = () => {
             cellRenderer: (params: any) => (
                 <input
                     type="checkbox"
+                    disabled={!canChangeSelection}
                     checked={selectedIds.has(params.data.versionid)}
                     onChange={() => toggleSelect(params.data.versionid)}
                     style={{
@@ -1582,6 +1642,8 @@ const OfflineWindow: React.FC = () => {
 
     // Function to toggle selection
     const toggleSelect = useCallback((id: string) => {
+        if (!canChangeSelection) return;
+
         setSelectedIds(prev => {
             const newSet = new Set(prev);
             if (newSet.has(id)) {
@@ -1634,8 +1696,13 @@ const OfflineWindow: React.FC = () => {
     const handleDownloadNow = async () => {
         console.log("Download Now button clicked");
 
+        if (!canUseDownloadNow) {
+            alert(`Download Now is disabled in this mode: ${displayMode}`);
+            return;
+        }
+
         // Collect selected entries from the filtered list
-        const entriesToDownload = filteredDownloadList.filter(entry => {
+        const entriesToDownload = visibleEntries.filter(entry => {
             // Must be selected
             const isSelected = selectedIds.has(entry.civitaiVersionID);
             const isEarly = isEarlyAccessActive(entry);
@@ -2239,22 +2306,19 @@ const OfflineWindow: React.FC = () => {
     };
 
     const handleDisplayModeClick = (mode: DisplayMode) => {
+        // ✅ Only block earlyAccess mode while downloading
+        if (uiMode === "downloading" && (mode === "earlyAccessCard" || mode === "holdCard" || mode === "errorCard")) {
+            alert("Can't switch to this mode while downloading.");
+            return;
+        }
+
+        // your existing logic...
         if (displayMode === mode) {
-            // Already in this mode → treat as "refresh"
-
-            // 1) Always refresh the main paged list
             void handleRefreshList();
-
-            // 2) If this is a special card mode, also force its list to reload
-            if (
-                mode === 'holdCard' ||
-                mode === 'earlyAccessCard' ||
-                mode === 'errorCard'
-            ) {
+            if (mode === "holdCard" || mode === "earlyAccessCard" || mode === "errorCard") {
                 setSpecialReloadToken((t) => t + 1);
             }
         } else {
-            // Normal switch between modes
             setDisplayMode(mode);
         }
     };
@@ -2358,6 +2422,21 @@ const OfflineWindow: React.FC = () => {
     };
 
     const handleSelectFirstN = () => {
+
+        if (!canChangeSelection) return;
+
+        console.log("SELECT_FIRST debug:", {
+            totalFiltered: filteredDownloadList.length,
+            missingVid: filteredDownloadList.filter(e => !String(e.civitaiVersionID ?? "").trim() || String(e.civitaiVersionID).trim() === "N/A").length,
+            sample: filteredDownloadList.slice(0, 25).map(e => ({
+                model: e.civitaiModelID,
+                vid: e.civitaiVersionID,
+                mvoId: e.modelVersionObject?.id,
+                path: e.downloadFilePath,
+                earlyActive: isEarlyAccessActive(e),
+            })),
+        });
+
         // Create a Set of combined civitaiVersionID and civitaiModelID for efficient lookup
         const failedIds = new Set(
             failedEntries.map(entry => `${entry.civitaiVersionID}|${entry.civitaiModelID}`)
@@ -2648,6 +2727,7 @@ const OfflineWindow: React.FC = () => {
         activePreviewId,
         displayMode,
         onErrorCardDownload,
+        canChangeSelection
     }) => {
 
         const [errorDownloadMethod, setErrorDownloadMethod] = React.useState<'server' | 'browser'>('browser');
@@ -2677,7 +2757,7 @@ const OfflineWindow: React.FC = () => {
                             displayMode === "earlyAccessCard" ||
                             displayMode === "errorCard";
 
-                        const canSelect = !selectionDisabled;
+                        const canSelect = !selectionDisabled && canChangeSelection;
 
                         const baseBg = isDarkMode ? "#333" : "#fff";
                         const selectedBg = isDarkMode ? "#1f2937" : "#eaf2ff";
@@ -3472,6 +3552,7 @@ const OfflineWindow: React.FC = () => {
         filteredDownloadList: OfflineDownloadEntry[];
         isDarkMode: boolean;
         isModifyMode: boolean;
+        canChangeSelection: boolean;
         selectedIds: Set<string>;
         activePreviewId: string | null;
         toggleSelect: (id: string) => void;
@@ -3485,7 +3566,8 @@ const OfflineWindow: React.FC = () => {
         toggleSelect,
         activePreviewId,
         handleSelectAll,
-        onToggleOverlay
+        onToggleOverlay,
+        canChangeSelection
     }) => {
             if (filteredDownloadList.length === 0) {
                 return (
@@ -3513,7 +3595,7 @@ const OfflineWindow: React.FC = () => {
                                 displayMode === "earlyAccessCard" ||
                                 displayMode === "errorCard";
 
-                            const canSelect = !selectionDisabled;
+                            const canSelect = !selectionDisabled && canChangeSelection;
 
                             const baseBg = isDarkMode ? "#333" : "#fff";
                             const selectedBg = isDarkMode ? "#1f2937" : "#eaf2ff";
@@ -3775,14 +3857,22 @@ const OfflineWindow: React.FC = () => {
 
 
     const handleSelectAll = () => {
-        if (selectedIds.size === getSelectableEntries().length) {
-            // All selectable entries are selected; deselect all
-            setSelectedIds(new Set());
+        if (!canChangeSelection) return;
+
+        if (selectedIds.size && isAllSelected) {
+            // deselect all visible
+            setSelectedIds(prev => {
+                const next = new Set(prev);
+                visibleEntries.forEach(e => next.delete(e.civitaiVersionID));
+                return next;
+            });
         } else {
-            // Not all selectable entries are selected; select all
-            const newSelectedIds = new Set(selectedIds);
-            getSelectableEntries().forEach(entry => newSelectedIds.add(entry.civitaiVersionID));
-            setSelectedIds(newSelectedIds);
+            // select all visible
+            setSelectedIds(prev => {
+                const next = new Set(prev);
+                visibleEntries.forEach(e => next.add(e.civitaiVersionID));
+                return next;
+            });
         }
     };
 
@@ -3946,6 +4036,7 @@ const OfflineWindow: React.FC = () => {
                                 style={{ ...styles.responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
                                 variant={displayMode === 'holdCard' ? 'primary' : 'secondary'}
                                 onClick={() => handleDisplayModeClick('holdCard')}
+                                disabled={uiMode === "downloading"}
                                 aria-label={`Hold entries (${holdEntries.length})`}
                             >
                                 Hold
@@ -3966,7 +4057,8 @@ const OfflineWindow: React.FC = () => {
                                 style={{ ...styles.responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
                                 variant={displayMode === 'earlyAccessCard' ? 'primary' : 'secondary'}
                                 onClick={() => handleDisplayModeClick('earlyAccessCard')}
-                                aria-label={`Early Access entries (${earlyAccessEntries.length})`}
+                                disabled={uiMode === "downloading"}   // ✅ only early access blocked
+                                title={uiMode === "downloading" ? "Disabled while downloading" : undefined}
                             >
                                 Early Access
                                 {earlyAccessEntries.length > 0 && (
@@ -3996,6 +4088,7 @@ const OfflineWindow: React.FC = () => {
                             <Button
                                 variant={displayMode === 'errorCard' ? 'primary' : 'secondary'}
                                 onClick={() => handleDisplayModeClick('errorCard')}
+                                disabled={uiMode === "downloading"}
                                 style={{ ...styles.responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
                                 aria-label={`Error entries (${errorEntries.length})`}
                             >
@@ -4917,23 +5010,14 @@ const OfflineWindow: React.FC = () => {
                             <Button
                                 onClick={handleDownloadNow}
                                 style={selectedIds.size > 0 ? styles.downloadButtonStyle : styles.downloadButtonDisabledStyle}
-                                disabled={selectedIds.size === 0 || isLoading || isModifyMode}
+                                disabled={selectedIds.size === 0 || isLoading || !canUseDownloadNow}
+                                title={
+                                    canUseDownloadNow
+                                        ? "Download selected"
+                                        : `Download Now is disabled in mode: ${displayMode}`
+                                }
                             >
-                                {isLoading ? (
-                                    <>
-                                        <Spinner
-                                            as="span"
-                                            animation="border"
-                                            size="sm"
-                                            role="status"
-                                            aria-hidden="true"
-                                            style={{ marginRight: '5px' }}
-                                        />
-                                        Downloading...
-                                    </>
-                                ) : (
-                                    'Download Now'
-                                )}
+                                {isLoading ? "Downloading..." : "Download Now"}
                             </Button>
 
                             <Button
@@ -5228,6 +5312,7 @@ const OfflineWindow: React.FC = () => {
                                         onToggleOverlay={toggleLeftOverlay}
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
                                         onRefreshRecord={handleRefreshOneRecord}
+                                        canChangeSelection={canChangeSelection}
                                     />
                                 )}
 
@@ -5241,6 +5326,7 @@ const OfflineWindow: React.FC = () => {
                                         handleSelectAll={handleSelectAll}
                                         onToggleOverlay={toggleLeftOverlay}
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
+                                        canChangeSelection={canChangeSelection}
                                     />
                                 )}
 
@@ -5255,6 +5341,7 @@ const OfflineWindow: React.FC = () => {
                                         showGalleries={false}
                                         onToggleOverlay={toggleLeftOverlay}
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
+                                        canChangeSelection={canChangeSelection}
                                     />
                                 )}
 
@@ -5269,6 +5356,7 @@ const OfflineWindow: React.FC = () => {
                                         showGalleries={false}
                                         onToggleOverlay={toggleLeftOverlay}
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
+                                        canChangeSelection={canChangeSelection}
                                     />
                                 )}
 
@@ -5283,16 +5371,24 @@ const OfflineWindow: React.FC = () => {
                                         showGalleries={false}
                                         onToggleOverlay={toggleLeftOverlay}
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
+                                        onRefreshRecord={handleRefreshOneRecord}
+                                        canChangeSelection={canChangeSelection}
                                     />
                                 )}
 
                                 {displayMode === 'failedCard' && (
-                                    <FailedCardMode
-                                        failedEntries={failedEntries}
+                                    <BigCardMode
+                                        filteredDownloadList={failedEntries}
                                         isDarkMode={isDarkMode}
+                                        isModifyMode={false} // view-only
                                         selectedIds={selectedIds}
                                         toggleSelect={toggleSelect}
-                                        isModifyMode={isModifyMode}
+                                        handleSelectAll={handleSelectAll}
+                                        showGalleries={false}
+                                        onToggleOverlay={toggleLeftOverlay}
+                                        activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
+                                        onRefreshRecord={handleRefreshOneRecord}
+                                        canChangeSelection={canChangeSelection}
                                     />
                                 )}
 
@@ -5309,6 +5405,7 @@ const OfflineWindow: React.FC = () => {
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
                                         displayMode="errorCard"
                                         onErrorCardDownload={handleErrorCardDownload}
+                                        canChangeSelection={canChangeSelection}
                                     />
                                 )}
 
