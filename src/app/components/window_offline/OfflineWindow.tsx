@@ -495,6 +495,16 @@ const OfflineWindow: React.FC = () => {
         // do NOT include: "earlyAccessCard", "holdCard", "recentCard", "errorCard"
     ]);
 
+    const isPagedMode =
+        displayMode === "bigCard" ||
+        displayMode === "smallCard" ||
+        displayMode === "table";
+
+    const isPagedDisplayMode = (m: DisplayMode) =>
+        m === "bigCard" || m === "smallCard" || m === "table";
+
+    const prevDisplayModeRef = useRef<DisplayMode>(displayMode);
+
     const canUseDownloadNow = !isModifyMode && DOWNLOAD_NOW_ALLOWED_MODES.has(displayMode);
 
     const canChangeSelection = uiMode === "idle" && !isLoading;
@@ -1108,24 +1118,118 @@ const OfflineWindow: React.FC = () => {
         }
     };
 
+    type ModifySnapshot = {
+        // what the UI shows (draft)
+        draft: {
+            filterText: string;
+            filterCondition: typeof filterCondition;
+            showPending: boolean;
+            showNonPending: boolean;
+            showHoldEntries: boolean;
+            showEarlyAccess: boolean;
+            showErrorEntries: boolean;
+            sortDir: typeof sortDir;
+            aiSuggestedOnly: boolean;
+            selectedPrefixes: string[];
+            showAiSuggestionsPanel: boolean;
+            goToPageInput: string;
+        };
+        // what the backend fetch uses
+        appliedQuery: typeof appliedQuery;
+        currentPage: number;
+    };
+
+    const preModifyRef = useRef<ModifySnapshot | null>(null);
+
     const toggleModifyMode = () => {
-        setIsModifyMode(prev => {
-            const next = !prev;
+        if (isLoading) return;
 
-            if (next) {
-                setShowPending(true);
-                setShowNonPending(false);
-            } else {
-                setShowPending(true);
-                setShowNonPending(true);
-            }
-            return next;
-        });
+        const nextIsModify = !isModifyMode;
 
+        // always clear selection when switching modes
         setSelectedIds(new Set());
-        setShowAiSuggestionsPanel(false)
-        setAiSuggestedOnly(false);
-        setFilterText("");
+        setSelectedSuggestedPathByVid({});
+
+        if (nextIsModify) {
+            // ✅ ENTER Modify Mode: snapshot current condition FIRST
+            preModifyRef.current = {
+                draft: {
+                    filterText,
+                    filterCondition,
+                    showPending,
+                    showNonPending,
+                    showHoldEntries,
+                    showEarlyAccess,
+                    showErrorEntries,
+                    sortDir,
+                    aiSuggestedOnly,
+                    selectedPrefixes: Array.from(selectedPrefixes),
+                    showAiSuggestionsPanel,
+                    goToPageInput,
+                },
+                appliedQuery,
+                currentPage,
+            };
+
+            // draft UI for modify mode (your preference)
+            setIsModifyMode(true);
+            setShowPending(true);
+            setShowNonPending(false);
+
+            setShowHoldEntries(true);
+            setShowEarlyAccess(true);
+
+            setShowAiSuggestionsPanel(false);
+            setAiSuggestedOnly(false);
+            setFilterText("");
+
+            // ✅ trigger backend fetch immediately (based on current appliedQuery, but pending-only)
+            setAppliedQuery((q) => ({
+                ...q,
+                showPending: true,
+                showNonPending: false,
+                showHoldEntries: true,
+                showEarlyAccess: true,
+                aiSuggestedOnly: false,
+            }));
+            setCurrentPage(1);
+            return;
+        }
+
+        // ✅ EXIT Modify Mode: restore snapshot
+        setIsModifyMode(false);
+
+        const snap = preModifyRef.current;
+        preModifyRef.current = null;
+
+        if (snap) {
+            // restore draft UI
+            setFilterText(snap.draft.filterText);
+            setFilterCondition(snap.draft.filterCondition);
+
+            setShowPending(snap.draft.showPending);
+            setShowNonPending(snap.draft.showNonPending);
+            setShowHoldEntries(snap.draft.showHoldEntries);
+            setShowEarlyAccess(snap.draft.showEarlyAccess);
+            setShowErrorEntries(snap.draft.showErrorEntries);
+            setSortDir(snap.draft.sortDir);
+
+            setAiSuggestedOnly(snap.draft.aiSuggestedOnly);
+            setShowAiSuggestionsPanel(snap.draft.showAiSuggestionsPanel);
+            setGoToPageInput(snap.draft.goToPageInput);
+
+            setSelectedPrefixes(new Set(snap.draft.selectedPrefixes));
+
+            // restore backend fetch condition (this will trigger your paging useEffect)
+            setAppliedQuery(snap.appliedQuery);
+            setCurrentPage(snap.currentPage);
+        } else {
+            // fallback if snapshot missing
+            setShowPending(true);
+            setShowNonPending(true);
+            setAppliedQuery((q) => ({ ...q, showPending: true, showNonPending: true }));
+            setCurrentPage(1);
+        }
     };
 
     // Utility function to pause execution for a given number of milliseconds
@@ -1240,15 +1344,24 @@ const OfflineWindow: React.FC = () => {
     }, [filterText, filterCondition]);
 
     useEffect(() => {
-        // Don’t clear selection while the app is busy (prevents “disselect during download”)
+        // Don’t clear selection while busy
         if (uiMode !== "idle") return;
-
-        // If you also want to prevent clearing during any loading flag:
         if (isLoading) return;
 
-        setSelectedIds(new Set());
+        const prev = prevDisplayModeRef.current;
+        const next = displayMode;
 
-        // optional: clear per-card AI picks when changing mode
+        const prevPaged = isPagedDisplayMode(prev);
+        const nextPaged = isPagedDisplayMode(next);
+
+        // update ref for next comparison
+        prevDisplayModeRef.current = next;
+
+        // ✅ If switching within paged modes (big/small/table), keep selection
+        if (prevPaged && nextPaged) return;
+
+        // otherwise clear selection (switching to/from special modes)
+        setSelectedIds(new Set());
         setSelectedSuggestedPathByVid({});
     }, [displayMode, uiMode, isLoading]);
 
@@ -1293,31 +1406,17 @@ const OfflineWindow: React.FC = () => {
     const filteredDownloadList = useMemo(() => {
         const base = offlineDownloadList;
 
-        // pending/non-pending filter
-        const pendingFiltered = base.filter(entry => {
-            const pending = isPendingEntry(entry); // you already have this helper
-            return (showPending && pending) || (showNonPending && !pending);
-        });
-
-        const extraFiltered = pendingFiltered.filter(entry => {
-            // Early Access filter:
-            // if checkbox is OFF and this entry is still Early Access -> hide it
-            if (!showEarlyAccess && isEarlyAccessActive(entry)) {
-                return false;
-            }
-            return true;
-        });
-
         if (!isModifyMode) {
-            return [...extraFiltered].sort((a, b) => {
+            return [...base].sort((a, b) => {
                 const aSelected = selectedIds.has(a.civitaiVersionID) ? 1 : 0;
                 const bSelected = selectedIds.has(b.civitaiVersionID) ? 1 : 0;
                 return bSelected - aSelected;
             });
         }
-        return extraFiltered;
-    }, [offlineDownloadList, selectedIds, isModifyMode, showPending, showNonPending,
-        showHoldEntries, showEarlyAccess, showErrorEntries, aiSuggestedOnly]);
+
+        return base;
+
+    }, [offlineDownloadList, selectedIds, isModifyMode, aiSuggestedOnly]);
 
     useEffect(() => {
         setSelectedIds(new Set());
@@ -1453,12 +1552,12 @@ const OfflineWindow: React.FC = () => {
                     if (checked) {
                         // Select all filtered entries
                         const newSelectedIds = new Set(selectedIds);
-                        filteredDownloadList.forEach(entry => newSelectedIds.add(entry.civitaiVersionID));
+                        visibleEntries.forEach(entry => newSelectedIds.add(entry.civitaiVersionID));
                         setSelectedIds(newSelectedIds);
                     } else {
                         // Unselect all filtered entries
                         const newSelectedIds = new Set(selectedIds);
-                        filteredDownloadList.forEach(entry => newSelectedIds.delete(entry.civitaiVersionID));
+                        visibleEntries.forEach(entry => newSelectedIds.delete(entry.civitaiVersionID));
                         setSelectedIds(newSelectedIds);
                     }
                 }
@@ -2422,53 +2521,44 @@ const OfflineWindow: React.FC = () => {
     };
 
     const handleSelectFirstN = () => {
-
         if (!canChangeSelection) return;
 
-        console.log("SELECT_FIRST debug:", {
-            totalFiltered: filteredDownloadList.length,
-            missingVid: filteredDownloadList.filter(e => !String(e.civitaiVersionID ?? "").trim() || String(e.civitaiVersionID).trim() === "N/A").length,
-            sample: filteredDownloadList.slice(0, 25).map(e => ({
-                model: e.civitaiModelID,
-                vid: e.civitaiVersionID,
-                mvoId: e.modelVersionObject?.id,
-                path: e.downloadFilePath,
-                earlyActive: isEarlyAccessActive(e),
-            })),
-        });
-
-        // Create a Set of combined civitaiVersionID and civitaiModelID for efficient lookup
         const failedIds = new Set(
-            failedEntries.map(entry => `${entry.civitaiVersionID}|${entry.civitaiModelID}`)
+            failedEntries.map(e => `${e.civitaiVersionID}|${e.civitaiModelID}`)
         );
 
-        // Apply the same exclusion criteria as in handleDownloadNow
-        const validEntries = filteredDownloadList.filter(entry => {
-            const isEarlyActive = isEarlyAccessActive(entry); // <-- use ACTIVE check
-            const downloadFilePath = entry.downloadFilePath ?? "";
+        const eligible = visibleEntries.filter((entry) => {
+            const key = `${entry.civitaiVersionID}|${entry.civitaiModelID}`;
 
-            const isPendingPath =
-                downloadFilePath === "/@scan@/ACG/Pending" ||
-                downloadFilePath === "/@scan@/ACG/Pending/";
+            // paged modes: strict rules
+            if (isPagedMode) {
+                const isPending = isPendingEntry(entry);          // your helper
+                const isEarlyActive = isEarlyAccessActive(entry); // your helper
+                return !isPending && !isEarlyActive && !failedIds.has(key);
+            }
 
-            const combinedId = `${entry.civitaiVersionID}|${entry.civitaiModelID}`;
+            // non-paged modes: no pending/early restrictions
+            if (displayMode === "failedCard") return true; // don't exclude itself
 
-            // Include if NOT early-active, NOT pending, and NOT previously failed
-            return !isEarlyActive && !isPendingPath && !failedIds.has(combinedId);
+            // optional: keep excluding failed items in other modes
+            return !failedIds.has(key);
         });
 
-
-        // Select the first N entries from the valid entries
-        const firstN = validEntries.slice(0, selectCount);
-
-        // Build a new Set with the civitaiVersionIDs of the selected entries
-        const newSelected = new Set<string>(
-            firstN.map(entry => entry.civitaiVersionID)
-        );
-
-        // Update the selectedIds state with the new selection
-        setSelectedIds(newSelected);
+        const firstN = eligible.slice(0, selectCount);
+        setSelectedIds(new Set(firstN.map(e => e.civitaiVersionID)));
     };
+
+    const handleSelectFirstN_Modify = () => {
+        if (!canChangeSelection) return;
+
+        const n = Math.max(0, Number(selectCount) || 0);
+
+        // ✅ no restrictions: just take first N of what’s visible right now
+        const firstN = visibleEntries.slice(0, n);
+
+        setSelectedIds(new Set(firstN.map(e => e.civitaiVersionID)));
+    };
+
 
     const handleCancelDownload = () => {
         // Unpause (so we don't get stuck in a paused loop)
@@ -4065,7 +4155,7 @@ const OfflineWindow: React.FC = () => {
                                     <span
                                         style={{
                                             ...styles.badgeStyle,
-                                            background: '#ef4444', // red-ish
+                                            background: '#000080', // red-ish
                                         }}
                                     >
                                         {badgeCount(earlyAccessEntries.length)}
@@ -4222,7 +4312,7 @@ const OfflineWindow: React.FC = () => {
                             pageSize={100}
                             minLen={3}
                             allowNumbers={false}
-                            disabled={isLoading}
+                            disabled={!isPagedMode || isLoading}
                             clientOtherTags={tagSource === 'other' ? clientOtherTags : undefined}
                         />
 
@@ -4247,6 +4337,7 @@ const OfflineWindow: React.FC = () => {
                                     placeholder="Filter..."
                                     value={filterText}
                                     onChange={(e) => setFilterText(e.target.value)}
+                                    disabled={!isPagedMode || isLoading}
                                     style={{
                                         backgroundColor: isDarkMode ? '#555' : '#fff',
                                         color: isDarkMode ? '#fff' : '#000',
@@ -4259,6 +4350,7 @@ const OfflineWindow: React.FC = () => {
                                         variant="outline-secondary"
                                         onClick={() => setFilterText('')}
                                         aria-label="Clear filter"
+                                        disabled={!isPagedMode || isLoading}
                                         style={{
                                             border: 'none',
                                             backgroundColor: 'transparent',
@@ -4272,7 +4364,7 @@ const OfflineWindow: React.FC = () => {
 
                             <select
                                 value={filterCondition}
-                                disabled={isLoading}
+                                disabled={!isPagedMode || isLoading}
                                 onChange={(e) => setFilterCondition(e.target.value as any)}
                                 style={{
                                     ...styles.filterSelectStyle,
@@ -4293,7 +4385,7 @@ const OfflineWindow: React.FC = () => {
                                 <Button
                                     size="sm"
                                     variant="primary"
-                                    disabled={isLoading}
+                                    disabled={!isPagedMode || isLoading}
                                     onClick={() => {
                                         setAppliedQuery({
                                             filterText: filterText.trim(),
@@ -4317,7 +4409,7 @@ const OfflineWindow: React.FC = () => {
                                 <Button
                                     size="sm"
                                     variant="outline-secondary"
-                                    disabled={isLoading}
+                                    disabled={!isPagedMode || isLoading}
                                     onClick={resetDraftFilters}
                                     style={{ flex: 1 }}
                                 >
@@ -4332,7 +4424,7 @@ const OfflineWindow: React.FC = () => {
                                     id="show-pending-checkbox"
                                     label={<span style={{ color: isDarkMode ? '#fff' : '#000', fontWeight: 600 }}>Show Pending</span>}
                                     checked={showPending}
-                                    disabled={isLoading}
+                                    disabled={!isPagedMode || isLoading}
                                     onChange={e => setShowPending(e.target.checked)}
                                     title="Show items whose download path is a Pending folder"
                                 />
@@ -4343,7 +4435,7 @@ const OfflineWindow: React.FC = () => {
                                     id="show-non-pending-checkbox"
                                     label={<span style={{ color: isDarkMode ? '#fff' : '#000', fontWeight: 600 }}>Show Non-Pending</span>}
                                     checked={showNonPending}
-                                    disabled={isLoading}
+                                    disabled={!isPagedMode || isLoading}
                                     onChange={e => setShowNonPending(e.target.checked)}
                                     title="Show items not in Pending folders"
                                 />
@@ -4353,7 +4445,7 @@ const OfflineWindow: React.FC = () => {
                                     id="show-hold-checkbox"
                                     label={<span style={{ color: isDarkMode ? '#fff' : '#000', fontWeight: 600 }}>Includes Hold</span>}
                                     checked={showHoldEntries}
-                                    disabled={isLoading}
+                                    disabled={!isPagedMode || isLoading}
                                     onChange={e => setShowHoldEntries(e.target.checked)}
                                 />
 
@@ -4362,7 +4454,7 @@ const OfflineWindow: React.FC = () => {
                                     id="show-error-checkbox"
                                     label={<span style={{ color: isDarkMode ? '#fff' : '#000', fontWeight: 600 }}>Includes Errors</span>}
                                     checked={showErrorEntries}
-                                    disabled={isLoading}
+                                    disabled={!isPagedMode || isLoading}
                                     onChange={e => setShowErrorEntries(e.target.checked)}
                                 />
 
@@ -4372,7 +4464,7 @@ const OfflineWindow: React.FC = () => {
                                     id="show-earlyaccess-checkbox"
                                     label={<span style={{ color: isDarkMode ? '#fff' : '#000', fontWeight: 600 }}>Includes Early Access</span>}
                                     checked={showEarlyAccess}
-                                    disabled={isLoading}
+                                    disabled={!isPagedMode || isLoading}
                                     onChange={e => setShowEarlyAccess(e.target.checked)}
                                 />
 
@@ -4380,7 +4472,7 @@ const OfflineWindow: React.FC = () => {
                                 <button
                                     type="button"
                                     className="btn btn-sm btn-outline-secondary"
-                                    disabled={isLoading}
+                                    disabled={!isPagedMode || isLoading}
                                     onClick={() => setSortDir(prev => (prev === 'desc' ? 'asc' : 'desc'))}
                                     style={{ display: 'flex', alignItems: 'center', gap: 4 }}
                                 >
@@ -4408,6 +4500,8 @@ const OfflineWindow: React.FC = () => {
                                     title="Disallow setting the downloadFilePath to a Pending folder"
                                 />
 
+
+                                {/*
                                 <Form.Check
                                     type="checkbox"
                                     id="allow-try-early-access"
@@ -4419,6 +4513,7 @@ const OfflineWindow: React.FC = () => {
                                     onChange={e => setAllowTryEarlyAccess(e.target.checked)}
                                     title="If enabled, Download Now will include entries still in Early Access."
                                 />
+                                */}
 
 
                             </div>
@@ -4468,6 +4563,46 @@ const OfflineWindow: React.FC = () => {
                                 />
                             </div>
                         </>}
+
+                        {(isModifyMode && displayMode !== 'errorCard') && (
+                            <>
+                                <Button
+                                    onClick={handleSelectFirstN_Modify}
+                                    style={{
+                                        ...styles.downloadButtonStyle,
+                                        backgroundColor: '#6f42c1', // purple-ish so you can tell it’s Modify-only
+                                        color: '#fff',
+                                    }}
+                                    disabled={isLoading || !canChangeSelection}
+                                    title="Select first N entries (no restrictions)"
+                                >
+                                    Select First (Modify)
+                                </Button>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                    <input
+                                        id="selectCountInputModify"
+                                        type="number"
+                                        min={1}
+                                        step={5}
+                                        value={selectCount}
+                                        onChange={(e) => {
+                                            const newVal = parseInt(e.target.value, 10);
+                                            if (!isNaN(newVal)) setSelectCount(newVal);
+                                        }}
+                                        disabled={isLoading}
+                                        style={{
+                                            width: '100px',
+                                            padding: '5px',
+                                            borderRadius: '4px',
+                                            border: '1px solid #ccc',
+                                            backgroundColor: isDarkMode ? '#555' : '#fff',
+                                            color: isDarkMode ? '#fff' : '#000',
+                                        }}
+                                    />
+                                </div>
+                            </>
+                        )}
 
                         {/* Action Button for Modify Mode */}
                         {isModifyMode && (
@@ -5150,7 +5285,7 @@ const OfflineWindow: React.FC = () => {
                                             setSelectedPrefixes(new Set());
                                         }
                                     }}
-                                    disabled={isLoading || (showPending && !showNonPending)}
+                                    disabled={isLoading || (showPending && !showNonPending) || !isPagedMode}
                                     style={{
                                         marginBottom: '8px',
                                         fontWeight: 'bold',
@@ -5174,7 +5309,7 @@ const OfflineWindow: React.FC = () => {
                                                 return next;
                                             })
                                         }
-                                        disabled={isLoading || (showPending && !showNonPending)}
+                                        disabled={isLoading || (showPending && !showNonPending) || !isPagedMode}
                                         style={{
                                             marginBottom: '4px',
                                             color: isDarkMode ? '#fff' : '#000',
