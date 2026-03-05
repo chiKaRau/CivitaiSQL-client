@@ -48,7 +48,9 @@ import {
     fetchBulkPatchOfflineDownloadList,
     fetchRunPendingFromOfflineDownloadListAiSuggestion,
     fetchBulkUpdateDownloadFilePath,
-    fetchRefreshOfflineDownloadRecord
+    fetchRefreshOfflineDownloadRecord,
+    fetchAddRecordToDatabaseInCustom,
+    fetchDownloadFilesByServer_v2ForCustom
 } from "../../api/civitaiSQL_api"
 
 import { makeOfflineWindowStyles } from "./OfflineWindow.styles";
@@ -63,7 +65,6 @@ import { ColDef, GridReadyEvent } from 'ag-grid-community';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
 import { AppState } from '../../store/configureStore';
-import FailedCardMode from './FailedCardMode';
 import FileNameToggle from './FileNameToggle';
 import TagList from './TagList';
 import TitleNameToggle from './TitleNameToggle';
@@ -320,6 +321,7 @@ const OfflineWindow: React.FC = () => {
     const leftPanelRef = useRef<HTMLDivElement>(null);
     const rightContentRef = useRef<HTMLDivElement>(null);
     const rightInnerRef = useRef<HTMLDivElement>(null);
+    const eaRefreshedVidSetRef = useRef<Set<string>>(new Set());
 
     const chromeData = useSelector((state: AppState) => state.chrome);
 
@@ -508,6 +510,14 @@ const OfflineWindow: React.FC = () => {
     const canUseDownloadNow = !isModifyMode && DOWNLOAD_NOW_ALLOWED_MODES.has(displayMode);
 
     const canChangeSelection = uiMode === "idle" && !isLoading;
+
+    const DUMMY_DOWNLOAD_URL =
+        "https://huggingface.co/Ukado/Cream/resolve/main/easynegative.safetensors";
+
+    const [dummyCreateStatusByVid, setDummyCreateStatusByVid] = useState({} as Record<
+        string,
+        { phase: "idle" | "downloading" | "inserting" | "success" | "fail"; text: string; msg?: string; running?: boolean }
+    >);
 
     const handleBulkPatchSelected = async () => {
         // 1) Targets = selected models (by versionID)
@@ -809,6 +819,13 @@ const OfflineWindow: React.FC = () => {
     }, []);
 
     useEffect(() => {
+        // leaving early access mode -> reset
+        if (displayMode !== "earlyAccessCard") {
+            eaRefreshedVidSetRef.current = new Set();
+        }
+    }, [displayMode]);
+
+    useEffect(() => {
         let cancelled = false;
 
         const loadSpecialList = async () => {
@@ -837,6 +854,10 @@ const OfflineWindow: React.FC = () => {
                     }
                 } else if (displayMode === 'errorCard') {
                     const payload = await fetchGetErrorModelList(dispatch);
+
+                    console.log("error card payload")
+                    console.log(payload)
+
                     if (!cancelled) {
                         setErrorEntries(Array.isArray(payload) ? payload as OfflineDownloadEntry[] : []);
                     }
@@ -2353,6 +2374,110 @@ const OfflineWindow: React.FC = () => {
         return isEarlyAccessActive(entry);
     };
 
+    const [eaRefreshProgress, setEaRefreshProgress] = useState({
+        running: false,
+        completed: 0,
+        total: 0,
+        msg: "",
+    });
+
+    const handleRefreshSelectedEarlyAccess = async () => {
+        if (isLoading) return;
+        if (displayMode !== "earlyAccessCard") return;
+
+        const selected = earlyAccessEntries.filter((e) =>
+            selectedIds.has(e.civitaiVersionID)
+        );
+
+        const targets = selected.filter(
+            (e) => !eaRefreshedVidSetRef.current.has(e.civitaiVersionID)
+        );
+
+        if (!selected.length) {
+            alert("No Early Access entries selected.");
+            return;
+        }
+
+        if (!targets.length) {
+            alert("All selected entries have already been refreshed (in this Early Access session).");
+            return;
+        }
+
+        setIsLoading(true);
+        setUiMode("modifying");
+        setEaRefreshProgress({ running: true, completed: 0, total: targets.length, msg: "" });
+
+        try {
+            for (let i = 0; i < targets.length; i++) {
+                const entry = targets[i];
+
+                // ✅ 1s delay between calls (no delay before first)
+                if (i > 0) await sleep(1000);
+
+                await fetchRefreshOfflineDownloadRecord(
+                    {
+                        civitaiModelID: entry.civitaiModelID,
+                        civitaiVersionID: entry.civitaiVersionID,
+                    },
+                    dispatch
+                );
+
+                // ✅ mark as refreshed so next run skips it
+                eaRefreshedVidSetRef.current.add(entry.civitaiVersionID);
+
+                setEaRefreshProgress((p) => ({
+                    ...p,
+                    completed: i + 1,
+                    msg: `Refreshed ${i + 1}/${targets.length}`,
+                }));
+            }
+
+            // ✅ auto-deselect the ones we just refreshed
+            setSelectedIds((prev) => {
+                const next = new Set(prev);
+                targets.forEach((e) => next.delete(e.civitaiVersionID));
+                return next;
+            });
+
+            // ❌ remove list refresh (so refreshed items don’t disappear)
+            // setSpecialReloadToken((t) => t + 1);
+
+        } catch (err: any) {
+            setEaRefreshProgress((p) => ({
+                ...p,
+                msg: `Failed: ${err?.message || "Unknown error"}`,
+            }));
+        } finally {
+            setEaRefreshProgress((p) => ({ ...p, running: false }));
+            setIsLoading(false);
+            setUiMode("idle");
+        }
+    };
+
+    const handleSelectNextN_EarlyAccess = () => {
+        if (!canChangeSelection) return;
+        if (displayMode !== "earlyAccessCard") return;
+
+        const nRaw = Number(selectCount) || 0;
+        const n = Math.max(5, Math.floor(nRaw / 5) * 5); // keep it in 5s
+
+        // Only depends on "refreshed set", not current selection
+        const remaining = earlyAccessEntries.filter((e) => {
+            const vid = e.civitaiVersionID;
+            return vid && !eaRefreshedVidSetRef.current.has(vid);
+        });
+
+        const firstN = remaining.slice(0, n);
+
+        if (!firstN.length) {
+            alert("No more unrefreshed Early Access entries to select.");
+            return;
+        }
+
+        // Replace selection with the same first N each time until you refresh them
+        setSelectedIds(new Set(firstN.map((e) => e.civitaiVersionID)));
+    };
+
     useEffect(() => {
         if (!leftOverlayEntry) return;
 
@@ -2366,6 +2491,84 @@ const OfflineWindow: React.FC = () => {
         document.addEventListener('click', onDocClick);
         return () => document.removeEventListener('click', onDocClick);
     }, [leftOverlayEntry, closeLeftOverlay]);
+
+    const toImgUrls = (arr: OfflineDownloadEntry["imageUrlsArray"]) =>
+        (Array.isArray(arr) ? arr : [])
+            .map((x: any) => (typeof x === "string" ? x : x?.url))
+            .filter(Boolean);
+
+    const handleCreateAddDummyFromError = async (entry: OfflineDownloadEntry) => {
+        const vid = entry?.civitaiVersionID;
+        if (!vid) return;
+
+        // prevent double-click spam
+        if (dummyCreateStatusByVid[vid]?.running) return;
+
+        const setStatus = (patch: any) =>
+            setDummyCreateStatusByVid((prev) => ({
+                ...prev,
+                [vid]: { ...(prev[vid] || { phase: "idle", text: "" }), ...patch },
+            }));
+
+        try {
+            setStatus({ phase: "downloading", text: "Downloading (custom)…", running: true, msg: "" });
+
+            const downloadOk = await fetchDownloadFilesByServer_v2ForCustom({
+                downloadFilePath: entry.downloadFilePath,
+                civitaiFileName: entry.civitaiFileName,
+                civitaiModelID: entry.civitaiModelID,
+                civitaiVersionID: entry.civitaiVersionID,
+                civitaiUrl: entry.civitaiUrl,
+                baseModel: entry.civitaiBaseModel || entry.modelVersionObject?.baseModel || "",
+                downloadUrl: DUMMY_DOWNLOAD_URL,          // ✅ fixed
+                imageUrls: toImgUrls(entry.imageUrlsArray) // string[]
+            });
+
+            if (!downloadOk) {
+                setStatus({ phase: "fail", text: "Download failed (custom).", running: false });
+                return;
+            }
+
+            setStatus({ phase: "inserting", text: "Download OK !  Inserting DB...", running: true });
+
+            const dto: any = {
+                name: entry.civitaiFileName || "",
+                mainModelName: entry.modelVersionObject?.model?.name || "",
+                url: entry.civitaiUrl || "",
+                category: entry.selectedCategory || "",
+                versionNumber: entry.civitaiVersionID || "",
+                modelNumber: entry.civitaiModelID || "",
+                type: entry.modelVersionObject?.model?.type || "",
+                baseModel: entry.civitaiBaseModel || entry.modelVersionObject?.baseModel || "",
+                imageUrls: toImgUrls(entry.imageUrlsArray).map((u) => ({ url: u })),
+                tags: Array.isArray(entry.civitaiTags) ? entry.civitaiTags : [],
+                localTags: [],
+                aliases: [],
+                triggerWords: Array.isArray(entry.modelVersionObject?.trainedWords) ? entry.modelVersionObject.trainedWords : [],
+                description: entry.modelVersionObject?.description || null,
+                stats: entry.modelVersionObject?.stats ? JSON.stringify(entry.modelVersionObject.stats) : null,
+                localPath: entry.downloadFilePath || "",
+                uploaded: null,
+                hash: null,
+                usageTips: null,
+                creatorName: entry.modelVersionObject?.creator?.username || null,
+                nsfw: Boolean(entry.modelVersionObject?.model?.nsfw),
+                flag: false,
+                urlAccessable: true,
+            };
+
+            await fetchAddRecordToDatabaseInCustom(dto);
+
+            setStatus({ phase: "success", text: "Done ! (download + insert)", running: false });
+
+            // Optional: if your backend removes it from error list after success, refresh:
+            // setSpecialReloadToken((t) => t + 1);
+
+        } catch (err: any) {
+            const msg = err?.response?.data?.message || err?.message || "Unknown error";
+            setStatus({ phase: "fail", text: "Failed.", msg, running: false });
+        }
+    };
 
     const handleRefreshOneRecord = async (entry: OfflineDownloadEntry) => {
         if (isLoading) return;
@@ -3627,6 +3830,59 @@ const OfflineWindow: React.FC = () => {
 
                                 </div>
 
+                                {displayMode === "errorCard" && (
+                                    (() => {
+                                        const vid = entry.civitaiVersionID;
+                                        const st = dummyCreateStatusByVid[vid];
+                                        const running = Boolean(st?.running);
+
+                                        const color =
+                                            st?.phase === "success" ? (isDarkMode ? "#86efac" : "#166534") :
+                                                st?.phase === "fail" ? (isDarkMode ? "#fca5a5" : "#991b1b") :
+                                                    (isDarkMode ? "#fde68a" : "#92400e");
+
+                                        return (
+                                            <div
+                                                style={{
+                                                    marginTop: 8,
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: 10,
+                                                    justifyContent: "flex-end", // keep it near the right-side buttons
+                                                    paddingRight: 2,
+                                                }}
+                                            >
+                                                <Button
+                                                    size="sm"
+                                                    variant="warning"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleCreateAddDummyFromError(entry);
+                                                    }}
+                                                    disabled={isLoading || running}
+                                                    title="Download with custom downloader + insert into custom DB"
+                                                >
+                                                    Create/Add Dummy
+                                                </Button>
+
+                                                <span
+                                                    style={{
+                                                        fontSize: 12,
+                                                        color,
+                                                        whiteSpace: "nowrap",
+                                                        overflow: "hidden",
+                                                        textOverflow: "ellipsis",
+                                                        maxWidth: 260,
+                                                    }}
+                                                    title={st?.msg || st?.text || ""}
+                                                >
+                                                    {st?.text || ""}
+                                                </span>
+                                            </div>
+                                        );
+                                    })()
+                                )}
+
 
                             </Card>
                         );
@@ -4522,7 +4778,7 @@ const OfflineWindow: React.FC = () => {
                         </div>
 
 
-                        {(!isModifyMode && displayMode !== 'errorCard') && <>
+                        {(!isModifyMode && displayMode !== 'errorCard' && displayMode !== 'earlyAccessCard') && <>
                             {/* "Select First N" Button */}
                             <Button
                                 onClick={handleSelectFirstN}
@@ -4602,6 +4858,76 @@ const OfflineWindow: React.FC = () => {
                                     />
                                 </div>
                             </>
+                        )}
+
+                        {displayMode === "earlyAccessCard" && (
+                            <>
+                                <Button
+                                    onClick={handleSelectNextN_EarlyAccess}
+                                    style={{
+                                        ...styles.downloadButtonStyle,
+                                        backgroundColor: "#f59e0b",
+                                        color: "#fff",
+                                    }}
+                                    disabled={isLoading || !canChangeSelection}
+                                    title="Select the next N Early Access entries that haven't been refreshed yet"
+                                >
+                                    Select Next (Unrefreshed)
+                                </Button>
+
+                                <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                                    <input
+                                        id="selectCountInputEarlyAccess"
+                                        type="number"
+                                        min={5}
+                                        step={5}                 // ✅ arrows move by 5
+                                        value={selectCount}
+                                        onChange={(e) => {
+                                            const v = parseInt(e.target.value, 10);
+                                            if (!Number.isNaN(v)) setSelectCount(v);
+                                        }}
+                                        onBlur={() => {
+                                            // ✅ snap typed values to multiples of 5
+                                            setSelectCount((prev) => Math.max(5, Math.floor((Number(prev) || 0) / 5) * 5));
+                                        }}
+                                        disabled={isLoading}
+                                        style={{
+                                            width: "100px",
+                                            padding: "5px",
+                                            borderRadius: "4px",
+                                            border: "1px solid #ccc",
+                                            backgroundColor: isDarkMode ? "#555" : "#fff",
+                                            color: isDarkMode ? "#fff" : "#000",
+                                        }}
+                                    />
+                                </div>
+                            </>
+                        )}
+
+                        {displayMode === "earlyAccessCard" && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                                <Button
+                                    size="sm"
+                                    variant="warning"
+                                    onClick={handleRefreshSelectedEarlyAccess}
+                                    disabled={isLoading || eaRefreshProgress.running || selectedIds.size === 0}
+                                    title="Refresh selected early access entries (1s delay between each)"
+                                >
+                                    Refresh Selected (Early Access)
+                                </Button>
+
+                                <span
+                                    style={{
+                                        fontSize: 12,
+                                        opacity: 0.9,
+                                        color: isDarkMode ? "#fff" : "#000",
+                                    }}
+                                >
+                                    {eaRefreshProgress.running
+                                        ? `Refreshing ${eaRefreshProgress.completed}/${eaRefreshProgress.total}...`
+                                        : eaRefreshProgress.msg}
+                                </span>
+                            </div>
                         )}
 
                         {/* Action Button for Modify Mode */}
