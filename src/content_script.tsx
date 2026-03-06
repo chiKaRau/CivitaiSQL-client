@@ -4,10 +4,52 @@ console.log("Calling Content Script")
 const cardSelector =
   '.relative.flex.overflow-hidden.rounded-md.border-gray-3.bg-gray-0.shadow-gray-4.dark\\:border-dark-4.dark\\:bg-dark-6.dark\\:shadow-dark-8.flex-col';
 
+const CIVITAI_GRID_SELECTOR = '[class^="MasonryGrid_grid__6QtWa"]';
+const CIVITAIARCHIVE_GRID_SELECTOR =
+  'div.grid.grid-cols-2.md\\:grid-cols-4.lg\\:grid-cols-6.gap-4';
+
 const stagedInfoMap: Map<string, { action: string }> = new Map();
 
 function normalizeUrl(url: string): string {
   return (url || "").replace("-commission", "");
+}
+
+function getModelContainer(): HTMLElement | null {
+  return (
+    document.querySelector(CIVITAI_GRID_SELECTOR) as HTMLElement | null ||
+    document.querySelector(CIVITAIARCHIVE_GRID_SELECTOR) as HTMLElement | null
+  );
+}
+
+function getModelCards(container?: HTMLElement | null): HTMLElement[] {
+  const root = container || getModelContainer();
+  if (!root) return [];
+
+  return Array.from(root.children).filter((child): child is HTMLElement => {
+    return child instanceof HTMLElement;
+  });
+}
+
+function getCardLink(card: HTMLElement): HTMLAnchorElement | null {
+  if (card.tagName.toLowerCase() === 'a') {
+    return card as HTMLAnchorElement;
+  }
+  return card.querySelector('a') as HTMLAnchorElement | null;
+}
+
+function isDirectCardElement(node: HTMLElement, parentContainer: HTMLElement): boolean {
+  if (node.parentElement !== parentContainer) return false;
+
+  const tag = node.tagName.toLowerCase();
+  return tag === 'div' || tag === 'a';
+}
+
+function applyOpenInNewTab(card: HTMLElement) {
+  const link = getCardLink(card);
+  if (!link) return;
+
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
 }
 
 function upsertStagedBadge(card: HTMLElement, action: string) {
@@ -24,7 +66,7 @@ function upsertStagedBadge(card: HTMLElement, action: string) {
       top: '10px',
       left: '10px',
       zIndex: '1002',
-      backgroundColor: '#7c3aed', // purple
+      backgroundColor: '#7c3aed',
       color: 'white',
       textShadow: '0px 0px 3px black',
       padding: '4px 8px',
@@ -38,17 +80,15 @@ function upsertStagedBadge(card: HTMLElement, action: string) {
       whiteSpace: 'nowrap',
     });
 
-    // make sure card is positioned
     if (!card.style.position) card.style.position = 'relative';
     card.appendChild(badge);
   }
 
   badge.textContent = text;
 
-  // optional: color by action
-  if (action === "offline") badge.style.backgroundColor = '#2563eb'; // blue
-  else if (action === "bundle") badge.style.backgroundColor = '#16a34a'; // green
-  else badge.style.backgroundColor = '#7c3aed'; // purple
+  if (action === "offline") badge.style.backgroundColor = '#2563eb';
+  else if (action === "bundle") badge.style.backgroundColor = '#16a34a';
+  else badge.style.backgroundColor = '#7c3aed';
 }
 
 function removeStagedBadge(card: HTMLElement) {
@@ -57,7 +97,7 @@ function removeStagedBadge(card: HTMLElement) {
 }
 
 function applyStagedForCard(card: HTMLElement) {
-  const a = card.querySelector('a') as HTMLAnchorElement | null;
+  const a = getCardLink(card);
   if (!a?.href) return;
 
   const url = normalizeUrl(a.href);
@@ -68,18 +108,18 @@ function applyStagedForCard(card: HTMLElement) {
 }
 
 function displayStagedBadges(): void {
-  const container = document.querySelector('.MasonryGrid_grid__6QtWa') as HTMLElement | null;
+  const container = getModelContainer();
   if (!container) return;
 
-  const cards = container.querySelectorAll(':scope > div') as NodeListOf<HTMLDivElement>;
+  const cards = getModelCards(container);
   cards.forEach((card) => applyStagedForCard(card));
 }
 
 function removeAllStagedBadges(): void {
-  const container = document.querySelector('.MasonryGrid_grid__6QtWa') as HTMLElement | null;
+  const container = getModelContainer();
   if (!container) return;
 
-  const cards = container.querySelectorAll(':scope > div') as NodeListOf<HTMLDivElement>;
+  const cards = getModelCards(container);
   cards.forEach((card) => removeStagedBadge(card));
 }
 
@@ -112,7 +152,6 @@ chrome.runtime.onMessage.addListener(
       return true;
     }
 
-    // OPTIONAL incremental updates (nice UX)
     if (message.action === "stage-url" && message.url) {
       stagedInfoMap.set(normalizeUrl(message.url), { action: message.stageAction || "" });
       displayStagedBadges();
@@ -129,7 +168,6 @@ chrome.runtime.onMessage.addListener(
   }
 );
 
-
 chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   if (message.action === "browser-download") {
     console.log("browser-download")
@@ -141,9 +179,7 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         const promise = await fetch(downloadUrl)
           .then((response) => response.arrayBuffer())
           .then((data) => {
-
             const fileName = `${modelID}_${versionID}_${name}`;
-            // Create the directories in the zip archive
             const filePath = `${downloadFilePath}${fileName}`;
             const parts = filePath.split('/');
             let folder: JSZip | null = zip;
@@ -157,7 +193,6 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
               }
             }
 
-            // Add the file to the appropriate directory
             if (folder) {
               folder.file(parts[parts.length - 1], data);
             } else {
@@ -167,13 +202,10 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         promises.push(promise);
       }
 
-      // Wait for all promises to complete
       await Promise.all(promises);
 
-      // Generate the zip archive
       const zipContent = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 9 } });
 
-      // Create a download link for the zip file
       const zipBlob = new Blob([zipContent]);
       const zipUrl = URL.createObjectURL(zipBlob);
 
@@ -186,7 +218,6 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
       downloadLink.click();
       document.body.removeChild(downloadLink);
 
-      // Clean up the URL object
       URL.revokeObjectURL(zipUrl);
 
     } catch (e) {
@@ -210,22 +241,13 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
     } = message.data;
 
     const baseModel = modelVersionObject?.baseModel || "unknown";
-
-    // 1) Clean up the path (remove leading/trailing slashes)
     const normalizedDownloadFilePath = (downloadFilePath || "").replace(/^\/+|\/+$/g, '');
-
-    // 2) If civitaiFileName is "model.safetensors", remove ".safetensors"
     const mainNameNoExt = civitaiFileName.replace(".safetensors", "");
     const modelName = `${civitaiModelID}_${civitaiVersionID}_${baseModel}_${mainNameNoExt}`;
 
     try {
-      //=================================================
-      // (A) Create the "innerZip"
-      //     This holds all .safetensors, .civitai.info,
-      //     and optionally .preview.png
-      //=================================================
       const innerZip = new JSZip();
-      // A1) Download each file from civitaiModelFileList and add to innerZip
+
       const filePromises = civitaiModelFileList.map(({ name, downloadUrl }: { name: string, downloadUrl: string }) =>
         fetch(downloadUrl)
           .then((response) => {
@@ -244,12 +266,10 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
       );
       await Promise.all(filePromises);
 
-      // A2) Add the .civitai.info file
       const infoFileName = `${modelName}.civitai.info`;
       const infoContent = JSON.stringify(modelVersionObject, null, 2);
       innerZip.file(infoFileName, infoContent);
 
-      // A3) Fetch a preview image or placeholder
       const imageUrlsArray = [
         ...(modelVersionObject.resources || [])
           .filter((r: any) => r.type === 'image' && r.url)
@@ -265,7 +285,7 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
           const resp = await fetch(imageUrl);
           if (resp.ok) {
             previewBlob = await resp.blob();
-            break; // Found a valid image
+            break;
           }
         } catch (e) {
           console.error(`Failed to download preview image ${imageUrl}: `, e);
@@ -273,7 +293,6 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
       }
 
       if (!previewBlob) {
-        // If no valid images found, use a placeholder
         try {
           const placeholderUrl = "https://placehold.co/350x450.png";
           const placeholderResp = await fetch(placeholderUrl);
@@ -287,30 +306,19 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         }
       }
 
-      // Add preview image INSIDE the innerZip if you want it duplicated there:
       if (previewBlob) {
         const previewInsideName = `${modelName}.preview.png`;
         innerZip.file(previewInsideName, previewBlob);
       }
 
-      //=================================================
-      // (B) Generate the innerZip
-      //=================================================
       const innerZipData = await innerZip.generateAsync({
-        type: 'arraybuffer', // or 'uint8array' or 'blob'
+        type: 'arraybuffer',
         compression: 'DEFLATE',
         compressionOptions: { level: 9 }
       });
 
-      //=================================================
-      // (C) Create the "outerZip"
-      //     replicate the folder path from downloadFilePath
-      //     place `modelName.zip` and `modelName.preview.png`
-      //=================================================
       const outerZip = new JSZip();
 
-      // C1) Create subfolders from normalizedDownloadFilePath
-      //     e.g. "abc/def/ghi/jkl"
       let currentFolder = outerZip;
       if (normalizedDownloadFilePath) {
         const parts = normalizedDownloadFilePath.split('/');
@@ -319,36 +327,22 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         }
       }
 
-      // Now `currentFolder` is the deepest folder (e.g. jkl/)
-
-      // C2) Put the inner zip in that folder
       const innerZipFileName = `${modelName}.zip`;
       currentFolder.file(innerZipFileName, innerZipData);
 
-      // C3) Also put the preview image at the same level (beside the inner zip)
-      //     So final layout is: jkl/
-      //        modelName.zip
-      //        modelName.preview.png
       if (previewBlob) {
         const previewOutsideName = `${modelName}.preview.png`;
         currentFolder.file(previewOutsideName, previewBlob);
       }
 
-      //=================================================
-      // (D) Generate the OUTER zip (the one user actually downloads)
-      //=================================================
       const outerZipBlob = await outerZip.generateAsync({
         type: 'blob',
         compression: 'DEFLATE',
         compressionOptions: { level: 9 }
       });
 
-      //=================================================
-      // (E) Trigger the download
-      //=================================================
       const zipUrl = URL.createObjectURL(outerZipBlob);
       const downloadLink = document.createElement('a');
-      // You can name the final file anything you'd like
       const finalZipFilename = `${modelName}_outer.zip`;
 
       downloadLink.href = zipUrl;
@@ -359,7 +353,6 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
       downloadLink.click();
       document.body.removeChild(downloadLink);
 
-      // Clean up the Blob URL
       URL.revokeObjectURL(zipUrl);
 
     } catch (e) {
@@ -368,13 +361,12 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   }
 });
 
-function addCardCheckbox(item: HTMLDivElement, index?: number) {
-  // avoid duplicates
+function addCardCheckbox(item: HTMLElement, index?: number) {
   if (item.querySelector('input[type="checkbox"].model-card-checkbox')) return;
 
   const checkbox: HTMLInputElement = document.createElement('input');
   checkbox.type = 'checkbox';
-  checkbox.className = 'model-card-checkbox';     // so we can identify it later
+  checkbox.className = 'model-card-checkbox';
   if (index != null) checkbox.id = `checkbox-${index}`;
 
   checkbox.style.position = 'absolute';
@@ -383,7 +375,6 @@ function addCardCheckbox(item: HTMLDivElement, index?: number) {
   checkbox.style.zIndex = '1000';
   checkbox.style.transform = 'scale(2.5)';
 
-  // keep existing positioning behavior (don’t clobber if you already set it)
   if (!item.style.position) item.style.position = 'relative';
   item.appendChild(checkbox);
 
@@ -392,17 +383,16 @@ function addCardCheckbox(item: HTMLDivElement, index?: number) {
   });
 
   checkbox.addEventListener('change', () => {
-    const linkElement: HTMLAnchorElement | null = item.querySelector('a');
+    const linkElement = getCardLink(item);
     if (linkElement?.href) {
       const url = linkElement.href;
 
-      // NEW: preview image inside the same <a> (avoids grabbing avatar)
       const imgEl = linkElement.querySelector('img') as HTMLImageElement | null;
       const imgSrc = imgEl?.currentSrc || imgEl?.src || "";
 
       if (checkbox.checked) {
         item.style.border = '2px solid yellow';
-        chrome.runtime.sendMessage({ action: 'addUrl', url, imgSrc }); // NEW
+        chrome.runtime.sendMessage({ action: 'addUrl', url, imgSrc });
       } else {
         item.style.border = '';
         chrome.runtime.sendMessage({ action: 'removeUrl', url });
@@ -426,19 +416,17 @@ chrome.runtime.onMessage.addListener(
     sender: chrome.runtime.MessageSender,
     sendResponse: (response?: any) => void
   ) => {
-    // Select the parent container with class 'MasonryGrid_grid__6QtWa'
-    const parentContainer: HTMLElement | null = document.querySelector('.MasonryGrid_grid__6QtWa');
+    const parentContainer: HTMLElement | null = getModelContainer();
 
     if (!parentContainer) {
-      console.warn("Container with class 'MasonryGrid_grid__6QtWa' not found.");
+      console.warn("Model container not found.");
       return;
     }
 
-    // Select only the direct child divs of the parent container
-    const cardElements: NodeListOf<HTMLDivElement> = parentContainer.querySelectorAll(':scope > div');
+    const cardElements = getModelCards(parentContainer);
 
     if (message.action === "display-checkboxes") {
-      cardElements.forEach((item: HTMLDivElement, index: number) => {
+      cardElements.forEach((item: HTMLElement, index: number) => {
         addCardCheckbox(item, index);
       });
     } else if (message.action === "uncheck-url") {
@@ -449,8 +437,8 @@ chrome.runtime.onMessage.addListener(
         return;
       }
 
-      cardElements.forEach((item: HTMLDivElement) => {
-        const linkElement: HTMLAnchorElement | null = item.querySelector('a');
+      cardElements.forEach((item: HTMLElement) => {
+        const linkElement = getCardLink(item);
 
         if (linkElement && linkElement.href === urlToUncheck) {
           const checkbox: HTMLInputElement | null = item.querySelector('input[type="checkbox"]');
@@ -468,8 +456,8 @@ chrome.runtime.onMessage.addListener(
         return;
       }
 
-      cardElements.forEach((item: HTMLDivElement) => {
-        const linkElement: HTMLAnchorElement | null = item.querySelector('a');
+      cardElements.forEach((item: HTMLElement) => {
+        const linkElement = getCardLink(item);
 
         if (linkElement && linkElement.href === urlToCheck) {
           const checkbox: HTMLInputElement | null = item.querySelector('input[type="checkbox"]');
@@ -480,24 +468,20 @@ chrome.runtime.onMessage.addListener(
         }
       });
     } else if (message.action === "remove-checkboxes") {
-      cardElements.forEach((item: HTMLDivElement) => {
+      cardElements.forEach((item: HTMLElement) => {
         const checkbox: HTMLInputElement | null = item.querySelector('input[type="checkbox"]');
 
         if (checkbox) {
           item.removeChild(checkbox);
         }
 
-        // Revert any CSS changes
         item.style.border = '';
       });
     }
 
-    // Indicate that the response is handled asynchronously
     return true;
   }
 );
-
-
 
 chrome.runtime.onMessage.addListener(
   async (
@@ -507,63 +491,45 @@ chrome.runtime.onMessage.addListener(
   ) => {
     if (message.action === "checkSavedMode") {
       const newUrlList: string[] = [];
-
-      // Select the parent container with class 'MasonryGrid_grid__6QtWa'
-      const parentContainer: HTMLElement | null = document.querySelector('.MasonryGrid_grid__6QtWa');
+      const parentContainer: HTMLElement | null = getModelContainer();
 
       if (parentContainer) {
-        // Select only the direct child divs of the parent
-        const childDivs: NodeListOf<HTMLDivElement> = parentContainer.querySelectorAll(':scope > div');
+        const childCards = getModelCards(parentContainer);
 
-        childDivs.forEach((item: HTMLDivElement) => {
-          // Optionally, ensure the div has an 'id'
-          // if (!item.id) return;
-
-          // Find the first <a> element within the current div
-          const linkElement: HTMLAnchorElement | null = item.querySelector('a');
+        childCards.forEach((item: HTMLElement) => {
+          const linkElement = getCardLink(item);
           console.log
           if (linkElement && linkElement.href) {
-            // Check if 'checkedUrlList' exists and does not include the current href
             if (message.checkedUrlList && !message.checkedUrlList.includes(linkElement.href)) {
               newUrlList.push(linkElement.href);
             }
           }
         });
 
-        // Send the list of new URLs back for further processing
         chrome.runtime.sendMessage({
           action: "checkUrlsInDatabase",
           newUrlList: newUrlList,
         });
       } else {
-        console.warn("Parent container with class 'MasonryGrid_grid__6QtWa' not found.");
+        console.warn("Model container not found.");
       }
     }
 
-    // Indicate that the response is handled asynchronously
     return true;
   }
 );
 
-
-// Assuming hrefMap is already defined and populated elsewhere in your code
-// const hrefMap: Map<string, string> = new Map();
-
 chrome.runtime.onMessage.addListener((message: any, sender, sendResponse) => {
   if (message.action === "checkUpdateAvaliableMode") {
     const newUrlList: string[] = [];
-
-    // Convert checkedUpdateList to a Set for faster lookup (O(1) complexity)
     const checkedSet = new Set<string>(message.checkedUpdateList);
 
-    // Iterate over the hrefMap values
     hrefMap.forEach((href: string) => {
       if (!checkedSet.has(href)) {
         newUrlList.push(href);
       }
     });
 
-    // Send the newUrlList back to the extension
     chrome.runtime.sendMessage({
       action: "checkifmodelAvaliable",
       newUrlList: newUrlList,
@@ -573,35 +539,27 @@ chrome.runtime.onMessage.addListener((message: any, sender, sendResponse) => {
   }
 });
 
-
-// Create a Map to cache hrefs associated with each div's unique id
 const hrefMap: Map<string, string> = new Map();
-
 const updateInfoMap: Map<string, { quantity: number; isUpdateAvaliable: boolean; isEarlyAccess: boolean }> = new Map();
-
-// Flag to track the current sort order (true for ascending, false for descending)
 let isSortedAscending: boolean = true;
 
-// Function to sort the divs based on cached hrefs
 function sortDivs(container: HTMLElement): void {
-  // Select all child divs within the container
-  const cardDivs = Array.from(container.children).filter(child => child instanceof HTMLElement) as HTMLElement[];
+  const cardDivs = getModelCards(container);
 
-  // Map each div to its cached href
   const sortableCards: { element: HTMLElement; url: string }[] = cardDivs.map(div => {
     const divId: string = div.id;
     let url: string = hrefMap.get(divId) || "";
 
-    // If the div currently has an <a>, update the cache
-    const anchor = div.querySelector('a') as HTMLAnchorElement | null;
+    const anchor = getCardLink(div);
     if (anchor) {
       url = anchor.href.replace("-commission", "");
-      hrefMap.set(divId, url);
+      if (divId) {
+        hrefMap.set(divId, url);
+      }
     }
 
-    // If there's still no URL, assign a default value to ensure consistent sorting
     if (!url) {
-      url = isSortedAscending ? "zzz-default" : ""; // Adjust as needed
+      url = isSortedAscending ? "zzz-default" : "";
     }
 
     return { element: div, url };
@@ -610,73 +568,61 @@ function sortDivs(container: HTMLElement): void {
   console.log("test-sortableCards")
   console.log(sortableCards);
 
-  // Sort the cards based on the reversed URL strings
   sortableCards.sort((a, b) => {
     const reverseA: string = a.url.split('').reverse().join('').toLowerCase();
     const reverseB: string = b.url.split('').reverse().join('').toLowerCase();
     return reverseA.localeCompare(reverseB);
   });
 
-  // If the current sort is descending, reverse the sorted array to make it ascending
   if (!isSortedAscending) {
     sortableCards.reverse();
   }
 
-  // Create a DocumentFragment to optimize DOM manipulation
   const fragment: DocumentFragment = document.createDocumentFragment();
   sortableCards.forEach(card => {
-    fragment.appendChild(card.element); // Move the existing <div> into the fragment
+    fragment.appendChild(card.element);
   });
 
-  // Append the sorted elements back to the container
   container.appendChild(fragment);
-
-  // Toggle the sort state for the next activation
   isSortedAscending = !isSortedAscending;
 
   console.log(`Cards have been sorted in ${isSortedAscending ? 'ascending' : 'descending'} order.`);
 }
 
-// Listener for messages from the Chrome extension
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "sortingMode") {
     console.log("Sorting mode activated");
 
-    // Select the container holding the card divs
-    const container = document.querySelector('.MasonryGrid_grid__6QtWa') as HTMLElement | null;
+    const container = getModelContainer();
     if (!container) {
-      console.error('Card container with class "MasonryGrid_grid__6QtWa" not found.');
+      console.error('Model container not found.');
       return;
     }
 
-    // Perform the sorting based on the updated hrefMap
     sortDivs(container);
   }
 });
 
-// Initialize the hrefMap with existing <a> elements
 initializeHrefMap();
 
-// Function to scan and cache hrefs from existing divs on page load
 function initializeHrefMap(): void {
-  // Select the container holding the card divs
-  const container = document.querySelector('.MasonryGrid_grid__6QtWa') as HTMLElement | null;
+  const container = getModelContainer();
   if (!container) {
-    console.error('Card container with class "MasonryGrid_grid__6QtWa" not found.');
+    console.error('Model container not found.');
     return;
   }
 
-  // Select all child divs within the container
-  const cardDivs = Array.from(container.children).filter(child => child instanceof HTMLElement) as HTMLElement[];
+  const cardDivs = getModelCards(container);
 
   cardDivs.forEach(div => {
     const divId: string = div.id;
-    const anchor = div.querySelector('a') as HTMLAnchorElement | null;
+    const anchor = getCardLink(div);
 
     if (anchor) {
-      // Process the href by removing "-commission" as per your original logic
       const processedUrl: string = anchor.href.replace("-commission", "");
-      hrefMap.set(divId, processedUrl);
+      if (divId) {
+        hrefMap.set(divId, processedUrl);
+      }
     }
   });
 
@@ -690,48 +636,40 @@ chrome.runtime.onMessage.addListener(
     sendResponse: (response?: any) => void
   ) => {
     if (message.action === "display-saved" || message.action === "remove-saved") {
-      // Select the parent container with class 'MasonryGrid_grid__6QtWa'
-      const container: HTMLElement | null = document.querySelector('.MasonryGrid_grid__6QtWa');
+      const container: HTMLElement | null = getModelContainer();
 
       if (!container) {
-        console.warn("Container with class 'MasonryGrid_grid__6QtWa' not found.");
+        console.warn("Model container not found.");
         return;
       }
 
-      // Select only the direct child divs of the container
-      const cardElements: NodeListOf<HTMLDivElement> = container.querySelectorAll(':scope > div');
+      const cardElements = getModelCards(container);
 
       console.log(`Number of first-level card elements: ${cardElements.length}`);
 
       if (message.action === "display-saved") {
         const savedList: Array<{ url: string; quantity: number }> | undefined = message.savedList;
 
-        // If savedList is not defined, just return
         if (!savedList) {
           console.warn("savedList is undefined or null.");
           return;
         }
 
-        cardElements.forEach((item: HTMLDivElement) => {
-          // Find the first <a> element inside the card
-          const linkElement: HTMLAnchorElement | null = item.querySelector('a');
+        cardElements.forEach((item: HTMLElement) => {
+          const linkElement = getCardLink(item);
 
           if (linkElement && linkElement.href) {
             const url: string = linkElement.href;
-            // Find the corresponding saved info for the URL
             const savedInfo = savedList.find((info) => info.url === url);
 
             if (savedInfo) {
-              // Check if a label already exists to avoid duplicates
               const existingLabel = item.querySelector('.saved-label') as HTMLDivElement | null;
 
               if (!existingLabel) {
-                // Create a label element
                 const label: HTMLDivElement = document.createElement('div');
                 label.classList.add('saved-label');
                 label.textContent = savedInfo.quantity > 0 ? `Saved: ${savedInfo.quantity}` : 'Not Saved';
 
-                // Style the label
                 Object.assign(label.style, {
                   position: 'absolute',
                   top: '50%',
@@ -743,45 +681,32 @@ chrome.runtime.onMessage.addListener(
                   textShadow: '0px 0px 3px black',
                   padding: '5px',
                   borderRadius: '5px',
-                  pointerEvents: 'none', // Prevents the label from interfering with user interactions
+                  pointerEvents: 'none',
                 });
 
-                // Ensure the parent has relative positioning
                 item.style.position = 'relative';
                 item.appendChild(label);
               } else {
-                // **Else Block: Update Existing Label**
-
-                // Update the text content based on savedInfo.quantity
                 existingLabel.textContent = savedInfo.quantity > 0 ? `Saved: ${savedInfo.quantity}` : 'Not Saved';
-
-                // Update the background color based on savedInfo.quantity
                 existingLabel.style.backgroundColor = savedInfo.quantity > 0 ? 'lightgreen' : 'tomato';
-
-                // Optional: If other styles need to be updated based on savedInfo, do it here
-                // For example:
-                // existingLabel.style.borderColor = savedInfo.quantity > 0 ? 'green' : 'red';
               }
             }
-
           }
         });
       } else if (message.action === "remove-saved") {
         console.log("Removing saved labels...");
 
-        cardElements.forEach((item: HTMLDivElement) => {
-          // Find the saved label within the card
+        cardElements.forEach((item: HTMLElement) => {
           const label: HTMLElement | null = item.querySelector('.saved-label');
 
           if (label) {
             console.log("Removing saved label from:", item);
-            label.remove(); // Remove the label element directly
+            label.remove();
           }
         });
       }
     }
 
-    // Indicate that the response is handled asynchronously
     return true;
   }
 );
@@ -793,76 +718,62 @@ chrome.runtime.onMessage.addListener(
     sendResponse: (response?: any) => void
   ) => {
     if (message.action === "display-offline" || message.action === "remove-offline") {
-      // Select the parent container with class 'MasonryGrid_grid__6QtWa'
-      const container: HTMLElement | null = document.querySelector('.MasonryGrid_grid__6QtWa');
+      const container: HTMLElement | null = getModelContainer();
 
       if (!container) {
-        console.warn("Container with class 'MasonryGrid_grid__6QtWa' not found.");
+        console.warn("Model container not found.");
         return;
       }
 
-      // Select only the direct child divs of the container
-      const cardElements: NodeListOf<HTMLDivElement> = container.querySelectorAll(':scope > div');
+      const cardElements = getModelCards(container);
 
       console.log(`Number of first-level card elements: ${cardElements.length}`);
 
       if (message.action === "display-offline") {
         const offlinelist: Array<{ url: string; quantity: number }> | undefined = message.offlineList;
 
-        // If offlineList is not defined, just return
         if (!offlinelist) {
           console.warn("offlineList is undefined or null.");
           return;
         }
 
-        cardElements.forEach((item: HTMLDivElement) => {
-          // Find the first <a> element inside the card
-          const linkElement: HTMLAnchorElement | null = item.querySelector('a');
+        cardElements.forEach((item: HTMLElement) => {
+          const linkElement = getCardLink(item);
 
           if (linkElement && linkElement.href) {
             const url: string = linkElement.href;
-            // Find the corresponding offline info for the URL
             const offlineInfo = offlinelist.find((info) => info.url === url);
 
-            // Only do something if offlineInfo is found
             if (offlineInfo) {
-              // Check if a label already exists
               const existingLabel = item.querySelector('.offline-label') as HTMLDivElement | null;
 
-              // Only show a label if quantity > 0
               if (offlineInfo.quantity > 0) {
-                // Create or update the label
                 if (!existingLabel) {
-                  // Create a new label
                   const label: HTMLDivElement = document.createElement('div');
                   label.classList.add('offline-label');
                   label.textContent = `Offline: ${offlineInfo.quantity}`;
 
-                  // Style the label
                   Object.assign(label.style, {
                     position: 'absolute',
                     top: '40%',
                     left: '50%',
                     transform: 'translate(-50%, -50%)',
                     zIndex: '1001',
-                    backgroundColor: 'blue', // <-- Use a different color here
+                    backgroundColor: 'blue',
                     color: 'white',
                     textShadow: '0px 0px 3px black',
                     padding: '5px',
                     borderRadius: '5px',
-                    pointerEvents: 'none', // Prevents the label from interfering with user interactions
+                    pointerEvents: 'none',
                   });
 
-                  // Ensure the parent has relative positioning
                   item.style.position = 'relative';
                   item.appendChild(label);
                 } else {
-                  // Update the existing label
                   existingLabel.textContent = `Offline: ${offlineInfo.quantity}`;
-                  existingLabel.style.backgroundColor = 'blue'; // <-- Use a different color here
+                  existingLabel.style.backgroundColor = 'blue';
                 }
               } else {
-                // If quantity <= 0, remove any existing label
                 if (existingLabel) {
                   existingLabel.remove();
                 }
@@ -873,19 +784,17 @@ chrome.runtime.onMessage.addListener(
       } else if (message.action === "remove-offline") {
         console.log("Removing offline labels...");
 
-        cardElements.forEach((item: HTMLDivElement) => {
-          // Find the label within the card
+        cardElements.forEach((item: HTMLElement) => {
           const label: HTMLElement | null = item.querySelector('.offline-label');
 
           if (label) {
             console.log("Removing offline label from:", item);
-            label.remove(); // Remove the label element directly
+            label.remove();
           }
         });
       }
     }
 
-    // Indicate that the response is handled asynchronously
     return true;
   }
 );
@@ -896,15 +805,14 @@ chrome.runtime.onMessage.addListener(
     sender: chrome.runtime.MessageSender,
     sendResponse: (response?: any) => void
   ) => {
-    const parentContainer: HTMLElement | null = document.querySelector('.MasonryGrid_grid__6QtWa');
+    const parentContainer: HTMLElement | null = getModelContainer();
 
     if (!parentContainer) {
-      console.warn("Container with class 'MasonryGrid_grid__6QtWa' not found.");
+      console.warn("Model container not found.");
       return;
     }
 
-    // Select only the direct child divs of the parent container
-    const cardElements: NodeListOf<HTMLDivElement> = parentContainer.querySelectorAll(':scope > div');
+    const cardElements = getModelCards(parentContainer);
 
     if (message.action === "display-update-avaliable") {
       const savedList: Array<{ url: string; quantity: number; isUpdateAvaliable: boolean; isEarlyAccess: boolean }> | undefined = message.savedList;
@@ -914,7 +822,6 @@ chrome.runtime.onMessage.addListener(
         return;
       }
 
-      // Populate updateInfoMap with the received savedList
       savedList.forEach(item => {
         updateInfoMap.set(item.url, {
           quantity: item.quantity || 0,
@@ -924,17 +831,12 @@ chrome.runtime.onMessage.addListener(
       });
 
       console.log(`display-update-avaliable: Stored update information for ${updateInfoMap.size} URLs.`);
-
-      // Display update labels on currently loaded cards
       displayUpdateLabels();
     } else if (message.action === "remove-update-saved") {
       console.log("Removing update and early access labels...");
-
-      // Remove labels from all card elements
       removeUpdateLabels();
     }
 
-    // Indicate that the response is handled asynchronously
     return true;
   }
 );
@@ -947,54 +849,46 @@ chrome.runtime.onMessage.addListener(
     sender: chrome.runtime.MessageSender,
     sendResponse: (response?: any) => void
   ) => {
-    const parentContainer: HTMLElement | null = document.querySelector('.MasonryGrid_grid__6QtWa');
+    const parentContainer: HTMLElement | null = getModelContainer();
 
     if (!parentContainer) {
-      console.warn("Container with class 'MasonryGrid_grid__6QtWa' not found.");
+      console.warn("Model container not found.");
       return;
     }
 
-    // Select only the direct child divs of the parent container
-    const cardElements: NodeListOf<HTMLDivElement> = parentContainer.querySelectorAll(':scope > div');
+    const cardElements = getModelCards(parentContainer);
 
     if (message.action === "display-creator-button") {
-      // Loop through each card element and add the creator button.
-      cardElements.forEach((card: HTMLDivElement) => {
+      cardElements.forEach((card: HTMLElement) => {
         addCreatorButton(card);
       });
       console.log("Creator URL buttons added to all cards.");
       sendResponse({ status: "success", message: "Creator URL buttons added." });
     }
 
-    // Indicate that the response is handled asynchronously
     return true;
   }
 );
 
-
 function displayUpdateLabels(): void {
-  const parentContainer: HTMLElement | null = document.querySelector('.MasonryGrid_grid__6QtWa');
+  const parentContainer: HTMLElement | null = getModelContainer();
 
   if (!parentContainer) {
-    console.warn("Container with class 'MasonryGrid_grid__6QtWa' not found.");
+    console.warn("Model container not found.");
     return;
   }
 
-  // Select only the direct child divs of the parent container
-  const cardElements: NodeListOf<HTMLDivElement> = parentContainer.querySelectorAll(':scope > div');
+  const cardElements = getModelCards(parentContainer);
 
-  cardElements.forEach((item: HTMLDivElement) => {
-    // Find the first <a> element inside the card
-    const linkElement: HTMLAnchorElement | null = item.querySelector('a');
+  cardElements.forEach((item: HTMLElement) => {
+    const linkElement = getCardLink(item);
 
     if (linkElement && linkElement.href) {
       const url: string = linkElement.href;
       const updateInfo = updateInfoMap.get(url);
 
       if (updateInfo?.isUpdateAvaliable || updateInfo?.isEarlyAccess) {
-        // Check if the label already exists to avoid duplicates
         if (!item.querySelector('.update-early-label')) {
-          // Create a label element
           const label: HTMLDivElement = document.createElement('div');
           label.classList.add('update-early-label');
 
@@ -1012,7 +906,6 @@ function displayUpdateLabels(): void {
             backgroundColor = 'red';
           }
 
-          // Apply label styles
           label.textContent = text;
           Object.assign(label.style, {
             position: 'absolute',
@@ -1035,10 +928,9 @@ function displayUpdateLabels(): void {
             justifyContent: 'center',
             alignItems: 'center',
             textAlign: 'center',
-            pointerEvents: 'none', // Ensure label doesn't interfere with user interactions
+            pointerEvents: 'none',
           });
 
-          // Ensure the parent has relative positioning
           item.style.position = 'relative';
           item.appendChild(label);
         }
@@ -1049,44 +941,36 @@ function displayUpdateLabels(): void {
   console.log("Displayed update labels based on updateInfoMap.");
 }
 
-// 10. Function to remove update labels
 function removeUpdateLabels(): void {
-  const parentContainer: HTMLElement | null = document.querySelector('.MasonryGrid_grid__6QtWa');
+  const parentContainer: HTMLElement | null = getModelContainer();
 
   if (!parentContainer) {
-    console.warn("Container with class 'MasonryGrid_grid__6QtWa' not found.");
+    console.warn("Model container not found.");
     return;
   }
 
-  // Select only the direct child divs of the parent container
-  const cardElements: NodeListOf<HTMLDivElement> = parentContainer.querySelectorAll(':scope > div');
+  const cardElements = getModelCards(parentContainer);
 
-  cardElements.forEach((item: HTMLDivElement) => {
-    // Remove only the label with the 'update-early-label' class
+  cardElements.forEach((item: HTMLElement) => {
     const label: HTMLElement | null = item.querySelector('.update-early-label');
     if (label) {
       console.log("Removing update label from:", item);
-      label.remove(); // Remove the label element directly
+      label.remove();
     }
   });
-
-  // Optionally, clear the updateInfoMap if you no longer need the update information
-  // updateInfoMap.clear();
 
   console.log("Removed all update labels from card elements.");
 }
 
 function handleNewCard(cardItem: HTMLElement): void {
-  const linkElement: HTMLAnchorElement | null = cardItem.querySelector('a');
+  const linkElement = getCardLink(cardItem);
 
   if (linkElement && linkElement.href) {
     const url: string = linkElement.href;
     const updateInfo = updateInfoMap.get(url);
 
     if (updateInfo?.isUpdateAvaliable || updateInfo?.isEarlyAccess) {
-      // Check if the label already exists to avoid duplicates
       if (!cardItem.querySelector('.update-early-label')) {
-        // Create a label element
         const label: HTMLDivElement = document.createElement('div');
         label.classList.add('update-early-label');
 
@@ -1104,7 +988,6 @@ function handleNewCard(cardItem: HTMLElement): void {
           backgroundColor = 'red';
         }
 
-        // Apply label styles
         label.textContent = text;
         Object.assign(label.style, {
           position: 'absolute',
@@ -1127,10 +1010,9 @@ function handleNewCard(cardItem: HTMLElement): void {
           justifyContent: 'center',
           alignItems: 'center',
           textAlign: 'center',
-          pointerEvents: 'none', // Ensure label doesn't interfere with user interactions
+          pointerEvents: 'none',
         });
 
-        // Ensure the parent has relative positioning
         cardItem.style.position = 'relative';
         cardItem.appendChild(label);
       }
@@ -1138,9 +1020,6 @@ function handleNewCard(cardItem: HTMLElement): void {
   }
 }
 
-// contentScript.ts
-
-// Utility function to wait for the parent container to be available
 function waitForElement(selector: string, timeout = 10000): Promise<HTMLElement> {
   return new Promise((resolve, reject) => {
     const element = document.querySelector(selector);
@@ -1169,7 +1048,6 @@ function waitForElement(selector: string, timeout = 10000): Promise<HTMLElement>
   });
 }
 
-// Inject custom CSS for the creator button if it hasn't been injected already
 function injectButtonStyles() {
   if (document.getElementById("creator-button-styles")) {
     return;
@@ -1195,17 +1073,15 @@ function injectButtonStyles() {
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
     }
     .add-creator-button.success {
-      background-color: #4caf50; /* green for success */
+      background-color: #4caf50;
     }
     .add-creator-button.failed {
-      background-color: #f44336; /* red for failure */
+      background-color: #f44336;
     }
   `;
   document.head.appendChild(style);
 }
 
-// Helper function to send an action to React (or your background page)
-// This wraps chrome.runtime.sendMessage in a Promise.
 function sendActionToReact(message: any): Promise<any> {
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(message, (response) => {
@@ -1219,18 +1095,15 @@ function sendActionToReact(message: any): Promise<any> {
   });
 }
 
-// Helper function to display a temporary message on the button
 function displayTemporaryMessage(button: HTMLButtonElement, message: string, originalText: string) {
   button.textContent = message;
 
-  // Add a temporary CSS class to update the background color
   if (message === "Success") {
     button.classList.add('success');
   } else if (message === "Failed") {
     button.classList.add('failed');
   }
 
-  // After 1 second, revert to the original text and remove the temporary styling
   setTimeout(() => {
     button.textContent = originalText;
     button.classList.remove('success');
@@ -1238,25 +1111,24 @@ function displayTemporaryMessage(button: HTMLButtonElement, message: string, ori
   }, 1000);
 }
 
-// Helper function to add a button to a card that sends an action to React
 function addCreatorButton(card: HTMLElement) {
-  // Check if the card already contains a button with the class "add-creator-button"
   if (card.querySelector('.add-creator-button')) {
     return;
   }
 
-  // Find the element that holds the creator name (by its class)
-  const creatorElement = card.querySelector('.UserAvatarSimple_username__1HunV');
-  if (creatorElement) {
-    const creatorName = creatorElement.textContent?.trim() || 'Unknown';
+  const creatorElement =
+    card.querySelector('.UserAvatarSimple_username__1HunV') ||
+    Array.from(card.querySelectorAll('span')).find((el) => (el.textContent || '').trim().startsWith('by '));
 
-    // Create the button element
+  if (creatorElement) {
+    const rawCreatorText = creatorElement.textContent?.trim() || 'Unknown';
+    const creatorName = rawCreatorText.replace(/^by\s+/i, '').trim() || 'Unknown';
+
     const button = document.createElement('button');
     button.classList.add('add-creator-button');
     const originalText = `Add ${creatorName} to list`;
     button.textContent = originalText;
 
-    // Set up the click event handler
     button.addEventListener('click', async () => {
       button.textContent = "Processing...";
       try {
@@ -1274,84 +1146,70 @@ function addCreatorButton(card: HTMLElement) {
       }
     });
 
-    // 5) Append inside the footer at the bottom
     const footer = card.querySelector('.AspectRatioImageCard_footer__FOU7a');
     if (footer) {
-      // Often there's a nested div like .flex.w-full.flex-col; if so, append to that:
       const footerContent = footer.querySelector('div.flex.w-full.flex-col.items-start.gap-1');
       if (footerContent) {
         footerContent.appendChild(button);
       } else {
-        // Fallback: just append to the footer
         footer.appendChild(button);
       }
 
-      // Style tweaks so it appears nicely at the bottom
+      button.style.display = 'block';
+      button.style.marginTop = '10px';
+      return;
+    }
+
+    // civitaiarchive fallback
+    const bottomOverlay = Array.from(card.querySelectorAll('div')).find((el) =>
+      (el.className || '').toString().includes('bg-gradient-to-t')
+    ) as HTMLElement | undefined;
+
+    if (bottomOverlay) {
+      bottomOverlay.appendChild(button);
       button.style.display = 'block';
       button.style.marginTop = '10px';
     }
   }
 }
 
-// Function to initialize the MutationObserver
 function initMutationObserver(parentContainer: HTMLElement) {
-  // console.log("Initializing MutationObserver on parent container:", parentContainer);
-
-  // Callback function to execute when mutations are observed
   const callback: MutationCallback = (mutationsList, observer) => {
     for (const mutation of mutationsList) {
-      // Handle added nodes
       if (mutation.type === 'childList') {
         if (mutation.addedNodes.length > 0) {
           mutation.addedNodes.forEach((node) => {
             if (node instanceof HTMLElement) {
-              // console.log("New node added:", node);
-
-              // Check if the added node is a card item (direct child div)
-              if (node.matches(':scope > div')) {
-                // console.log("New card item detected:", node);
-
-                if (node.tagName.toLowerCase() === 'a') {
-                  const anchor = node as HTMLAnchorElement;
-                  //console.log("New <a> tag detected within card item:", anchor);
-
-                  // If node.href is already absolute, use it directly
-                  // Otherwise, construct the absolute URL using getAttribute
-                  const suffixUrl = anchor.href; // Or use new URL(anchor.getAttribute('href')!, 'https://civitai.com').href;
+              if (isDirectCardElement(node, parentContainer)) {
+                const anchor = getCardLink(node);
+                if (anchor) {
+                  const suffixUrl = anchor.href;
 
                   chrome.runtime.sendMessage({
                     action: "checkUrlsInDatabase",
                     newUrlList: [suffixUrl],
                   });
 
-                  const divParent = anchor.closest('div[id]') as HTMLElement | null;
-                  if (divParent) {
-                    const divId = divParent.id;
-                    const processedUrl = anchor.href.replace("-commission", "");
+                  const cardEl = node;
+                  const divId = cardEl.id;
+                  const processedUrl = anchor.href.replace("-commission", "");
 
-                    // Update the hrefMap with the new href
+                  if (divId) {
                     hrefMap.set(divId, processedUrl);
                     console.log(`Added href to hrefMap: [${divId}] ${processedUrl}`);
-
-                    // Check if this URL has update information
-                    if (updateInfoMap.has(processedUrl)) {
-                      handleNewCard(divParent);
-                    }
-
-                    // Add the creator button to the card
-                    addCreatorButton(divParent);
-                    addCardCheckbox(divParent as HTMLDivElement);   // NEW
-
-                    applyStagedForCard(divParent);
-
                   }
 
-                }
+                  if (updateInfoMap.has(processedUrl) || updateInfoMap.has(anchor.href)) {
+                    handleNewCard(cardEl);
+                  }
 
-                // Optionally, process the new card item here
+                  applyOpenInNewTab(cardEl);
+                  addCreatorButton(cardEl);
+                  addCardCheckbox(cardEl);
+                  applyStagedForCard(cardEl);
+                }
               }
 
-              // Additionally, observe any nested changes within the added node
               observeCardItem(node);
             }
           });
@@ -1360,150 +1218,110 @@ function initMutationObserver(parentContainer: HTMLElement) {
         if (mutation.removedNodes.length > 0) {
           mutation.removedNodes.forEach((node) => {
             if (node instanceof HTMLElement) {
-              // console.log("Node removed:", node);
-              // Optionally, handle the removal of card items here
             }
           });
         }
       }
 
-      // Optionally, handle attribute changes if needed
       if (mutation.type === 'attributes') {
-        // console.log(`Attribute "${mutation.attributeName}" modified on:`, mutation.target);
       }
     }
   };
 
-  // Create a MutationObserver instance linked to the callback function
   const observer = new MutationObserver(callback);
 
-  // Configuration of the observer:
-  // - childList: true => Observe addition and removal of child nodes
-  // - subtree: true => Observe changes within all descendants
-  // This is important for detecting when content within card items is added dynamically
   observer.observe(parentContainer, {
     childList: true,
     subtree: true,
   });
-
-  // console.log("MutationObserver initialized and now watching for changes.");
 }
 
-// Function to observe nested changes within a card item (e.g., when <a> tags are added)
 function observeCardItem(cardItem: HTMLElement) {
-  // Check if the card item already has an observer to prevent multiple observers
   if (cardItem.hasAttribute('data-observed')) {
     return;
   }
 
-  // Mark the card item as observed
   cardItem.setAttribute('data-observed', 'true');
 
-  // Callback for nested mutations within the card item
   const nestedCallback: MutationCallback = (mutationsList, observer) => {
     for (const mutation of mutationsList) {
       if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
         mutation.addedNodes.forEach((node) => {
           if (node instanceof HTMLElement) {
-            // console.log("Nested node added within card item:", node);
-            // Check if an <a> tag is added
-            if (node.tagName.toLowerCase() === 'a') {
-              const anchor = node as HTMLAnchorElement;
-              //console.log("New <a> tag detected within card item:", anchor);
+            const anchor =
+              node.tagName.toLowerCase() === 'a'
+                ? (node as HTMLAnchorElement)
+                : (node.querySelector('a') as HTMLAnchorElement | null);
 
-              // If node.href is already absolute, use it directly
-              // Otherwise, construct the absolute URL using getAttribute
-              const suffixUrl = anchor.href; // Or use new URL(anchor.getAttribute('href')!, 'https://civitai.com').href;
+            if (anchor) {
+              const suffixUrl = anchor.href;
 
               chrome.runtime.sendMessage({
                 action: "checkUrlsInDatabase",
                 newUrlList: [suffixUrl],
               });
 
-              const divParent = anchor.closest('div[id]') as HTMLElement | null;
-              if (divParent) {
-                const divId = divParent.id;
-                const processedUrl = anchor.href.replace("-commission", "");
+              const directCard = anchor.closest('a, div') as HTMLElement | null;
+              const cardEl = directCard || cardItem;
+              const divId = cardEl.id;
+              const processedUrl = anchor.href.replace("-commission", "");
 
-                // Update the hrefMap with the new href
+              if (divId) {
                 hrefMap.set(divId, processedUrl);
                 console.log(`Added href to hrefMap: [${divId}] ${processedUrl}`);
-
-                // Check if this URL has update information
-                if (updateInfoMap.has(processedUrl)) {
-                  handleNewCard(divParent);
-                }
-
-                // Add the creator button to the card
-                addCreatorButton(divParent);
-                addCardCheckbox(divParent as HTMLDivElement);   // NEW
-
-                applyStagedForCard(divParent);
-
               }
+
+              if (updateInfoMap.has(processedUrl) || updateInfoMap.has(anchor.href)) {
+                handleNewCard(cardEl);
+              }
+
+              applyOpenInNewTab(cardEl);
+              addCreatorButton(cardEl);
+              addCardCheckbox(cardEl);
+              applyStagedForCard(cardEl);
             }
           }
         });
       }
 
       if (mutation.type === 'attributes') {
-        // console.log(`Attribute "${mutation.attributeName}" modified on:`, mutation.target);
       }
     }
   };
 
-  // Create a MutationObserver for the card item
   const nestedObserver = new MutationObserver(nestedCallback);
 
-  // Start observing the card item for child additions and attribute changes
   nestedObserver.observe(cardItem, {
     childList: true,
     subtree: true,
     attributes: true,
   });
-
-  // console.log("Nested MutationObserver initialized for card item:", cardItem);
 }
 
-// Function to process existing card items on initial load
 function processExistingCards(parentContainer: HTMLElement) {
-  const cardItems = parentContainer.querySelectorAll(':scope > div');
-  // console.log(`Processing ${cardItems.length} existing card items.`);
+  const cardItems = getModelCards(parentContainer);
 
   cardItems.forEach((item) => {
-    // console.log("Existing card item:", item);
-    // Optionally, process each card item (e.g., extract URLs, apply labels)
     observeCardItem(item as HTMLElement);
+    applyOpenInNewTab(item as HTMLElement);
     applyStagedForCard(item as HTMLElement);
-
   });
 }
 
-// Main function to initialize the content script
 async function main() {
-
-  // Inject the custom button styles before anything else
   injectButtonStyles();
 
-  const parentContainerSelector = '[class^="MasonryGrid_grid__6QtWa"]'; // Adjust this selector as needed
+  const parentContainerSelector =
+    `${CIVITAI_GRID_SELECTOR}, ${CIVITAIARCHIVE_GRID_SELECTOR}`;
 
   try {
-    const parentContainer = await waitForElement(parentContainerSelector, 15000); // Wait up to 15 seconds
-    // console.log("Parent container found:", parentContainer);
+    const parentContainer = await waitForElement(parentContainerSelector, 15000);
 
-    // Initialize the MutationObserver on the parent container
     initMutationObserver(parentContainer);
-
-    // Process existing card items
     processExistingCards(parentContainer);
   } catch (error) {
     console.error(error);
   }
 }
 
-// Run the main function once the script is loaded
 main();
-
-
-
-
