@@ -1,5 +1,3 @@
-// DownloadPathEditor.tsx
-
 import React, { useEffect, useRef, useState } from "react";
 import { InputGroup, FormControl, Button, Form } from "react-bootstrap";
 import { useDispatch } from "react-redux";
@@ -23,11 +21,8 @@ const DownloadPathEditor: React.FC<DownloadPathEditorProps> = ({
     onSave,
     onCancel,
 }) => {
-    // Value input (saved to backend)
     const [value, setValue] = useState(initialValue ?? "");
-
-    // Builder input (prefix dropdown affects ONLY this) - starts empty
-    const [builderValue, setBuilderValue] = useState("");
+    const [suffixValue, setSuffixValue] = useState("");
 
     const [suggestions, setSuggestions] = useState<string[]>([]);
     const [prefixsList, setPrefixsList] = useState<{
@@ -60,6 +55,7 @@ const DownloadPathEditor: React.FC<DownloadPathEditorProps> = ({
     };
 
     const trimTrailingSlashes = (s: string) => (s ?? "").trim().replace(/\/+$/g, "");
+    const trimLeadingSlashes = (s: string) => (s ?? "").trim().replace(/^\/+/g, "");
 
     const validateScanRoot = (p: string) => {
         const trimmed = (p ?? "").trim();
@@ -68,7 +64,6 @@ const DownloadPathEditor: React.FC<DownloadPathEditorProps> = ({
         return null;
     };
 
-    // Fetch folders + prefixes once on mount
     useEffect(() => {
         const load = async () => {
             try {
@@ -83,14 +78,12 @@ const DownloadPathEditor: React.FC<DownloadPathEditorProps> = ({
                         .filter(Boolean);
                     setSuggestions(Array.from(new Set(normalized)));
                 } else {
-                    console.warn("Unexpected fetchGetFoldersList result:", folders);
                     setSuggestions([]);
                 }
 
                 if (Array.isArray(prefixes)) {
                     setPrefixsList(prefixes);
-                } else if (prefixes) {
-                    console.warn("Unexpected fetchGetCategoriesPrefixsList result:", prefixes);
+                } else {
                     setPrefixsList([]);
                 }
             } catch (err) {
@@ -103,7 +96,6 @@ const DownloadPathEditor: React.FC<DownloadPathEditorProps> = ({
         load();
     }, [dispatch]);
 
-    // Close editor if user clicks outside
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
             if (!containerRef.current) return;
@@ -115,31 +107,57 @@ const DownloadPathEditor: React.FC<DownloadPathEditorProps> = ({
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [onCancel]);
 
-    // Apply: copy builder -> value (validate builder)
+    const handlePrefixChange: React.ChangeEventHandler<HTMLSelectElement> = (e) => {
+        setSelectedPrefix(e.target.value);
+        if (builderError) setBuilderError(null);
+    };
+
     const handleApplyBuilderToValue = () => {
-        const err = validateScanRoot(builderValue);
+        const prefix = trimTrailingSlashes(selectedPrefix);
+        const suffix = trimLeadingSlashes(suffixValue);
+
+        let combined = "";
+
+        if (prefix && suffix) {
+            combined = `${prefix}/${suffix}`;
+        } else if (prefix) {
+            combined = prefix;
+        } else if (suffix) {
+            combined = normalizeToScanRoot(suffix);
+        } else {
+            setBuilderError("Please select a prefix or enter a suffix.");
+            return;
+        }
+
+        const err = validateScanRoot(combined);
         if (err) {
             setBuilderError(err);
             return;
         }
+
         setBuilderError(null);
-        setValue(builderValue.trim());
+        setValue(sanitizePath(combined));
         setValueError(null);
     };
 
-    // Update: save value -> backend (validate value)
+    const sanitizePath = (p: string) =>
+        (p ?? "").replace(/[<>:"\\|?*]/g, "");
+
     const handleUpdate = () => {
-        const err = validateScanRoot(value);
+        const cleaned = sanitizePath(value).trim();
+
+        const err = validateScanRoot(cleaned);
         if (err) {
             setValueError(err);
             return;
         }
-        setValueError(null);
-        onSave(value.trim());
-    };
 
-    const handleKeyDownValue: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
-        if (e.key === "Enter") {
+        setValue(cleaned);      // so UI also reflects cleaned value
+        setValueError(null);
+        onSave(cleaned);
+    };
+    const handleKeyDownValue: React.KeyboardEventHandler<HTMLInputElement | HTMLTextAreaElement> = (e) => {
+        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
             e.preventDefault();
             handleUpdate();
         } else if (e.key === "Escape") {
@@ -158,45 +176,8 @@ const DownloadPathEditor: React.FC<DownloadPathEditorProps> = ({
         }
     };
 
-    // Prefix dropdown ONLY edits builderValue
-    // IMPORTANT: prefix dropdown values ALREADY include "/@scan@/" so we do NOT add it.
-    const handlePrefixChange: React.ChangeEventHandler<HTMLSelectElement> = (e) => {
-        const nextPrefixRaw = e.target.value; // expected like "/@scan@/SomePrefix" (already includes ROOT)
-        const nextPrefixBase = trimTrailingSlashes(nextPrefixRaw);
-
-        const prevPrefixBase = trimTrailingSlashes(selectedPrefix);
-        const current = (builderValue ?? "").trim();
-
-        // Preserve whatever user typed after the previous selected prefix
-        // Example:
-        //   prev = "/@scan@/A", current="/@scan@/A/sub/dir" -> tail="sub/dir"
-        //   next = "/@scan@/B" -> builder becomes "/@scan@/B/sub/dir"
-        let tail = "";
-        if (prevPrefixBase && current.startsWith(prevPrefixBase)) {
-            tail = current.slice(prevPrefixBase.length).replace(/^\/+/, "");
-        } else if (current.startsWith(ROOT_PREFIX)) {
-            // fallback: drop the first segment under /@scan@/
-            const rest = current.slice(ROOT_PREFIX.length).replace(/^\/+/, "");
-            const parts = rest.split("/").filter(Boolean);
-            parts.shift();
-            tail = parts.join("/");
-        } else {
-            tail = current.replace(/^\/+/, "");
-        }
-
-        setSelectedPrefix(nextPrefixRaw);
-
-        // If user picked "(No prefix)" just don't change builderValue
-        if (!nextPrefixBase) return;
-
-        const nextBuilder = tail ? `${nextPrefixBase}/${tail}` : nextPrefixBase;
-        setBuilderValue(nextBuilder);
-        setBuilderError(null);
-    };
-
     return (
         <div ref={containerRef} style={{ marginTop: 4 }}>
-            {/* Builder row (NO autocomplete / datalist) */}
             <div style={{ marginBottom: 8 }}>
                 <InputGroup size="sm">
                     <Form.Select
@@ -218,11 +199,11 @@ const DownloadPathEditor: React.FC<DownloadPathEditorProps> = ({
                     </Form.Select>
 
                     <FormControl
-                        value={builderValue}
-                        placeholder="Build path…"
+                        value={suffixValue}
+                        placeholder="Enter suffix…"
                         autoComplete="off"
                         onChange={(e) => {
-                            setBuilderValue(e.target.value);
+                            setSuffixValue(e.target.value);
                             if (builderError) setBuilderError(null);
                         }}
                         onKeyDown={handleKeyDownBuilder}
@@ -252,16 +233,26 @@ const DownloadPathEditor: React.FC<DownloadPathEditorProps> = ({
                 )}
             </div>
 
-            {/* Value row (has datalist autocomplete) */}
-            <InputGroup size="sm">
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <FormControl
+                    as="textarea"
+                    rows={2}
                     autoFocus
                     value={value}
                     placeholder={`Type download path… (must start with ${ROOT_PREFIX})`}
-                    list="download-path-options"
                     onChange={(e) => {
                         setValue(e.target.value);
                         if (valueError) setValueError(null);
+
+                        // auto-grow
+                        const target = e.target as HTMLTextAreaElement;
+                        target.style.height = "auto";
+                        target.style.height = `${target.scrollHeight}px`;
+                    }}
+                    onInput={(e) => {
+                        const target = e.target as HTMLTextAreaElement;
+                        target.style.height = "auto";
+                        target.style.height = `${target.scrollHeight}px`;
                     }}
                     onKeyDown={handleKeyDownValue}
                     isInvalid={!!valueError}
@@ -269,17 +260,24 @@ const DownloadPathEditor: React.FC<DownloadPathEditorProps> = ({
                         backgroundColor: isDarkMode ? "#555" : "#fff",
                         color: isDarkMode ? "#fff" : "#000",
                         borderColor: isDarkMode ? "#777" : "#ccc",
+                        resize: "none",
+                        overflow: "hidden",
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-word",
+                        minHeight: 42,
                     }}
                 />
 
-                <Button variant="success" onClick={handleUpdate}>
-                    Update
-                </Button>
+                <div style={{ display: "flex", gap: 8 }}>
+                    <Button variant="success" onClick={handleUpdate}>
+                        Update
+                    </Button>
 
-                <Button variant="outline-secondary" onClick={onCancel}>
-                    Cancel
-                </Button>
-            </InputGroup>
+                    <Button variant="outline-secondary" onClick={onCancel}>
+                        Cancel
+                    </Button>
+                </div>
+            </div>
 
             {valueError && (
                 <div

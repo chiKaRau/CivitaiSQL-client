@@ -4243,10 +4243,19 @@ const OfflineWindow: React.FC = () => {
         }
     };
 
-    const updateEntryLocal = (matcher: (e: OfflineDownloadEntry) => boolean, patch: Partial<OfflineDownloadEntry>) => {
-        setOfflineDownloadList(prev =>
-            prev.map(e => (matcher(e) ? { ...e, ...patch } : e))
-        );
+    const updateEntryLocal = (
+        matcher: (e: OfflineDownloadEntry) => boolean,
+        patch: Partial<OfflineDownloadEntry>
+    ) => {
+        const applyPatch = (list: OfflineDownloadEntry[]) =>
+            list.map((e) => (matcher(e) ? { ...e, ...patch } : e));
+
+        setOfflineDownloadList((prev) => applyPatch(prev));
+        setErrorEntries((prev) => applyPatch(prev));
+        setRecentlyDownloaded((prev) => applyPatch(prev));
+        setHoldEntries((prev) => applyPatch(prev));
+        setEarlyAccessEntries((prev) => applyPatch(prev));
+        setFailedEntries((prev) => applyPatch(prev));
     };
 
     const handleHoldChange = async (entry: OfflineDownloadEntry, nextHold: boolean) => {
