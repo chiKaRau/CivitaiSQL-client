@@ -8,7 +8,7 @@ import { updateDownloadFilePath } from '../../store/actions/chromeActions';
 
 // Icons Components
 import { AiFillFolderOpen, AiOutlineClose } from "react-icons/ai";
-import { BsCloudDownloadFill, BsDownload } from 'react-icons/bs';
+import { BsCloudDownloadFill, BsDownload, BsPencilFill } from 'react-icons/bs';
 import { FaMagnifyingGlass, FaMagnifyingGlassPlus, FaSun, FaMoon, FaArrowRight } from "react-icons/fa6"; // Added FaSun and FaMoon
 import { MdOutlineApps, MdOutlineTipsAndUpdates, MdOutlineDownloadForOffline, MdOutlineDownload, MdOutlinePendingActions, MdRefresh } from "react-icons/md";
 import { FcDownload, FcGenericSortingAsc, FcGenericSortingDesc } from "react-icons/fc";
@@ -3425,62 +3425,83 @@ const OfflineWindow: React.FC = () => {
                                     <div
                                         style={{
                                             margin: "4px 0",
-                                            whiteSpace: "normal",
-                                            wordWrap: "break-word",
                                         }}
                                     >
-                                        {(displayMode === "recentCard" || (displayMode === "errorCard")) ? (
-                                            // keep your existing clickable link for recentCard
-                                            entry.downloadFilePath ? (
-                                                <a
-                                                    href="#"
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-                                                        e.stopPropagation();
-                                                        fetchOpenModelDownloadDirectory(entry.downloadFilePath!, dispatch);
-                                                    }}
-                                                    style={{
-                                                        textDecoration: "underline",
-                                                        cursor: "pointer",
-                                                        color: isDarkMode ? "#60A5FA" : "#1D4ED8",
-                                                    }}
-                                                    aria-label="Open model download directory"
-                                                    title={entry.downloadFilePath}
-                                                >
-                                                    {entry.downloadFilePath}
-                                                </a>
-                                            ) : (
-                                                "N/A"
-                                            )
-                                        ) : editingPathId === entry.civitaiVersionID ? (
-                                            // ⬇️ ONLY this card shows the editor when its ID matches
-                                            <DownloadPathEditor
-                                                initialValue={entry.downloadFilePath ?? ""}
-                                                isDarkMode={isDarkMode}
-                                                onSave={(nextPath: any) => handleDownloadPathSave(entry, nextPath)}
-                                                onCancel={() => setEditingPathId(null)}
-                                            />
+                                        {editingPathId === entry.civitaiVersionID ? (
+                                            <div>
+                                                <strong>Download Path:</strong>
+                                                <div style={{ marginTop: 6 }}>
+                                                    <DownloadPathEditor
+                                                        initialValue={entry.downloadFilePath ?? ""}
+                                                        isDarkMode={isDarkMode}
+                                                        onSave={(nextPath: any) => handleDownloadPathSave(entry, nextPath)}
+                                                        onCancel={() => setEditingPathId(null)}
+                                                    />
+                                                </div>
+                                            </div>
                                         ) : (
-                                            // Normal display; double-click to start editing for THIS card only
-                                            <>
-                                                <strong>Download Path:</strong>{" "}
+                                            <div
+                                                style={{
+                                                    display: "flex",
+                                                    alignItems: "flex-start",
+                                                    gap: 8,
+                                                }}
+                                            >
+                                                <strong style={{ flexShrink: 0 }}>Download Path:</strong>
+
                                                 <span
                                                     data-no-select="true"
-                                                    onDoubleClick={(e) => {
+                                                    onClick={(e) => {
                                                         e.stopPropagation();
-                                                        setEditingPathId(entry.civitaiVersionID);
+                                                        if (entry.downloadFilePath) {
+                                                            fetchOpenModelDownloadDirectory(entry.downloadFilePath, dispatch);
+                                                        }
                                                     }}
                                                     style={{
-                                                        cursor: "pointer",
-                                                        textDecoration: "underline dotted",
+                                                        flex: 1,
+                                                        cursor: entry.downloadFilePath ? "pointer" : "default",
+                                                        textDecoration: entry.downloadFilePath ? "underline" : "none",
+                                                        color: entry.downloadFilePath
+                                                            ? (isDarkMode ? "#60A5FA" : "#1D4ED8")
+                                                            : (isDarkMode ? "#fff" : "#000"),
                                                         whiteSpace: "normal",
-                                                        wordWrap: "break-word",
+                                                        wordBreak: "break-word",
+                                                        lineHeight: 1.35,
                                                     }}
-                                                    title="Double-click to edit download path"
+                                                    title={entry.downloadFilePath ? "Click to open model download directory" : "N/A"}
                                                 >
                                                     {entry.downloadFilePath ?? "N/A"}
                                                 </span>
-                                            </>
+
+                                                <button
+                                                    type="button"
+                                                    data-no-select="true"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setEditingPathId(entry.civitaiVersionID);
+                                                    }}
+                                                    title="Edit download path"
+                                                    aria-label="Edit download path"
+                                                    style={{
+                                                        display: "inline-flex",
+                                                        alignItems: "center",
+                                                        justifyContent: "center",
+                                                        width: 28,
+                                                        height: 28,
+                                                        borderRadius: 8,
+                                                        border: isDarkMode
+                                                            ? "1px solid rgba(255,255,255,0.18)"
+                                                            : "1px solid rgba(0,0,0,0.18)",
+                                                        background: "transparent",
+                                                        color: isDarkMode ? "#fff" : "#000",
+                                                        cursor: "pointer",
+                                                        padding: 0,
+                                                        flexShrink: 0,
+                                                    }}
+                                                >
+                                                    <BsPencilFill size={13} />
+                                                </button>
+                                            </div>
                                         )}
                                     </div>
 
