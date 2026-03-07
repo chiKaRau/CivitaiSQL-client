@@ -25,6 +25,7 @@ const DownloadPathEditor: React.FC<DownloadPathEditorProps> = ({
     const [suffixValue, setSuffixValue] = useState("");
 
     const [suggestions, setSuggestions] = useState<string[]>([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
     const [prefixsList, setPrefixsList] = useState<{
         id: number;
         prefixName: string;
@@ -63,6 +64,14 @@ const DownloadPathEditor: React.FC<DownloadPathEditorProps> = ({
         if (!trimmed.startsWith(ROOT_PREFIX)) return `Path must start with "${ROOT_PREFIX}"`;
         return null;
     };
+
+    const filteredSuggestions = suggestions
+        .filter((s) => {
+            const q = value.trim().toLowerCase();
+            if (!q) return false;
+            return s.toLowerCase().includes(q);
+        })
+        .slice(0, 8);
 
     useEffect(() => {
         const load = async () => {
@@ -177,7 +186,10 @@ const DownloadPathEditor: React.FC<DownloadPathEditorProps> = ({
     };
 
     return (
-        <div ref={containerRef} style={{ marginTop: 4 }}>
+        <div
+            ref={containerRef}
+            style={{ marginTop: 4, position: "relative" }}
+        >
             <div style={{ marginBottom: 8 }}>
                 <InputGroup size="sm">
                     <Form.Select
@@ -240,11 +252,13 @@ const DownloadPathEditor: React.FC<DownloadPathEditorProps> = ({
                     autoFocus
                     value={value}
                     placeholder={`Type download path… (must start with ${ROOT_PREFIX})`}
+                    onFocus={() => setShowSuggestions(true)}
                     onChange={(e) => {
                         setValue(e.target.value);
+                        setShowSuggestions(true);
+
                         if (valueError) setValueError(null);
 
-                        // auto-grow
                         const target = e.target as HTMLTextAreaElement;
                         target.style.height = "auto";
                         target.style.height = `${target.scrollHeight}px`;
@@ -268,6 +282,59 @@ const DownloadPathEditor: React.FC<DownloadPathEditorProps> = ({
                     }}
                 />
 
+                {showSuggestions && filteredSuggestions.length > 0 && (
+                    <div
+                        data-no-select="true"
+                        onMouseDown={(e) => {
+                            e.stopPropagation();
+                        }}
+                        style={{
+                            position: "absolute",
+                            left: 0,
+                            right: 0,
+                            top: "100%",
+                            zIndex: 9999,
+                            marginTop: 4,
+                            maxHeight: 220,
+                            overflowY: "auto",
+                            borderRadius: 8,
+                            border: `1px solid ${isDarkMode ? "#666" : "#ccc"}`,
+                            backgroundColor: isDarkMode ? "#2b2b2b" : "#fff",
+                            boxShadow: "0 6px 18px rgba(0,0,0,0.18)",
+                        }}
+                    >
+                        {filteredSuggestions.map((s) => (
+                            <button
+                                key={s}
+                                type="button"
+                                data-no-select="true"
+                                onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setValue(s);
+                                    setShowSuggestions(false);
+                                    if (valueError) setValueError(null);
+                                }}
+                                style={{
+                                    display: "block",
+                                    width: "100%",
+                                    textAlign: "left",
+                                    padding: "8px 10px",
+                                    border: "none",
+                                    background: "transparent",
+                                    color: isDarkMode ? "#fff" : "#000",
+                                    cursor: "pointer",
+                                    whiteSpace: "normal",
+                                    wordBreak: "break-word",
+                                }}
+                                title={s}
+                            >
+                                {s}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
                 <div style={{ display: "flex", gap: 8 }}>
                     <Button variant="success" onClick={handleUpdate}>
                         Update
@@ -290,12 +357,6 @@ const DownloadPathEditor: React.FC<DownloadPathEditorProps> = ({
                     {valueError}
                 </div>
             )}
-
-            <datalist id="download-path-options">
-                {suggestions.map((s) => (
-                    <option key={s} value={s} />
-                ))}
-            </datalist>
         </div>
     );
 };
