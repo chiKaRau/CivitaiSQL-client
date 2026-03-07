@@ -1099,6 +1099,7 @@ export const fetchBulkPatchOfflineDownloadList = async (
         hold?: boolean | null;
         downloadPriority?: number | null;
         downloadFilePath?: string | null;
+        isError?: boolean | null;
     },
     dispatch: any
 ) => {
@@ -1107,9 +1108,10 @@ export const fetchBulkPatchOfflineDownloadList = async (
 
         // Optional: prevent sending an empty patch (backend also rejects this)
         const hasAnyPatch =
-            patch?.hold !== undefined && patch?.hold !== null ||
-            patch?.downloadPriority !== undefined && patch?.downloadPriority !== null ||
-            patch?.downloadFilePath !== undefined && patch?.downloadFilePath !== null;
+            (patch?.hold !== undefined && patch?.hold !== null) ||
+            (patch?.downloadPriority !== undefined && patch?.downloadPriority !== null) ||
+            (patch?.downloadFilePath !== undefined && patch?.downloadFilePath !== null) ||
+            (patch?.isError !== undefined && patch?.isError !== null);
 
         console.log(hasAnyPatch)
 
@@ -1129,11 +1131,10 @@ export const fetchBulkPatchOfflineDownloadList = async (
             {
                 targets,
                 patch: {
-                    // Only include the fields you want to update.
-                    // If a field is null/undefined, backend will keep old value.
                     hold: patch.hold ?? null,
                     downloadPriority: patch.downloadPriority ?? null,
                     downloadFilePath: patch.downloadFilePath ?? null,
+                    isError: patch.isError ?? null,
                 },
             }
         );

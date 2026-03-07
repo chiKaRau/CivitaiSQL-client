@@ -9,7 +9,7 @@ import { updateDownloadFilePath } from '../../store/actions/chromeActions';
 // Icons Components
 import { AiFillFolderOpen, AiOutlineClose } from "react-icons/ai";
 import { BsCloudDownloadFill, BsDownload, BsPencilFill } from 'react-icons/bs';
-import { FaMagnifyingGlass, FaMagnifyingGlassPlus, FaSun, FaMoon, FaArrowRight } from "react-icons/fa6"; // Added FaSun and FaMoon
+import { FaMagnifyingGlass, FaMagnifyingGlassPlus, FaSun, FaMoon, FaArrowRight, FaCheck } from "react-icons/fa6"; // Added FaSun and FaMoon
 import { MdOutlineApps, MdOutlineTipsAndUpdates, MdOutlineDownloadForOffline, MdOutlineDownload, MdOutlinePendingActions, MdRefresh } from "react-icons/md";
 import { FcDownload, FcGenericSortingAsc, FcGenericSortingDesc } from "react-icons/fc";
 import { TfiCheckBox } from "react-icons/tfi";
@@ -225,6 +225,7 @@ interface BigCardModeProps {
     canChangeSelection: boolean;
     displayMode?: string;
     onErrorCardDownload?: (entry: OfflineDownloadEntry, method: 'server' | 'browser') => void;
+    onToggleIsError?: (entry: OfflineDownloadEntry) => void;
 }
 
 
@@ -309,6 +310,7 @@ const ALL_PATCH_FIELDS = [
     { key: "downloadFilePath", label: "Modify downloadFilePath" },
     { key: "hold", label: "Hold" },
     { key: "downloadPriority", label: "Download Priority" },
+    { key: "isError", label: "Is Error" },
 ];
 
 const AI_BATCH_SIZE = 10;
@@ -377,6 +379,7 @@ const OfflineWindow: React.FC = () => {
     const [selectedPatchFields, setSelectedPatchFields] = useState(new Set());
     const [bulkHold, setBulkHold] = useState(true);
     const [bulkDownloadPriority, setBulkDownloadPriority] = useState(5); // default 5 (1~10)
+    const [bulkIsError, setBulkIsError] = useState(true);
 
     const [batchResults, setBatchResults] = React.useState<BatchResult[]>([]);
 
@@ -534,12 +537,11 @@ const OfflineWindow: React.FC = () => {
         const patch = {} as Parameters<typeof fetchBulkPatchOfflineDownloadList>[1];
 
         if (selectedPatchFields.has("hold")) {
-            patch.hold = bulkHold;                 // boolean
+            patch.hold = bulkHold;
         }
         if (selectedPatchFields.has("downloadPriority")) {
-            patch.downloadPriority = bulkDownloadPriority; // number 1~10
+            patch.downloadPriority = bulkDownloadPriority;
         }
-
         if (selectedPatchFields.has("downloadFilePath")) {
             const v = (modify_downloadFilePath || "").trim();
             if (!v) {
@@ -547,6 +549,9 @@ const OfflineWindow: React.FC = () => {
                 return;
             }
             patch.downloadFilePath = v;
+        }
+        if (selectedPatchFields.has("isError")) {
+            patch.isError = bulkIsError;
         }
 
         setIsPatching(true);
@@ -560,6 +565,7 @@ const OfflineWindow: React.FC = () => {
             // 1) Reset bulk controls
             setBulkHold(true);                 // change to false if your "default" is false
             setBulkDownloadPriority(5);
+            setBulkIsError(true);
 
             // reset modify_downloadFilePath to default
             dispatch(updateDownloadFilePath("/@scan@/ACG/Pending/"));
@@ -3020,7 +3026,8 @@ const OfflineWindow: React.FC = () => {
         activePreviewId,
         displayMode,
         onErrorCardDownload,
-        canChangeSelection
+        canChangeSelection,
+        onToggleIsError
     }) => {
 
         const [errorDownloadMethod, setErrorDownloadMethod] = React.useState<'server' | 'browser'>('browser');
@@ -3725,6 +3732,36 @@ const OfflineWindow: React.FC = () => {
                                                 })()}
                                             </p>
 
+                                            <p style={{ margin: '4px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <strong>isError:</strong>{' '}
+                                                <button
+                                                    type="button"
+                                                    data-no-select="true"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+
+                                                        const ok = window.confirm(
+                                                            `Are you sure you want to set isError to ${entry.isError ? "false" : "true"} for this entry?`
+                                                        );
+                                                        if (!ok) return;
+
+                                                        onToggleIsError?.(entry);
+                                                    }}
+                                                    title={`Click to set isError to ${entry.isError ? "false" : "true"}`}
+                                                    style={{
+                                                        border: "none",
+                                                        background: "transparent",
+                                                        padding: 0,
+                                                        cursor: "pointer",
+                                                        color: entry.isError ? "#22c55e" : "#9ca3af",
+                                                        display: "inline-flex",
+                                                        alignItems: "center",
+                                                        justifyContent: "center",
+                                                    }}
+                                                >
+                                                    {entry.isError ? <FaCheck size={16} /> : <FaTimes size={16} />}
+                                                </button>
+                                            </p>
                                         </>
                                     )}
                                 </div>
@@ -4275,6 +4312,38 @@ const OfflineWindow: React.FC = () => {
             // revert on failure
             updateEntryLocal(match, { hold: prevHold });
             alert(`Failed to update hold: ${err?.message || 'Unknown error'}`);
+        }
+    };
+
+    const handleToggleIsError = async (entry: OfflineDownloadEntry) => {
+        const nextIsError = !Boolean(entry.isError);
+
+        const match = (e: OfflineDownloadEntry) =>
+            e.civitaiVersionID === entry.civitaiVersionID &&
+            e.civitaiModelID === entry.civitaiModelID;
+
+        const prevIsError = Boolean(entry.isError);
+
+        // optimistic update
+        updateEntryLocal(match, { isError: nextIsError });
+
+        try {
+            await fetchBulkPatchOfflineDownloadList(
+                [
+                    {
+                        civitaiModelID: entry.civitaiModelID,
+                        civitaiVersionID: entry.civitaiVersionID,
+                    },
+                ],
+                {
+                    isError: nextIsError,
+                } as any,
+                dispatch
+            );
+        } catch (err: any) {
+            // revert on failure
+            updateEntryLocal(match, { isError: prevIsError });
+            alert(`Failed to update isError: ${err?.message || "Unknown error"}`);
         }
     };
 
@@ -5090,57 +5159,6 @@ const OfflineWindow: React.FC = () => {
                                             </div>
                                         )}
 
-                                        {/* hold */}
-                                        {selectedPatchFields.has("hold") && (
-                                            <div
-                                                style={{
-                                                    border: `1px solid ${isDarkMode ? "#444" : "#ddd"}`,
-                                                    borderRadius: 6,
-                                                    padding: 8,
-                                                    marginBottom: 8,
-                                                    backgroundColor: isDarkMode ? "#2a2a2a" : "#fafafa",
-                                                    color: isDarkMode ? "#fff" : "#000",
-                                                }}
-                                            >
-                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                                                    <div style={{ fontWeight: 600 }}>Hold</div>
-
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => removePatchField("hold")}
-                                                        style={{
-                                                            cursor: "pointer",
-                                                            width: 28,
-                                                            height: 28,
-                                                            borderRadius: 8,
-                                                            border: `1px solid ${isDarkMode ? "#555" : "#ccc"}`,
-                                                            backgroundColor: isDarkMode ? "#333" : "#f6f6f6",
-                                                            color: isDarkMode ? "#fff" : "#111",
-                                                            display: "flex",
-                                                            alignItems: "center",
-                                                            justifyContent: "center",
-                                                            padding: 0,
-                                                        }}
-                                                        aria-label="Remove hold"
-                                                        title="Remove"
-                                                    >
-                                                        <AiOutlineClose />
-                                                    </button>
-                                                </div>
-
-                                                <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={bulkHold}
-                                                        onChange={(e) => setBulkHold(e.target.checked)}
-                                                    />
-                                                    <span style={{ opacity: isDarkMode ? 0.9 : 0.85 }}>
-                                                        Set hold = <b>{bulkHold ? "true" : "false"}</b>
-                                                    </span>
-                                                </label>
-                                            </div>
-                                        )}
-
                                         {/* downloadPriority */}
                                         {selectedPatchFields.has("downloadPriority") && (
                                             <div
@@ -5202,6 +5220,110 @@ const OfflineWindow: React.FC = () => {
                                                 </div>
                                             </div>
                                         )}
+
+                                        {/* hold */}
+                                        {selectedPatchFields.has("hold") && (
+                                            <div
+                                                style={{
+                                                    border: `1px solid ${isDarkMode ? "#444" : "#ddd"}`,
+                                                    borderRadius: 6,
+                                                    padding: 8,
+                                                    marginBottom: 8,
+                                                    backgroundColor: isDarkMode ? "#2a2a2a" : "#fafafa",
+                                                    color: isDarkMode ? "#fff" : "#000",
+                                                }}
+                                            >
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                                                    <div style={{ fontWeight: 600 }}>Hold</div>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removePatchField("hold")}
+                                                        style={{
+                                                            cursor: "pointer",
+                                                            width: 28,
+                                                            height: 28,
+                                                            borderRadius: 8,
+                                                            border: `1px solid ${isDarkMode ? "#555" : "#ccc"}`,
+                                                            backgroundColor: isDarkMode ? "#333" : "#f6f6f6",
+                                                            color: isDarkMode ? "#fff" : "#111",
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            justifyContent: "center",
+                                                            padding: 0,
+                                                        }}
+                                                        aria-label="Remove hold"
+                                                        title="Remove"
+                                                    >
+                                                        <AiOutlineClose />
+                                                    </button>
+                                                </div>
+
+                                                <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={bulkHold}
+                                                        onChange={(e) => setBulkHold(e.target.checked)}
+                                                    />
+                                                    <span style={{ opacity: isDarkMode ? 0.9 : 0.85 }}>
+                                                        Set hold = <b>{bulkHold ? "true" : "false"}</b>
+                                                    </span>
+                                                </label>
+                                            </div>
+                                        )}
+
+
+                                        {selectedPatchFields.has("isError") && (
+                                            <div
+                                                style={{
+                                                    border: `1px solid ${isDarkMode ? "#444" : "#ddd"}`,
+                                                    borderRadius: 6,
+                                                    padding: 8,
+                                                    marginBottom: 8,
+                                                    backgroundColor: isDarkMode ? "#2a2a2a" : "#fafafa",
+                                                    color: isDarkMode ? "#fff" : "#000",
+                                                }}
+                                            >
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                                                    <div style={{ fontWeight: 600 }}>Is Error</div>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removePatchField("isError")}
+                                                        style={{
+                                                            cursor: "pointer",
+                                                            width: 28,
+                                                            height: 28,
+                                                            borderRadius: 8,
+                                                            border: `1px solid ${isDarkMode ? "#555" : "#ccc"}`,
+                                                            backgroundColor: isDarkMode ? "#333" : "#f6f6f6",
+                                                            color: isDarkMode ? "#fff" : "#111",
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            justifyContent: "center",
+                                                            padding: 0,
+                                                        }}
+                                                        aria-label="Remove isError"
+                                                        title="Remove"
+                                                    >
+                                                        <AiOutlineClose />
+                                                    </button>
+                                                </div>
+
+                                                <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={bulkIsError}
+                                                        onChange={(e) => setBulkIsError(e.target.checked)}
+                                                    />
+                                                    <span style={{ opacity: isDarkMode ? 0.9 : 0.85 }}>
+                                                        Set isError = <b>{bulkIsError ? "true" : "false"}</b>
+                                                    </span>
+                                                </label>
+                                            </div>
+                                        )}
+
+
 
                                         <button
                                             onClick={handleBulkPatchSelected}
@@ -5807,6 +5929,7 @@ const OfflineWindow: React.FC = () => {
                                         onToggleOverlay={toggleLeftOverlay}
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
                                         onRefreshRecord={handleRefreshOneRecord}
+                                        onToggleIsError={handleToggleIsError}
                                         canChangeSelection={canChangeSelection}
                                     />
                                 )}
@@ -5851,6 +5974,7 @@ const OfflineWindow: React.FC = () => {
                                         showGalleries={false}
                                         onToggleOverlay={toggleLeftOverlay}
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
+                                        onToggleIsError={handleToggleIsError}
                                         canChangeSelection={canChangeSelection}
                                     />
                                 )}
@@ -5867,6 +5991,7 @@ const OfflineWindow: React.FC = () => {
                                         onToggleOverlay={toggleLeftOverlay}
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
                                         onRefreshRecord={handleRefreshOneRecord}
+                                        onToggleIsError={handleToggleIsError}
                                         canChangeSelection={canChangeSelection}
                                     />
                                 )}
@@ -5883,6 +6008,7 @@ const OfflineWindow: React.FC = () => {
                                         onToggleOverlay={toggleLeftOverlay}
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
                                         onRefreshRecord={handleRefreshOneRecord}
+                                        onToggleIsError={handleToggleIsError}
                                         canChangeSelection={canChangeSelection}
                                     />
                                 )}
@@ -5891,7 +6017,7 @@ const OfflineWindow: React.FC = () => {
                                     <BigCardMode
                                         filteredDownloadList={errorEntries}
                                         isDarkMode={isDarkMode}
-                                        isModifyMode={false} // view-only, same as hold / early access
+                                        isModifyMode={false}
                                         selectedIds={selectedIds}
                                         toggleSelect={toggleSelect}
                                         handleSelectAll={handleSelectAll}
@@ -5900,6 +6026,7 @@ const OfflineWindow: React.FC = () => {
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
                                         displayMode="errorCard"
                                         onErrorCardDownload={handleErrorCardDownload}
+                                        onToggleIsError={handleToggleIsError}
                                         canChangeSelection={canChangeSelection}
                                     />
                                 )}
