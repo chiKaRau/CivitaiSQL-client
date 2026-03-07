@@ -239,13 +239,13 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
             console.log(response);
 
             setModelData(data);
-            const firstVersion = data.modelVersions[0];
+            const firstVersion = data?.modelVersions?.[0] || null;
             setSelectedVersion(firstVersion); // Select the first version by default
 
-            const imagesArray = response?.data?.modelVersions?.map((version: any) => ({
-                id: version.id,
-                baseModel: version.baseModel || 'No Base Model',
-                images: version.images.map((image: any) => image.url)
+            const imagesArray = (response?.data?.modelVersions || []).map((version: any) => ({
+                id: version?.id,
+                baseModel: version?.baseModel || 'No Base Model',
+                images: (version?.images || []).map((image: any) => image?.url).filter(Boolean)
             }));
 
             // Get version IDs to check with the API
@@ -682,7 +682,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
 
 
                             {/* Safer carousel overlay */}
-                            {showCarousel && selectedVersion && selectedVersion.images.length > 0 && (
+                            {showCarousel && selectedVersion && Array.isArray(selectedVersion.images) && selectedVersion.images.length > 0 && (
                                 <div
                                     style={{
                                         position: 'absolute',
@@ -696,7 +696,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
                                         zIndex: 9999,
                                     }}
                                 >
-                                    <Carousel images={selectedVersion.images.map((image) => image.url)} />
+                                    <Carousel images={(selectedVersion.images || []).map((image) => image?.url).filter(Boolean)} />
                                 </div>
                             )}
                         </div>
@@ -850,7 +850,7 @@ interface CarouselProps {
     images: string[];
 }
 
-const Carousel: React.FC<CarouselProps> = ({ images }) => {
+const Carousel: React.FC<CarouselProps> = ({ images = [] }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
 
     const handlePrev = () => {

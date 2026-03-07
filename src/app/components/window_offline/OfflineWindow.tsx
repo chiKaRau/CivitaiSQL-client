@@ -4673,6 +4673,10 @@ const OfflineWindow: React.FC = () => {
                                     variant="primary"
                                     disabled={!isPagedMode || isLoading}
                                     onClick={() => {
+
+                                        setSelectedIds(new Set());
+                                        setSelectedSuggestedPathByVid({});
+
                                         setAppliedQuery({
                                             filterText: filterText.trim(),
                                             filterCondition,
