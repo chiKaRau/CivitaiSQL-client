@@ -715,7 +715,8 @@ export const fetchOfflineDownloadList = async (dispatch: any) => {
 export const fetchModelOfflineDownloadHistoryList = async (
     dispatch: any,
     page: number = 0,
-    size: number = 100
+    size: number = 100,
+    createdDate?: string
 ) => {
     try {
         dispatch(clearError());
@@ -723,7 +724,7 @@ export const fetchModelOfflineDownloadHistoryList = async (
         const response = await axios.get(
             `${config.domain}/api/get_model_offline_download_history_list`,
             {
-                params: { page, size },
+                params: { page, size, createdDate },
             }
         );
 
@@ -738,6 +739,36 @@ export const fetchModelOfflineDownloadHistoryList = async (
             error.message
         );
         dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+};
+
+export const fetchModelOfflineDownloadHistoryAvailableDates = async (
+    dispatch: any,
+    year: number,
+    month: number
+) => {
+    try {
+        dispatch(clearError());
+
+        const response = await axios.get(
+            `${config.domain}/api/get_model_offline_download_history_available_dates`,
+            {
+                params: { year, month },
+            }
+        );
+
+        if (response.status >= 200 && response.status < 300) {
+            return response.data?.payload;
+        } else {
+            throw new Error("Unexpected response status: " + response.status);
+        }
+    } catch (error: any) {
+        console.error(
+            "Error during model offline download history available dates retrieval:",
+            error.message
+        );
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+        return [];
     }
 };
 

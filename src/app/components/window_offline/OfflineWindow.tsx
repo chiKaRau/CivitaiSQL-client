@@ -51,7 +51,8 @@ import {
     fetchRefreshOfflineDownloadRecord,
     fetchAddRecordToDatabaseInCustom,
     fetchDownloadFilesByServer_v2ForCustom,
-    fetchModelOfflineDownloadHistoryList
+    fetchModelOfflineDownloadHistoryList,
+    fetchModelOfflineDownloadHistoryAvailableDates
 } from "../../api/civitaiSQL_api"
 
 import { makeOfflineWindowStyles } from "./OfflineWindow.styles";
@@ -85,6 +86,7 @@ import type {
     OfflineDownloadEntry,
     ModelOfflineDownloadHistoryEntry,
 } from './OfflineWindow.types';
+import HistoryDatePicker from '../window/HistoryDatePicker';
 
 const PENDING_PATH_RE = /[/\\]@scan@[/\\]acg[/\\]pending([/\\]|$)/i;
 
@@ -324,6 +326,15 @@ const OfflineWindow: React.FC = () => {
 
     const [isBulkUpdatingDownloadPaths, setIsBulkUpdatingDownloadPaths] = React.useState(false);
 
+    const [historySelectedDate, setHistorySelectedDate] = useState<string>(() =>
+        toLocalYmd(new Date())
+    );
+
+    // optional: dates that have records, for calendar highlight
+    const [historyAvailableDates, setHistoryAvailableDates] = useState<string[]>([]);
+
+    const [historyCalendarMonth, setHistoryCalendarMonth] = useState<Date>(() => new Date());
+
     // near the top of OfflineWindow.tsx (after DisplayMode type)
     const DOWNLOAD_NOW_ALLOWED_MODES = new Set<DisplayMode>([
         "table",
@@ -456,7 +467,8 @@ const OfflineWindow: React.FC = () => {
                 const payload = await fetchModelOfflineDownloadHistoryList(
                     dispatch,
                     historyPage - 1,
-                    historyItemsPerPage
+                    historyItemsPerPage,
+                    historySelectedDate
                 );
 
                 if (!cancelled) {
@@ -486,7 +498,54 @@ const OfflineWindow: React.FC = () => {
         return () => {
             cancelled = true;
         };
-    }, [displayMode, historyPage, historyItemsPerPage, historyReloadToken, dispatch]);
+    }, [
+        displayMode,
+        historyPage,
+        historyItemsPerPage,
+        historyReloadToken,
+        historySelectedDate,
+        dispatch
+    ]);
+
+    useEffect(() => {
+        setHistoryPage(1);
+    }, [historySelectedDate]);
+
+    useEffect(() => {
+        const loadHistoryAvailableDates = async () => {
+            if (displayMode !== "historyTable") return;
+
+            const year = historyCalendarMonth.getFullYear();
+            const month = historyCalendarMonth.getMonth() + 1;
+
+            const dates = await fetchModelOfflineDownloadHistoryAvailableDates(
+                dispatch,
+                year,
+                month
+            );
+
+            setHistoryAvailableDates(Array.isArray(dates) ? dates : []);
+        };
+
+        loadHistoryAvailableDates();
+    }, [displayMode, historyCalendarMonth, dispatch]);
+
+    function toLocalYmd(d: Date) {
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
+        return `${yyyy}-${mm}-${dd}`;
+    }
+
+    function parseLocalYmd(s: string): Date | null {
+        if (!s) return null;
+
+        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return null;
+
+        const [, y, mo, d] = m;
+        return new Date(Number(y), Number(mo) - 1, Number(d));
+    }
 
     const availablePatchFields = ALL_PATCH_FIELDS.filter(f => !selectedPatchFields.has(f.key));
 
@@ -4144,6 +4203,16 @@ const OfflineWindow: React.FC = () => {
                         }
                     </div>
 
+                    {displayMode === "historyTable" && (
+                        <HistoryDatePicker
+                            selectedDate={historySelectedDate}
+                            onChangeDate={setHistorySelectedDate}
+                            availableDates={historyAvailableDates}
+                            isDarkMode={isDarkMode}
+                            onMonthChange={setHistoryCalendarMonth}
+                        />
+                    )}
+                    
                     {/* Download or Modify Progress Indicators */}
                     {uiMode !== 'idle' && (
                         <div

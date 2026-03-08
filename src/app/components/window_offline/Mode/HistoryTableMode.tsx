@@ -1,6 +1,4 @@
-// HistoryTableMode.tsx
-
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { ColDef } from 'ag-grid-community';
 
@@ -38,17 +36,14 @@ function formatHistoryDateTime(value?: string) {
     return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
 }
 
-const defaultColDef: ColDef = {
-    flex: 1,
-    minWidth: 150,
-    resizable: true,
-};
-
 const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
     entries,
+    isDarkMode,
     agGridStyle,
     currentTheme,
 }) => {
+    const [hoveredImageUrl, setHoveredImageUrl] = useState<string | null>(null);
+
     const cellStyle = {
         color: currentTheme.rowFontColor,
     };
@@ -71,6 +66,20 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
 
     const columnDefs: ColDef[] = [
         {
+            headerName: "#",
+            width: 80,
+            sortable: false,
+            filter: false,
+            valueGetter: (params: any) => {
+                return (params.node?.rowIndex ?? 0) + 1;
+            },
+            cellStyle: {
+                ...cellStyle,
+                textAlign: "center",
+                fontWeight: 700,
+            },
+        },
+        {
             headerName: "Image",
             field: "imageUrl",
             width: 130,
@@ -84,6 +93,8 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
                     <img
                         src={url}
                         alt="History"
+                        onMouseEnter={() => setHoveredImageUrl(url)}
+                        onMouseLeave={() => setHoveredImageUrl((prev) => (prev === url ? null : prev))}
                         style={{
                             width: "80px",
                             height: "80px",
@@ -91,6 +102,7 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
                             borderRadius: "4px",
                             display: "block",
                             margin: "0 auto",
+                            cursor: "zoom-in",
                         }}
                     />
                 );
@@ -147,19 +159,58 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
     }, [entries]);
 
     return (
-        <div className="ag-theme-alpine" style={agGridStyle}>
-            <AgGridReact
-                rowData={rowData}
-                columnDefs={columnDefs}
-                defaultColDef={defaultColDef}
-                getRowStyle={getRowStyle}
-                headerHeight={40}
-                rowHeight={95}
-                onGridReady={(params) => {
-                    params.api.sizeColumnsToFit();
-                }}
-            />
-        </div>
+        <>
+            <div className="ag-theme-alpine" style={agGridStyle}>
+                <AgGridReact
+                    rowData={rowData}
+                    columnDefs={columnDefs}
+                    defaultColDef={defaultColDef}
+                    getRowStyle={getRowStyle}
+                    headerHeight={40}
+                    rowHeight={95}
+                    onGridReady={(params) => {
+                        params.api.sizeColumnsToFit();
+                    }}
+                />
+            </div>
+
+            {hoveredImageUrl && (
+                <div
+                    onMouseEnter={() => setHoveredImageUrl(hoveredImageUrl)}
+                    onMouseLeave={() => setHoveredImageUrl(null)}
+                    style={{
+                        position: "fixed",
+                        top: "50%",
+                        left: "50%",
+                        transform: "translate(-50%, -50%)",
+                        zIndex: 4000,
+                        backgroundColor: isDarkMode ? "rgba(17,24,39,0.96)" : "rgba(255,255,255,0.96)",
+                        border: `1px solid ${isDarkMode ? "#4b5563" : "#d1d5db"}`,
+                        borderRadius: "12px",
+                        padding: "12px",
+                        boxShadow: "0 12px 30px rgba(0,0,0,0.35)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        maxWidth: "80vw",
+                        maxHeight: "80vh",
+                        pointerEvents: "auto",
+                    }}
+                >
+                    <img
+                        src={hoveredImageUrl}
+                        alt="Preview"
+                        style={{
+                            maxWidth: "70vw",
+                            maxHeight: "70vh",
+                            objectFit: "contain",
+                            borderRadius: "8px",
+                            display: "block",
+                        }}
+                    />
+                </div>
+            )}
+        </>
     );
 };
 
