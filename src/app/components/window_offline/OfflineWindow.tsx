@@ -50,7 +50,8 @@ import {
     fetchBulkUpdateDownloadFilePath,
     fetchRefreshOfflineDownloadRecord,
     fetchAddRecordToDatabaseInCustom,
-    fetchDownloadFilesByServer_v2ForCustom
+    fetchDownloadFilesByServer_v2ForCustom,
+    fetchModelOfflineDownloadHistoryList
 } from "../../api/civitaiSQL_api"
 
 import { makeOfflineWindowStyles } from "./OfflineWindow.styles";
@@ -85,7 +86,8 @@ type DisplayMode = 'table'
     | 'updateCard'
     | 'recentCard'
     | 'holdCard'
-    | 'earlyAccessCard';
+    | 'earlyAccessCard'
+    | 'historyTable';
 
 type BatchStatus = "running" | "success" | "fail";
 
@@ -228,6 +230,13 @@ interface BigCardModeProps {
     onToggleIsError?: (entry: OfflineDownloadEntry) => void;
 }
 
+interface ModelOfflineDownloadHistoryEntry {
+    civitaiModelID: number;
+    civitaiVersionID: number;
+    imageUrl: string;
+    createdAt: string;
+    updatedAt: string;
+}
 
 // **1. SelectAllHeaderCheckbox Component**
 interface SelectAllHeaderCheckboxProps {
@@ -343,6 +352,7 @@ const OfflineWindow: React.FC = () => {
         | 'recentCard'
         | 'holdCard'
         | 'earlyAccessCard'
+        | 'historyTable'
     >('bigCard');
 
     const [filtersReady, setFiltersReady] = useState(false);
@@ -419,6 +429,9 @@ const OfflineWindow: React.FC = () => {
     );
     const [aiSuggestRunStatus, setAiSuggestRunStatus] = useState<null | "running" | "success" | "fail">(null);
     const [aiSuggestRunMsg, setAiSuggestRunMsg] = useState("");
+
+    const [modelOfflineDownloadHistoryList, setModelOfflineDownloadHistoryList] = useState<ModelOfflineDownloadHistoryEntry[]>([]);
+    const [historyPage, setHistoryPage] = useState(0);
 
     // NEW: sort direction for date (server-side)
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc'); // if you hate the type, you can drop it
@@ -607,6 +620,54 @@ const OfflineWindow: React.FC = () => {
             return next;
         });
     };
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadHistoryList = async () => {
+            if (displayMode !== "historyTable") return;
+
+            try {
+                setUiMode("paging");
+                setIsLoading(true);
+
+                const payload = await fetchModelOfflineDownloadHistoryList(dispatch, historyPage);
+
+                if (!cancelled) {
+                    setModelOfflineDownloadHistoryList(
+                        Array.isArray(payload) ? payload as ModelOfflineDownloadHistoryEntry[] : []
+                    );
+                }
+            } catch (err: any) {
+                console.error("History list fetch failed:", err?.message || err);
+                if (!cancelled) {
+                    setModelOfflineDownloadHistoryList([]);
+                }
+            } finally {
+                if (!cancelled) {
+                    setIsLoading(false);
+                    setUiMode("idle");
+                }
+            }
+        };
+
+        loadHistoryList();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [displayMode, historyPage, dispatch]);
+
+    function formatHistoryDateTime(value?: string) {
+        if (!value) return "N/A";
+
+        const normalized = value.includes("T") ? value : value.replace(" ", "T");
+        const d = new Date(normalized);
+
+        if (Number.isNaN(d.getTime())) return value;
+
+        return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+    }
 
     const availablePatchFields = ALL_PATCH_FIELDS.filter(f => !selectedPatchFields.has(f.key));
 
@@ -835,11 +896,11 @@ const OfflineWindow: React.FC = () => {
         let cancelled = false;
 
         const loadSpecialList = async () => {
-            // Only react when switching into one of these modes
             if (
                 displayMode !== 'holdCard' &&
                 displayMode !== 'earlyAccessCard' &&
-                displayMode !== 'errorCard'
+                displayMode !== 'errorCard' &&
+                displayMode !== 'historyTable'
             ) {
                 return;
             }
@@ -860,12 +921,15 @@ const OfflineWindow: React.FC = () => {
                     }
                 } else if (displayMode === 'errorCard') {
                     const payload = await fetchGetErrorModelList(dispatch);
-
-                    console.log("error card payload")
-                    console.log(payload)
-
                     if (!cancelled) {
                         setErrorEntries(Array.isArray(payload) ? payload as OfflineDownloadEntry[] : []);
+                    }
+                } else if (displayMode === 'historyTable') {
+                    const payload = await fetchModelOfflineDownloadHistoryList(dispatch, historyPage);
+                    if (!cancelled) {
+                        setModelOfflineDownloadHistoryList(
+                            Array.isArray(payload) ? payload as ModelOfflineDownloadHistoryEntry[] : []
+                        );
                     }
                 }
             } catch (err: any) {
@@ -874,6 +938,7 @@ const OfflineWindow: React.FC = () => {
                     if (displayMode === 'holdCard') setHoldEntries([]);
                     else if (displayMode === 'earlyAccessCard') setEarlyAccessEntries([]);
                     else if (displayMode === 'errorCard') setErrorEntries([]);
+                    else if (displayMode === 'historyTable') setModelOfflineDownloadHistoryList([]);
                 }
             } finally {
                 if (!cancelled) {
@@ -885,7 +950,7 @@ const OfflineWindow: React.FC = () => {
 
         loadSpecialList();
         return () => { cancelled = true; };
-    }, [displayMode, dispatch, specialReloadToken]);
+    }, [displayMode, dispatch, specialReloadToken, historyPage]);
 
 
     async function fetchExcludedTags() {
@@ -1720,6 +1785,8 @@ const OfflineWindow: React.FC = () => {
             cellStyle: cellStyle,
         }
     ];
+
+
     const currentTheme = React.useMemo(
         () => (isDarkMode ? darkTheme : lightTheme),
         [isDarkMode]
@@ -1755,7 +1822,6 @@ const OfflineWindow: React.FC = () => {
         });
     }, [filteredDownloadList]);
 
-
     // Define default column properties
     const defaultColDef: ColDef = {
         flex: 1,
@@ -1784,23 +1850,41 @@ const OfflineWindow: React.FC = () => {
     const handleRefreshList = async () => {
         if (isLoading) return;
 
-        setFailedEntries([]);
+        if (
+            displayMode === "holdCard" ||
+            displayMode === "earlyAccessCard" ||
+            displayMode === "errorCard" ||
+            displayMode === "historyTable"
+        ) {
+            setSpecialReloadToken((t) => t + 1);
+            return;
+        }
+
+        if (displayMode === "recentCard") {
+            setRecentlyDownloaded(prev => [...prev]);
+            return;
+        }
+
+        if (displayMode === "failedCard") {
+            setFailedEntries(prev => [...prev]);
+            return;
+        }
+
         try {
             setIsLoading(true);
             const p = await fetchPageWithApplied(currentPage);
             applyPagedResultToState(p);
+
+            try {
+                await fetchExcludedTags();
+            } catch (error: any) {
+                console.error("Failed to refresh pending remove tag list:", error.message);
+            }
         } catch (error: any) {
             console.error("Failed to refresh the download list:", error.message);
             alert("Failed to refresh the download list. Please try again later.");
         } finally {
             setIsLoading(false);
-        }
-
-        try {
-            fetchExcludedTags();
-        } catch (error: any) {
-            console.error("Failed to refresh pending remove tag list:", error.message);
-            alert("Failed to refresh the pending remove tag list. Please try again later.");
         }
     };
 
@@ -2614,17 +2698,24 @@ const OfflineWindow: React.FC = () => {
     };
 
     const handleDisplayModeClick = (mode: DisplayMode) => {
-        // ✅ Only block earlyAccess mode while downloading
-        if (uiMode === "downloading" && (mode === "earlyAccessCard" || mode === "holdCard" || mode === "errorCard")) {
+        if (
+            uiMode === "downloading" &&
+            (mode === "earlyAccessCard" || mode === "holdCard" || mode === "errorCard" || mode === "historyTable")
+        ) {
             alert("Can't switch to this mode while downloading.");
             return;
         }
 
-        // your existing logic...
         if (displayMode === mode) {
-            void handleRefreshList();
-            if (mode === "holdCard" || mode === "earlyAccessCard" || mode === "errorCard") {
+            if (
+                mode === "holdCard" ||
+                mode === "earlyAccessCard" ||
+                mode === "errorCard" ||
+                mode === "historyTable"
+            ) {
                 setSpecialReloadToken((t) => t + 1);
+            } else {
+                void handleRefreshList();
             }
         } else {
             setDisplayMode(mode);
@@ -2795,6 +2886,83 @@ const OfflineWindow: React.FC = () => {
         const clamped = Math.min(Math.max(1, n), totalPages || 1);
         setCurrentPage(clamped);
     };
+
+    const historyColumnDefs: ColDef[] = [
+        {
+            headerName: "Image",
+            field: "imageUrl",
+            width: 130,
+            sortable: false,
+            filter: false,
+            cellRenderer: (params: any) => {
+                const url = params.value;
+                if (!url) return <span>N/A</span>;
+
+                return (
+                    <img
+                        src={url}
+                        alt="History"
+                        style={{
+                            width: "80px",
+                            height: "80px",
+                            objectFit: "contain",
+                            borderRadius: "4px",
+                            display: "block",
+                            margin: "0 auto",
+                        }}
+                    />
+                );
+            },
+            cellStyle: {
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "6px",
+            },
+        },
+        {
+            headerName: "Model ID",
+            field: "civitaiModelID",
+            sortable: true,
+            filter: false,
+            cellStyle: cellStyle,
+        },
+        {
+            headerName: "Version ID",
+            field: "civitaiVersionID",
+            sortable: true,
+            filter: false,
+            cellStyle: cellStyle,
+        },
+        {
+            headerName: "Created At",
+            field: "createdAt",
+            flex: 1,
+            sortable: true,
+            filter: false,
+            tooltipField: "createdAt",
+            cellStyle: cellStyle,
+        },
+        {
+            headerName: "Updated At",
+            field: "updatedAt",
+            flex: 1,
+            sortable: true,
+            filter: false,
+            tooltipField: "updatedAt",
+            cellStyle: cellStyle,
+        },
+    ];
+
+    const historyRowData = useMemo(() => {
+        return modelOfflineDownloadHistoryList.map((entry) => ({
+            civitaiModelID: entry.civitaiModelID ?? "N/A",
+            civitaiVersionID: entry.civitaiVersionID ?? "N/A",
+            imageUrl: entry.imageUrl ?? "",
+            createdAt: formatHistoryDateTime(entry.createdAt),
+            updatedAt: formatHistoryDateTime(entry.updatedAt),
+        }));
+    }, [modelOfflineDownloadHistoryList]);
 
     const PreviewCard: React.FC<{ entry: OfflineDownloadEntry; isDarkMode: boolean }> = ({ entry, isDarkMode }) => {
         const showEA = isEntryEarlyAccess(entry);
@@ -3055,6 +3223,7 @@ const OfflineWindow: React.FC = () => {
                             displayMode === "recentCard" ||
                             displayMode === "holdCard" ||
                             displayMode === "earlyAccessCard" ||
+                            displayMode === "historyTable" ||
                             displayMode === "errorCard";
 
                         const canSelect = !selectionDisabled && canChangeSelection;
@@ -3997,6 +4166,7 @@ const OfflineWindow: React.FC = () => {
                                 displayMode === "recentCard" ||
                                 displayMode === "holdCard" ||
                                 displayMode === "earlyAccessCard" ||
+                                displayMode === "historyTable" ||
                                 displayMode === "errorCard";
 
                             const canSelect = !selectionDisabled && canChangeSelection;
@@ -4476,6 +4646,15 @@ const OfflineWindow: React.FC = () => {
                                 )}
                             </Button>
 
+                            <Button
+                                style={{ ...styles.responsiveButtonStyle }}
+                                variant={displayMode === 'historyTable' ? 'primary' : 'secondary'}
+                                disabled={uiMode === "downloading"}
+                                onClick={() => handleDisplayModeClick('historyTable')}
+                            >
+                                History Table
+                            </Button>
+
                             {/* NEW: Hold list mode */}
                             <Button
                                 style={{ ...styles.responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
@@ -4881,7 +5060,7 @@ const OfflineWindow: React.FC = () => {
                         </div>
 
 
-                        {(!isModifyMode && displayMode !== 'errorCard' && displayMode !== 'earlyAccessCard') && <>
+                        {(!isModifyMode && displayMode !== 'errorCard' && displayMode !== 'earlyAccessCard' && displayMode !== 'historyTable') && <>
                             {/* "Select First N" Button */}
                             <Button
                                 onClick={handleSelectFirstN}
@@ -5917,6 +6096,21 @@ const OfflineWindow: React.FC = () => {
                                     </div>
                                 )}
 
+                                {displayMode === 'historyTable' && (
+                                    <div className="ag-theme-alpine" style={styles.agGridStyle}>
+                                        <AgGridReact
+                                            rowData={historyRowData}
+                                            columnDefs={historyColumnDefs}
+                                            defaultColDef={defaultColDef}
+                                            getRowStyle={getRowStyle}
+                                            headerHeight={40}
+                                            rowHeight={95}
+                                            onGridReady={(params) => {
+                                                params.api.sizeColumnsToFit();
+                                            }}
+                                        />
+                                    </div>
+                                )}
                                 {displayMode === 'bigCard' && (
                                     <BigCardMode
                                         filteredDownloadList={paginatedDownloadList}
