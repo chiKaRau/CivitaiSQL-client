@@ -1361,20 +1361,7 @@ const OfflineWindow: React.FC = () => {
         }
     };
 
-    const filteredDownloadList = useMemo(() => {
-        const base = offlineDownloadList;
-
-        if (!isModifyMode) {
-            return [...base].sort((a, b) => {
-                const aSelected = selectedIds.has(a.civitaiVersionID) ? 1 : 0;
-                const bSelected = selectedIds.has(b.civitaiVersionID) ? 1 : 0;
-                return bSelected - aSelected;
-            });
-        }
-
-        return base;
-
-    }, [offlineDownloadList, selectedIds, isModifyMode, aiSuggestedOnly]);
+    const filteredDownloadList = useMemo(() => offlineDownloadList, [offlineDownloadList]);
 
     useEffect(() => {
         setSelectedIds(new Set());
@@ -4212,7 +4199,7 @@ const OfflineWindow: React.FC = () => {
                             onMonthChange={setHistoryCalendarMonth}
                         />
                     )}
-                    
+
                     {/* Download or Modify Progress Indicators */}
                     {uiMode !== 'idle' && (
                         <div
