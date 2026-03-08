@@ -642,14 +642,10 @@ const OfflineWindow: React.FC = () => {
                 );
 
                 if (!cancelled) {
-                    const rows = Array.isArray(payload)
-                        ? payload
-                        : Array.isArray(payload?.content)
-                            ? payload.content
-                            : [];
+                    const rows = Array.isArray(payload?.content) ? payload.content : [];
 
                     setModelOfflineDownloadHistoryList(rows);
-                    setHistoryTotalItems(payload?.totalElements ?? rows.length);
+                    setHistoryTotalItems(payload?.totalElements ?? 0);
                     setHistoryTotalPages(payload?.totalPages ?? 1);
                 }
             } catch (err: any) {
