@@ -87,59 +87,47 @@ const DownloadFilePathOptionPanel: React.FC<DownloadFilePathOptionPanelProps> = 
 
     // 3) Memoized sort & filter
     const sortedAndFiltered = useMemo(() => {
-        return foldersList
-            .filter((folder) => {
-                const lower = folder.toLowerCase()
-                // match at least one displayed category
-                if (
-                    !parsedCategories.some(
-                        (item: any) =>
-                            item.display &&
-                            lower.includes(item.category.prefixName.toLowerCase())
-                    )
-                ) {
-                    return false
-                }
-                // exception flags
-                // const isChars = parsedCategories.some(
-                //     (i: any) => i.category.prefixName === 'Characters' && i.display
-                // )
-                // const isReal = parsedCategories.some(
-                //     (i: any) => i.category.prefixName === 'Real' && i.display
-                // )
-                // const isPoses = parsedCategories.some(
-                //     (i: any) => i.category.prefixName === 'Poses' && i.display
-                // )
-                // const isMales = parsedCategories.some(
-                //     (i: any) => i.category.prefixName === 'Males' && i.display
-                // )
-                // const isSFW = parsedCategories.some(
-                //     (i: any) => i.category.prefixName === 'SFW' && i.display
-                // )
-                // const isNSFW = parsedCategories.some(
-                //     (i: any) => i.category.prefixName === 'NSFW' && i.display
-                // )
-                // const isEX = parsedCategories.some(
-                //     (i: any) => i.category.prefixName === 'EX' && i.display
-                // )
+        const lc = (s: string) => s.toLowerCase()
 
-                // // apply same exceptions
-                // if (isChars && !isMales && lower.includes('(males)')) return false
-                // if (isPoses && !isNSFW && lower.includes('/nsfw/')) return false
-                // if (isPoses && !isSFW && lower.includes('/sfw/')) return false
-                // if (isPoses && !isReal && lower.includes('/real/')) return false
-                // if (isSFW && !isNSFW && lower.includes('/nsfw/')) return false
-                // if (!isEX && lower.includes('/ex/')) return false
+        const allowPrefixes = parsedCategories
+            .filter(
+                (item: any) =>
+                    item.display &&
+                    item.category?.downloadFilePath?.startsWith('/@scan@/')
+            )
+            .map((item: any) => lc(item.category.downloadFilePath))
+
+        const denyPrefixes = parsedCategories
+            .filter(
+                (item: any) =>
+                    !item.display &&
+                    item.category?.downloadFilePath?.startsWith('/@scan@/')
+            )
+            .map((item: any) => lc(item.category.downloadFilePath))
+
+        return foldersList
+            .filter((raw) => {
+                const folder = lc(raw)
+
+                const allowed =
+                    allowPrefixes.length === 0
+                        ? true
+                        : allowPrefixes.some((p: string) => folder.startsWith(p))
+
+                if (!allowed) return false
+                if (denyPrefixes.some((p: string) => folder.startsWith(p))) return false
 
                 return true
             })
             .sort((a, b) => {
-                const A = a.charAt(0).toUpperCase()
-                const B = b.charAt(0).toUpperCase()
-                const dA = /\d/.test(A),
-                    dB = /\d/.test(B)
-                if (dA && !dB) return 1
-                if (!dA && dB) return -1
+                const firstCharA = a.charAt(0).toUpperCase()
+                const firstCharB = b.charAt(0).toUpperCase()
+                const isDigitA = /\d/.test(firstCharA)
+                const isDigitB = /\d/.test(firstCharB)
+
+                if (isDigitA && !isDigitB) return 1
+                if (!isDigitA && isDigitB) return -1
+
                 return a.localeCompare(b, 'en', {
                     numeric: true,
                     sensitivity: 'base'
