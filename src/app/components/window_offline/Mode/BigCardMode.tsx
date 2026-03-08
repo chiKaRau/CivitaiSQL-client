@@ -410,6 +410,7 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                             )}
 
                             <div
+                                data-no-select="true"
                                 style={{
                                     marginTop: '5px',
                                     fontSize: '0.8rem',
@@ -418,6 +419,7 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                 }}
                             >
                                 <div
+                                    data-no-select="true"
                                     style={{
                                         textAlign: 'center',
                                         wordWrap: 'break-word',
