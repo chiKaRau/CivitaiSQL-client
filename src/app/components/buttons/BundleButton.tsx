@@ -17,7 +17,9 @@ import {
     fetchDownloadFilesByBrowser_v2,
     fetchAddRecordToDatabase,
     fetchCivitaiModelInfoFromCivitaiByVersionID,
-    fetchAddOfflineDownloadFileIntoOfflineDownloadList
+    fetchAddOfflineDownloadFileIntoOfflineDownloadList,
+    fetchGetOfflineRecordByModelAndVersion,
+    fetchRemoveOfflineDownloadFileIntoOfflineDownloadList
 } from "../../api/civitaiSQL_api"
 
 //utils
@@ -37,6 +39,9 @@ const BundleButton: React.FC = (props: any) => {
     const chrome = useSelector((state: AppState) => state.chrome);
     const { downloadMethod, downloadFilePath, selectedCategory, offlineMode } = chrome;
 
+    const [isOfflineRecordExisting, setIsOfflineRecordExisting] = useState(false);
+    const [isCheckingOfflineRecord, setIsCheckingOfflineRecord] = useState(false);
+
     const dispatch = useDispatch();
     const [isLoading, setIsLoading] = useState(false)
 
@@ -48,6 +53,38 @@ const BundleButton: React.FC = (props: any) => {
             updateDownloadMethodIntoChromeStorage(downloadMethod);
         }
     }, [downloadMethod])
+
+    useEffect(() => {
+        const checkOfflineRecord = async () => {
+            if (!offlineMode) {
+                setIsOfflineRecordExisting(false);
+                return;
+            }
+
+            if (!civitaiModelID || !civitaiVersionID) {
+                setIsOfflineRecordExisting(false);
+                return;
+            }
+
+            setIsCheckingOfflineRecord(true);
+            try {
+                const record = await fetchGetOfflineRecordByModelAndVersion(
+                    civitaiModelID,
+                    civitaiVersionID,
+                    dispatch
+                );
+
+                setIsOfflineRecordExisting(!!record);
+            } catch (error) {
+                console.error("Failed to check offline record:", error);
+                setIsOfflineRecordExisting(false);
+            } finally {
+                setIsCheckingOfflineRecord(false);
+            }
+        };
+
+        checkOfflineRecord();
+    }, [offlineMode, civitaiModelID, civitaiVersionID, dispatch]);
 
     const handleBundleAll = async () => {
         handleDownloadFile()
@@ -207,8 +244,40 @@ const BundleButton: React.FC = (props: any) => {
 
         //If download Method is server, the server will download the file into server's folder
         await fetchAddOfflineDownloadFileIntoOfflineDownloadList(modelObject, false, dispatch);
+        setIsOfflineRecordExisting(true);
         dispatch(updateDownloadFilePath("/@scan@/ACG/Pending/"));
         setIsLoading(false);
+    };
+
+    const handleRemoveOfflineDownloadFileFromOfflineDownloadList = async () => {
+        if (!civitaiModelID || !civitaiVersionID) {
+            dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
+            return;
+        }
+
+        const userConfirmed = window.confirm(
+            `Are you sure you want to remove ${civitaiModelID}_${civitaiVersionID} from Offline List?`
+        );
+        if (!userConfirmed) return;
+
+        setIsLoading(true);
+        dispatch(clearError());
+
+        try {
+            await fetchRemoveOfflineDownloadFileIntoOfflineDownloadList(
+                {
+                    civitaiModelID,
+                    civitaiVersionID,
+                },
+                dispatch
+            );
+
+            setIsOfflineRecordExisting(false);
+        } catch (error) {
+            console.error("Failed to remove offline record:", error);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -229,15 +298,31 @@ const BundleButton: React.FC = (props: any) => {
             */}
 
             {offlineMode ?
-                <OverlayTrigger placement={"bottom"}
-                    overlay={<Tooltip id="tooltip">Add file into offline download list</Tooltip>}>
+                <OverlayTrigger
+                    placement={"bottom"}
+                    overlay={
+                        <Tooltip id="tooltip">
+                            {isOfflineRecordExisting
+                                ? "Remove this file from offline download list"
+                                : "Add file into offline download list"}
+                        </Tooltip>
+                    }
+                >
                     <Button
-                        variant={"success"}
-                        onClick={handleAddOfflineDownloadFileintoOfflineDownloadList}
-                        disabled={isLoading}
+                        variant={isOfflineRecordExisting ? "danger" : "success"}
+                        onClick={
+                            isOfflineRecordExisting
+                                ? handleRemoveOfflineDownloadFileFromOfflineDownloadList
+                                : handleAddOfflineDownloadFileintoOfflineDownloadList
+                        }
+                        disabled={isLoading || isCheckingOfflineRecord}
                         className="btn btn-primary btn-lg w-100"
                     >
-                        Offline Download
+                        {isCheckingOfflineRecord
+                            ? "Checking..."
+                            : isOfflineRecordExisting
+                                ? "Remove from Offline List"
+                                : "Offline Download"}
                         {isLoading && <span className="button-state-complete">✓</span>}
                     </Button>
                 </OverlayTrigger>

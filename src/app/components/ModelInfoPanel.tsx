@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { AppState } from '../store/configureStore';
 import { Button } from 'react-bootstrap';
-import { fetchFullRecordFromAllTableModelIDandVersionID } from '../api/civitaiSQL_api';
+import { fetchFullRecordFromAllTableModelIDandVersionID, fetchGetOfflineRecordByModelAndVersion } from '../api/civitaiSQL_api';
 
 //Model Page
 const ModelInfoPanel: React.FC = () => {
@@ -25,6 +25,7 @@ const ModelInfoPanel: React.FC = () => {
     const [showDatabaseSection, setShowDatabaseSection] = useState(false);
 
     const [fullRecord, setFullRecord] = useState<any | null>(null);
+    const [offlineRecord, setOfflineRecord] = useState<any | null>(null);
 
     const fmt = (iso?: string) => (iso ? new Date(iso).toLocaleString() : '—');
 
@@ -44,6 +45,41 @@ const ModelInfoPanel: React.FC = () => {
         setFullRecord(data ?? null);
         setIsLoading(false);
     };
+
+    const handleRetrieveOfflineRecord = async () => {
+        if (!civitaiModelID || !civitaiVersionID) {
+            setOfflineRecord(null);
+            return;
+        }
+
+        try {
+            const data = await fetchGetOfflineRecordByModelAndVersion(
+                civitaiModelID,
+                civitaiVersionID,
+                dispatch
+            );
+
+            console.log("offline record data : ", data);
+            setOfflineRecord(data ?? null);
+        } catch (error) {
+            console.error("Failed to load offline record:", error);
+            setOfflineRecord(null);
+        }
+    };
+
+    useEffect(() => {
+        console.log(civitaiModelID)
+        console.log(civitaiVersionID)
+
+        if (civitaiModelID && civitaiVersionID) {
+            handleRetrieveFullInfoData();
+            handleRetrieveOfflineRecord();
+        } else {
+            setFullRecord(null);
+            setOfflineRecord(null);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [civitaiModelID, civitaiVersionID]);
 
     // auto-load when IDs are available/changed (or call the handler from a button if you prefer)
     useEffect(() => {
@@ -112,6 +148,25 @@ const ModelInfoPanel: React.FC = () => {
                     />
 
                 </div>)}
+
+                {offlineRecord?.downloadFilePath && (
+                    <div className="inputContainer">
+                        <label className="inputLabel">Offline DownloadPath:</label>
+                        <input
+                            type="text"
+                            value={offlineRecord?.downloadFilePath ?? ''}
+                            placeholder="Offline DownloadPath"
+                            readOnly
+                            title={offlineRecord?.downloadFilePath ?? ''}
+                            style={{
+                                direction: 'rtl',
+                                textAlign: 'left',
+                                width: '100%',
+                                boxSizing: 'border-box'
+                            }}
+                        />
+                    </div>
+                )}
             </div>
             {isInDatabase && showDatabaseSection && (
                 <div className="databaseSection">
