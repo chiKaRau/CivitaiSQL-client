@@ -431,7 +431,11 @@ const OfflineWindow: React.FC = () => {
     const [aiSuggestRunMsg, setAiSuggestRunMsg] = useState("");
 
     const [modelOfflineDownloadHistoryList, setModelOfflineDownloadHistoryList] = useState<ModelOfflineDownloadHistoryEntry[]>([]);
-    const [historyPage, setHistoryPage] = useState(0);
+    const [historyPage, setHistoryPage] = useState(1);
+    const [historyItemsPerPage, setHistoryItemsPerPage] = useState(100);
+    const [historyTotalItems, setHistoryTotalItems] = useState(0);
+    const [historyTotalPages, setHistoryTotalPages] = useState(1);
+    const [historyReloadToken, setHistoryReloadToken] = useState(0);
 
     // NEW: sort direction for date (server-side)
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc'); // if you hate the type, you can drop it
@@ -631,17 +635,29 @@ const OfflineWindow: React.FC = () => {
                 setUiMode("paging");
                 setIsLoading(true);
 
-                const payload = await fetchModelOfflineDownloadHistoryList(dispatch, historyPage);
+                const payload = await fetchModelOfflineDownloadHistoryList(
+                    dispatch,
+                    historyPage - 1,
+                    historyItemsPerPage
+                );
 
                 if (!cancelled) {
-                    setModelOfflineDownloadHistoryList(
-                        Array.isArray(payload) ? payload as ModelOfflineDownloadHistoryEntry[] : []
-                    );
+                    const rows = Array.isArray(payload)
+                        ? payload
+                        : Array.isArray(payload?.content)
+                            ? payload.content
+                            : [];
+
+                    setModelOfflineDownloadHistoryList(rows);
+                    setHistoryTotalItems(payload?.totalElements ?? rows.length);
+                    setHistoryTotalPages(payload?.totalPages ?? 1);
                 }
             } catch (err: any) {
                 console.error("History list fetch failed:", err?.message || err);
                 if (!cancelled) {
                     setModelOfflineDownloadHistoryList([]);
+                    setHistoryTotalItems(0);
+                    setHistoryTotalPages(1);
                 }
             } finally {
                 if (!cancelled) {
@@ -656,7 +672,7 @@ const OfflineWindow: React.FC = () => {
         return () => {
             cancelled = true;
         };
-    }, [displayMode, historyPage, dispatch]);
+    }, [displayMode, historyPage, historyItemsPerPage, historyReloadToken, dispatch]);
 
     function formatHistoryDateTime(value?: string) {
         if (!value) return "N/A";
@@ -899,8 +915,7 @@ const OfflineWindow: React.FC = () => {
             if (
                 displayMode !== 'holdCard' &&
                 displayMode !== 'earlyAccessCard' &&
-                displayMode !== 'errorCard' &&
-                displayMode !== 'historyTable'
+                displayMode !== 'errorCard'
             ) {
                 return;
             }
@@ -924,13 +939,6 @@ const OfflineWindow: React.FC = () => {
                     if (!cancelled) {
                         setErrorEntries(Array.isArray(payload) ? payload as OfflineDownloadEntry[] : []);
                     }
-                } else if (displayMode === 'historyTable') {
-                    const payload = await fetchModelOfflineDownloadHistoryList(dispatch, historyPage);
-                    if (!cancelled) {
-                        setModelOfflineDownloadHistoryList(
-                            Array.isArray(payload) ? payload as ModelOfflineDownloadHistoryEntry[] : []
-                        );
-                    }
                 }
             } catch (err: any) {
                 console.error('Special list fetch failed:', err?.message || err);
@@ -938,7 +946,6 @@ const OfflineWindow: React.FC = () => {
                     if (displayMode === 'holdCard') setHoldEntries([]);
                     else if (displayMode === 'earlyAccessCard') setEarlyAccessEntries([]);
                     else if (displayMode === 'errorCard') setErrorEntries([]);
-                    else if (displayMode === 'historyTable') setModelOfflineDownloadHistoryList([]);
                 }
             } finally {
                 if (!cancelled) {
@@ -950,7 +957,7 @@ const OfflineWindow: React.FC = () => {
 
         loadSpecialList();
         return () => { cancelled = true; };
-    }, [displayMode, dispatch, specialReloadToken, historyPage]);
+    }, [displayMode, dispatch, specialReloadToken]);
 
 
     async function fetchExcludedTags() {
@@ -1853,10 +1860,14 @@ const OfflineWindow: React.FC = () => {
         if (
             displayMode === "holdCard" ||
             displayMode === "earlyAccessCard" ||
-            displayMode === "errorCard" ||
-            displayMode === "historyTable"
+            displayMode === "errorCard"
         ) {
             setSpecialReloadToken((t) => t + 1);
+            return;
+        }
+
+        if (displayMode === "historyTable") {
+            setHistoryReloadToken((t) => t + 1);
             return;
         }
 
@@ -2710,10 +2721,11 @@ const OfflineWindow: React.FC = () => {
             if (
                 mode === "holdCard" ||
                 mode === "earlyAccessCard" ||
-                mode === "errorCard" ||
-                mode === "historyTable"
+                mode === "errorCard"
             ) {
                 setSpecialReloadToken((t) => t + 1);
+            } else if (mode === "historyTable") {
+                setHistoryReloadToken((t) => t + 1);
             } else {
                 void handleRefreshList();
             }
@@ -6111,6 +6123,7 @@ const OfflineWindow: React.FC = () => {
                                         />
                                     </div>
                                 )}
+
                                 {displayMode === 'bigCard' && (
                                     <BigCardMode
                                         filteredDownloadList={paginatedDownloadList}
@@ -6230,119 +6243,114 @@ const OfflineWindow: React.FC = () => {
                     </div>
 
                     {/* Footer Area */}
-                    {(displayMode === 'bigCard' || displayMode === 'smallCard') && (
+                    {(displayMode === 'bigCard' || displayMode === 'smallCard' || displayMode === 'historyTable') && (
                         <div style={styles.footerStyle}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-                                {/* Range Display */}
-                                <div style={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>
-                                    Showing {startItem} - {endItem} of {totalItems} items
-                                </div>
+                            {(() => {
+                                const isHistory = displayMode === "historyTable";
 
-                                {/* Pagination + Go-To (center) */}
-                                <div
-                                    style={{
-                                        flex: 1,
-                                        display: 'flex',
-                                        justifyContent: 'center',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        flexWrap: 'wrap',
-                                    }}
-                                >
-                                    {/* Remove bottom margin on UL */}
-                                    <Pagination className="mb-0" size="sm" style={{ marginBottom: 0 }}>
-                                        <Pagination.First
-                                            onClick={() => setCurrentPage(1)}
-                                            disabled={currentPage === 1}
-                                            aria-label="First Page"
-                                        >
-                                            <FaAngleDoubleLeft />
-                                        </Pagination.First>
-                                        <Pagination.Prev
-                                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                                            disabled={currentPage === 1}
-                                            aria-label="Previous Page"
-                                        >
-                                            <FaAngleLeft />
-                                        </Pagination.Prev>
+                                const page = isHistory ? historyPage : currentPage;
+                                const total = isHistory ? historyTotalPages : totalPages;
+                                const totalItemsX = isHistory ? historyTotalItems : totalItems;
+                                const perPage = isHistory ? historyItemsPerPage : itemsPerPage;
 
-                                        {Array.from({ length: totalPages }, (_, index) => index + 1)
-                                            .slice(Math.max(currentPage - 3, 0), currentPage + 2)
-                                            .map(page => (
-                                                <Pagination.Item
-                                                    key={page}
-                                                    active={page === currentPage}
-                                                    onClick={() => setCurrentPage(page)}
-                                                    aria-label={`Page ${page}`}
-                                                >
-                                                    {page}
-                                                </Pagination.Item>
-                                            ))}
+                                const start = totalItemsX === 0 ? 0 : (page - 1) * perPage + 1;
+                                const end = Math.min(page * perPage, totalItemsX);
 
-                                        <Pagination.Next
-                                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                                            disabled={currentPage === totalPages}
-                                            aria-label="Next Page"
-                                        >
-                                            <FaAngleRight />
-                                        </Pagination.Next>
-                                        <Pagination.Last
-                                            onClick={() => setCurrentPage(totalPages)}
-                                            disabled={currentPage === totalPages}
-                                            aria-label="Last Page"
-                                        >
-                                            <FaAngleDoubleRight />
-                                        </Pagination.Last>
-                                    </Pagination>
+                                return (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                                        <div style={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>
+                                            Showing {start} - {end} of {totalItemsX} items
+                                        </div>
 
-                                    {/* Input + Button aligned via InputGroup */}
-                                    <InputGroup style={{ width: 170 }}>
-                                        <Form.Control
-                                            type="number"
-                                            min={1}
-                                            max={totalPages || 1}
-                                            placeholder="Page #"
-                                            value={goToPageInput}
-                                            onChange={(e) => setGoToPageInput(e.target.value)}
-                                            onKeyDown={(e) => { if (e.key === 'Enter') handleGoToPage(); }}
-                                            size="sm"
-                                            aria-label="Go to page number"
-                                            disabled={totalPages <= 1}
+                                        <div
                                             style={{
+                                                flex: 1,
+                                                display: 'flex',
+                                                justifyContent: 'center',
+                                                alignItems: 'center',
+                                                gap: '8px',
+                                                flexWrap: 'wrap',
+                                            }}
+                                        >
+                                            <Pagination className="mb-0" size="sm" style={{ marginBottom: 0 }}>
+                                                <Pagination.First
+                                                    onClick={() => isHistory ? setHistoryPage(1) : setCurrentPage(1)}
+                                                    disabled={page === 1}
+                                                >
+                                                    <FaAngleDoubleLeft />
+                                                </Pagination.First>
+
+                                                <Pagination.Prev
+                                                    onClick={() =>
+                                                        isHistory
+                                                            ? setHistoryPage(prev => Math.max(prev - 1, 1))
+                                                            : setCurrentPage(prev => Math.max(prev - 1, 1))
+                                                    }
+                                                    disabled={page === 1}
+                                                >
+                                                    <FaAngleLeft />
+                                                </Pagination.Prev>
+
+                                                {Array.from({ length: total }, (_, index) => index + 1)
+                                                    .slice(Math.max(page - 3, 0), page + 2)
+                                                    .map(p => (
+                                                        <Pagination.Item
+                                                            key={p}
+                                                            active={p === page}
+                                                            onClick={() => isHistory ? setHistoryPage(p) : setCurrentPage(p)}
+                                                        >
+                                                            {p}
+                                                        </Pagination.Item>
+                                                    ))}
+
+                                                <Pagination.Next
+                                                    onClick={() =>
+                                                        isHistory
+                                                            ? setHistoryPage(prev => Math.min(prev + 1, total))
+                                                            : setCurrentPage(prev => Math.min(prev + 1, total))
+                                                    }
+                                                    disabled={page === total}
+                                                >
+                                                    <FaAngleRight />
+                                                </Pagination.Next>
+
+                                                <Pagination.Last
+                                                    onClick={() => isHistory ? setHistoryPage(total) : setCurrentPage(total)}
+                                                    disabled={page === total}
+                                                >
+                                                    <FaAngleDoubleRight />
+                                                </Pagination.Last>
+                                            </Pagination>
+                                        </div>
+
+                                        <Form.Select
+                                            value={isHistory ? historyItemsPerPage : itemsPerPage}
+                                            onChange={(e) => {
+                                                const next = parseInt(e.target.value, 10);
+                                                if (isHistory) {
+                                                    setHistoryItemsPerPage(next);
+                                                    setHistoryPage(1);
+                                                } else {
+                                                    setItemsPerPage(next);
+                                                }
+                                            }}
+                                            style={{
+                                                width: '170px',
+                                                padding: '5px',
+                                                borderRadius: '4px',
+                                                border: '1px solid #ccc',
                                                 backgroundColor: isDarkMode ? '#555' : '#fff',
                                                 color: isDarkMode ? '#fff' : '#000',
                                             }}
-                                        />
-                                        <Button
-                                            onClick={handleGoToPage}
-                                            size="sm"
-                                            disabled={totalPages <= 1 || !goToPageInput.trim()}
-                                            aria-label="Go to page"
+                                            aria-label="Items Per Page"
                                         >
-                                            Go
-                                        </Button>
-                                    </InputGroup>
-                                </div>
-
-                                {/* Items Per Page Selector */}
-                                <Form.Select
-                                    value={itemsPerPage}
-                                    onChange={(e) => setItemsPerPage(parseInt(e.target.value, 10))}
-                                    style={{
-                                        width: '150px',
-                                        padding: '5px',
-                                        borderRadius: '4px',
-                                        border: '1px solid #ccc',
-                                        backgroundColor: isDarkMode ? '#555' : '#fff',
-                                        color: isDarkMode ? '#fff' : '#000',
-                                    }}
-                                    aria-label="Items Per Page"
-                                >
-                                    <option value={50}>50 items per page</option>
-                                    <option value={100}>100 items per page</option>
-                                    <option value={200}>200 items per page</option>
-                                </Form.Select>
-                            </div>
+                                            <option value={50}>50 items per page</option>
+                                            <option value={100}>100 items per page</option>
+                                            <option value={200}>200 items per page</option>
+                                        </Form.Select>
+                                    </div>
+                                );
+                            })()}
                         </div>
                     )}
                 </div>

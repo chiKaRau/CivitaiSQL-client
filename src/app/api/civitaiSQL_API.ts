@@ -714,7 +714,8 @@ export const fetchOfflineDownloadList = async (dispatch: any) => {
 
 export const fetchModelOfflineDownloadHistoryList = async (
     dispatch: any,
-    page: number = 0
+    page: number = 0,
+    size: number = 100
 ) => {
     try {
         dispatch(clearError());
@@ -722,7 +723,7 @@ export const fetchModelOfflineDownloadHistoryList = async (
         const response = await axios.get(
             `${config.domain}/api/get_model_offline_download_history_list`,
             {
-                params: { page },
+                params: { page, size },
             }
         );
 
