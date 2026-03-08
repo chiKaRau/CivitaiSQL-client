@@ -4082,60 +4082,66 @@ const OfflineWindow: React.FC = () => {
                         }}
                     >
                         {/* Select All Button */}
-                        <Button
-                            onClick={handleSelectAll}
-                            style={{
-                                padding: '10px 20px',
-                                borderRadius: '4px',
-                                backgroundColor: '#007bff',
-                                color: '#fff',
-                                border: 'none',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '5px',
-                            }}
-                            disabled={isLoading}
-                            aria-label={isAllSelected ? 'Deselect All' : 'Select All'}
-                        >
-                            {isAllSelected ? 'Deselect All' : 'Select All'}
-                        </Button>
+                        {displayMode !== 'historyTable' &&
+                            <>
+                                <Button
+                                    onClick={handleSelectAll}
+                                    style={{
+                                        padding: '10px 20px',
+                                        borderRadius: '4px',
+                                        backgroundColor: '#007bff',
+                                        color: '#fff',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '5px',
+                                    }}
+                                    disabled={isLoading}
+                                    aria-label={isAllSelected ? 'Deselect All' : 'Select All'}
+                                >
+                                    {isAllSelected ? 'Deselect All' : 'Select All'}
+                                </Button>
 
-                        {/* Selection Count Display */}
-                        <div
-                            style={{
-                                flex: 1,
-                                minWidth: 0,
-                                padding: '8px 12px',
-                                borderRadius: '4px',
-                                backgroundColor: isDarkMode ? '#444' : '#e0e0e0',
-                                color: isDarkMode ? '#fff' : '#000',
-                                fontWeight: 'bold',
-                                textAlign: 'center',
-                                whiteSpace: 'normal',    // allow wrapping onto next line
-                            }}
-                        >
-                            {(isModifyMode) ? (
-                                <>
-                                    {selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'} selected <FaArrowRight />
-                                    "<span
-                                        style={{
-                                            display: 'inline-block',
-                                            maxWidth: '100%',
-                                            whiteSpace: 'normal',    // allow this span to wrap
-                                            wordBreak: 'break-all',  // break long paths anywhere
-                                        }}
-                                        title={modify_downloadFilePath} // When hovered, show full text
-                                    >
-                                        {modify_downloadFilePath}
-                                    </span>"
-                                </>
-                            ) : (
-                                <>
-                                    {selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'} selected
-                                </>
-                            )}
-                        </div>
+
+                                {/* Selection Count Display */}
+                                <div
+                                    style={{
+                                        flex: 1,
+                                        minWidth: 0,
+                                        padding: '8px 12px',
+                                        borderRadius: '4px',
+                                        backgroundColor: isDarkMode ? '#444' : '#e0e0e0',
+                                        color: isDarkMode ? '#fff' : '#000',
+                                        fontWeight: 'bold',
+                                        textAlign: 'center',
+                                        whiteSpace: 'normal',    // allow wrapping onto next line
+                                    }}
+                                >
+                                    {(isModifyMode) ? (
+                                        <>
+                                            {selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'} selected <FaArrowRight />
+                                            "<span
+                                                style={{
+                                                    display: 'inline-block',
+                                                    maxWidth: '100%',
+                                                    whiteSpace: 'normal',    // allow this span to wrap
+                                                    wordBreak: 'break-all',  // break long paths anywhere
+                                                }}
+                                                title={modify_downloadFilePath} // When hovered, show full text
+                                            >
+                                                {modify_downloadFilePath}
+                                            </span>"
+                                        </>
+                                    ) : (
+                                        <>
+                                            {selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'} selected
+                                        </>
+                                    )}
+                                </div>
+
+                            </>
+                        }
                     </div>
 
                     {/* Download or Modify Progress Indicators */}
