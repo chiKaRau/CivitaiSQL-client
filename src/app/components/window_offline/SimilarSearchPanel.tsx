@@ -1,8 +1,8 @@
 import React from 'react';
-import { OfflineDownloadEntry } from './OfflineWindow';
 import { FaChevronCircleLeft, FaChevronCircleRight, FaStar } from 'react-icons/fa';
 import { MdDownload, MdOutlineSupervisorAccount } from 'react-icons/md';
 import { IoMdThumbsUp } from 'react-icons/io';
+import { OfflineDownloadEntry } from './OfflineWindow.types';
 
 type CivitaiStats = {
     downloadCount?: number;

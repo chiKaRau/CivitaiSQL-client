@@ -61,189 +61,30 @@ import {
 } from "../../utils/chromeUtils"
 
 // Ag-Grid Imports
-import { AgGridReact } from 'ag-grid-react';
-import { ColDef, GridReadyEvent } from 'ag-grid-community';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
 import { AppState } from '../../store/configureStore';
-import FileNameToggle from './FileNameToggle';
-import TagList from './TagList';
-import TitleNameToggle from './TitleNameToggle';
 import TopTagsDropdown from './TopTagsDropdown';
 import SimilarSearchPanel from './SimilarSearchPanel';
-import DownloadPathEditor from './DownloadPathEditor';
 import { setError } from '../../store/actions/errorsActions';
 import { darkTheme, lightTheme } from './OfflineWindow.theme';
+import HistoryTableMode from './Mode/HistoryTableMode';
+import TableMode from './Mode/TableMode';
+import BigCardMode from './Mode/BigCardMode';
+import SmallCardMode from './Mode/SmallCardMode';
+import PreviewCard from './Mode/PreviewCard';
 
-
-//TYPE
-type DownloadMethod = 'server' | 'browser';
-type DisplayMode = 'table'
-    | 'bigCard'
-    | 'smallCard'
-    | 'failedCard'
-    | 'errorCard'
-    | 'updateCard'
-    | 'recentCard'
-    | 'holdCard'
-    | 'earlyAccessCard'
-    | 'historyTable';
-
-type BatchStatus = "running" | "success" | "fail";
-
-type BatchResult = {
-    batchNo: number;
-    start: number;
-    end: number;
-    status: BatchStatus;
-    msg?: string;
-};
-
-type StatusFilter = 'pending' | 'non-pending' | 'both';
-
-// TypeScript Interfaces
-interface CivitaiModelFile {
-    name: string;
-    downloadUrl: string;
-}
-
-interface ModelVersionObject {
-    id: number;
-    modelId: number;
-    name: string;
-    createdAt: string;
-    updatedAt: string;
-    status: string;
-    publishedAt: string;
-    trainedWords: string[];
-    trainingStatus: any;
-    trainingDetails: any;
-    baseModel: string;
-    baseModelType: any;
-    earlyAccessEndsAt: any;
-    availability?: 'EarlyAccess' | 'Public' | string;
-    description: string;
-    uploadType: string;
-    air: string;
-    stats: {
-        downloadCount: number;
-        ratingCount: number;
-        rating: number;
-        thumbsUpCount: number;
-    };
-    model: {
-        name: string;
-        type: string;
-        nsfw: boolean;
-        poi: boolean;
-    };
-    creator: {
-        username: string;
-        image: string;
-    };
-    files: {
-        id: number;
-        sizeKB: number;
-        name: string;
-        type: string;
-        pickleScanResult: string;
-        pickleScanMessage: string | null;
-        virusScanResult: string;
-        virusScanMessage: string | null;
-        scannedAt: string;
-        metadata: {
-            format: string;
-            size: any;
-            fp: any;
-        };
-        hashes: {
-            AutoV1: string;
-            AutoV2: string;
-            SHA256: string;
-            CRC32: string;
-            BLAKE3: string;
-            AutoV3: string;
-        };
-        primary: boolean;
-        downloadUrl: string;
-    }[];
-    images: {
-        url: string;
-        nsfwLevel: number;
-        width: number;
-        height: number;
-        hash: string;
-        type: string;
-        metadata: {
-            hash: string;
-            size: number;
-            width: number;
-            height: number;
-        };
-        meta: any;
-        availability: string;
-        hasMeta: boolean;
-        onSite: boolean;
-    }[];
-    downloadUrl: string;
-}
-
-export interface OfflineDownloadEntry {
-    civitaiFileName: string;
-    civitaiModelFileList: CivitaiModelFile[];
-    modelVersionObject: ModelVersionObject;
-    civitaiBaseModel: string;
-    downloadFilePath: string;
-    civitaiUrl: string;
-    civitaiVersionID: string;
-    civitaiModelID: string;
-    imageUrlsArray: (string | { url: string; width?: number; height?: number; nsfw?: any })[];
-    selectedCategory: string;
-    civitaiTags: string[];
-    hold?: boolean;
-    isError?: boolean;
-    downloadPriority?: number;           // 1..10
-    earlyAccessEndsAt?: string | null;
-
-    aiSuggestedArtworkTitle?: string | null;
-    jikanNormalizedArtworkTitle?: string | null;
-
-    aiSuggestedDownloadFilePath?: string[];      // e.g. ["/@scan@/ACG/.../", "@scan@/Update/.../"]
-    jikanSuggestedDownloadFilePath?: string[];   // same shape
-    localSuggestedDownloadFilePath?: string[];   // can be [] in your sample
-}
-
-interface BigCardModeProps {
-    filteredDownloadList: OfflineDownloadEntry[];
-    isDarkMode: boolean;
-    isModifyMode: boolean;
-    selectedIds: Set<string>;
-    toggleSelect: (id: string) => void;
-    handleSelectAll: (entries: OfflineDownloadEntry[]) => void;
-    showGalleries: boolean;
-    onToggleOverlay: (entry: OfflineDownloadEntry) => void;
-    onRefreshRecord?: (entry: OfflineDownloadEntry) => void;
-    activePreviewId: string | null;
-    canChangeSelection: boolean;
-    displayMode?: string;
-    onErrorCardDownload?: (entry: OfflineDownloadEntry, method: 'server' | 'browser') => void;
-    onToggleIsError?: (entry: OfflineDownloadEntry) => void;
-}
-
-interface ModelOfflineDownloadHistoryEntry {
-    civitaiModelID: number;
-    civitaiVersionID: number;
-    imageUrl: string;
-    createdAt: string;
-    updatedAt: string;
-}
-
-// **1. SelectAllHeaderCheckbox Component**
-interface SelectAllHeaderCheckboxProps {
-    isChecked: boolean;
-    isIndeterminate: boolean;
-    onChange: (checked: boolean) => void;
-}
+import type {
+    DownloadMethod,
+    DisplayMode,
+    BatchStatus,
+    BatchResult,
+    StatusFilter,
+    CivitaiModelFile,
+    ModelVersionObject,
+    OfflineDownloadEntry,
+    ModelOfflineDownloadHistoryEntry,
+} from './OfflineWindow.types';
 
 const PENDING_PATH_RE = /[/\\]@scan@[/\\]acg[/\\]pending([/\\]|$)/i;
 
@@ -251,29 +92,6 @@ function isPendingEntry(entry: OfflineDownloadEntry): boolean {
     const p = (entry.downloadFilePath || '').trim();
     return PENDING_PATH_RE.test(p);
 }
-
-const SelectAllHeaderCheckbox: React.FC<SelectAllHeaderCheckboxProps> = ({ isChecked, isIndeterminate, onChange }) => {
-    const checkboxRef = useRef<HTMLInputElement>(null);
-
-    useEffect(() => {
-        if (checkboxRef.current) {
-            checkboxRef.current.indeterminate = isIndeterminate;
-        }
-    }, [isIndeterminate]);
-
-    return (
-        <input
-            type="checkbox"
-            ref={checkboxRef}
-            checked={isChecked}
-            onChange={(e) => onChange(e.target.checked)}
-            style={{
-                transform: 'scale(1.2)',
-                cursor: 'pointer',
-            }}
-        />
-    );
-};
 
 // Semaphore class to control concurrency
 class Semaphore {
@@ -328,9 +146,9 @@ const DEFAULT_AI_SUGGEST_COUNT = 20;
 
 const OfflineWindow: React.FC = () => {
 
-
     const leftPanelRef = useRef<HTMLDivElement>(null);
     const rightContentRef = useRef<HTMLDivElement>(null);
+    const leftOverlayDrawerRef = useRef<HTMLDivElement>(null);
     const rightInnerRef = useRef<HTMLDivElement>(null);
     const eaRefreshedVidSetRef = useRef<Set<string>>(new Set());
 
@@ -670,17 +488,6 @@ const OfflineWindow: React.FC = () => {
         };
     }, [displayMode, historyPage, historyItemsPerPage, historyReloadToken, dispatch]);
 
-    function formatHistoryDateTime(value?: string) {
-        if (!value) return "N/A";
-
-        const normalized = value.includes("T") ? value : value.replace(" ", "T");
-        const d = new Date(normalized);
-
-        if (Number.isNaN(d.getTime())) return value;
-
-        return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
-    }
-
     const availablePatchFields = ALL_PATCH_FIELDS.filter(f => !selectedPatchFields.has(f.key));
 
     const getAiSuggestCount = () => {
@@ -887,9 +694,6 @@ const OfflineWindow: React.FC = () => {
             )
         );
     };
-
-    // how many tags per page
-    const TAGS_PER_PAGE = 100;
 
     // 1) On mount, fetch the initial list of excluded tags from the server
     useEffect(() => {
@@ -1555,7 +1359,24 @@ const OfflineWindow: React.FC = () => {
 
     // Toggle: click the same card again to close; different card swaps the content
     const toggleLeftOverlay = useCallback((entry: OfflineDownloadEntry) => {
-        setLeftOverlayEntry(prev => (prev?.civitaiVersionID === entry.civitaiVersionID ? null : entry));
+        setLeftOverlayEntry(prev => {
+            const nextEntry =
+                prev?.civitaiVersionID === entry.civitaiVersionID ? null : entry;
+
+            // if opening/swapping preview, reset left panel scroll
+            if (nextEntry) {
+                requestAnimationFrame(() => {
+                    if (leftPanelRef.current) {
+                        leftPanelRef.current.scrollTo({
+                            top: 0,
+                            behavior: 'auto',
+                        });
+                    }
+                });
+            }
+
+            return nextEntry;
+        });
     }, []);
 
     const closeLeftOverlay = useCallback(() => setLeftOverlayEntry(null), []);
@@ -1568,26 +1389,6 @@ const OfflineWindow: React.FC = () => {
         return () => window.removeEventListener('keydown', onKey);
     }, [leftOverlayEntry, closeLeftOverlay]);
 
-    // Function to style rows
-    const getRowStyle = (params: any) => {
-        const isEven = params.node.rowIndex % 2 === 0;
-        const isSelected = selectedIds.has(params.data.versionid);
-        return {
-            backgroundColor: isSelected
-                ? isDarkMode
-                    ? '#666666'
-                    : '#e0e0e0'
-                : isEven
-                    ? currentTheme.evenRowBackgroundColor
-                    : currentTheme.oddRowBackgroundColor,
-            color: currentTheme.rowFontColor,
-        };
-    };
-
-    // Function to style cells
-    const cellStyle = (params: any) => ({
-        color: currentTheme.rowFontColor,
-    });
 
     const visibleEntries = React.useMemo(() => {
         switch (displayMode) {
@@ -1624,171 +1425,6 @@ const OfflineWindow: React.FC = () => {
         visibleEntries.some(e => selectedIds.has(e.civitaiVersionID)) && !isAllSelected;
 
 
-    // **3. Define column definitions for Ag-Grid with dynamic styles**
-    const columnDefs: ColDef[] = [
-        {
-            headerName: 'ID',
-            field: 'id',
-            width: 60,
-            cellStyle: { textAlign: 'center', padding: '5px' } // Center-align ID column 
-        },
-        {
-            headerName: "",
-            field: "select",
-            sortable: false,
-            filter: false,
-            width: 50,
-            // **4. Add headerComponentFramework and headerComponentParams for Select All functionality**
-            headerComponent: SelectAllHeaderCheckbox,
-            headerComponentParams: {
-                isChecked: isAllSelected,
-                isIndeterminate: isIndeterminate,
-                onChange: (checked: boolean) => {
-                    if (checked) {
-                        // Select all filtered entries
-                        const newSelectedIds = new Set(selectedIds);
-                        visibleEntries.forEach(entry => newSelectedIds.add(entry.civitaiVersionID));
-                        setSelectedIds(newSelectedIds);
-                    } else {
-                        // Unselect all filtered entries
-                        const newSelectedIds = new Set(selectedIds);
-                        visibleEntries.forEach(entry => newSelectedIds.delete(entry.civitaiVersionID));
-                        setSelectedIds(newSelectedIds);
-                    }
-                }
-            },
-            cellRenderer: (params: any) => (
-                <input
-                    type="checkbox"
-                    disabled={!canChangeSelection}
-                    checked={selectedIds.has(params.data.versionid)}
-                    onChange={() => toggleSelect(params.data.versionid)}
-                    style={{
-                        transform: 'scale(1.2)',
-                        cursor: isModifyMode ? 'pointer' : 'not-allowed',
-                        accentColor: isDarkMode ? '#fff' : '#000',
-                    }}
-                />
-            ),
-            headerClass: 'custom-header', // Optional: for additional styling
-        },
-        {
-            headerName: 'Title',
-            field: 'title',
-            flex: 1,
-            tooltipField: 'title', // This tells AG Grid to show the field's content as tooltip
-            cellStyle: {
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-            },
-        },
-        {
-            headerName: 'Model Name',
-            field: 'modelName',
-            flex: 1,
-            tooltipField: 'modelName', // This tells AG Grid to show the field's content as tooltip
-            cellStyle: {
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-            },
-        },
-        {
-            headerName: 'Version Name',
-            field: 'versionName',
-            flex: 1,
-            tooltipField: 'versionName',
-            cellStyle: {
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-            },
-        },
-        {
-            headerName: "Model ID",
-            field: "modelId",
-            sortable: true,
-            filter: false,
-            cellStyle: cellStyle,
-        },
-        {
-            headerName: "Version ID",
-            field: "versionid",
-            sortable: true,
-            filter: false,
-            cellStyle: cellStyle,
-        },
-        {
-            headerName: "Base Model",
-            field: "baseModel",
-            sortable: true,
-            filter: false,
-            cellStyle: cellStyle,
-        },
-        {
-            headerName: 'URL',
-            field: 'url',
-            flex: 2, // give URL more space
-            tooltipField: 'url',
-            cellStyle: {
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                padding: '5px',
-            },
-            cellRenderer: (params: any) => {
-                return (
-                    <span
-                        style={{
-                            display: 'inline-block',
-                            width: '100%',
-                            userSelect: 'text', // optional: let user copy
-                        }}
-                    >
-                        {params.value}
-                    </span>
-                );
-            },
-        },
-        {
-            headerName: 'FilePath',
-            field: 'filepath',
-            flex: 1,
-            tooltipField: 'filepath',
-            cellStyle: {
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-            },
-        },
-        {
-            headerName: 'Category',
-            field: 'category',
-            flex: 1,
-            tooltipField: 'category',
-            cellStyle: {
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-            },
-        },
-        {
-            headerName: "Early Access",
-            field: "earlyAccessDisplay",
-            sortable: true,
-            filter: false,
-            cellStyle: cellStyle,
-        },
-        {
-            headerName: "File Size (MB)",
-            field: "filesize",
-            sortable: true,
-            filter: false,
-            cellStyle: cellStyle,
-        }
-    ];
-
 
     const currentTheme = React.useMemo(
         () => (isDarkMode ? darkTheme : lightTheme),
@@ -1800,38 +1436,6 @@ const OfflineWindow: React.FC = () => {
         [isDarkMode, currentTheme, leftOverlayEntry]
     );
 
-    // Prepare row data by extracting necessary fields and computing file size
-    const rowData = useMemo(() => {
-        return filteredDownloadList.map((entry, index) => {
-            // Safely access modelVersionObject and files
-            const safetensorFile = entry.modelVersionObject?.files?.find(file => file.name.endsWith('.safetensors'));
-            const filesizeMB = safetensorFile ? (safetensorFile.sizeKB / 1024).toFixed(2) : 'N/A';
-
-            return {
-                id: index + 1,
-                title: entry?.modelVersionObject?.model?.name ?? 'N/A',
-                modelName: entry.civitaiFileName ?? 'N/A',
-                versionName: entry.modelVersionObject?.name ?? 'N/A',
-                modelId: entry.modelVersionObject?.modelId ?? 'N/A',
-                versionid: entry.civitaiVersionID ?? 'N/A',
-                baseModel: entry.modelVersionObject?.baseModel ?? 'N/A',
-                category: entry.selectedCategory ?? 'N/A',
-                filepath: entry.downloadFilePath ?? 'N/A',
-                url: entry.civitaiUrl ?? 'N/A',
-                creator: entry.modelVersionObject?.creator?.username ?? 'N/A',
-                filesize: filesizeMB + " MB",
-                earlyAccessDisplay: earlyAccessLabel(entry),
-            };
-        });
-    }, [filteredDownloadList]);
-
-    // Define default column properties
-    const defaultColDef: ColDef = {
-        flex: 1,
-        minWidth: 150,
-        resizable: true,
-        cellStyle: cellStyle,
-    };
 
     const badgeCount = (n: number) => (String(n));
 
@@ -2589,6 +2193,15 @@ const OfflineWindow: React.FC = () => {
         return () => document.removeEventListener('click', onDocClick);
     }, [leftOverlayEntry, closeLeftOverlay]);
 
+    useEffect(() => {
+        if (!leftOverlayEntry) return;
+
+        leftOverlayDrawerRef.current?.scrollTo({
+            top: 0,
+            behavior: 'auto',
+        });
+    }, [leftOverlayEntry]);
+
     const toImgUrls = (arr: OfflineDownloadEntry["imageUrlsArray"]) =>
         (Array.isArray(arr) ? arr : [])
             .map((x: any) => (typeof x === "string" ? x : x?.url))
@@ -2894,1549 +2507,6 @@ const OfflineWindow: React.FC = () => {
         const clamped = Math.min(Math.max(1, n), totalPages || 1);
         setCurrentPage(clamped);
     };
-
-    const historyColumnDefs: ColDef[] = [
-        {
-            headerName: "Image",
-            field: "imageUrl",
-            width: 130,
-            sortable: false,
-            filter: false,
-            cellRenderer: (params: any) => {
-                const url = params.value;
-                if (!url) return <span>N/A</span>;
-
-                return (
-                    <img
-                        src={url}
-                        alt="History"
-                        style={{
-                            width: "80px",
-                            height: "80px",
-                            objectFit: "contain",
-                            borderRadius: "4px",
-                            display: "block",
-                            margin: "0 auto",
-                        }}
-                    />
-                );
-            },
-            cellStyle: {
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "6px",
-            },
-        },
-        {
-            headerName: "Model ID",
-            field: "civitaiModelID",
-            sortable: true,
-            filter: false,
-            cellStyle: cellStyle,
-        },
-        {
-            headerName: "Version ID",
-            field: "civitaiVersionID",
-            sortable: true,
-            filter: false,
-            cellStyle: cellStyle,
-        },
-        {
-            headerName: "Created At",
-            field: "createdAt",
-            flex: 1,
-            sortable: true,
-            filter: false,
-            tooltipField: "createdAt",
-            cellStyle: cellStyle,
-        },
-        {
-            headerName: "Updated At",
-            field: "updatedAt",
-            flex: 1,
-            sortable: true,
-            filter: false,
-            tooltipField: "updatedAt",
-            cellStyle: cellStyle,
-        },
-    ];
-
-    const historyRowData = useMemo(() => {
-        return modelOfflineDownloadHistoryList.map((entry) => ({
-            civitaiModelID: entry.civitaiModelID ?? "N/A",
-            civitaiVersionID: entry.civitaiVersionID ?? "N/A",
-            imageUrl: entry.imageUrl ?? "",
-            createdAt: formatHistoryDateTime(entry.createdAt),
-            updatedAt: formatHistoryDateTime(entry.updatedAt),
-        }));
-    }, [modelOfflineDownloadHistoryList]);
-
-    const PreviewCard: React.FC<{ entry: OfflineDownloadEntry; isDarkMode: boolean }> = ({ entry, isDarkMode }) => {
-        const showEA = isEntryEarlyAccess(entry);
-        const [activeIdx, setActiveIdx] = React.useState(0);
-        return (
-            <Card
-                style={{
-                    width: '100%',
-                    maxWidth: 520,
-                    margin: '0 auto',
-                    border: isDarkMode ? '1px solid #666' : '1px solid #ccc',
-                    borderRadius: 10,
-                    backgroundColor: isDarkMode ? '#333' : '#fff',
-                    color: isDarkMode ? '#fff' : '#000',
-                    boxShadow: isDarkMode ? '2px 2px 12px rgba(255,255,255,0.08)' : '2px 2px 12px rgba(0,0,0,0.1)',
-                    position: 'relative',
-                    padding: 12
-                }}
-            >
-                {showEA && (
-                    <div style={{
-                        position: 'absolute', top: 8, right: 8,
-                        background: isDarkMode ? '#444' : '#fff',
-                        color: 'red', fontWeight: 700, fontSize: '.8rem',
-                        border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
-                        padding: '2px 6px', borderRadius: 6
-                    }}>
-                        {(() => {
-                            const ends = getEarlyAccessEndsAt(entry);
-                            return ends ? formatLocalDateTime(ends) : 'Early Access Only';
-                        })()}
-
-                    </div>
-                )}
-
-                <div style={{
-                    display: 'flex', alignItems: 'center',
-                    marginTop: 10, marginBottom: 6,
-                    borderBottom: `1px solid ${isDarkMode ? '#555' : '#ccc'}`, paddingBottom: 6
-                }}>
-                    {entry.modelVersionObject?.baseModel && (
-                        <span style={{
-                            fontSize: '.75rem', fontWeight: 700, background: '#007bff',
-                            color: '#fff', padding: '2px 8px', borderRadius: 6, marginRight: 8
-                        }}>
-                            {entry.modelVersionObject.baseModel}
-                        </span>
-                    )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                        <TitleNameToggle titleName={entry?.modelVersionObject?.model?.name ?? 'N/A'} truncateAfter={40} />
-                    </div>
-                </div>
-
-                {entry.imageUrlsArray?.length ? (
-                    <div style={{ height: 400, overflow: 'hidden' }}>
-                        <Carousel
-                            variant={isDarkMode ? 'dark' : 'light'}
-                            indicators={entry.imageUrlsArray.length > 1}
-                            controls={entry.imageUrlsArray.length > 1}
-                            interval={null}
-                            style={{ height: '100%', marginBottom: 0, overflow: 'hidden' }}
-                            activeIndex={activeIdx}
-                            onSelect={(next) => setActiveIdx(next as number)}
-                        >
-                            {entry.imageUrlsArray.map((img, idx) => {
-                                const { url } = normalizeImg(img as any);
-                                const len = entry.imageUrlsArray.length;
-
-                                const isActive = idx === activeIdx;
-                                const isNear =
-                                    idx === (activeIdx + 1) % len || idx === (activeIdx - 1 + len) % len;
-
-                                // choose “tiers” of sizes
-                                const widths = isActive
-                                    ? [520, 720, 960]  // sharp for current slide
-                                    : isNear
-                                        ? [400, 520]       // medium for next/prev
-                                        : [200, 320];      // tiny thumbnails for others
-
-                                return (
-                                    <Carousel.Item key={idx} style={{ height: '400px' }}>
-                                        <div
-                                            style={{
-                                                height: '100%',
-                                                width: '100%',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                background: isDarkMode ? '#2b2b2b' : '#f5f5f5',
-                                                borderRadius: 6,
-                                                overflow: 'hidden',
-                                            }}
-                                        >
-                                            <img
-                                                className="d-block"
-                                                // use a small src, let srcSet upgrade when active
-                                                src={withWidth(url, widths[0])}
-                                                srcSet={buildSrcSet(url, widths)}
-                                                sizes="(max-width: 560px) 100vw, 520px"
-                                                loading={isActive ? 'eager' : 'lazy'}
-                                                decoding="async"
-                                                alt={`Preview ${idx + 1}`}
-                                                style={{
-                                                    width: '100%',
-                                                    height: '100%',
-                                                    objectFit: 'contain',
-                                                    display: 'block',
-                                                }}
-                                            />
-                                        </div>
-                                    </Carousel.Item>
-                                );
-                            })}
-                        </Carousel>
-                    </div>
-                ) : (
-                    <div
-                        style={{
-                            height: 400,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            background: isDarkMode ? '#555' : '#f0f0f0',
-                            borderRadius: 6,
-                        }}
-                    >
-                        No Images Available
-                    </div>
-                )}
-
-
-
-                <div style={{ marginTop: 8, fontSize: '.9rem', lineHeight: 1.35 }}>
-                    <div title={entry.modelVersionObject?.name ?? 'N/A'}><strong>Version:</strong> {entry.modelVersionObject?.name ?? 'N/A'}</div>
-
-                    <div data-no-select="true">
-                        <FileNameToggle fileName={entry.civitaiFileName ?? 'N/A'} truncateAfter={56} />
-                    </div>
-
-                    {Array.isArray(entry.civitaiTags) && entry.civitaiTags.length > 0 && (
-                        <div data-no-select="true">
-                            <TagList
-                                tags={(() => {
-                                    const base = Array.isArray(entry.civitaiTags) ? entry.civitaiTags : [];
-
-                                    const tokenize = (s?: string) =>
-                                        (s || "")
-                                            .replace(/\.[^/.]+$/, "")
-                                            .split(/[^\p{L}\p{N}]+/gu)
-                                            .map(x => x.trim())
-                                            .filter(Boolean);
-
-                                    const fileTags = tokenize(entry.civitaiFileName);
-                                    const nameTags = tokenize(entry?.modelVersionObject?.model?.name);
-
-                                    const isValid = (t: string) => {
-                                        const clean = (t || "").trim();
-                                        if (clean.length < 2) return false;
-                                        if (/^\d+$/u.test(clean)) return false;                 // remove "12"
-                                        if (/^[A-Z]{2}$/u.test(clean)) return false;            // remove "IL"
-
-                                        const letterCount = (clean.match(/\p{L}/gu) || []).length;
-                                        if (letterCount < 2) return false;                      // needs >= 2 letters
-                                        return true;
-                                    };
-
-
-                                    const seen = new Set<string>();
-                                    const merged: string[] = [];
-
-                                    for (const t of [...base, ...fileTags, ...nameTags]) {
-                                        const clean = (t || "").trim();
-                                        if (!isValid(clean)) continue;
-
-                                        const key = clean.toLowerCase();
-                                        if (seen.has(key)) continue;
-
-                                        seen.add(key);
-                                        merged.push(clean);
-                                    }
-
-                                    return merged;
-                                })()}
-                                isDarkMode={isDarkMode}
-                            />
-
-                        </div>
-                    )}
-
-                    <div style={{ marginTop: 4, whiteSpace: 'normal', wordWrap: 'break-word' }}>
-                        <strong>Download Path:</strong> {entry.downloadFilePath ?? 'N/A'}
-                    </div>
-                    <div><strong>Category:</strong> {entry.selectedCategory ?? 'N/A'}</div>
-                    <div><strong>Model ID:</strong> {entry.modelVersionObject?.modelId ?? 'N/A'}</div>
-                    <div><strong>Version ID:</strong> {entry.modelVersionObject?.id ?? 'N/A'}</div>
-                    <div>
-                        <strong>URL:</strong>{' '}
-                        {entry.civitaiUrl ? (
-                            <a href={entry.civitaiUrl} target="_blank" rel="noopener noreferrer" style={{ color: isDarkMode ? '#60A5FA' : '#0d6efd' }}>
-                                Visit Model
-                            </a>
-                        ) : 'N/A'}
-                    </div>
-                    <div><strong>Creator:</strong> {entry.modelVersionObject?.creator?.username ?? 'N/A'}</div>
-                    <div>
-                        <strong>File Size:</strong>{' '}
-                        {(() => {
-                            const f = entry.modelVersionObject?.files?.find(file => file.name.endsWith('.safetensors'));
-                            return f ? `${(f.sizeKB / 1024).toFixed(2)} MB` : 'N/A';
-                        })()}
-                    </div>
-                </div>
-            </Card>
-        );
-    };
-
-
-    // **BigCardMode Component Implementation**
-    const BigCardMode: React.FC<BigCardModeProps> = ({
-        filteredDownloadList,
-        isDarkMode,
-        isModifyMode,
-        selectedIds,
-        toggleSelect,
-        handleSelectAll,
-        showGalleries,
-        onToggleOverlay,
-        onRefreshRecord,
-        activePreviewId,
-        displayMode,
-        onErrorCardDownload,
-        canChangeSelection,
-        onToggleIsError
-    }) => {
-
-        const [errorDownloadMethod, setErrorDownloadMethod] = React.useState<'server' | 'browser'>('browser');
-
-        if (filteredDownloadList.length === 0) {
-            return (
-                <div style={{ color: isDarkMode ? '#fff' : '#000' }}>
-                    No downloads available.
-                </div>
-            );
-        }
-        return (
-            <div>
-                <div
-                    style={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        gap: '20px',
-                        justifyContent: 'center'
-                    }}
-                >
-                    {filteredDownloadList.map((entry, cardIndex) => {
-
-                        const selectionDisabled =
-                            displayMode === "recentCard" ||
-                            displayMode === "holdCard" ||
-                            displayMode === "earlyAccessCard" ||
-                            displayMode === "historyTable" ||
-                            displayMode === "errorCard";
-
-                        const canSelect = !selectionDisabled && canChangeSelection;
-
-                        const baseBg = isDarkMode ? "#333" : "#fff";
-                        const selectedBg = isDarkMode ? "#1f2937" : "#eaf2ff";
-                        const baseBorder = isDarkMode ? "#555" : "#ccc";
-                        const selectedBorder = isDarkMode ? "#60A5FA" : "#2563eb";
-
-                        const baseShadow = isDarkMode
-                            ? "2px 2px 8px rgba(255,255,255,0.1)"
-                            : "2px 2px 8px rgba(0,0,0,0.1)";
-
-                        const selectedShadow = isDarkMode
-                            ? "0 0 0 2px rgba(96,165,250,0.35), 2px 2px 10px rgba(255,255,255,0.12)"
-                            : "0 0 0 2px rgba(37,99,235,0.25), 2px 2px 10px rgba(0,0,0,0.12)";
-
-
-                        const isSelected = selectedIds.has(entry.civitaiVersionID);
-                        const showEA = isEntryEarlyAccess(entry);
-
-
-                        return (
-                            <Card
-                                key={cardIndex}
-                                style={{
-                                    width: "100%",
-                                    maxWidth: "380px",
-                                    border: "1px solid",
-                                    borderColor: isSelected ? selectedBorder : baseBorder,
-                                    borderRadius: "8px",
-                                    boxShadow: isSelected ? selectedShadow : baseShadow,
-                                    backgroundColor: isSelected ? selectedBg : baseBg,
-                                    color: isDarkMode ? "#fff" : "#000",
-                                    position: "relative",
-                                    cursor: canSelect ? "pointer" : "default",
-                                    opacity: isModifyMode && canSelect && !isSelected ? 0.8 : 1,
-                                    transition:
-                                        "background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease",
-                                    overflow: "hidden",
-                                    margin: "0 auto",
-                                    padding: "10px",
-                                }}
-                                onClick={(e) => {
-                                    if (!canSelect) return;
-                                    if (isInteractiveClickTarget(e.target)) return;
-                                    toggleSelect(entry.civitaiVersionID);
-                                }}
-                                onKeyDown={(e) => {
-                                    if (!canSelect) return;
-                                    if (e.key === "Enter" || e.key === " ") {
-                                        e.preventDefault();
-                                        toggleSelect(entry.civitaiVersionID);
-                                    }
-                                }}
-                                role={canSelect ? "button" : undefined}
-                                tabIndex={canSelect ? 0 : -1}
-                                aria-pressed={canSelect ? isSelected : undefined}
-                            >
-
-                                <div
-                                    style={{
-                                        position: "absolute",
-                                        top: 8,
-                                        left: 8,
-                                        right: 8,
-                                        zIndex: 3,
-                                        display: "flex",
-                                        alignItems: "center",
-                                        justifyContent: "space-between",
-                                        pointerEvents: "none", // IMPORTANT: children that need clicks set to auto
-                                    }}
-                                >
-                                    {/* LEFT (was CENTER) */}
-                                    <div style={{ display: "flex", alignItems: "center", pointerEvents: "auto" }}>
-                                        <div
-                                            style={{
-                                                display: "inline-flex",
-                                                alignItems: "center",
-                                                gap: 6,
-                                                padding: "2px 8px",
-                                                borderRadius: 999,
-                                                background: isDarkMode ? "rgba(0,0,0,0.45)" : "rgba(255,255,255,0.85)",
-                                                border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.15)"
-                                                    }`,
-                                                backdropFilter: "blur(2px)",
-                                                fontSize: 12,
-                                                fontWeight: 800,
-                                                color: isDarkMode ? "#fff" : "#111",
-                                                pointerEvents: "auto",
-                                            }}
-                                        >
-                                            <span style={{ minWidth: 18, textAlign: "center" }}>
-                                                {cardIndex + 1}
-                                            </span>
-
-                                            <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onRefreshRecord?.(entry);
-                                                }}
-                                                disabled={isLoading}
-                                                title="Refresh/update this record"
-                                                aria-label="Refresh/update this record"
-                                                style={{
-                                                    display: "inline-flex",
-                                                    alignItems: "center",
-                                                    justifyContent: "center",
-                                                    width: 22,
-                                                    height: 22,
-                                                    borderRadius: 8,
-                                                    border: isDarkMode
-                                                        ? "1px solid rgba(255,255,255,0.18)"
-                                                        : "1px solid rgba(0,0,0,0.18)",
-                                                    background: "transparent",
-                                                    color: "inherit",
-                                                    cursor: isLoading ? "not-allowed" : "pointer",
-                                                    padding: 0,
-                                                    opacity: isLoading ? 0.6 : 1,
-                                                }}
-                                            >
-                                                <MdRefresh size={16} />
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {/* CENTER (was LEFT) */}
-                                    <div
-                                        style={{
-                                            flex: 1,
-                                            display: "flex",
-                                            justifyContent: "center",
-                                            marginLeft: -100,
-                                            pointerEvents: "none",
-                                        }}
-                                    >
-                                        {isSelected && (
-                                            <div
-                                                style={{
-                                                    display: "inline-flex",
-                                                    alignItems: "center",
-                                                    gap: 6,
-                                                    background: isDarkMode ? "rgba(37,99,235,0.9)" : "#2563eb",
-                                                    color: "#fff",
-                                                    borderRadius: 999,
-                                                    padding: "2px 8px",
-                                                    fontSize: 12,
-                                                    fontWeight: 700,
-                                                    pointerEvents: "none",
-                                                }}
-                                            >
-                                                <TfiCheckBox /> Selected
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* RIGHT */}
-                                    <div style={{ display: "flex", alignItems: "center", pointerEvents: "auto" }}>
-                                        {/* Early Access badge at the top-right */}
-                                        {showEA && (
-                                            <div
-                                                style={{
-                                                    position: 'absolute',
-                                                    top: '5px',
-                                                    right: '5px',
-                                                    color: 'red',
-                                                    fontWeight: 'bold',
-                                                    fontSize: '0.8rem',
-                                                    backgroundColor: isDarkMode ? '#444' : '#fff',
-                                                    padding: '2px 4px',
-                                                    borderRadius: '4px',
-                                                    border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
-                                                }}
-                                            >
-                                                {(() => {
-                                                    const ends = getEarlyAccessEndsAt(entry);
-                                                    return ends ? formatLocalDateTime(ends) : 'Early Access Only';
-                                                })()}
-
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* ---- 1) BaseModel badge + Title ---- */}
-                                <div
-                                    style={{
-                                        display: 'flex',            // <-- make this a flex container
-                                        alignItems: 'center',       // vertically center badge + title
-                                        marginTop: '40px',
-                                        marginBottom: '5px',
-                                        borderBottom: `1px solid ${isDarkMode ? '#555' : '#ccc'}`,
-                                        paddingBottom: '5px',
-                                    }}
-                                >
-                                    {/* BaseModel as a badge, only if present */}
-                                    {entry.modelVersionObject?.baseModel && (
-                                        <span
-                                            style={{
-                                                fontSize: '0.7rem',
-                                                fontWeight: 'bold',
-                                                backgroundColor: '#007bff',
-                                                color: '#fff',
-                                                padding: '2px 6px',
-                                                borderRadius: '4px',
-                                                marginRight: '6px',
-                                                flexShrink: 0,          // never shrink the badge
-                                            }}
-                                        >
-                                            {entry.modelVersionObject.baseModel}
-                                        </span>
-                                    )}
-
-                                    {/* wrap your toggle in a flex child so it can shrink & ellipsis properly */}
-                                    <div style={{ flex: 1, minWidth: 0 }} data-no-select="true">
-                                        <TitleNameToggle
-                                            titleName={entry?.modelVersionObject?.model?.name ?? 'N/A'}
-                                            truncateAfter={30}
-                                        />
-                                    </div>
-                                </div>
-
-
-                                {/* Images */}
-                                {entry.imageUrlsArray && entry.imageUrlsArray.length > 0 ? (
-                                    showGalleries ? (
-                                        // Full carousel (same as before)
-                                        <Carousel
-                                            variant={isDarkMode ? 'dark' : 'light'}
-                                            indicators={entry.imageUrlsArray.length > 1}
-                                            controls={entry.imageUrlsArray.length > 1}
-                                            interval={null}
-                                            style={{ marginBottom: 0 }}
-                                        >
-                                            {entry.imageUrlsArray.map((img, imgIndex) => {
-                                                const { url, width, height } = normalizeImg(img as any);
-                                                const baseW = 380;
-                                                return (
-                                                    <Carousel.Item key={imgIndex}>
-                                                        <img
-                                                            className="d-block w-100"
-                                                            src={withWidth(url, baseW)}
-                                                            srcSet={buildSrcSet(url, [320, 480, 640, 800])}
-                                                            sizes="(max-width: 420px) 100vw, 380px"
-                                                            loading={imgIndex === 0 && cardIndex === 0 ? 'eager' : 'lazy'}
-                                                            decoding="async"
-                                                            width={width ?? undefined}
-                                                            height={height ?? undefined}
-                                                            alt={`Slide ${imgIndex + 1}`}
-                                                            style={{ maxHeight: '300px', objectFit: 'contain', margin: '0 auto' }}
-                                                        />
-                                                    </Carousel.Item>
-                                                );
-                                            })}
-                                        </Carousel>
-                                    ) : (
-                                        // Only the first image (fast)
-                                        (() => {
-                                            const first = normalizeImg(entry.imageUrlsArray[0] as any);
-                                            const baseW = 380;
-                                            return (
-                                                <img
-                                                    className="d-block w-100"
-                                                    src={withWidth(first.url, baseW)}
-                                                    srcSet={buildSrcSet(first.url, [320, 480, 640, 800])}
-                                                    sizes="(max-width: 420px) 100vw, 380px"
-                                                    loading={cardIndex === 0 ? 'eager' : 'lazy'}
-                                                    decoding="async"
-                                                    width={first.width ?? undefined}
-                                                    height={first.height ?? undefined}
-                                                    alt="Preview"
-                                                    style={{ maxHeight: '300px', objectFit: 'contain', margin: '0 auto' }}
-                                                />
-                                            );
-                                        })()
-                                    )
-                                ) : (
-                                    <div
-                                        style={{
-                                            height: '200px',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            backgroundColor: isDarkMode ? '#555' : '#f0f0f0',
-                                            marginBottom: 0,
-                                            borderRadius: '4px',
-                                        }}
-                                    >
-                                        <span>No Images Available</span>
-                                    </div>
-                                )}
-
-                                {/* 3) Smaller text under the carousel */}
-                                <div
-                                    style={{
-                                        marginTop: '5px',
-                                        fontSize: '0.8rem', // smaller text
-                                        lineHeight: 1.3,
-                                        padding: '0 5px',
-                                    }}
-                                >
-                                    {/* Version Name */}
-                                    <div
-                                        style={{
-                                            textAlign: 'center',
-                                            wordWrap: 'break-word',
-                                            whiteSpace: 'nowrap',
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis',
-                                        }}
-                                        title={entry.modelVersionObject?.name ?? 'N/A'}
-                                    >
-                                        <strong>Version:</strong> {entry.modelVersionObject?.name ?? 'N/A'}
-                                    </div>
-
-                                    {/* File Name */}
-                                    <FileNameToggle
-                                        fileName={entry.civitaiFileName ?? 'N/A'}
-                                        truncateAfter={40}   // adjust to taste
-                                    />
-
-                                    {/* Tags */}
-                                    {Array.isArray(entry.civitaiTags) && entry.civitaiTags.length > 0 && (
-                                        <div data-no-select="true">
-                                            <TagList
-                                                tags={(() => {
-                                                    const base = Array.isArray(entry.civitaiTags) ? entry.civitaiTags : [];
-
-                                                    const tokenize = (s?: string) =>
-                                                        (s || "")
-                                                            .replace(/\.[^/.]+$/, "")
-                                                            .split(/[^\p{L}\p{N}]+/gu)
-                                                            .map(x => x.trim())
-                                                            .filter(Boolean);
-
-                                                    const fileTags = tokenize(entry.civitaiFileName);
-                                                    const nameTags = tokenize(entry?.modelVersionObject?.model?.name);
-
-                                                    const isValid = (t: string) => {
-                                                        const clean = (t || "").trim();
-                                                        if (clean.length < 2) return false;
-                                                        if (/^\d+$/u.test(clean)) return false;                 // remove "12"
-                                                        if (/^[A-Z]{2}$/u.test(clean)) return false;            // remove "IL"
-
-                                                        const letterCount = (clean.match(/\p{L}/gu) || []).length;
-                                                        if (letterCount < 2) return false;                      // needs >= 2 letters
-                                                        return true;
-                                                    };
-
-
-                                                    const seen = new Set<string>();
-                                                    const merged: string[] = [];
-
-                                                    for (const t of [...base, ...fileTags, ...nameTags]) {
-                                                        const clean = (t || "").trim();
-                                                        if (!isValid(clean)) continue;
-
-                                                        const key = clean.toLowerCase();
-                                                        if (seen.has(key)) continue;
-
-                                                        seen.add(key);
-                                                        merged.push(clean);
-                                                    }
-
-                                                    return merged;
-                                                })()}
-                                                isDarkMode={isDarkMode}
-                                            />
-
-                                        </div>
-                                    )}
-
-                                    {/* 3) Show full download path with line wrapping */}
-                                    <div
-                                        style={{
-                                            margin: "4px 0",
-                                        }}
-                                    >
-                                        {editingPathId === entry.civitaiVersionID ? (
-                                            <div>
-                                                <strong>Download Path:</strong>
-                                                <div style={{ marginTop: 6 }}>
-                                                    <DownloadPathEditor
-                                                        initialValue={entry.downloadFilePath ?? ""}
-                                                        isDarkMode={isDarkMode}
-                                                        onSave={(nextPath: any) => handleDownloadPathSave(entry, nextPath)}
-                                                        onCancel={() => setEditingPathId(null)}
-                                                    />
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div
-                                                style={{
-                                                    display: "flex",
-                                                    alignItems: "flex-start",
-                                                    gap: 8,
-                                                }}
-                                            >
-                                                <strong style={{ flexShrink: 0 }}>Download Path:</strong>
-
-                                                <span
-                                                    data-no-select="true"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        if (entry.downloadFilePath) {
-                                                            fetchOpenModelDownloadDirectory(entry.downloadFilePath, dispatch);
-                                                        }
-                                                    }}
-                                                    style={{
-                                                        flex: 1,
-                                                        cursor: entry.downloadFilePath ? "pointer" : "default",
-                                                        textDecoration: entry.downloadFilePath ? "underline" : "none",
-                                                        color: entry.downloadFilePath
-                                                            ? (isDarkMode ? "#60A5FA" : "#1D4ED8")
-                                                            : (isDarkMode ? "#fff" : "#000"),
-                                                        whiteSpace: "normal",
-                                                        wordBreak: "break-word",
-                                                        lineHeight: 1.35,
-                                                    }}
-                                                    title={entry.downloadFilePath ? "Click to open model download directory" : "N/A"}
-                                                >
-                                                    {entry.downloadFilePath ?? "N/A"}
-                                                </span>
-
-                                                <button
-                                                    type="button"
-                                                    data-no-select="true"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setEditingPathId(entry.civitaiVersionID);
-                                                    }}
-                                                    title="Edit download path"
-                                                    aria-label="Edit download path"
-                                                    style={{
-                                                        display: "inline-flex",
-                                                        alignItems: "center",
-                                                        justifyContent: "center",
-                                                        width: 28,
-                                                        height: 28,
-                                                        borderRadius: 8,
-                                                        border: isDarkMode
-                                                            ? "1px solid rgba(255,255,255,0.18)"
-                                                            : "1px solid rgba(0,0,0,0.18)",
-                                                        background: "transparent",
-                                                        color: isDarkMode ? "#fff" : "#000",
-                                                        cursor: "pointer",
-                                                        padding: 0,
-                                                        flexShrink: 0,
-                                                    }}
-                                                >
-                                                    <BsPencilFill size={13} />
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {showAiSuggestionsPanel ? (
-                                        <div style={{ marginTop: 8 }}>
-                                            <strong>AI suggestion</strong>
-
-                                            <p>
-                                                <strong>Gemini Suggested Title:</strong>
-                                                <span
-                                                    title={entry.aiSuggestedArtworkTitle || ""}
-                                                    style={{
-                                                        flex: 1,
-                                                        whiteSpace: "normal",
-                                                        overflowWrap: "anywhere",   // best for long paths with no spaces
-                                                        wordBreak: "break-word",    // fallback behavior
-                                                        opacity: entry.aiSuggestedArtworkTitle ? 1 : 0.7,
-                                                    }}
-                                                >
-                                                    {entry.aiSuggestedArtworkTitle || "(none)"}
-                                                </span>
-                                            </p>
-
-                                            <p>
-                                                <strong>Jikan Normalized Title:</strong>
-                                                <span
-                                                    title={entry.jikanNormalizedArtworkTitle || ""}
-                                                    style={{
-                                                        flex: 1,
-                                                        whiteSpace: "normal",
-                                                        overflowWrap: "anywhere",   // best for long paths with no spaces
-                                                        wordBreak: "break-word",    // fallback behavior
-                                                        opacity: entry.jikanNormalizedArtworkTitle ? 1 : 0.7,
-                                                    }}
-                                                >
-                                                    {entry.jikanNormalizedArtworkTitle || "(none)"}
-                                                </span>
-                                            </p>
-
-                                            {(() => {
-                                                const suggestedPaths = mergeSuggestedPathsForEntry(entry);
-                                                const vidKey = entry.civitaiVersionID;
-
-                                                const hasUserPick = Object.prototype.hasOwnProperty.call(selectedSuggestedPathByVid, vidKey);
-                                                const selectedPath = hasUserPick
-                                                    ? (selectedSuggestedPathByVid[vidKey] ?? "")
-                                                    : (suggestedPaths[0] ?? "");
-
-                                                const selectedKey = normalizePathKey(selectedPath);
-
-                                                const clearSelected = (e: React.MouseEvent) => {
-                                                    e.stopPropagation();
-                                                    setSelectedSuggestedPathByVid((prev) => ({ ...prev, [vidKey]: "" }));
-                                                };
-
-                                                if (suggestedPaths.length === 0) {
-                                                    return (
-                                                        <div style={{ marginTop: 6, opacity: 0.85 }}>
-                                                            N/A
-                                                        </div>
-                                                    );
-                                                }
-
-                                                return (
-                                                    <div style={{ marginTop: 6 }}>
-
-                                                        {/* Selected path (defaults to the top suggestion) */}
-                                                        <div
-                                                            style={{
-                                                                display: "flex",
-                                                                alignItems: "center",
-                                                                gap: 8,
-                                                                marginBottom: 6,
-                                                            }}
-                                                        >
-                                                            <strong>Selected:</strong>
-                                                            <span
-                                                                title={selectedPath || ""}
-                                                                style={{
-                                                                    flex: 1,
-                                                                    whiteSpace: "normal",
-                                                                    overflowWrap: "anywhere",   // best for long paths with no spaces
-                                                                    wordBreak: "break-word",    // fallback behavior
-                                                                    opacity: selectedPath ? 1 : 0.7,
-
-                                                                    padding: "6px 10px",
-                                                                    borderRadius: 10,
-                                                                    border: `1px solid ${isDarkMode ? "rgba(96,165,250,0.45)" : "rgba(13,110,253,0.35)"}`,
-                                                                    background: isDarkMode ? "rgba(96,165,250,0.12)" : "rgba(13,110,253,0.08)",
-                                                                    boxShadow: isDarkMode ? "0 0 0 2px rgba(96,165,250,0.10)" : "0 0 0 2px rgba(13,110,253,0.06)",
-                                                                    fontWeight: 600,
-                                                                }}
-                                                            >
-                                                                {selectedPath || "(none)"}
-                                                            </span>
-
-                                                            <button
-                                                                type="button"
-                                                                onClick={clearSelected}
-                                                                disabled={!selectedPath}
-                                                                style={{
-                                                                    borderRadius: 8,
-                                                                    padding: "4px 10px",
-                                                                    cursor: selectedPath ? "pointer" : "not-allowed",
-                                                                    border: isDarkMode ? "1px solid rgba(255,255,255,0.18)" : "1px solid rgba(0,0,0,0.18)",
-                                                                    background: "transparent",
-                                                                    color: isDarkMode ? "#fff" : "#000",
-                                                                    opacity: selectedPath ? 1 : 0.5,
-                                                                }}
-                                                            >
-                                                                Clear
-                                                            </button>
-                                                        </div>
-
-                                                        <div style={{ fontWeight: 700, marginBottom: 6 }}>
-                                                            Suggested paths ({suggestedPaths.length})
-                                                        </div>
-
-                                                        {/* Limit to ~3 visible items; scroll for more */}
-                                                        <div style={{ maxHeight: 132, overflowY: "auto", paddingRight: 6 }}>
-                                                            <ul
-                                                                style={{
-                                                                    margin: 0,
-                                                                    padding: 0,
-                                                                    listStyle: "none",
-                                                                    display: "flex",
-                                                                    flexDirection: "column",
-                                                                    gap: 8,
-                                                                }}
-                                                            >
-                                                                {suggestedPaths.map((p) => {
-                                                                    const isSelected = selectedKey && normalizePathKey(p) === selectedKey;
-                                                                    return (
-                                                                        <li key={p}>
-                                                                            <button
-                                                                                type="button"
-                                                                                title={p} // hover shows full path
-                                                                                onClick={(e) => {
-                                                                                    e.stopPropagation();
-                                                                                    setSelectedSuggestedPathByVid((prev) => ({ ...prev, [vidKey]: p }));
-                                                                                }}
-                                                                                style={{
-                                                                                    width: "100%",
-                                                                                    borderRadius: 10,
-                                                                                    padding: "8px 10px",
-                                                                                    cursor: "pointer",
-                                                                                    textAlign: "left",
-                                                                                    border: isSelected
-                                                                                        ? (isDarkMode ? "1px solid rgba(96,165,250,0.9)" : "1px solid rgba(37,99,235,0.9)")
-                                                                                        : (isDarkMode ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(0,0,0,0.14)"),
-                                                                                    background: isSelected
-                                                                                        ? (isDarkMode ? "rgba(96,165,250,0.14)" : "rgba(37,99,235,0.10)")
-                                                                                        : (isDarkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.03)"),
-                                                                                    color: isDarkMode ? "#fff" : "#000",
-                                                                                }}
-                                                                            >
-                                                                                <span
-                                                                                    style={{
-                                                                                        display: "block",
-                                                                                        overflow: "hidden",
-                                                                                        textOverflow: "ellipsis",
-                                                                                        whiteSpace: "nowrap",
-                                                                                    }}
-                                                                                >
-                                                                                    {p}
-                                                                                </span>
-                                                                            </button>
-                                                                        </li>
-                                                                    );
-                                                                })}
-                                                            </ul>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })()}
-
-
-                                        </div>
-                                    ) : (
-                                        <>
-                                            {/* Category */}
-                                            <p style={{ margin: '4px 0' }}>
-                                                <strong>Category:</strong> {entry.selectedCategory ?? 'N/A'}
-                                            </p>
-                                            <p style={{ margin: '4px 0' }}>
-                                                <strong>Model ID:</strong> {entry.modelVersionObject?.modelId ?? 'N/A'}
-                                            </p>
-                                            <p style={{ margin: '4px 0' }}>
-                                                <strong>Version ID:</strong> {entry.modelVersionObject?.id ?? 'N/A'}
-                                            </p>
-                                            <p style={{ margin: '4px 0' }}>
-                                                <strong>URL:</strong>{' '}
-                                                {entry.civitaiUrl ? (
-                                                    <a
-                                                        href={entry.civitaiUrl}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        style={{ color: isDarkMode ? '#1e90ff' : '#007bff' }}
-                                                    >
-                                                        Visit Model
-                                                    </a>
-                                                ) : (
-                                                    'N/A'
-                                                )}
-                                            </p>
-
-                                            <p style={{ margin: '4px 0' }}>
-                                                <strong>Creator:</strong> {entry.modelVersionObject?.creator?.username ?? 'N/A'}
-                                            </p>
-
-                                            <p style={{ margin: '4px 0' }}>
-                                                <strong>File Size:</strong>{' '}
-                                                {(() => {
-                                                    const safetensorFile =
-                                                        entry.modelVersionObject?.files?.find(file =>
-                                                            file.name.endsWith('.safetensors')
-                                                        );
-                                                    return safetensorFile
-                                                        ? `${(safetensorFile.sizeKB / 1024).toFixed(2)} MB`
-                                                        : 'N/A';
-                                                })()}
-                                            </p>
-
-                                            <p style={{ margin: '4px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                <strong>isError:</strong>{' '}
-                                                <button
-                                                    type="button"
-                                                    data-no-select="true"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-
-                                                        const ok = window.confirm(
-                                                            `Are you sure you want to set isError to ${entry.isError ? "false" : "true"} for this entry?`
-                                                        );
-                                                        if (!ok) return;
-
-                                                        onToggleIsError?.(entry);
-                                                    }}
-                                                    title={`Click to set isError to ${entry.isError ? "false" : "true"}`}
-                                                    style={{
-                                                        border: "none",
-                                                        background: "transparent",
-                                                        padding: 0,
-                                                        cursor: "pointer",
-                                                        color: entry.isError ? "#22c55e" : "#9ca3af",
-                                                        display: "inline-flex",
-                                                        alignItems: "center",
-                                                        justifyContent: "center",
-                                                    }}
-                                                >
-                                                    {entry.isError ? <FaCheck size={16} /> : <FaTimes size={16} />}
-                                                </button>
-                                            </p>
-                                        </>
-                                    )}
-                                </div>
-
-                                {/* --- Hold, Priority, Remove, Preview (one line) --- */}
-                                <div style={styles.controlRowStyle}>
-                                    {/* Hold checkbox */}
-                                    <Form.Check
-                                        type="checkbox"
-                                        id={`hold-${entry.civitaiModelID}-${entry.civitaiVersionID}`}
-                                        label={<span style={{ fontWeight: 600 }}>Hold</span>}
-                                        checked={Boolean(entry.hold)}
-                                        onChange={(e) => {
-                                            e.stopPropagation();
-                                            handleHoldChange(entry, e.target.checked);
-                                        }}
-                                        disabled={isLoading}
-                                        style={{ cursor: 'pointer' }}
-                                    />
-
-                                    {/* Priority */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                        <span style={{ fontSize: '.85rem', opacity: .9 }}>Priority</span>
-                                        <Form.Select
-                                            size="sm"
-                                            value={(entry.downloadPriority ?? 10)}
-                                            onChange={(e) => {
-                                                const next = parseInt(e.target.value, 10);
-                                                handlePriorityChange(entry, next);
-                                            }}
-                                            disabled={isLoading}
-                                            style={{
-                                                width: 90,
-                                                backgroundColor: isDarkMode ? '#444' : '#fff',
-                                                color: isDarkMode ? '#fff' : '#000',
-                                                border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`
-                                            }}
-                                            aria-label="Download priority (1–10)"
-                                        >
-                                            {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
-                                                <option key={n} value={n}>{n}</option>
-                                            ))}
-                                        </Form.Select>
-                                    </div>
-
-                                    {/* right-side action buttons */}
-                                    <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
-                                        {/* Remove */}
-                                        <button
-                                            type="button"
-                                            onClick={(e) => { e.stopPropagation(); handleRemoveOne(entry); }}
-                                            title="Remove from list"
-                                            aria-label="Remove from list"
-                                            style={styles.inlineDangerBtnStyle}
-                                            disabled={isLoading}
-                                        >
-                                            <FaTrashAlt size={14} />
-                                        </button>
-
-                                        {/* Preview in left panel */}
-                                        <button
-                                            type="button"
-                                            onClick={(e) => { e.stopPropagation(); onToggleOverlay(entry); }}
-                                            title="Preview in left panel"
-                                            aria-label="Preview in left panel"
-                                            style={styles.inlineIconBtnStyle}
-                                            disabled={isLoading}
-                                        >
-                                            <LuPanelLeftOpen size={18} />
-                                        </button>
-                                    </div>
-
-                                    {displayMode === 'errorCard' && onErrorCardDownload && (
-                                        <OverlayTrigger
-                                            placement="top"
-                                            overlay={
-                                                <Tooltip id={`tooltip-error-download-${entry.civitaiVersionID}`}>
-                                                    {`Download by ${errorDownloadMethod === 'server' ? 'server' : 'browser'}`}
-                                                </Tooltip>
-                                            }
-                                        >
-                                            <Dropdown as={ButtonGroup}>
-                                                <Button
-                                                    variant="success"
-                                                    size="sm"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        onErrorCardDownload(entry, errorDownloadMethod);
-                                                    }}
-                                                >
-                                                    {errorDownloadMethod === 'server' ? <BsCloudDownloadFill /> : <FcDownload />}
-                                                </Button>
-
-                                                <Dropdown.Toggle
-                                                    split
-                                                    variant="success"
-                                                    size="sm"
-                                                    id={`errorCard-download-${entry.civitaiVersionID}`}
-                                                />
-                                                <Dropdown.Menu>
-                                                    <Dropdown.Item
-                                                        active={errorDownloadMethod === 'server'}
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setErrorDownloadMethod('server');
-                                                        }}
-                                                    >
-                                                        server
-                                                    </Dropdown.Item>
-                                                    <Dropdown.Item
-                                                        active={errorDownloadMethod === 'browser'}
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setErrorDownloadMethod('browser');
-                                                        }}
-                                                    >
-                                                        browser
-                                                    </Dropdown.Item>
-                                                </Dropdown.Menu>
-                                            </Dropdown>
-                                        </OverlayTrigger>
-                                    )}
-
-
-                                </div>
-
-                                {displayMode === "errorCard" && (
-                                    (() => {
-                                        const vid = entry.civitaiVersionID;
-                                        const st = dummyCreateStatusByVid[vid];
-                                        const running = Boolean(st?.running);
-
-                                        const color =
-                                            st?.phase === "success" ? (isDarkMode ? "#86efac" : "#166534") :
-                                                st?.phase === "fail" ? (isDarkMode ? "#fca5a5" : "#991b1b") :
-                                                    (isDarkMode ? "#fde68a" : "#92400e");
-
-                                        return (
-                                            <div
-                                                style={{
-                                                    marginTop: 8,
-                                                    display: "flex",
-                                                    alignItems: "center",
-                                                    gap: 10,
-                                                    justifyContent: "flex-end", // keep it near the right-side buttons
-                                                    paddingRight: 2,
-                                                }}
-                                            >
-                                                <Button
-                                                    size="sm"
-                                                    variant="warning"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleCreateAddDummyFromError(entry);
-                                                    }}
-                                                    disabled={isLoading || running}
-                                                    title="Download with custom downloader + insert into custom DB"
-                                                >
-                                                    Create/Add Dummy
-                                                </Button>
-
-                                                <span
-                                                    style={{
-                                                        fontSize: 12,
-                                                        color,
-                                                        whiteSpace: "nowrap",
-                                                        overflow: "hidden",
-                                                        textOverflow: "ellipsis",
-                                                        maxWidth: 260,
-                                                    }}
-                                                    title={st?.msg || st?.text || ""}
-                                                >
-                                                    {st?.text || ""}
-                                                </span>
-                                            </div>
-                                        );
-                                    })()
-                                )}
-
-
-                            </Card>
-                        );
-                    })}
-                </div>
-            </div>
-        );
-    };
-
-
-    // **SmallCardMode Component Implementation**
-    const SmallCardMode: React.FC<{
-        filteredDownloadList: OfflineDownloadEntry[];
-        isDarkMode: boolean;
-        isModifyMode: boolean;
-        canChangeSelection: boolean;
-        selectedIds: Set<string>;
-        activePreviewId: string | null;
-        toggleSelect: (id: string) => void;
-        handleSelectAll: () => void;
-        onToggleOverlay: (entry: OfflineDownloadEntry) => void;
-    }> = ({
-        filteredDownloadList,
-        isDarkMode,
-        isModifyMode,
-        selectedIds,
-        toggleSelect,
-        activePreviewId,
-        handleSelectAll,
-        onToggleOverlay,
-        canChangeSelection
-    }) => {
-            if (filteredDownloadList.length === 0) {
-                return (
-                    <div style={{ color: isDarkMode ? '#fff' : '#000' }}>
-                        No downloads available.
-                    </div>
-                );
-            }
-
-            return (
-                <div>
-                    <div
-                        style={{
-                            display: 'flex',
-                            flexWrap: 'wrap',
-                            gap: '10px',
-                            justifyContent: 'center',
-                        }}
-                    >
-                        {filteredDownloadList.map((entry, cardIndex) => {
-
-                            const selectionDisabled =
-                                displayMode === "recentCard" ||
-                                displayMode === "holdCard" ||
-                                displayMode === "earlyAccessCard" ||
-                                displayMode === "historyTable" ||
-                                displayMode === "errorCard";
-
-                            const canSelect = !selectionDisabled && canChangeSelection;
-
-                            const baseBg = isDarkMode ? "#333" : "#fff";
-                            const selectedBg = isDarkMode ? "#1f2937" : "#eaf2ff";
-                            const baseBorder = isDarkMode ? "#555" : "#ccc";
-                            const selectedBorder = isDarkMode ? "#60A5FA" : "#2563eb";
-
-                            const baseShadow = isDarkMode
-                                ? "2px 2px 8px rgba(255,255,255,0.1)"
-                                : "2px 2px 8px rgba(0,0,0,0.1)";
-
-                            const selectedShadow = isDarkMode
-                                ? "0 0 0 2px rgba(96,165,250,0.35), 2px 2px 10px rgba(255,255,255,0.12)"
-                                : "0 0 0 2px rgba(37,99,235,0.25), 2px 2px 10px rgba(0,0,0,0.12)";
-
-
-                            const isSelected = selectedIds.has(entry.civitaiVersionID);
-                            const showEA = isEntryEarlyAccess(entry);
-                            const firstImageUrl = entry.imageUrlsArray?.[0] ?? null;
-                            const isFirstCard = cardIndex === 0;
-
-                            return (
-                                <Card
-                                    key={cardIndex}
-                                    style={{
-                                        width: "100%",
-                                        maxWidth: '180px',
-                                        border: "1px solid",
-                                        borderColor: isSelected ? selectedBorder : baseBorder,
-                                        borderRadius: "8px",
-                                        boxShadow: isSelected ? selectedShadow : baseShadow,
-                                        backgroundColor: isSelected ? selectedBg : baseBg,
-                                        color: isDarkMode ? "#fff" : "#000",
-                                        position: "relative",
-                                        cursor: canSelect ? "pointer" : "default",
-                                        opacity: isModifyMode && canSelect && !isSelected ? 0.8 : 1,
-                                        transition:
-                                            "background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease",
-                                        overflow: "hidden",
-                                        margin: "0 auto",
-                                        padding: "10px",
-                                    }}
-                                    onClick={(e) => {
-                                        if (!canSelect) return;
-                                        if (isInteractiveClickTarget(e.target)) return;
-                                        toggleSelect(entry.civitaiVersionID);
-                                    }}
-                                    onKeyDown={(e) => {
-                                        if (!canSelect) return;
-                                        if (e.key === "Enter" || e.key === " ") {
-                                            e.preventDefault();
-                                            toggleSelect(entry.civitaiVersionID);
-                                        }
-                                    }}
-                                    role={canSelect ? "button" : undefined}
-                                    tabIndex={canSelect ? 0 : -1}
-                                    aria-pressed={canSelect ? isSelected : undefined}
-                                >
-                                    {/* Optional: small selected indicator (no checkbox) */}
-                                    {isSelected && (
-                                        <div
-                                            style={{
-                                                position: "absolute",
-                                                top: 8,
-                                                left: 8,
-                                                background: isDarkMode ? "rgba(37,99,235,0.9)" : "#2563eb",
-                                                color: "#fff",
-                                                borderRadius: 999,
-                                                padding: "2px 8px",
-                                                fontSize: 12,
-                                                fontWeight: 700,
-                                                pointerEvents: "none",
-                                                zIndex: 2,
-                                            }}
-                                        >
-                                            <TfiCheckBox /> Selected
-                                        </div>
-                                    )}
-
-                                    {showEA && (
-                                        <div
-                                            style={{
-                                                position: 'absolute',
-                                                top: '5px',
-                                                right: '5px',
-                                                color: 'red',
-                                                fontWeight: 'bold',
-                                                fontSize: '0.8rem',
-                                                backgroundColor: isDarkMode ? '#444' : '#fff',
-                                                padding: '2px 4px',
-                                                borderRadius: '4px',
-                                                border: `1px solid ${isDarkMode ? '#666' : '#ccc'}`,
-                                            }}
-                                        >
-                                            {(() => {
-                                                const ends = getEarlyAccessEndsAt(entry);
-                                                return ends ? formatLocalDateTime(ends) : 'Early Access Only';
-                                            })()}
-
-                                        </div>
-                                    )}
-
-                                    {/* Base Model Badge + Title */}
-                                    <div
-                                        style={{
-                                            marginTop: '40px',
-                                            marginBottom: '4px',
-                                            fontSize: '0.9rem',
-                                            fontWeight: 'bold',
-                                            textAlign: 'center',
-                                            borderBottom: `1px solid ${isDarkMode ? '#555' : '#ccc'}`,
-                                            paddingBottom: '4px',
-                                            whiteSpace: 'nowrap',
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis',
-                                        }}
-                                    >
-                                        {/* 1) BaseModel badge */}
-                                        {entry.modelVersionObject?.baseModel && (
-                                            <span
-                                                style={{
-                                                    display: 'inline-block',
-                                                    fontSize: '0.65rem',
-                                                    fontWeight: 'bold',
-                                                    backgroundColor: '#007bff',
-                                                    color: '#fff',
-                                                    padding: '2px 5px',
-                                                    borderRadius: '4px',
-                                                    marginRight: '5px',
-                                                }}
-                                            >
-                                                {entry.modelVersionObject.baseModel}
-                                            </span>
-                                        )}
-                                        {/* Model Title */}
-                                        <span
-                                            style={{
-                                                fontSize: '0.85rem',
-                                            }}
-                                            title={entry?.modelVersionObject?.model?.name ?? 'N/A'}
-                                        >
-                                            {entry?.modelVersionObject?.model?.name ?? 'N/A'}
-                                        </span>
-                                    </div>
-
-                                    {/* Image (Thumbnail) */}
-                                    {/* Image (Thumbnail) */}
-                                    {firstImageUrl ? (() => {
-                                        // If firstImageUrl is always a string, use:
-                                        // const url = firstImageUrl as string;
-                                        //
-                                        // If it can be an object {url,width,height}, use normalizeImg:
-                                        const { url, width, height } =
-                                            typeof firstImageUrl === 'string'
-                                                ? { url: firstImageUrl, width: undefined, height: undefined }
-                                                : normalizeImg(firstImageUrl as any);
-
-                                        const thumbW = 180; // small-card target width
-
-                                        return (
-                                            <img
-                                                src={withWidth(url, thumbW)}                       // serve a thumbnail
-                                                srcSet={buildSrcSet(url, [160, 200, 320])}         // responsive thumbs
-                                                sizes="(max-width: 200px) 100vw, 180px"
-                                                loading={isFirstCard ? 'eager' : 'lazy'}
-                                                decoding="async"
-                                                width={width ?? undefined}                         // keeps aspect ratio if known
-                                                height={height ?? undefined}
-                                                alt={`Thumbnail ${cardIndex + 1}`}
-                                                style={{
-                                                    width: '100%',
-                                                    maxHeight: '100px',
-                                                    objectFit: 'contain',
-                                                    borderRadius: '4px',
-                                                    marginBottom: '2px',
-                                                }}
-                                            />
-                                        );
-                                    })() : (
-                                        <div
-                                            style={{
-                                                height: '100px',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                backgroundColor: isDarkMode ? '#555' : '#f0f0f0',
-                                                marginBottom: '2px',
-                                                borderRadius: '4px',
-                                            }}
-                                        >
-                                            <span>No Image</span>
-                                        </div>
-                                    )}
-
-
-                                    {/* Info Section under the image */}
-                                    <div
-                                        style={{
-                                            fontSize: '0.7rem',
-                                            lineHeight: 1.2,
-                                            marginTop: '2px',
-                                            marginBottom: '0px',
-                                        }}
-                                    >
-                                        {/* Version Name */}
-                                        <div
-                                            style={{
-                                                textAlign: 'center',
-                                                whiteSpace: 'nowrap',
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                                marginBottom: '4px',
-                                            }}
-                                            title={entry.modelVersionObject?.name ?? 'N/A'}
-                                        >
-                                            <strong>Ver:</strong> {entry.modelVersionObject?.name ?? 'N/A'}
-                                        </div>
-
-                                        {/* File Path - allow wrapping */}
-                                        <p
-                                            style={{
-                                                margin: '4px 0',
-                                                whiteSpace: 'normal',  // allow multi-line
-                                                wordWrap: 'break-word',
-                                            }}
-                                        >
-                                            <strong>Path:</strong> {entry.downloadFilePath ?? 'N/A'}
-                                        </p>
-
-                                        {/* Category */}
-                                        <p
-                                            style={{
-                                                margin: '4px 0',
-                                                whiteSpace: 'nowrap',
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                            }}
-                                            title={entry.selectedCategory ?? 'N/A'}
-                                        >
-                                            <strong>Cat:</strong> {entry.selectedCategory ?? 'N/A'}
-                                        </p>
-                                    </div>
-
-                                    <button
-                                        type="button"
-                                        onClick={(e) => { e.stopPropagation(); onToggleOverlay(entry); }}
-                                        title="Preview in left panel"
-                                        aria-label="Preview in left panel"
-                                        style={activePreviewId === entry.civitaiVersionID ? styles.previewBtnActiveStyle : styles.previewBtnStyle}
-                                    >
-                                        <LuPanelLeftOpen size={18} />
-                                    </button>
-                                </Card>
-                            );
-                        })}
-                    </div>
-                </div>
-            );
-        };
-
 
     const handleSelectAll = () => {
         if (!canChangeSelection) return;
@@ -5887,12 +3957,25 @@ const OfflineWindow: React.FC = () => {
 
                     {leftOverlayEntry && (
                         <div style={styles.leftOverlayBackdropStyle} onClick={closeLeftOverlay}>
-                            <div style={styles.leftOverlayDrawerStyle} onClick={(e) => e.stopPropagation()}>
+                            <div
+                                ref={leftOverlayDrawerRef}
+                                style={styles.leftOverlayDrawerStyle}
+                                onClick={(e) => e.stopPropagation()}
+                            >
                                 <button onClick={closeLeftOverlay} style={styles.closeBtnStyle} aria-label="Close overlay">
                                     <IoCloseOutline size={22} />
                                 </button>
 
-                                <PreviewCard entry={leftOverlayEntry} isDarkMode={isDarkMode} />
+                                <PreviewCard
+                                    entry={leftOverlayEntry}
+                                    isDarkMode={isDarkMode}
+                                    isEntryEarlyAccess={isEntryEarlyAccess}
+                                    getEarlyAccessEndsAt={getEarlyAccessEndsAt}
+                                    formatLocalDateTime={formatLocalDateTime}
+                                    normalizeImg={normalizeImg}
+                                    withWidth={withWidth}
+                                    buildSrcSet={buildSrcSet}
+                                />
 
                                 {leftOverlayEntry && (
                                     <SimilarSearchPanel entry={leftOverlayEntry} isDarkMode={isDarkMode} />
@@ -6083,43 +4166,30 @@ const OfflineWindow: React.FC = () => {
                         ) : (
                             <>
                                 {displayMode === 'table' && (
-                                    <div className="ag-theme-alpine" style={styles.agGridStyle}>
-                                        <AgGridReact
-                                            rowData={rowData}
-                                            columnDefs={columnDefs}
-                                            defaultColDef={defaultColDef}
-                                            pagination={true}
-                                            paginationPageSize={itemsPerPage}
-                                            getRowStyle={getRowStyle}
-                                            onRowClicked={(params: any) => {
-                                                if (isModifyMode && params.event.ctrlKey) {
-                                                    toggleSelect(params.data.versionid);
-                                                }
-                                            }}
-                                            headerHeight={40}
-                                            onGridReady={(params) => {
-                                                params.api.sizeColumnsToFit(); // Automatically size columns to fit the grid width
-                                            }}
-                                        />
-                                    </div>
+                                    <TableMode
+                                        entries={filteredDownloadList}
+                                        isDarkMode={isDarkMode}
+                                        isModifyMode={isModifyMode}
+                                        selectedIds={selectedIds}
+                                        visibleEntries={visibleEntries}
+                                        isAllSelected={isAllSelected}
+                                        isIndeterminate={isIndeterminate}
+                                        canChangeSelection={canChangeSelection}
+                                        agGridStyle={styles.agGridStyle}
+                                        currentTheme={currentTheme}
+                                        toggleSelect={toggleSelect}
+                                        setSelectedIds={setSelectedIds}
+                                    />
                                 )}
 
                                 {displayMode === 'historyTable' && (
-                                    <div className="ag-theme-alpine" style={styles.agGridStyle}>
-                                        <AgGridReact
-                                            rowData={historyRowData}
-                                            columnDefs={historyColumnDefs}
-                                            defaultColDef={defaultColDef}
-                                            getRowStyle={getRowStyle}
-                                            headerHeight={40}
-                                            rowHeight={95}
-                                            onGridReady={(params) => {
-                                                params.api.sizeColumnsToFit();
-                                            }}
-                                        />
-                                    </div>
+                                    <HistoryTableMode
+                                        entries={modelOfflineDownloadHistoryList}
+                                        isDarkMode={isDarkMode}
+                                        agGridStyle={styles.agGridStyle}
+                                        currentTheme={currentTheme}
+                                    />
                                 )}
-
                                 {displayMode === 'bigCard' && (
                                     <BigCardMode
                                         filteredDownloadList={paginatedDownloadList}
@@ -6134,6 +4204,28 @@ const OfflineWindow: React.FC = () => {
                                         onRefreshRecord={handleRefreshOneRecord}
                                         onToggleIsError={handleToggleIsError}
                                         canChangeSelection={canChangeSelection}
+                                        isLoading={isLoading}
+                                        editingPathId={editingPathId}
+                                        setEditingPathId={setEditingPathId}
+                                        handleDownloadPathSave={handleDownloadPathSave}
+                                        handleHoldChange={handleHoldChange}
+                                        handlePriorityChange={handlePriorityChange}
+                                        handleRemoveOne={handleRemoveOne}
+                                        handleCreateAddDummyFromError={handleCreateAddDummyFromError}
+                                        dummyCreateStatusByVid={dummyCreateStatusByVid}
+                                        showAiSuggestionsPanel={showAiSuggestionsPanel}
+                                        selectedSuggestedPathByVid={selectedSuggestedPathByVid}
+                                        setSelectedSuggestedPathByVid={setSelectedSuggestedPathByVid}
+                                        styles={styles}
+                                        isInteractiveClickTarget={isInteractiveClickTarget}
+                                        isEntryEarlyAccess={isEntryEarlyAccess}
+                                        getEarlyAccessEndsAt={getEarlyAccessEndsAt}
+                                        formatLocalDateTime={formatLocalDateTime}
+                                        normalizeImg={normalizeImg}
+                                        withWidth={withWidth}
+                                        buildSrcSet={buildSrcSet}
+                                        mergeSuggestedPathsForEntry={mergeSuggestedPathsForEntry}
+                                        normalizePathKey={normalizePathKey}
                                     />
                                 )}
 
@@ -6148,21 +4240,15 @@ const OfflineWindow: React.FC = () => {
                                         onToggleOverlay={toggleLeftOverlay}
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
                                         canChangeSelection={canChangeSelection}
-                                    />
-                                )}
-
-                                {displayMode === 'recentCard' && (
-                                    <BigCardMode
-                                        filteredDownloadList={recentlyDownloaded} // reuse BigCard exactly as-is
-                                        isDarkMode={isDarkMode}
-                                        isModifyMode={false}                      // read-only
-                                        selectedIds={selectedIds}
-                                        toggleSelect={toggleSelect}
-                                        handleSelectAll={handleSelectAll}
-                                        showGalleries={false}
-                                        onToggleOverlay={toggleLeftOverlay}
-                                        activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
-                                        canChangeSelection={canChangeSelection}
+                                        displayMode={displayMode}
+                                        styles={styles}
+                                        isInteractiveClickTarget={isInteractiveClickTarget}
+                                        isEntryEarlyAccess={isEntryEarlyAccess}
+                                        getEarlyAccessEndsAt={getEarlyAccessEndsAt}
+                                        formatLocalDateTime={formatLocalDateTime}
+                                        normalizeImg={normalizeImg}
+                                        withWidth={withWidth}
+                                        buildSrcSet={buildSrcSet}
                                     />
                                 )}
 
@@ -6170,7 +4256,7 @@ const OfflineWindow: React.FC = () => {
                                     <BigCardMode
                                         filteredDownloadList={holdEntries}
                                         isDarkMode={isDarkMode}
-                                        isModifyMode={false} // treat as view-only
+                                        isModifyMode={false}
                                         selectedIds={selectedIds}
                                         toggleSelect={toggleSelect}
                                         handleSelectAll={handleSelectAll}
@@ -6179,6 +4265,28 @@ const OfflineWindow: React.FC = () => {
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
                                         onToggleIsError={handleToggleIsError}
                                         canChangeSelection={canChangeSelection}
+                                        isLoading={isLoading}
+                                        editingPathId={editingPathId}
+                                        setEditingPathId={setEditingPathId}
+                                        handleDownloadPathSave={handleDownloadPathSave}
+                                        handleHoldChange={handleHoldChange}
+                                        handlePriorityChange={handlePriorityChange}
+                                        handleRemoveOne={handleRemoveOne}
+                                        handleCreateAddDummyFromError={handleCreateAddDummyFromError}
+                                        dummyCreateStatusByVid={dummyCreateStatusByVid}
+                                        showAiSuggestionsPanel={showAiSuggestionsPanel}
+                                        selectedSuggestedPathByVid={selectedSuggestedPathByVid}
+                                        setSelectedSuggestedPathByVid={setSelectedSuggestedPathByVid}
+                                        styles={styles}
+                                        isInteractiveClickTarget={isInteractiveClickTarget}
+                                        isEntryEarlyAccess={isEntryEarlyAccess}
+                                        getEarlyAccessEndsAt={getEarlyAccessEndsAt}
+                                        formatLocalDateTime={formatLocalDateTime}
+                                        normalizeImg={normalizeImg}
+                                        withWidth={withWidth}
+                                        buildSrcSet={buildSrcSet}
+                                        mergeSuggestedPathsForEntry={mergeSuggestedPathsForEntry}
+                                        normalizePathKey={normalizePathKey}
                                     />
                                 )}
 
@@ -6186,7 +4294,7 @@ const OfflineWindow: React.FC = () => {
                                     <BigCardMode
                                         filteredDownloadList={earlyAccessEntries}
                                         isDarkMode={isDarkMode}
-                                        isModifyMode={false} // view-only
+                                        isModifyMode={false}
                                         selectedIds={selectedIds}
                                         toggleSelect={toggleSelect}
                                         handleSelectAll={handleSelectAll}
@@ -6196,6 +4304,28 @@ const OfflineWindow: React.FC = () => {
                                         onRefreshRecord={handleRefreshOneRecord}
                                         onToggleIsError={handleToggleIsError}
                                         canChangeSelection={canChangeSelection}
+                                        isLoading={isLoading}
+                                        editingPathId={editingPathId}
+                                        setEditingPathId={setEditingPathId}
+                                        handleDownloadPathSave={handleDownloadPathSave}
+                                        handleHoldChange={handleHoldChange}
+                                        handlePriorityChange={handlePriorityChange}
+                                        handleRemoveOne={handleRemoveOne}
+                                        handleCreateAddDummyFromError={handleCreateAddDummyFromError}
+                                        dummyCreateStatusByVid={dummyCreateStatusByVid}
+                                        showAiSuggestionsPanel={showAiSuggestionsPanel}
+                                        selectedSuggestedPathByVid={selectedSuggestedPathByVid}
+                                        setSelectedSuggestedPathByVid={setSelectedSuggestedPathByVid}
+                                        styles={styles}
+                                        isInteractiveClickTarget={isInteractiveClickTarget}
+                                        isEntryEarlyAccess={isEntryEarlyAccess}
+                                        getEarlyAccessEndsAt={getEarlyAccessEndsAt}
+                                        formatLocalDateTime={formatLocalDateTime}
+                                        normalizeImg={normalizeImg}
+                                        withWidth={withWidth}
+                                        buildSrcSet={buildSrcSet}
+                                        mergeSuggestedPathsForEntry={mergeSuggestedPathsForEntry}
+                                        normalizePathKey={normalizePathKey}
                                     />
                                 )}
 
@@ -6203,7 +4333,7 @@ const OfflineWindow: React.FC = () => {
                                     <BigCardMode
                                         filteredDownloadList={failedEntries}
                                         isDarkMode={isDarkMode}
-                                        isModifyMode={false} // view-only
+                                        isModifyMode={false}
                                         selectedIds={selectedIds}
                                         toggleSelect={toggleSelect}
                                         handleSelectAll={handleSelectAll}
@@ -6213,6 +4343,28 @@ const OfflineWindow: React.FC = () => {
                                         onRefreshRecord={handleRefreshOneRecord}
                                         onToggleIsError={handleToggleIsError}
                                         canChangeSelection={canChangeSelection}
+                                        isLoading={isLoading}
+                                        editingPathId={editingPathId}
+                                        setEditingPathId={setEditingPathId}
+                                        handleDownloadPathSave={handleDownloadPathSave}
+                                        handleHoldChange={handleHoldChange}
+                                        handlePriorityChange={handlePriorityChange}
+                                        handleRemoveOne={handleRemoveOne}
+                                        handleCreateAddDummyFromError={handleCreateAddDummyFromError}
+                                        dummyCreateStatusByVid={dummyCreateStatusByVid}
+                                        showAiSuggestionsPanel={showAiSuggestionsPanel}
+                                        selectedSuggestedPathByVid={selectedSuggestedPathByVid}
+                                        setSelectedSuggestedPathByVid={setSelectedSuggestedPathByVid}
+                                        styles={styles}
+                                        isInteractiveClickTarget={isInteractiveClickTarget}
+                                        isEntryEarlyAccess={isEntryEarlyAccess}
+                                        getEarlyAccessEndsAt={getEarlyAccessEndsAt}
+                                        formatLocalDateTime={formatLocalDateTime}
+                                        normalizeImg={normalizeImg}
+                                        withWidth={withWidth}
+                                        buildSrcSet={buildSrcSet}
+                                        mergeSuggestedPathsForEntry={mergeSuggestedPathsForEntry}
+                                        normalizePathKey={normalizePathKey}
                                     />
                                 )}
 
@@ -6231,6 +4383,28 @@ const OfflineWindow: React.FC = () => {
                                         onErrorCardDownload={handleErrorCardDownload}
                                         onToggleIsError={handleToggleIsError}
                                         canChangeSelection={canChangeSelection}
+                                        isLoading={isLoading}
+                                        editingPathId={editingPathId}
+                                        setEditingPathId={setEditingPathId}
+                                        handleDownloadPathSave={handleDownloadPathSave}
+                                        handleHoldChange={handleHoldChange}
+                                        handlePriorityChange={handlePriorityChange}
+                                        handleRemoveOne={handleRemoveOne}
+                                        handleCreateAddDummyFromError={handleCreateAddDummyFromError}
+                                        dummyCreateStatusByVid={dummyCreateStatusByVid}
+                                        showAiSuggestionsPanel={showAiSuggestionsPanel}
+                                        selectedSuggestedPathByVid={selectedSuggestedPathByVid}
+                                        setSelectedSuggestedPathByVid={setSelectedSuggestedPathByVid}
+                                        styles={styles}
+                                        isInteractiveClickTarget={isInteractiveClickTarget}
+                                        isEntryEarlyAccess={isEntryEarlyAccess}
+                                        getEarlyAccessEndsAt={getEarlyAccessEndsAt}
+                                        formatLocalDateTime={formatLocalDateTime}
+                                        normalizeImg={normalizeImg}
+                                        withWidth={withWidth}
+                                        buildSrcSet={buildSrcSet}
+                                        mergeSuggestedPathsForEntry={mergeSuggestedPathsForEntry}
+                                        normalizePathKey={normalizePathKey}
                                     />
                                 )}
 
