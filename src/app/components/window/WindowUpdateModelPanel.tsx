@@ -876,8 +876,23 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
     const chrome = useSelector((state: AppState) => state.chrome);
     const { downloadMethod, offlineMode } = chrome;
 
-    const [originalModelsList, setOriginalModelsList] = useState<{ name: string; url: string; id: number; baseModel: string; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
-    const [modelsList, setModelsList] = useState<{ name: string; url: string; id: number; baseModel: string; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
+    const [originalModelsList, setOriginalModelsList] = useState<{
+        name: string;
+        url: string;
+        id: number;
+        baseModel: string;
+        localPath?: string | null;
+        imageUrls: { url: string; height: number; width: number; nsfw: string }[];
+    }[]>([]);
+
+    const [modelsList, setModelsList] = useState<{
+        name: string;
+        url: string;
+        id: number;
+        baseModel: string;
+        localPath?: string | null;
+        imageUrls: { url: string; height: number; width: number; nsfw: string }[];
+    }[]>([]);
     const [visibleToasts, setVisibleToasts] = useState<boolean[]>([])
     const [visibleIsCarted, setVisibleIsCarted] = useState<boolean[]>([])
     const [isLoading, setIsLoading] = useState(false)
@@ -936,6 +951,9 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
         }
 
         const data = await fetchDatabaseModelInfoByModelID(civitaiModelID, dispatch);
+
+        console.log("update window record data : ", data)
+
         setModelsList(data)
         setOriginalModelsList(data);
         const uniqueBaseModels = Array.from(
@@ -1047,19 +1065,30 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
         }
 
         switch (updateOption) {
+            case "Database_and_LocalUpdateFolder": {
+                const clickedModel = modelsList.find(m => m.id === id);
+                const localScanPath = normalizeLocalPathToScanPath(clickedModel?.localPath);
+                const localUpdatePath = buildUpdatePathFromScanPath(localScanPath);
+                dispatch(updateDownloadFilePath(localUpdatePath || UpdateDownloadFilePath));
+                break;
+            }
+            case "Database_and_LocalFileFolder": {
+                const clickedModel = modelsList.find(m => m.id === id);
+                const localScanPath = normalizeLocalPathToScanPath(clickedModel?.localPath);
+                dispatch(updateDownloadFilePath(localScanPath || downloadFilePath));
+                break;
+            }
             case "Database_and_UpdateFolder":
-
-                props.setDownloadFilePath(UpdateDownloadFilePath);
-                //dispatch(updateDownloadFilePath(`/@scan@/Update/${downloadFilePath.split('/').reverse()[1]}/`))
+                dispatch(updateDownloadFilePath(UpdateDownloadFilePath));
                 break;
             case "Database_and_FileFolder":
-                props.setDownloadFilePath(downloadFilePath);
+                dispatch(updateDownloadFilePath(downloadFilePath));
                 break;
             case "Database_Only":
-                props.setDownloadFilePath(downloadFilePath);
+                dispatch(updateDownloadFilePath(downloadFilePath));
                 break;
             default:
-                props.setDownloadFilePath('/@scan@/ACG/Temp/');
+                dispatch(updateDownloadFilePath('/@scan@/ACG/Temp/'));
                 break;
         }
 
@@ -1178,6 +1207,35 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
         setIsLoading(false)
     };
 
+    const normalizeLocalPathToScanPath = (localPath?: string | null) => {
+        if (!localPath) return "";
+
+        const normalized = localPath.replace(/\\/g, "/");
+        const marker = "/@scan@/";
+        const markerIndex = normalized.indexOf(marker);
+
+        if (markerIndex === -1) return "";
+
+        let scanPath = normalized.substring(markerIndex);
+        if (!scanPath.endsWith("/")) {
+            scanPath += "/";
+        }
+
+        return scanPath;
+    };
+
+    const buildUpdatePathFromScanPath = (scanPath: string) => {
+        if (!scanPath) return "";
+
+        const regex = /^\/@scan@\/[^\/]+\/?$/;
+
+        if (regex.test(scanPath)) {
+            return `/@scan@/Update/${scanPath.replace("/@scan@/", "")}`;
+        } else {
+            return `/@scan@/Update/${scanPath.replace("/@scan@/ACG/", "")}`;
+        }
+    };
+
     return (
         <>
             <div className="buttonGroup" style={{ padding: "5px", display: "flex", justifyContent: "flex-start", alignItems: "flex-start" }}>
@@ -1226,6 +1284,8 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                 :
                 <>
                     {modelsList?.map((model, index) => {
+                        const localScanPath = normalizeLocalPathToScanPath(model?.localPath);
+                        const localUpdatePath = buildUpdatePathFromScanPath(localScanPath);
                         if (!visibleToasts[index]) return null;
                         return (
                             <div key={index} className="panel-toast-container">
@@ -1259,6 +1319,39 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
 
                                         {/**Update Radio Button */}
                                         <div className="radio-container">
+                                            {localUpdatePath && (
+                                                <label className="radio-label">
+                                                    <input
+                                                        type="radio"
+                                                        value="Database_and_LocalUpdateFolder"
+                                                        checked={updateOption === 'Database_and_LocalUpdateFolder'}
+                                                        onChange={() => setUpdateOption('Database_and_LocalUpdateFolder')}
+                                                        className="radio-input"
+                                                    />
+                                                    <div className="truncated-text-container">
+                                                        <span>
+                                                            Database & Update to {localUpdatePath}
+                                                        </span>
+                                                    </div>
+                                                </label>
+                                            )}
+
+                                            {localScanPath && (
+                                                <label className="radio-label">
+                                                    <input
+                                                        type="radio"
+                                                        value="Database_and_LocalFileFolder"
+                                                        checked={updateOption === 'Database_and_LocalFileFolder'}
+                                                        onChange={() => setUpdateOption('Database_and_LocalFileFolder')}
+                                                        className="radio-input"
+                                                    />
+                                                    <div className="truncated-text-container">
+                                                        <span>
+                                                            Database & {localScanPath}
+                                                        </span>
+                                                    </div>
+                                                </label>
+                                            )}
                                             <label className="radio-label">
                                                 <input
                                                     type="radio"

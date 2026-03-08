@@ -38,7 +38,7 @@ const ModelInfoPanel: React.FC = () => {
             civitaiVersionID,
             dispatch
         );
-        console.log("data : ", data)
+        console.log("full record data : ", data)
 
         // expect the shape you showed: data.payload.model
         setFullRecord(data ?? null);
