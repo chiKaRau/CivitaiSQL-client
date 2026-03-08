@@ -79,6 +79,7 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
     const [isSorted, setIsSorted] = useState(false)
     const [baseModelList, setBaseModelList] = useState<{ baseModel: string, display: boolean }[]>([]);
     const [isColapPanelOpen, setUsColapPanelOpen] = useState(false);
+    const [effectiveDownloadFilePath, setEffectiveDownloadFilePath] = useState("");
 
     let UpdateDownloadFilePath = "";
 
@@ -156,23 +157,23 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
 
     useEffect(() => {
         if (hasUpdateCompleted) {
-
             if (offlineMode) {
-                handleAddOfflineDownloadFileintoOfflineDownloadList();
+                handleAddOfflineDownloadFileintoOfflineDownloadList(effectiveDownloadFilePath);
             } else {
-                //handleDownload();
-                handleDownload_v2();
-                bookmarkThisModel(civitaiData?.type, dispatch)
-                setHasUpdateCompleted(false)
-                props.toggleDatabaseUpdateModelPanelOpen()
+                handleDownload_v2(effectiveDownloadFilePath);
+                bookmarkThisModel(civitaiData?.type, dispatch);
+                setHasUpdateCompleted(false);
+                props.toggleDatabaseUpdateModelPanelOpen();
             }
         }
-    }, [hasUpdateCompleted])
+    }, [hasUpdateCompleted, effectiveDownloadFilePath]);
 
-    const handleAddOfflineDownloadFileintoOfflineDownloadList = async () => {
+    const handleAddOfflineDownloadFileintoOfflineDownloadList = async (targetDownloadFilePath?: string) => {
 
         setIsLoading(true)
         // Utility function to delay execution
+
+        const finalDownloadFilePath = targetDownloadFilePath || downloadFilePath;
 
         //Fetch Civitai ModelInfo
         const modelId = civitaiUrl.match(/\/models\/(\d+)/)?.[1] || '';
@@ -216,9 +217,14 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                 }
 
                 let modelObject = {
-                    downloadFilePath, civitaiFileName, civitaiModelID,
-                    civitaiVersionID, civitaiModelFileList, civitaiUrl,
-                    selectedCategory, civitaiTags
+                    downloadFilePath: finalDownloadFilePath,
+                    civitaiFileName,
+                    civitaiModelID,
+                    civitaiVersionID,
+                    civitaiModelFileList,
+                    civitaiUrl,
+                    selectedCategory,
+                    civitaiTags
                 }
 
                 await fetchAddOfflineDownloadFileIntoOfflineDownloadList(modelObject, false, dispatch);
@@ -270,10 +276,12 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
         setIsLoading(false)
     }
 
-    const handleDownload_v2 = async () => {
+    const handleDownload_v2 = async (targetDownloadFilePath?: string) => {
 
         setIsLoading(true);
         dispatch(clearError());
+
+        const finalDownloadFilePath = targetDownloadFilePath || downloadFilePath;
 
         let civitaiFileName = retrieveCivitaiFileName(civitaiData, civitaiVersionID);
         //the fileList would contains the urls of all files such as safetensor, training data, ...
@@ -285,7 +293,7 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
             civitaiFileName === null || civitaiFileName === "" ||
             civitaiModelID === null || civitaiModelID === "" ||
             civitaiVersionID === null || civitaiVersionID === "" ||
-            downloadFilePath === null || downloadFilePath === "" ||
+            finalDownloadFilePath === null || finalDownloadFilePath === "" ||
             civitaiModelFileList === null || !civitaiModelFileList.length
         ) {
             dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
@@ -294,8 +302,12 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
         }
 
         let modelObject = {
-            downloadFilePath, civitaiFileName, civitaiModelID,
-            civitaiVersionID, civitaiModelFileList, civitaiUrl
+            downloadFilePath: finalDownloadFilePath,
+            civitaiFileName,
+            civitaiModelID,
+            civitaiVersionID,
+            civitaiModelFileList,
+            civitaiUrl
         }
 
         if (downloadMethod === "server") {
@@ -303,7 +315,7 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
             await fetchDownloadFilesByServer_v2(modelObject, dispatch);
         } else {
             //if download Method is browser, the chrome browser will download the file into server's folder
-            await fetchDownloadFilesByBrowser_v2(civitaiUrl, downloadFilePath, dispatch);
+            await fetchDownloadFilesByBrowser_v2(civitaiUrl, finalDownloadFilePath, dispatch);
 
             try {
                 const data = await fetchCivitaiModelInfoFromCivitaiByVersionID(civitaiVersionID, dispatch);
@@ -335,33 +347,38 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
             return;
         }
 
+        let selectedPath = "";
+
         switch (updateOption) {
             case "Database_and_LocalUpdateFolder": {
                 const clickedModel = modelsList.find(m => m.id === id);
                 const localScanPath = normalizeLocalPathToScanPath(clickedModel?.localPath);
                 const localUpdatePath = buildUpdatePathFromScanPath(localScanPath);
-                dispatch(updateDownloadFilePath(localUpdatePath || UpdateDownloadFilePath));
+                selectedPath = localUpdatePath || UpdateDownloadFilePath;
                 break;
             }
             case "Database_and_LocalFileFolder": {
                 const clickedModel = modelsList.find(m => m.id === id);
                 const localScanPath = normalizeLocalPathToScanPath(clickedModel?.localPath);
-                dispatch(updateDownloadFilePath(localScanPath || downloadFilePath));
+                selectedPath = localScanPath || downloadFilePath;
                 break;
             }
             case "Database_and_UpdateFolder":
-                dispatch(updateDownloadFilePath(UpdateDownloadFilePath));
+                selectedPath = UpdateDownloadFilePath;
                 break;
             case "Database_and_FileFolder":
-                dispatch(updateDownloadFilePath(downloadFilePath));
+                selectedPath = downloadFilePath;
                 break;
             case "Database_Only":
-                dispatch(updateDownloadFilePath(downloadFilePath));
+                selectedPath = downloadFilePath;
                 break;
             default:
-                dispatch(updateDownloadFilePath('/@scan@/ACG/Temp/'));
+                selectedPath = '/@scan@/ACG/Temp/';
                 break;
         }
+
+        dispatch(updateDownloadFilePath(selectedPath));
+        setEffectiveDownloadFilePath(selectedPath);
 
         fetchUpdateRecordAtDatabase(id, civitaiUrl, selectedCategory, dispatch);
 
