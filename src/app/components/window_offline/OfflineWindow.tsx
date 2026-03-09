@@ -376,7 +376,7 @@ const OfflineWindow: React.FC = () => {
 
     const handleBulkPatchSelected = async () => {
         // 1) Targets = selected models (by versionID)
-        const modelObjects = filteredDownloadList
+        const modelObjects = visibleEntries
             .filter((entry) => selectedIds.has(entry.civitaiVersionID))
             .map((entry) => ({
                 civitaiModelID: entry.civitaiModelID,
@@ -3102,13 +3102,18 @@ const OfflineWindow: React.FC = () => {
                                 <option value="begins with">Begins with</option>
                                 <option value="ends with">Ends with</option>
                             </select>
-                            <div style={{ display: "flex", gap: 10, width: "100%" }}>
+                            <div
+                                style={{
+                                    display: "flex",
+                                    gap: 10,
+                                    width: "100%",
+                                    alignItems: "stretch",
+                                }}
+                            >
                                 <Button
-                                    size="sm"
                                     variant="primary"
                                     disabled={!isPagedMode || isLoading}
                                     onClick={() => {
-
                                         setSelectedIds(new Set());
                                         setSelectedSuggestedPathByVid({});
 
@@ -3126,19 +3131,42 @@ const OfflineWindow: React.FC = () => {
                                         });
                                         setCurrentPage(1);
                                     }}
-                                    style={{ flex: 1 }}
+                                    style={{
+                                        flex: 1,
+                                        minHeight: 44,
+                                        fontSize: "1rem",
+                                        fontWeight: 700,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        borderRadius: 8,
+                                        boxShadow: isDarkMode
+                                            ? "0 2px 8px rgba(0,0,0,0.35)"
+                                            : "0 2px 8px rgba(0,0,0,0.12)",
+                                    }}
                                 >
                                     Apply Filters
                                 </Button>
 
                                 <Button
-                                    size="sm"
                                     variant="outline-secondary"
                                     disabled={!isPagedMode || isLoading}
                                     onClick={resetDraftFilters}
-                                    style={{ flex: 1 }}
+                                    title="Reset Draft Filters"
+                                    aria-label="Reset Draft Filters"
+                                    style={{
+                                        width: 44,
+                                        minWidth: 44,
+                                        height: 44,
+                                        padding: 0,
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        borderRadius: 8,
+                                        flexShrink: 0,
+                                    }}
                                 >
-                                    Reset (Draft)
+                                    <MdRefresh size={18} />
                                 </Button>
                             </div>
 
@@ -3308,12 +3336,15 @@ const OfflineWindow: React.FC = () => {
                                     <input
                                         id="selectCountInputModify"
                                         type="number"
-                                        min={1}
+                                        min={5}
                                         step={5}
                                         value={selectCount}
                                         onChange={(e) => {
-                                            const newVal = parseInt(e.target.value, 10);
-                                            if (!isNaN(newVal)) setSelectCount(newVal);
+                                            const v = parseInt(e.target.value, 10);
+                                            if (!Number.isNaN(v)) setSelectCount(v);
+                                        }}
+                                        onBlur={() => {
+                                            setSelectCount((prev) => Math.max(5, Math.floor((Number(prev) || 0) / 5) * 5));
                                         }}
                                         disabled={isLoading}
                                         style={{

@@ -562,7 +562,7 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                             <strong>Version ID:</strong> {entry.modelVersionObject?.id ?? 'N/A'}
                                         </p>
                                         <p style={{ margin: '4px 0' }}>
-                                            <strong>URL:</strong>{' '}
+                                            <strong>Civitai URL:</strong>{' '}
                                             {entry.civitaiUrl ? (
                                                 <a
                                                     href={entry.civitaiUrl}
@@ -615,6 +615,20 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                             >
                                                 {entry.isError ? <FaCheck size={16} /> : <FaTimes size={16} />}
                                             </button>
+                                        </p>
+
+                                        <p style={{ margin: '4px 0' }}>
+                                            <strong>Civitai Archive URL:</strong>{' '}
+                                            {entry.civitaiModelID && entry.civitaiVersionID ? (
+                                                <a
+                                                    href={`https://civitaiarchive.com/models/${entry.civitaiModelID}?modelVersionId=${entry.civitaiVersionID}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    style={{ color: isDarkMode ? '#1e90ff' : '#007bff' }}
+                                                >
+                                                    Visit Archive
+                                                </a>
+                                            ) : 'N/A'}
                                         </p>
                                     </>
                                 )}
