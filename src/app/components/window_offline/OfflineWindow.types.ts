@@ -12,7 +12,8 @@ export type DisplayMode =
     | 'recentCard'
     | 'holdCard'
     | 'earlyAccessCard'
-    | 'historyTable';
+    | 'historyTable'
+    | 'aiCard';
 
 export type BatchStatus = "running" | "success" | "fail";
 

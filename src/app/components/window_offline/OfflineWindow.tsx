@@ -173,6 +173,7 @@ const OfflineWindow: React.FC = () => {
         | 'holdCard'
         | 'earlyAccessCard'
         | 'historyTable'
+        | 'aiCard'
     >('bigCard');
 
     const [filtersReady, setFiltersReady] = useState(false);
@@ -316,8 +317,6 @@ const OfflineWindow: React.FC = () => {
 
     const [goToPageInput, setGoToPageInput] = useState<string>('');
 
-    // NEW: toggle AI Suggestions block (only used in Modify Mode UI)
-    const [showAiSuggestionsPanel, setShowAiSuggestionsPanel] = useState(false);
 
     // NEW: keep what the user clicked in the AI suggestion list (per versionID)
     const [selectedSuggestedPathByVid, setSelectedSuggestedPathByVid] = useState({} as Record<string, string>);
@@ -334,6 +333,13 @@ const OfflineWindow: React.FC = () => {
     const [historyAvailableDates, setHistoryAvailableDates] = useState<string[]>([]);
 
     const [historyCalendarMonth, setHistoryCalendarMonth] = useState<Date>(() => new Date());
+
+    const [aiEntries, setAiEntries] = useState<OfflineDownloadEntry[]>([]);
+    const [aiPage, setAiPage] = useState(1);
+    const [aiItemsPerPage, setAiItemsPerPage] = useState(100);
+    const [aiTotalItems, setAiTotalItems] = useState(0);
+    const [aiTotalPages, setAiTotalPages] = useState(1);
+    const [aiReloadToken, setAiReloadToken] = useState(0);
 
     // near the top of OfflineWindow.tsx (after DisplayMode type)
     const DOWNLOAD_NOW_ALLOWED_MODES = new Set<DisplayMode>([
@@ -537,15 +543,62 @@ const OfflineWindow: React.FC = () => {
         return `${yyyy}-${mm}-${dd}`;
     }
 
-    function parseLocalYmd(s: string): Date | null {
-        if (!s) return null;
+    useEffect(() => {
+        let cancelled = false;
 
-        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-        if (!m) return null;
+        const loadAiList = async () => {
+            if (displayMode !== "aiCard") return;
 
-        const [, y, mo, d] = m;
-        return new Date(Number(y), Number(mo) - 1, Number(d));
-    }
+            try {
+                setUiMode("paging");
+                setIsLoading(true);
+
+                const page0 = Math.max(0, aiPage - 1);
+
+                const aiPrefixes = getActivePrefixes();
+
+                const p = await fetchOfflineDownloadListPage(
+                    dispatch,
+                    page0,
+                    aiItemsPerPage,
+                    false,
+                    aiPrefixes,
+                    "",
+                    "contains",
+                    "pending",
+                    true,
+                    true,
+                    "desc",
+                    true,
+                    true
+                );
+
+                if (!cancelled) {
+                    setAiEntries(Array.isArray(p?.content) ? p.content : []);
+                    setAiTotalItems(p?.totalElements ?? 0);
+                    setAiTotalPages(p?.totalPages ?? 1);
+                }
+            } catch (err: any) {
+                console.error("AI list fetch failed:", err?.message || err);
+                if (!cancelled) {
+                    setAiEntries([]);
+                    setAiTotalItems(0);
+                    setAiTotalPages(1);
+                }
+            } finally {
+                if (!cancelled) {
+                    setIsLoading(false);
+                    setUiMode("idle");
+                }
+            }
+        };
+
+        loadAiList();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [displayMode, aiPage, aiItemsPerPage, aiReloadToken, dispatch]);
 
     const availablePatchFields = ALL_PATCH_FIELDS.filter(f => !selectedPatchFields.has(f.key));
 
@@ -1042,13 +1095,6 @@ const OfflineWindow: React.FC = () => {
         setIsDarkMode(prevMode => !prevMode);
     };
 
-    const toggleAiSuggestionsPanel = () => {
-        const next = !showAiSuggestionsPanel; // header controls open/close
-        setShowAiSuggestionsPanel(next);
-        setAiSuggestedOnly(next);
-        setSelectedIds(new Set());
-    };
-
     const resetDraftFilters = () => {
         // Draft-only resets (do NOT touch appliedQuery)
         setFilterText("");
@@ -1064,8 +1110,6 @@ const OfflineWindow: React.FC = () => {
         setSortDir("desc");
         setAiSuggestedOnly(false);
 
-        // Optional: if you consider these part of “default”
-        setShowAiSuggestionsPanel(false);
         setSelectedSuggestedPathByVid({});
         setGoToPageInput("");
 
@@ -1089,7 +1133,6 @@ const OfflineWindow: React.FC = () => {
             sortDir: typeof sortDir;
             aiSuggestedOnly: boolean;
             selectedPrefixes: string[];
-            showAiSuggestionsPanel: boolean;
             goToPageInput: string;
         };
         // what the backend fetch uses
@@ -1122,7 +1165,6 @@ const OfflineWindow: React.FC = () => {
                     sortDir,
                     aiSuggestedOnly,
                     selectedPrefixes: Array.from(selectedPrefixes),
-                    showAiSuggestionsPanel,
                     goToPageInput,
                 },
                 appliedQuery,
@@ -1137,7 +1179,6 @@ const OfflineWindow: React.FC = () => {
             setShowHoldEntries(true);
             setShowEarlyAccess(true);
 
-            setShowAiSuggestionsPanel(false);
             setAiSuggestedOnly(false);
             setFilterText("");
 
@@ -1173,7 +1214,6 @@ const OfflineWindow: React.FC = () => {
             setSortDir(snap.draft.sortDir);
 
             setAiSuggestedOnly(snap.draft.aiSuggestedOnly);
-            setShowAiSuggestionsPanel(snap.draft.showAiSuggestionsPanel);
             setGoToPageInput(snap.draft.goToPageInput);
 
             setSelectedPrefixes(new Set(snap.draft.selectedPrefixes));
@@ -1448,8 +1488,10 @@ const OfflineWindow: React.FC = () => {
                 return earlyAccessEntries;
             case "errorCard":
                 return errorEntries;
+            case "aiCard":
+                return aiEntries;
             default:
-                return filteredDownloadList; // bigCard / smallCard / table (your main list)
+                return filteredDownloadList;
         }
     }, [
         displayMode,
@@ -1458,6 +1500,7 @@ const OfflineWindow: React.FC = () => {
         holdEntries,
         earlyAccessEntries,
         errorEntries,
+        aiEntries,
         filteredDownloadList,
     ]);
 
@@ -1524,6 +1567,11 @@ const OfflineWindow: React.FC = () => {
 
         if (displayMode === "failedCard") {
             setFailedEntries(prev => [...prev]);
+            return;
+        }
+
+        if (displayMode === "aiCard") {
+            setAiReloadToken((t) => t + 1);
             return;
         }
 
@@ -1964,7 +2012,9 @@ const OfflineWindow: React.FC = () => {
 
     const handleApplySelectedAiPathsToDownloadFilePath = async () => {
         // selectedIds contains civitaiVersionID keys in your app :contentReference[oaicite:6]{index=6}
-        const selectedEntries = filteredDownloadList.filter((e) =>
+        const sourceEntries = displayMode === "aiCard" ? aiEntries : filteredDownloadList;
+
+        const selectedEntries = sourceEntries.filter((e) =>
             selectedIds.has(e.civitaiVersionID)
         );
 
@@ -2010,8 +2060,11 @@ const OfflineWindow: React.FC = () => {
         try {
             const resp = await fetchBulkUpdateDownloadFilePath(items, dispatch);
 
-            // refresh list so you immediately see updated downloadFilePath
-            await refreshCurrentPage(); // already used elsewhere :contentReference[oaicite:9]{index=9}
+            if (displayMode === "aiCard") {
+                setAiReloadToken((t) => t + 1);
+            } else {
+                await refreshCurrentPage();
+            }
 
             // optional: show some feedback in your existing AI msg line
             const updatedPairs = resp?.updatedPairs ?? resp?.savedEntities ?? null;
@@ -2381,6 +2434,8 @@ const OfflineWindow: React.FC = () => {
                 setSpecialReloadToken((t) => t + 1);
             } else if (mode === "historyTable") {
                 setHistoryReloadToken((t) => t + 1);
+            } else if (mode === "aiCard") {
+                setAiReloadToken((t) => t + 1);
             } else {
                 void handleRefreshList();
             }
@@ -2821,7 +2876,6 @@ const OfflineWindow: React.FC = () => {
                                 )}
                             </Button>
 
-
                             <Button
                                 variant={displayMode === 'failedCard' ? 'primary' : 'secondary'}
                                 onClick={() => handleDisplayModeClick('failedCard')}
@@ -2851,6 +2905,15 @@ const OfflineWindow: React.FC = () => {
                                         {badgeCount(errorEntries.length)}
                                     </span>
                                 )}
+                            </Button>
+
+                            <Button
+                                style={{ ...styles.responsiveButtonStyle }}
+                                variant={displayMode === 'aiCard' ? 'primary' : 'secondary'}
+                                onClick={() => handleDisplayModeClick('aiCard')}
+                                disabled={uiMode === "downloading"}
+                            >
+                                AI Mode
                             </Button>
 
 
@@ -3663,255 +3726,109 @@ const OfflineWindow: React.FC = () => {
                                     </Button>
                                 </div>
 
-                                <div
-                                    style={{
-                                        borderRadius: 10,
-                                        padding: 10,
-                                        background: isDarkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
-                                        border: isDarkMode ? "1px solid rgba(255,255,255,0.10)" : "1px solid rgba(0,0,0,0.08)",
-                                    }}
-                                >
-                                    {/* ✅ Header (click to expand/collapse) */}
-                                    <div
-                                        role="button"
-                                        tabIndex={0}
-                                        aria-expanded={showAiSuggestionsPanel}
-                                        onClick={toggleAiSuggestionsPanel}
-                                        onKeyDown={(e) => {
-                                            if (e.key === "Enter" || e.key === " ") {
-                                                e.preventDefault();
-                                                toggleAiSuggestionsPanel();
-                                            }
-                                        }}
-                                        style={{
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "space-between",
-                                            gap: 10,
-                                            cursor: "pointer",
-                                            userSelect: "none",
-                                            fontWeight: 700,
-                                            color: isDarkMode ? "#f0f0f0" : "#222",
-                                            padding: "6px 8px",
-                                            borderRadius: 8,
-                                        }}
-                                        title={showAiSuggestionsPanel ? "Click to collapse" : "Click to expand"}
+                            </div>
+                        )}
+
+                        {displayMode === "aiCard" && (
+                            <div
+                                style={{
+                                    borderRadius: 10,
+                                    padding: 10,
+                                    background: isDarkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                                    border: isDarkMode ? "1px solid rgba(255,255,255,0.10)" : "1px solid rgba(0,0,0,0.08)",
+                                    marginTop: 10,
+                                }}
+                            >
+                                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                                    <Button
+                                        variant="warning"
+                                        onClick={handleRunPendingAiSuggestions}
+                                        disabled={isLoading || aiSuggestRunStatus === "running"}
                                     >
-                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                            <MdOutlineTipsAndUpdates />
-                                            <span>AI Suggestions</span>
+                                        Run AI Suggestion for downloadFilePath
+                                    </Button>
 
-                                            {/* Optional quick status hint in header */}
-                                            {aiSuggestRunStatus === "running" && (
-                                                <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 600, opacity: 0.9 }}>
-                                                    <Spinner animation="border" size="sm" variant={isDarkMode ? "light" : "dark"} />
-                                                    Running ...
-                                                </span>
-                                            )}
-                                        </div>
-
-                                        <div style={{ fontWeight: 600, opacity: 0.9 }}>
-                                            {showAiSuggestionsPanel ? "Hide" : "Show"}
-                                        </div>
-                                    </div>
-
-                                    {/* ✅ Collapsible body */}
-                                    <div
-                                        style={{
-                                            maxHeight: showAiSuggestionsPanel ? 1200 : 0, // large enough for your content
-                                            overflow: "hidden",
-                                            opacity: showAiSuggestionsPanel ? 1 : 0,
-                                            transition: "max-height 200ms ease, opacity 200ms ease",
-                                            pointerEvents: showAiSuggestionsPanel ? "auto" : "none",
-                                        }}
+                                    <Form.Control
+                                        as="select"
+                                        value={aiSuggestCountInput}
+                                        onChange={onChangeAiSuggestCount}
+                                        onBlur={() => setAiSuggestCountInput(String(getAiSuggestCount()))}
+                                        disabled={isLoading || aiSuggestRunStatus === "running"}
+                                        style={{ width: 90 }}
                                     >
-                                        <div style={{ paddingTop: 10 }}>
-                                            {/* Row 1: Button + dropdown on same line */}
-                                            <div
-                                                style={{
-                                                    display: "flex",
-                                                    gap: 10,
-                                                    alignItems: "center",
-                                                    flexWrap: "nowrap",
-                                                    whiteSpace: "nowrap",
-                                                    overflowX: "auto",
-                                                    paddingBottom: 2,
-                                                }}
-                                            >
-                                                <Button
-                                                    variant="warning"
-                                                    onClick={handleRunPendingAiSuggestions}
-                                                    disabled={isLoading || isPatching || aiSuggestRunStatus === "running"}
-                                                    title="Run AI suggestions for pending entries"
-                                                    style={{
-                                                        display: "inline-flex",
-                                                        alignItems: "center",
-                                                        gap: 6,
-                                                        maxWidth: 320,
-                                                        minWidth: 190,
-                                                        overflow: "hidden",
-                                                        flex: "1 1 auto",
-                                                    }}
-                                                >
-                                                    <MdOutlineTipsAndUpdates style={{ flex: "0 0 auto" }} />
+                                        {Array.from({ length: 10 }, (_, i) => 100 - i * 10).map((n) => (
+                                            <option key={n} value={String(n)}>
+                                                {n}
+                                            </option>
+                                        ))}
+                                    </Form.Control>
 
-                                                    <span
-                                                        style={{
-                                                            whiteSpace: "normal",
-                                                            textOverflow: "clip",
-                                                            overflow: "visible",
-                                                            overflowWrap: "anywhere",
-                                                            wordBreak: "break-word",
-                                                            lineHeight: 1.1,
-                                                            textAlign: "left",
-                                                            flex: "1 1 auto",
-                                                            minWidth: 0,
-                                                        }}
-                                                    >
-                                                        Run AI Suggestion for downloadFilePath
-                                                    </span>
-                                                </Button>
-
-                                                <Form.Control
-                                                    as="select"
-                                                    value={aiSuggestCountInput}
-                                                    onChange={onChangeAiSuggestCount}
-                                                    onBlur={() => setAiSuggestCountInput(String(getAiSuggestCount()))}
-                                                    disabled={isLoading || isPatching || aiSuggestRunStatus === "running"}
-                                                    style={{ width: 90, flex: "0 0 auto" }}
-                                                    aria-label="AI suggestion total count (10 to 100)"
-                                                >
-                                                    {Array.from({ length: 10 }, (_, i) => 100 - i * 10).map((n) => (
-                                                        <option key={n} value={String(n)}>
-                                                            {n}
-                                                        </option>
-                                                    ))}
-                                                </Form.Control>
-                                            </div>
-
-
-                                            {/* ✅ Row 1.5: Apply selected paths to downloadFilePath */}
-                                            <div style={{ marginTop: 10 }}>
-                                                <Button
-                                                    variant="primary"
-                                                    onClick={handleApplySelectedAiPathsToDownloadFilePath}
-                                                    disabled={
-                                                        isLoading ||
-                                                        isPatching ||
-                                                        isBulkUpdatingDownloadPaths ||
-                                                        aiSuggestRunStatus === "running" ||
-                                                        selectedIds.size === 0
-                                                    }
-                                                    title="Update downloadFilePath for selected models using the AI selectedPath"
-                                                    style={{
-                                                        display: "inline-flex",
-                                                        alignItems: "center",
-                                                        gap: 8,
-                                                        fontWeight: 700,
-                                                    }}
-                                                >
-                                                    {isBulkUpdatingDownloadPaths && (
-                                                        <Spinner animation="border" size="sm" variant="light" />
-                                                    )}
-                                                    {isBulkUpdatingDownloadPaths
-                                                        ? "Updating downloadFilePath..."
-                                                        : `Apply selectedPath -> downloadFilePath (${selectedIds.size})`}
-                                                </Button>
-                                            </div>
-
-                                            {/* Row 2: Status line */}
-                                            <div
-                                                style={{
-                                                    marginTop: 10,
-                                                    display: "flex",
-                                                    alignItems: "center",
-                                                    gap: 10,
-                                                    flexWrap: "wrap",
-                                                    minHeight: 22,
-                                                    color: isDarkMode ? "#e6e6e6" : "#333",
-                                                }}
-                                            >
-                                                {aiSuggestRunStatus === "success" && (
-                                                    <Badge bg="success" style={{ flex: "0 0 auto" }}>
-                                                        Done
-                                                    </Badge>
-                                                )}
-
-                                                {aiSuggestRunStatus === "fail" && (
-                                                    <Badge bg="danger" style={{ flex: "0 0 auto" }}>
-                                                        Stopped
-                                                    </Badge>
-                                                )}
-
-                                                {batchResults.length > 0 && (
-                                                    <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-                                                        {batchResults.map((b) => (
-                                                            <div key={b.batchNo} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                                                <span>
-                                                                    <strong>Batch #{b.batchNo}</strong> ({b.start} ~ {b.end})
-                                                                </span>
-
-                                                                {b.status === "success" && <Badge bg="success">Success</Badge>}
-                                                                {b.status === "fail" && <Badge bg="danger">Fail</Badge>}
-                                                                {b.status === "running" && (
-                                                                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                                                                        <Spinner animation="border" size="sm" variant={isDarkMode ? "light" : "dark"} />
-                                                                        Processing...
-                                                                    </span>
-                                                                )}
-
-                                                                {!!b.msg && b.status !== "running" && (
-                                                                    <small
-                                                                        style={{
-                                                                            opacity: isDarkMode ? 0.95 : 0.9,
-                                                                            color: isDarkMode ? "#e6e6e6" : "#333",
-                                                                            maxWidth: 520,
-                                                                            overflow: "hidden",
-                                                                            textOverflow: "ellipsis",
-                                                                            whiteSpace: "nowrap",
-                                                                        }}
-                                                                        title={b.msg}
-                                                                    >
-                                                                        {b.msg}
-                                                                    </small>
-                                                                )}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-
-                                                {!aiSuggestRunStatus && <small style={{ opacity: 0.75 }}> </small>}
-                                            </div>
-
-                                            {/* Row 3: Progress + cooldown */}
-                                            {aiSuggestRunStatus === "running" && (
-                                                <div
-                                                    style={{
-                                                        marginTop: 6,
-                                                        display: "flex",
-                                                        flexDirection: "column",
-                                                        gap: 4,
-                                                        color: isDarkMode ? "#e6e6e6" : "#333",
-                                                    }}
-                                                >
-                                                    {currentBatchRange && <div style={{ fontWeight: 600 }}>{currentBatchRange}</div>}
-
-                                                    <div>
-                                                        Progress: {aiSuggestProgress.completed}/{aiSuggestProgress.total}
-                                                    </div>
-
-                                                    {batchCooldown !== null && (
-                                                        <div>
-                                                            Cooldown: <strong>{batchCooldown}s</strong>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
+                                    <Button
+                                        variant="primary"
+                                        onClick={handleApplySelectedAiPathsToDownloadFilePath}
+                                        disabled={
+                                            isLoading ||
+                                            isBulkUpdatingDownloadPaths ||
+                                            aiSuggestRunStatus === "running" ||
+                                            selectedIds.size === 0
+                                        }
+                                    >
+                                        {isBulkUpdatingDownloadPaths
+                                            ? "Updating downloadFilePath..."
+                                            : `Apply selectedPath -> downloadFilePath (${selectedIds.size})`}
+                                    </Button>
                                 </div>
 
+                                {aiSuggestRunStatus === "running" && (
+                                    <div style={{ marginTop: 10 }}>
+                                        {currentBatchRange && <div>{currentBatchRange}</div>}
+                                        <div>
+                                            Progress: {aiSuggestProgress.completed}/{aiSuggestProgress.total}
+                                        </div>
+                                        {batchCooldown !== null && (
+                                            <div>
+                                                Cooldown: <strong>{batchCooldown}s</strong>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
 
+                                {batchResults.length > 0 && (
+                                    <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+                                        {batchResults.map((b) => (
+                                            <div key={b.batchNo} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                                <span>
+                                                    <strong>Batch #{b.batchNo}</strong> ({b.start} ~ {b.end})
+                                                </span>
+
+                                                {b.status === "success" && <Badge bg="success">Success</Badge>}
+                                                {b.status === "fail" && <Badge bg="danger">Fail</Badge>}
+                                                {b.status === "running" && (
+                                                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                                        <Spinner animation="border" size="sm" variant={isDarkMode ? "light" : "dark"} />
+                                                        Processing...
+                                                    </span>
+                                                )}
+
+                                                {!!b.msg && b.status !== "running" && (
+                                                    <small
+                                                        style={{
+                                                            opacity: isDarkMode ? 0.95 : 0.9,
+                                                            color: isDarkMode ? "#e6e6e6" : "#333",
+                                                            maxWidth: 520,
+                                                            overflow: "hidden",
+                                                            textOverflow: "ellipsis",
+                                                            whiteSpace: "nowrap",
+                                                        }}
+                                                        title={b.msg}
+                                                    >
+                                                        {b.msg}
+                                                    </small>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -4275,7 +4192,7 @@ const OfflineWindow: React.FC = () => {
                                         handleRemoveOne={handleRemoveOne}
                                         handleCreateAddDummyFromError={handleCreateAddDummyFromError}
                                         dummyCreateStatusByVid={dummyCreateStatusByVid}
-                                        showAiSuggestionsPanel={showAiSuggestionsPanel}
+                                        showAiSuggestionsPanel={false}
                                         selectedSuggestedPathByVid={selectedSuggestedPathByVid}
                                         setSelectedSuggestedPathByVid={setSelectedSuggestedPathByVid}
                                         styles={styles}
@@ -4336,7 +4253,7 @@ const OfflineWindow: React.FC = () => {
                                         handleRemoveOne={handleRemoveOne}
                                         handleCreateAddDummyFromError={handleCreateAddDummyFromError}
                                         dummyCreateStatusByVid={dummyCreateStatusByVid}
-                                        showAiSuggestionsPanel={showAiSuggestionsPanel}
+                                        showAiSuggestionsPanel={false}
                                         selectedSuggestedPathByVid={selectedSuggestedPathByVid}
                                         setSelectedSuggestedPathByVid={setSelectedSuggestedPathByVid}
                                         styles={styles}
@@ -4375,7 +4292,7 @@ const OfflineWindow: React.FC = () => {
                                         handleRemoveOne={handleRemoveOne}
                                         handleCreateAddDummyFromError={handleCreateAddDummyFromError}
                                         dummyCreateStatusByVid={dummyCreateStatusByVid}
-                                        showAiSuggestionsPanel={showAiSuggestionsPanel}
+                                        showAiSuggestionsPanel={false}
                                         selectedSuggestedPathByVid={selectedSuggestedPathByVid}
                                         setSelectedSuggestedPathByVid={setSelectedSuggestedPathByVid}
                                         styles={styles}
@@ -4414,7 +4331,7 @@ const OfflineWindow: React.FC = () => {
                                         handleRemoveOne={handleRemoveOne}
                                         handleCreateAddDummyFromError={handleCreateAddDummyFromError}
                                         dummyCreateStatusByVid={dummyCreateStatusByVid}
-                                        showAiSuggestionsPanel={showAiSuggestionsPanel}
+                                        showAiSuggestionsPanel={false}
                                         selectedSuggestedPathByVid={selectedSuggestedPathByVid}
                                         setSelectedSuggestedPathByVid={setSelectedSuggestedPathByVid}
                                         styles={styles}
@@ -4454,7 +4371,7 @@ const OfflineWindow: React.FC = () => {
                                         handleRemoveOne={handleRemoveOne}
                                         handleCreateAddDummyFromError={handleCreateAddDummyFromError}
                                         dummyCreateStatusByVid={dummyCreateStatusByVid}
-                                        showAiSuggestionsPanel={showAiSuggestionsPanel}
+                                        showAiSuggestionsPanel={false}
                                         selectedSuggestedPathByVid={selectedSuggestedPathByVid}
                                         setSelectedSuggestedPathByVid={setSelectedSuggestedPathByVid}
                                         styles={styles}
@@ -4470,121 +4387,216 @@ const OfflineWindow: React.FC = () => {
                                     />
                                 )}
 
+                                {displayMode === 'aiCard' && (
+                                    <BigCardMode
+                                        filteredDownloadList={aiEntries}
+                                        isDarkMode={isDarkMode}
+                                        isModifyMode={false}
+                                        selectedIds={selectedIds}
+                                        toggleSelect={toggleSelect}
+                                        handleSelectAll={handleSelectAll}
+                                        showGalleries={showGalleries}
+                                        onToggleOverlay={toggleLeftOverlay}
+                                        activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
+                                        onRefreshRecord={handleRefreshOneRecord}
+                                        onToggleIsError={handleToggleIsError}
+                                        canChangeSelection={canChangeSelection}
+                                        isLoading={isLoading}
+                                        editingPathId={editingPathId}
+                                        setEditingPathId={setEditingPathId}
+                                        handleDownloadPathSave={handleDownloadPathSave}
+                                        handleHoldChange={handleHoldChange}
+                                        handlePriorityChange={handlePriorityChange}
+                                        handleRemoveOne={handleRemoveOne}
+                                        handleCreateAddDummyFromError={handleCreateAddDummyFromError}
+                                        dummyCreateStatusByVid={dummyCreateStatusByVid}
+                                        showAiSuggestionsPanel={true}
+                                        selectedSuggestedPathByVid={selectedSuggestedPathByVid}
+                                        setSelectedSuggestedPathByVid={setSelectedSuggestedPathByVid}
+                                        styles={styles}
+                                        isInteractiveClickTarget={isInteractiveClickTarget}
+                                        isEntryEarlyAccess={isEntryEarlyAccess}
+                                        getEarlyAccessEndsAt={getEarlyAccessEndsAt}
+                                        formatLocalDateTime={formatLocalDateTime}
+                                        normalizeImg={normalizeImg}
+                                        withWidth={withWidth}
+                                        buildSrcSet={buildSrcSet}
+                                        mergeSuggestedPathsForEntry={mergeSuggestedPathsForEntry}
+                                        normalizePathKey={normalizePathKey}
+                                        displayMode="aiCard"
+                                    />
+                                )}
+
                             </>
                         )}
                     </div>
 
                     {/* Footer Area */}
-                    {(displayMode === 'bigCard' || displayMode === 'smallCard' || displayMode === 'historyTable') && (
-                        <div style={styles.footerStyle}>
-                            {(() => {
-                                const isHistory = displayMode === "historyTable";
+                    {(displayMode === 'bigCard' ||
+                        displayMode === 'smallCard' ||
+                        displayMode === 'historyTable' ||
+                        displayMode === 'aiCard') && (
+                            <div style={styles.footerStyle}>
+                                {(() => {
+                                    const isHistory = displayMode === "historyTable";
+                                    const isAi = displayMode === "aiCard";
 
-                                const page = isHistory ? historyPage : currentPage;
-                                const total = isHistory ? historyTotalPages : totalPages;
-                                const totalItemsX = isHistory ? historyTotalItems : totalItems;
-                                const perPage = isHistory ? historyItemsPerPage : itemsPerPage;
+                                    const page = isHistory
+                                        ? historyPage
+                                        : isAi
+                                            ? aiPage
+                                            : currentPage;
 
-                                const start = totalItemsX === 0 ? 0 : (page - 1) * perPage + 1;
-                                const end = Math.min(page * perPage, totalItemsX);
+                                    const total = isHistory
+                                        ? historyTotalPages
+                                        : isAi
+                                            ? aiTotalPages
+                                            : totalPages;
 
-                                return (
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-                                        <div style={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>
-                                            Showing {start} - {end} of {totalItemsX} items
-                                        </div>
+                                    const totalItemsX = isHistory
+                                        ? historyTotalItems
+                                        : isAi
+                                            ? aiTotalItems
+                                            : totalItems;
 
-                                        <div
-                                            style={{
-                                                flex: 1,
-                                                display: 'flex',
-                                                justifyContent: 'center',
-                                                alignItems: 'center',
-                                                gap: '8px',
-                                                flexWrap: 'wrap',
-                                            }}
-                                        >
-                                            <Pagination className="mb-0" size="sm" style={{ marginBottom: 0 }}>
-                                                <Pagination.First
-                                                    onClick={() => isHistory ? setHistoryPage(1) : setCurrentPage(1)}
-                                                    disabled={page === 1}
-                                                >
-                                                    <FaAngleDoubleLeft />
-                                                </Pagination.First>
+                                    const perPage = isHistory
+                                        ? historyItemsPerPage
+                                        : isAi
+                                            ? aiItemsPerPage
+                                            : itemsPerPage;
 
-                                                <Pagination.Prev
-                                                    onClick={() =>
-                                                        isHistory
-                                                            ? setHistoryPage(prev => Math.max(prev - 1, 1))
-                                                            : setCurrentPage(prev => Math.max(prev - 1, 1))
-                                                    }
-                                                    disabled={page === 1}
-                                                >
-                                                    <FaAngleLeft />
-                                                </Pagination.Prev>
+                                    const start = totalItemsX === 0 ? 0 : (page - 1) * perPage + 1;
+                                    const end = Math.min(page * perPage, totalItemsX);
 
-                                                {Array.from({ length: total }, (_, index) => index + 1)
-                                                    .slice(Math.max(page - 3, 0), page + 2)
-                                                    .map(p => (
-                                                        <Pagination.Item
-                                                            key={p}
-                                                            active={p === page}
-                                                            onClick={() => isHistory ? setHistoryPage(p) : setCurrentPage(p)}
-                                                        >
-                                                            {p}
-                                                        </Pagination.Item>
-                                                    ))}
+                                    return (
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                                            <div style={{ fontWeight: 'bold', color: isDarkMode ? '#fff' : '#000' }}>
+                                                Showing {start} - {end} of {totalItemsX} items
+                                            </div>
 
-                                                <Pagination.Next
-                                                    onClick={() =>
-                                                        isHistory
-                                                            ? setHistoryPage(prev => Math.min(prev + 1, total))
-                                                            : setCurrentPage(prev => Math.min(prev + 1, total))
-                                                    }
-                                                    disabled={page === total}
-                                                >
-                                                    <FaAngleRight />
-                                                </Pagination.Next>
+                                            <div
+                                                style={{
+                                                    flex: 1,
+                                                    display: 'flex',
+                                                    justifyContent: 'center',
+                                                    alignItems: 'center',
+                                                    gap: '8px',
+                                                    flexWrap: 'wrap',
+                                                }}
+                                            >
+                                                <Pagination className="mb-0" size="sm" style={{ marginBottom: 0 }}>
+                                                    <Pagination.First
+                                                        onClick={() =>
+                                                            isHistory
+                                                                ? setHistoryPage(1)
+                                                                : isAi
+                                                                    ? setAiPage(1)
+                                                                    : setCurrentPage(1)
+                                                        }
+                                                        disabled={page === 1}
+                                                    >
+                                                        <FaAngleDoubleLeft />
+                                                    </Pagination.First>
 
-                                                <Pagination.Last
-                                                    onClick={() => isHistory ? setHistoryPage(total) : setCurrentPage(total)}
-                                                    disabled={page === total}
-                                                >
-                                                    <FaAngleDoubleRight />
-                                                </Pagination.Last>
-                                            </Pagination>
-                                        </div>
+                                                    <Pagination.Prev
+                                                        onClick={() =>
+                                                            isHistory
+                                                                ? setHistoryPage(prev => Math.max(prev - 1, 1))
+                                                                : isAi
+                                                                    ? setAiPage(prev => Math.max(prev - 1, 1))
+                                                                    : setCurrentPage(prev => Math.max(prev - 1, 1))
+                                                        }
+                                                        disabled={page === 1}
+                                                    >
+                                                        <FaAngleLeft />
+                                                    </Pagination.Prev>
 
-                                        <Form.Select
-                                            value={isHistory ? historyItemsPerPage : itemsPerPage}
-                                            onChange={(e) => {
-                                                const next = parseInt(e.target.value, 10);
-                                                if (isHistory) {
-                                                    setHistoryItemsPerPage(next);
-                                                    setHistoryPage(1);
-                                                } else {
-                                                    setItemsPerPage(next);
+                                                    {Array.from({ length: total }, (_, index) => index + 1)
+                                                        .slice(Math.max(page - 3, 0), page + 2)
+                                                        .map(p => (
+                                                            <Pagination.Item
+                                                                key={p}
+                                                                active={p === page}
+                                                                onClick={() =>
+                                                                    isHistory
+                                                                        ? setHistoryPage(p)
+                                                                        : isAi
+                                                                            ? setAiPage(p)
+                                                                            : setCurrentPage(p)
+                                                                }
+                                                            >
+                                                                {p}
+                                                            </Pagination.Item>
+                                                        ))}
+
+                                                    <Pagination.Next
+                                                        onClick={() =>
+                                                            isHistory
+                                                                ? setHistoryPage(prev => Math.min(prev + 1, total))
+                                                                : isAi
+                                                                    ? setAiPage(prev => Math.min(prev + 1, total))
+                                                                    : setCurrentPage(prev => Math.min(prev + 1, total))
+                                                        }
+                                                        disabled={page === total}
+                                                    >
+                                                        <FaAngleRight />
+                                                    </Pagination.Next>
+
+                                                    <Pagination.Last
+                                                        onClick={() =>
+                                                            isHistory
+                                                                ? setHistoryPage(total)
+                                                                : isAi
+                                                                    ? setAiPage(total)
+                                                                    : setCurrentPage(total)
+                                                        }
+                                                        disabled={page === total}
+                                                    >
+                                                        <FaAngleDoubleRight />
+                                                    </Pagination.Last>
+                                                </Pagination>
+                                            </div>
+
+                                            <Form.Select
+                                                value={
+                                                    isHistory
+                                                        ? historyItemsPerPage
+                                                        : isAi
+                                                            ? aiItemsPerPage
+                                                            : itemsPerPage
                                                 }
-                                            }}
-                                            style={{
-                                                width: '170px',
-                                                padding: '5px',
-                                                borderRadius: '4px',
-                                                border: '1px solid #ccc',
-                                                backgroundColor: isDarkMode ? '#555' : '#fff',
-                                                color: isDarkMode ? '#fff' : '#000',
-                                            }}
-                                            aria-label="Items Per Page"
-                                        >
-                                            <option value={50}>50 items per page</option>
-                                            <option value={100}>100 items per page</option>
-                                            <option value={200}>200 items per page</option>
-                                        </Form.Select>
-                                    </div>
-                                );
-                            })()}
-                        </div>
-                    )}
+                                                onChange={(e) => {
+                                                    const next = parseInt(e.target.value, 10);
+
+                                                    if (isHistory) {
+                                                        setHistoryItemsPerPage(next);
+                                                        setHistoryPage(1);
+                                                    } else if (isAi) {
+                                                        setAiItemsPerPage(next);
+                                                        setAiPage(1);
+                                                    } else {
+                                                        setItemsPerPage(next);
+                                                    }
+                                                }}
+                                                style={{
+                                                    width: '170px',
+                                                    padding: '5px',
+                                                    borderRadius: '4px',
+                                                    border: '1px solid #ccc',
+                                                    backgroundColor: isDarkMode ? '#555' : '#fff',
+                                                    color: isDarkMode ? '#fff' : '#000',
+                                                }}
+                                                aria-label="Items Per Page"
+                                            >
+                                                <option value={50}>50 items per page</option>
+                                                <option value={100}>100 items per page</option>
+                                                <option value={200}>200 items per page</option>
+                                            </Form.Select>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        )}
                 </div>
 
             </>
