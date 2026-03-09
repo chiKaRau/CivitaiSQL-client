@@ -4339,6 +4339,46 @@ const OfflineWindow: React.FC = () => {
                                     />
                                 )}
 
+                                {displayMode === 'recentCard' && (
+                                    <BigCardMode
+                                        filteredDownloadList={recentlyDownloaded}
+                                        isDarkMode={isDarkMode}
+                                        isModifyMode={false}
+                                        selectedIds={selectedIds}
+                                        toggleSelect={toggleSelect}
+                                        handleSelectAll={handleSelectAll}
+                                        showGalleries={showGalleries}
+                                        onToggleOverlay={toggleLeftOverlay}
+                                        activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
+                                        onRefreshRecord={handleRefreshOneRecord}
+                                        onToggleIsError={handleToggleIsError}
+                                        canChangeSelection={canChangeSelection}
+                                        isLoading={isLoading}
+                                        editingPathId={editingPathId}
+                                        setEditingPathId={setEditingPathId}
+                                        handleDownloadPathSave={handleDownloadPathSave}
+                                        handleHoldChange={handleHoldChange}
+                                        handlePriorityChange={handlePriorityChange}
+                                        handleRemoveOne={handleRemoveOne}
+                                        handleCreateAddDummyFromError={handleCreateAddDummyFromError}
+                                        dummyCreateStatusByVid={dummyCreateStatusByVid}
+                                        showAiSuggestionsPanel={false}
+                                        selectedSuggestedPathByVid={selectedSuggestedPathByVid}
+                                        setSelectedSuggestedPathByVid={setSelectedSuggestedPathByVid}
+                                        styles={styles}
+                                        isInteractiveClickTarget={isInteractiveClickTarget}
+                                        isEntryEarlyAccess={isEntryEarlyAccess}
+                                        getEarlyAccessEndsAt={getEarlyAccessEndsAt}
+                                        formatLocalDateTime={formatLocalDateTime}
+                                        normalizeImg={normalizeImg}
+                                        withWidth={withWidth}
+                                        buildSrcSet={buildSrcSet}
+                                        mergeSuggestedPathsForEntry={mergeSuggestedPathsForEntry}
+                                        normalizePathKey={normalizePathKey}
+                                        displayMode="recentCard"
+                                    />
+                                )}
+
                                 {displayMode === 'failedCard' && (
                                     <BigCardMode
                                         filteredDownloadList={failedEntries}
