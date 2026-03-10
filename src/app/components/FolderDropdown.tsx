@@ -4,7 +4,7 @@ import { Dropdown, Button, Spinner, OverlayTrigger, Tooltip } from 'react-bootst
 import { useDispatch } from 'react-redux';
 import { FaClipboard } from 'react-icons/fa';
 import { fetchGetFoldersList } from "../api/civitaiSQL_api";
-import { updateDownloadFilePath } from '../store/actions/chromeActions';
+import { updateDownloadFilePath, updateDownloadPriority } from '../store/actions/chromeActions';
 import { InputGroup, FormControl } from 'react-bootstrap';
 
 import Fuse from 'fuse.js';
@@ -92,6 +92,7 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText }) => {
     const handleSelectFolder = (folder: string) => {
         setSelectedFolder(folder);
         dispatch(updateDownloadFilePath(folder));
+        dispatch(updateDownloadPriority(5));
     };
 
     const dropdownToggleStyle: React.CSSProperties = {
