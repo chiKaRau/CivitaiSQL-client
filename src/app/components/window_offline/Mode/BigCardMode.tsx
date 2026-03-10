@@ -617,19 +617,21 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                             </button>
                                         </p>
 
-                                        <p style={{ margin: '4px 0' }}>
-                                            <strong>Civitai Archive URL:</strong>{' '}
-                                            {entry.civitaiModelID && entry.civitaiVersionID ? (
-                                                <a
-                                                    href={`https://civitaiarchive.com/models/${entry.civitaiModelID}?modelVersionId=${entry.civitaiVersionID}`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    style={{ color: isDarkMode ? '#1e90ff' : '#007bff' }}
-                                                >
-                                                    Visit Archive
-                                                </a>
-                                            ) : 'N/A'}
-                                        </p>
+                                        {displayMode === 'errorCard' && (
+                                            <p style={{ margin: '4px 0' }}>
+                                                <strong>Civitai Archive URL:</strong>{' '}
+                                                {entry.civitaiModelID && entry.civitaiVersionID ? (
+                                                    <a
+                                                        href={`https://civitaiarchive.com/models/${entry.civitaiModelID}?modelVersionId=${entry.civitaiVersionID}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        style={{ color: isDarkMode ? '#1e90ff' : '#007bff' }}
+                                                    >
+                                                        Visit Archive
+                                                    </a>
+                                                ) : 'N/A'}
+                                            </p>
+                                        )}
                                     </>
                                 )}
 

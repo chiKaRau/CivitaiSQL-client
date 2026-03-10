@@ -138,14 +138,61 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
             cellStyle,
         },
         {
-            headerName: "Updated At",
-            field: "updatedAt",
-            flex: 1,
-            sortable: true,
+            headerName: "Civitai URL",
+            field: "civitaiUrl",
+            minWidth: 140,
+            sortable: false,
             filter: false,
-            tooltipField: "updatedAt",
+            cellRenderer: (params: any) => {
+                const url = params.value;
+                if (!url) return <span>N/A</span>;
+
+                return (
+                    <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            color: isDarkMode ? "#1e90ff" : "#007bff",
+                            textDecoration: "underline",
+                            fontWeight: 600,
+                        }}
+                    >
+                        Visit Model
+                    </a>
+                );
+            },
             cellStyle,
         },
+        {
+            headerName: "Civitai Archive URL",
+            field: "civitaiArchiveUrl",
+            minWidth: 160,
+            sortable: false,
+            filter: false,
+            cellRenderer: (params: any) => {
+                const url = params.value;
+                if (!url) return <span>N/A</span>;
+
+                return (
+                    <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            color: isDarkMode ? "#1e90ff" : "#007bff",
+                            textDecoration: "underline",
+                            fontWeight: 600,
+                        }}
+                    >
+                        Visit Archive
+                    </a>
+                );
+            },
+            cellStyle,
+        }
     ];
 
     const rowData = useMemo(() => {
@@ -153,8 +200,15 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
             civitaiModelID: entry.civitaiModelID ?? "N/A",
             civitaiVersionID: entry.civitaiVersionID ?? "N/A",
             imageUrl: entry.imageUrl ?? "",
+            civitaiUrl:
+                entry.civitaiModelID && entry.civitaiVersionID
+                    ? `https://civitai.com/models/${entry.civitaiModelID}?modelVersionId=${entry.civitaiVersionID}`
+                    : "",
+            civitaiArchiveUrl:
+                entry.civitaiModelID && entry.civitaiVersionID
+                    ? `https://civitaiarchive.com/models/${entry.civitaiModelID}?modelVersionId=${entry.civitaiVersionID}`
+                    : "",
             createdAt: formatHistoryDateTime(entry.createdAt),
-            updatedAt: formatHistoryDateTime(entry.updatedAt),
         }));
     }, [entries]);
 
