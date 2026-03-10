@@ -6,7 +6,7 @@ import { useDispatch } from 'react-redux';
 import { FaAngleLeft, FaAngleRight } from "react-icons/fa6";
 import { BsDatabaseFillExclamation } from "react-icons/bs";
 import { GoChecklist } from "react-icons/go";
-import { OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { Form, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { PiListDashesFill } from "react-icons/pi";
 // top of file (with the other icon imports)
 import { MdDeleteSweep, MdFirstPage, MdLastPage } from "react-icons/md";
@@ -33,14 +33,20 @@ interface Model {
 interface PanelProps {
     url: string;
     setSelectedUrl: (selectedUrl: string) => void;
-    setUrlList: (updater: (prevUrlList: string[]) => string[]) => void; // Callback to update the URL list
-    urlList: string[]; // Pass the list of URLs to check for duplicates
+    setUrlList: (updater: (prevUrlList: string[]) => string[]) => void;
+    urlList: string[];
     setUrlImgSrcMap?: React.Dispatch<React.SetStateAction<Record<string, string>>>;
     setUrlVersionIdMap?: React.Dispatch<React.SetStateAction<Record<string, string>>>;
     setModelPrimaryVersionIdMap?: React.Dispatch<
         React.SetStateAction<Record<string, string>>
     >;
     setUrlBadgeMap?: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+
+    lockedUrl: string;
+    setLockedUrl: React.Dispatch<React.SetStateAction<string>>;
+    neighborCount: number;
+    setNeighborCount: React.Dispatch<React.SetStateAction<number>>;
+    handleAddAroundLocked: (direction: "prev" | "next") => void;
 }
 
 const ui = {
@@ -139,8 +145,21 @@ const IconBtn: React.FC<{
 };
 
 
-const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, setSelectedUrl, setUrlImgSrcMap,
-    setUrlVersionIdMap, setModelPrimaryVersionIdMap, setUrlBadgeMap }) => {
+const WindowShortcutPanel: React.FC<PanelProps> = ({
+    url,
+    urlList,
+    setUrlList,
+    setSelectedUrl,
+    setUrlImgSrcMap,
+    setUrlVersionIdMap,
+    setModelPrimaryVersionIdMap,
+    setUrlBadgeMap,
+    lockedUrl,
+    setLockedUrl,
+    neighborCount,
+    setNeighborCount,
+    handleAddAroundLocked
+}) => {
 
     const dispatch = useDispatch();
 
@@ -155,6 +174,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
     const [hasUpdated, setHasUpdated] = useState(false);
     const [showCarousel, setShowCarousel] = useState(false);
 
+    const isLocked = lockedUrl === url;
 
     // Extract modelId from the URL
     const modelId = url.match(/\/models\/(\d+)/)?.[1] || '';
@@ -728,6 +748,141 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, s
                             >
                                 <MdRemove />
                             </IconBtn>
+                        </div>
+
+                        <div style={ui.group}>
+                            <div
+                                style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "8px",
+                                    flexWrap: "wrap",
+                                    marginTop: "10px",
+                                    padding: "10px",
+                                    border: "1px solid rgba(255,255,255,0.12)",
+                                    borderRadius: "8px",
+                                    background: "rgba(255,255,255,0.04)",
+                                }}
+                            >
+                                <span
+                                    style={{
+                                        fontSize: "12px",
+                                        fontWeight: 700,
+                                        padding: "4px 8px",
+                                        borderRadius: "999px",
+                                        border: isLocked
+                                            ? "1px solid rgba(245,158,11,0.45)"
+                                            : "1px solid rgba(255,255,255,0.15)",
+                                        background: isLocked
+                                            ? "rgba(245,158,11,0.12)"
+                                            : "rgba(0,0,0,0.18)",
+                                    }}
+                                >
+                                    {isLocked ? "Locked" : "Not Locked"}
+                                </span>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setLockedUrl(isLocked ? "" : url)}
+                                    style={{
+                                        padding: "6px 10px",
+                                        fontSize: "12px",
+                                        borderRadius: "8px",
+                                        border: "1px solid rgba(255,255,255,0.15)",
+                                        background: isLocked ? "rgba(245,158,11,0.18)" : "rgba(255,255,255,0.06)",
+                                        color: "inherit",
+                                        cursor: "pointer",
+                                    }}
+                                >
+                                    {isLocked ? "Unlock" : "Lock This Model"}
+                                </button>
+
+                                <div style={{ display: "flex", alignItems: "center", gap: "6px", marginLeft: "8px" }}>
+                                    <span style={{ fontSize: "12px" }}>N</span>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setNeighborCount(prev => Math.max(1, prev - 1))}
+                                        disabled={neighborCount <= 1}
+                                        style={{
+                                            width: 28,
+                                            height: 28,
+                                            borderRadius: 6,
+                                            border: "1px solid rgba(255,255,255,0.15)",
+                                            background: "rgba(255,255,255,0.06)",
+                                            color: "inherit",
+                                            cursor: neighborCount <= 1 ? "not-allowed" : "pointer",
+                                            opacity: neighborCount <= 1 ? 0.6 : 1,
+                                        }}
+                                    >
+                                        -
+                                    </button>
+
+                                    <Form.Control
+                                        size="sm"
+                                        type="number"
+                                        min={1}
+                                        value={neighborCount}
+                                        onChange={(e) => {
+                                            const val = Number(e.target.value);
+                                            setNeighborCount(Number.isFinite(val) && val > 0 ? val : 1);
+                                        }}
+                                        style={{ width: "80px" }}
+                                    />
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setNeighborCount(prev => prev + 1)}
+                                        style={{
+                                            width: 28,
+                                            height: 28,
+                                            borderRadius: 6,
+                                            border: "1px solid rgba(255,255,255,0.15)",
+                                            background: "rgba(255,255,255,0.06)",
+                                            color: "inherit",
+                                            cursor: "pointer",
+                                        }}
+                                    >
+                                        +
+                                    </button>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={() => handleAddAroundLocked("prev")}
+                                    disabled={!isLocked}
+                                    style={{
+                                        padding: "6px 10px",
+                                        fontSize: "12px",
+                                        borderRadius: "8px",
+                                        border: "1px solid rgba(255,255,255,0.15)",
+                                        background: !isLocked ? "rgba(255,255,255,0.04)" : "rgba(59,130,246,0.18)",
+                                        color: "inherit",
+                                        cursor: !isLocked ? "not-allowed" : "pointer",
+                                        opacity: !isLocked ? 0.6 : 1,
+                                    }}
+                                >
+                                    Add Previous N
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => handleAddAroundLocked("next")}
+                                    disabled={!isLocked}
+                                    style={{
+                                        padding: "6px 10px",
+                                        fontSize: "12px",
+                                        borderRadius: "8px",
+                                        border: "1px solid rgba(255,255,255,0.15)",
+                                        background: !isLocked ? "rgba(255,255,255,0.04)" : "rgba(34,197,94,0.18)",
+                                        color: "inherit",
+                                        cursor: !isLocked ? "not-allowed" : "pointer",
+                                        opacity: !isLocked ? 0.6 : 1,
+                                    }}
+                                >
+                                    Add Next N
+                                </button>
+                            </div>
                         </div>
 
                         {/* Spacer pushes right-side group to next line nicely when narrow */}

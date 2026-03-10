@@ -197,6 +197,9 @@ const WindowComponent: React.FC = () => {
     // at the top of your component
     type RatingCfg = { rating: string; expectedMax: number };
 
+    const [lockedUrl, setLockedUrl] = useState<string>("");
+    const [neighborCount, setNeighborCount] = useState<number>(1);
+
     // Optional fallback so UI doesn't go blank if API fails.
     // If you truly want zero hardcode, set this to [] and handle empty UI states.
     const DEFAULT_RATING_CFG: RatingCfg[] = [
@@ -289,6 +292,14 @@ const WindowComponent: React.FC = () => {
     useEffect(() => {
         handleToggleCheckBoxMode()
     }, [])
+
+    useEffect(() => {
+        if (!selectedUrl) return;
+        if (!lockedUrl) return;
+        if (lockedUrl !== selectedUrl) {
+            setLockedUrl("");
+        }
+    }, [selectedUrl]);
 
     useEffect(() => {
 
@@ -426,7 +437,6 @@ const WindowComponent: React.FC = () => {
         return []; // <-- NEW
     }
 
-
     const timeAgo = (input: string | Date | null | undefined) => {
         if (!input) return "";
         const d = typeof input === "string" ? new Date(input) : input;
@@ -446,7 +456,6 @@ const WindowComponent: React.FC = () => {
         const y = Math.floor(day / 365);
         return `${y}y ago`;
     };
-
 
     const [selectedCreatorUrlText, setSelectedCreatorUrlText] = useState("");
 
@@ -492,7 +501,6 @@ const WindowComponent: React.FC = () => {
             };
         });
     }, [stagedItems, modelPrimaryVersionIdMap, urlBadgeMap]);
-
 
     const pickByNullThenAge = (direction: 1 | -1): number | null => {
         const cur = currentCreatorUrlIndex ?? -1;
@@ -646,26 +654,74 @@ const WindowComponent: React.FC = () => {
     };
 
 
-    const handleUpdateCreatorUrlList = async (creator: any): Promise<{ status: string }> => {
-        if (!creator) {
-            return { status: "failure" };
-        }
+    const syncLockedUrlToOriginalTab = (url: string) => {
+        chrome.storage.local.get("originalTabId", (r) => {
+            const tabId = r?.originalTabId;
+            if (!tabId) return;
 
-        const creatorUrl = `https://civitai.com/user/${creator}/models`;
-
-        const result = await fetchUpdateCreatorUrlList(
-            creatorUrl,
-            "new",
-            false,
-            "N/A",
-            dispatch
-        );
-
-        console.log("handleUpdateCreatorUrlList result:", result);
-
-        // result is already { status: "success" } or { status: "failure" }
-        return result || { status: "failure" };
+            chrome.tabs.sendMessage(
+                tabId,
+                { action: "set-locked-url", url },
+                () => {
+                    const err = chrome.runtime.lastError;
+                    if (err) console.debug("[set-locked-url] sendMessage:", err.message);
+                }
+            );
+        });
     };
+
+    const clearLockedUrlFromOriginalTab = () => {
+        chrome.storage.local.get("originalTabId", (r) => {
+            const tabId = r?.originalTabId;
+            if (!tabId) return;
+
+            chrome.tabs.sendMessage(
+                tabId,
+                { action: "clear-locked-url" },
+                () => {
+                    const err = chrome.runtime.lastError;
+                    if (err) console.debug("[clear-locked-url] sendMessage:", err.message);
+                }
+            );
+        });
+    };
+
+    const handleAddAroundLocked = (direction: "prev" | "next") => {
+        if (!lockedUrl) return;
+
+        chrome.storage.local.get("originalTabId", (r) => {
+            const tabId = r?.originalTabId;
+            if (!tabId) return;
+
+            chrome.tabs.sendMessage(
+                tabId,
+                {
+                    action: "add-around-locked",
+                    lockedUrl,
+                    direction,
+                    count: neighborCount,
+                },
+                () => {
+                    const err = chrome.runtime.lastError;
+                    if (err) console.debug("[add-around-locked] sendMessage:", err.message);
+                }
+            );
+        });
+    };
+
+    useEffect(() => {
+        if (lockedUrl) {
+            syncLockedUrlToOriginalTab(lockedUrl);
+        } else {
+            clearLockedUrlFromOriginalTab();
+        }
+    }, [lockedUrl]);
+
+    useEffect(() => {
+        if (!selectedUrl && lockedUrl) {
+            setLockedUrl("");
+        }
+    }, [selectedUrl, lockedUrl]);
 
 
     // -- NEW Buttons: Refresh List & Refresh Page -----------------------
@@ -1618,6 +1674,11 @@ const WindowComponent: React.FC = () => {
                 }
 
                 console.log(`Original Tab ID set to: ${activeTab.id}`);
+
+                if (lockedUrl) {
+                    syncLockedUrlToOriginalTab(lockedUrl);
+                }
+
             } else {
                 console.error('No active tab found in the normal window.');
             }
@@ -2661,6 +2722,11 @@ const WindowComponent: React.FC = () => {
                                         setUrlVersionIdMap={setUrlVersionIdMap}
                                         setModelPrimaryVersionIdMap={setModelPrimaryVersionIdMap}
                                         setUrlBadgeMap={setUrlBadgeMap}
+                                        lockedUrl={lockedUrl}
+                                        setLockedUrl={setLockedUrl}
+                                        neighborCount={neighborCount}
+                                        setNeighborCount={setNeighborCount}
+                                        handleAddAroundLocked={handleAddAroundLocked}
                                     />
                                 )}
                             </div>

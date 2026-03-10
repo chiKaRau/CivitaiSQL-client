@@ -10,6 +10,8 @@ const CIVITAIARCHIVE_GRID_SELECTOR =
 
 const stagedInfoMap: Map<string, { action: string }> = new Map();
 
+let lockedUrl: string = "";
+
 function normalizeUrl(url: string): string {
   return (url || "").replace("-commission", "");
 }
@@ -122,6 +124,165 @@ function removeAllStagedBadges(): void {
   const cards = getModelCards(container);
   cards.forEach((card) => removeStagedBadge(card));
 }
+
+function upsertLockedBadge(card: HTMLElement) {
+  let badge = card.querySelector('.locked-badge') as HTMLDivElement | null;
+
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.classList.add('locked-badge');
+
+    Object.assign(badge.style, {
+      position: 'absolute',
+      top: '10px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      zIndex: '1003',
+      backgroundColor: '#2563eb',
+      color: 'white',
+      textShadow: '0px 0px 3px black',
+      padding: '6px 12px',
+      borderRadius: '8px',
+      fontFamily: 'Arial, sans-serif',
+      fontSize: '12px',
+      fontWeight: 'bold',
+      letterSpacing: '0.6px',
+      pointerEvents: 'none',
+      userSelect: 'none',
+      whiteSpace: 'nowrap',
+      border: '2px solid #60a5fa',
+      boxShadow: '0 0 0 3px rgba(37, 99, 235, 0.20)',
+    });
+
+    if (!card.style.position) card.style.position = 'relative';
+    card.appendChild(badge);
+  }
+
+  badge.textContent = 'LOCKED';
+
+  card.style.outline = '3px solid #2563eb';
+  card.style.outlineOffset = '-3px';
+  card.style.boxShadow = '0 0 0 4px rgba(37, 99, 235, 0.28)';
+}
+
+function removeLockedBadge(card: HTMLElement) {
+  const badge = card.querySelector('.locked-badge') as HTMLElement | null;
+  if (badge) badge.remove();
+
+  card.style.outline = '';
+  card.style.outlineOffset = '';
+  card.style.boxShadow = '';
+}
+
+function applyLockedForCard(card: HTMLElement) {
+  const a = getCardLink(card);
+  if (!a?.href) return;
+
+  const normalized = normalizeUrl(a.href);
+  if (lockedUrl && normalized === normalizeUrl(lockedUrl)) {
+    upsertLockedBadge(card);
+  } else {
+    removeLockedBadge(card);
+  }
+}
+
+function displayLockedBadge(): void {
+  const container = getModelContainer();
+  if (!container) return;
+
+  const cards = getModelCards(container);
+  cards.forEach((card) => applyLockedForCard(card));
+}
+
+function clearLockedBadge(): void {
+  const container = getModelContainer();
+  if (!container) return;
+
+  const cards = getModelCards(container);
+  cards.forEach((card) => removeLockedBadge(card));
+}
+
+chrome.runtime.onMessage.addListener(
+  async (
+    message: {
+      action: string;
+      url?: string;
+      lockedUrl?: string;
+      direction?: "prev" | "next";
+      count?: number;
+    },
+    sender,
+    sendResponse
+  ) => {
+    if (message.action === "set-locked-url") {
+      lockedUrl = message.url || "";
+      displayLockedBadge();
+      return true;
+    }
+
+    if (message.action === "clear-locked-url") {
+      lockedUrl = "";
+      clearLockedBadge();
+      return true;
+    }
+
+    if (message.action === "add-around-locked") {
+      const anchorUrl = normalizeUrl(message.lockedUrl || "");
+      const direction = message.direction || "next";
+      const count = Math.max(1, Number(message.count || 1));
+
+      const container = getModelContainer();
+      if (!container || !anchorUrl) return true;
+
+      const cards = getModelCards(container);
+
+      const anchorIndex = cards.findIndex((card) => {
+        const a = getCardLink(card);
+        return !!a?.href && normalizeUrl(a.href) === anchorUrl;
+      });
+
+      if (anchorIndex === -1) {
+        console.warn("Locked card not found on page:", anchorUrl);
+        return true;
+      }
+
+      const pickedCards: HTMLElement[] = [];
+
+      if (direction === "next") {
+        for (let i = anchorIndex + 1; i < cards.length && pickedCards.length < count; i++) {
+          pickedCards.push(cards[i]);
+        }
+      } else {
+        for (let i = anchorIndex - 1; i >= 0 && pickedCards.length < count; i--) {
+          pickedCards.push(cards[i]);
+        }
+      }
+
+      pickedCards.forEach((card) => {
+        addCardCheckbox(card);
+
+        const linkElement = getCardLink(card);
+        if (!linkElement?.href) return;
+
+        const url = linkElement.href;
+        const checkbox = card.querySelector('input[type="checkbox"].model-card-checkbox') as HTMLInputElement | null;
+
+        const imgEl = linkElement.querySelector('img') as HTMLImageElement | null;
+        const imgSrc = imgEl?.currentSrc || imgEl?.src || "";
+
+        if (checkbox && !checkbox.checked) {
+          checkbox.checked = true;
+          card.style.border = '2px solid yellow';
+          chrome.runtime.sendMessage({ action: 'addUrl', url, imgSrc });
+        }
+      });
+
+      return true;
+    }
+
+    return true;
+  }
+);
 
 chrome.runtime.onMessage.addListener(
   async (
@@ -1207,6 +1368,8 @@ function initMutationObserver(parentContainer: HTMLElement) {
                   addCreatorButton(cardEl);
                   addCardCheckbox(cardEl);
                   applyStagedForCard(cardEl);
+                  applyLockedForCard(cardEl);
+
                 }
               }
 
@@ -1279,6 +1442,8 @@ function observeCardItem(cardItem: HTMLElement) {
               addCreatorButton(cardEl);
               addCardCheckbox(cardEl);
               applyStagedForCard(cardEl);
+              applyLockedForCard(cardEl);
+
             }
           }
         });
@@ -1305,6 +1470,8 @@ function processExistingCards(parentContainer: HTMLElement) {
     observeCardItem(item as HTMLElement);
     applyOpenInNewTab(item as HTMLElement);
     applyStagedForCard(item as HTMLElement);
+    applyLockedForCard(item as HTMLElement);
+
   });
 }
 
