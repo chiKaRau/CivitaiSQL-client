@@ -11,6 +11,7 @@ const CIVITAIARCHIVE_GRID_SELECTOR =
 const stagedInfoMap: Map<string, { action: string }> = new Map();
 
 let lockedUrl: string = "";
+let lockedNeighborManagedUrls: Set<string> = new Set();
 
 function normalizeUrl(url: string): string {
   return (url || "").replace("-commission", "");
@@ -222,6 +223,7 @@ chrome.runtime.onMessage.addListener(
 
     if (message.action === "clear-locked-url") {
       lockedUrl = "";
+      lockedNeighborManagedUrls.clear();
       clearLockedBadge();
       return true;
     }
@@ -246,27 +248,55 @@ chrome.runtime.onMessage.addListener(
         return true;
       }
 
-      const pickedCards: HTMLElement[] = [];
+      const targetCards: HTMLElement[] = [];
 
       if (direction === "next") {
-        for (let i = anchorIndex + 1; i < cards.length && pickedCards.length < count; i++) {
-          pickedCards.push(cards[i]);
+        for (let i = anchorIndex + 1; i < cards.length && targetCards.length < count; i++) {
+          targetCards.push(cards[i]);
         }
       } else {
-        for (let i = anchorIndex - 1; i >= 0 && pickedCards.length < count; i--) {
-          pickedCards.push(cards[i]);
+        for (let i = anchorIndex - 1; i >= 0 && targetCards.length < count; i--) {
+          targetCards.push(cards[i]);
         }
       }
 
-      pickedCards.forEach((card) => {
+      const nextManagedUrls = new Set<string>();
+
+      // 1) build the new desired set
+      targetCards.forEach((card) => {
+        const linkElement = getCardLink(card);
+        if (!linkElement?.href) return;
+        nextManagedUrls.add(normalizeUrl(linkElement.href));
+      });
+
+      // 2) remove ones that were previously managed but are no longer desired
+      cards.forEach((card) => {
+        const linkElement = getCardLink(card);
+        if (!linkElement?.href) return;
+
+        const normalized = normalizeUrl(linkElement.href);
+        const checkbox = card.querySelector('input[type="checkbox"].model-card-checkbox') as HTMLInputElement | null;
+
+        if (lockedNeighborManagedUrls.has(normalized) && !nextManagedUrls.has(normalized)) {
+          if (checkbox && checkbox.checked) {
+            checkbox.checked = false;
+            card.style.border = '';
+            chrome.runtime.sendMessage({ action: 'removeUrl', url: linkElement.href });
+          }
+        }
+      });
+
+      // 3) add/check desired ones
+      targetCards.forEach((card) => {
         addCardCheckbox(card);
 
         const linkElement = getCardLink(card);
         if (!linkElement?.href) return;
 
         const url = linkElement.href;
-        const checkbox = card.querySelector('input[type="checkbox"].model-card-checkbox') as HTMLInputElement | null;
+        const normalized = normalizeUrl(url);
 
+        const checkbox = card.querySelector('input[type="checkbox"].model-card-checkbox') as HTMLInputElement | null;
         const imgEl = linkElement.querySelector('img') as HTMLImageElement | null;
         const imgSrc = imgEl?.currentSrc || imgEl?.src || "";
 
@@ -275,7 +305,12 @@ chrome.runtime.onMessage.addListener(
           card.style.border = '2px solid yellow';
           chrome.runtime.sendMessage({ action: 'addUrl', url, imgSrc });
         }
+
+        lockedNeighborManagedUrls.add(normalized);
       });
+
+      // 4) replace managed memory with exact current desired set
+      lockedNeighborManagedUrls = nextManagedUrls;
 
       return true;
     }

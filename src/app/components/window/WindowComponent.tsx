@@ -1104,8 +1104,6 @@ const WindowComponent: React.FC = () => {
         } catch (err) {
             console.error("Post-run refresh failed:", err);
         }
-
-        setIsHandleRefresh(true);
     };
 
     const ImageTooltip: React.FC<any> = (props) => {
@@ -1942,18 +1940,20 @@ const WindowComponent: React.FC = () => {
 
     const makeStageId = () => `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
-    const handleStageAllFromInbox = () => {
+    const handleStageAllFromInbox = async () => {
         if (!urlList.length) return;
 
         const now = Date.now();
         const action = offlineMode ? "offline" : "bundle";
+
+        const pathsToSave = new Set<string>();
 
         setStagedItems((prev) => {
             const existingUrls = new Set(prev.map(x => x.url));
             const additions: StagedItem[] = [];
 
             for (const url of urlList) {
-                if (existingUrls.has(url)) continue; // avoid duplicates by URL
+                if (existingUrls.has(url)) continue;
 
                 const { modelId, versionId, imgSrc } = parseModelAndVersion(url);
 
@@ -1962,24 +1962,29 @@ const WindowComponent: React.FC = () => {
                     url,
                     modelId,
                     versionId,
-                    imgSrc, // ✅
-
+                    imgSrc,
                     downloadFilePath,
                     selectedCategory,
                     downloadMethod,
                     hold,
                     downloadPriority,
-
                     action,
                     stagedAt: now,
                     status: "staged",
                 });
+
+                if (downloadFilePath?.trim()) {
+                    pathsToSave.add(downloadFilePath.trim());
+                }
             }
 
             return [...prev, ...additions];
         });
 
-        // Uncheck them on the page + clear inbox list
+        for (const path of pathsToSave) {
+            await addRecentDownloadFilePath(path);
+        }
+
         chrome.storage.local.get("originalTabId", (result) => {
             if (result.originalTabId) {
                 for (const url of urlList) {
@@ -1991,10 +1996,12 @@ const WindowComponent: React.FC = () => {
         setUrlList([]);
         setSelectedUrl("");
         dispatch(updateDownloadFilePath("/@scan@/ACG/Pending/"));
-        setIsLoading(false)
+        setIsLoading(false);
         setHold(false);
         setDownloadPriority(5);
         dispatch(updateDownloadPriority(5));
+
+        setIsHandleRefresh(true);
     };
 
     const sendStagedToTab = (tabId: number, list: StagedItem[]) => {
