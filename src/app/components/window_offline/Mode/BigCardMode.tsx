@@ -865,7 +865,7 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                         title="Preview in left panel"
                                         aria-label="Preview in left panel"
                                         style={styles.inlineIconBtnStyle}
-                                        disabled={isLoading}
+                                    // disabled={isLoading}
                                     >
                                         <LuPanelLeftOpen size={18} />
                                     </button>
