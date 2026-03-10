@@ -180,3 +180,44 @@ export const callChromeBrowserDownload_v2 = (data: any) => {
         }
     });
 }
+
+export type RecentDownloadPathItem = {
+    path: string;
+    createdAt: number;
+};
+
+const RECENT_DOWNLOAD_PATHS_KEY = "recentDownloadFilePaths";
+const MAX_RECENT_DOWNLOAD_PATHS = 25;
+
+export const getRecentDownloadFilePaths = async (): Promise<RecentDownloadPathItem[]> => {
+    return new Promise((resolve) => {
+        chrome.storage.local.get([RECENT_DOWNLOAD_PATHS_KEY], (result) => {
+            const list = result?.[RECENT_DOWNLOAD_PATHS_KEY];
+            resolve(Array.isArray(list) ? list : []);
+        });
+    });
+};
+
+export const addRecentDownloadFilePath = async (path: string): Promise<RecentDownloadPathItem[]> => {
+    const cleanPath = (path || "").trim();
+    if (!cleanPath) return getRecentDownloadFilePaths();
+
+    const current = await getRecentDownloadFilePaths();
+
+    const next: RecentDownloadPathItem[] = [
+        { path: cleanPath, createdAt: Date.now() },
+        ...current.filter(item => item?.path !== cleanPath),
+    ].slice(0, MAX_RECENT_DOWNLOAD_PATHS);
+
+    return new Promise((resolve) => {
+        chrome.storage.local.set({ [RECENT_DOWNLOAD_PATHS_KEY]: next }, () => {
+            resolve(next);
+        });
+    });
+};
+
+export const clearRecentDownloadFilePaths = async (): Promise<void> => {
+    return new Promise((resolve) => {
+        chrome.storage.local.set({ [RECENT_DOWNLOAD_PATHS_KEY]: [] }, () => resolve());
+    });
+};

@@ -104,7 +104,7 @@ import {
 } from "../../api/civitaiSQL_api"
 
 //utils
-import { bookmarkThisUrl, updateDownloadMethodIntoChromeStorage, callChromeBrowserDownload, removeBookmarkByUrl, updateOfflineModeIntoChromeStorage, updateSelectedCategoryIntoChromeStorage, updateDownloadFilePathIntoChromeStorage } from "../../utils/chromeUtils"
+import { bookmarkThisUrl, updateDownloadMethodIntoChromeStorage, callChromeBrowserDownload, removeBookmarkByUrl, updateOfflineModeIntoChromeStorage, updateSelectedCategoryIntoChromeStorage, updateDownloadFilePathIntoChromeStorage, addRecentDownloadFilePath } from "../../utils/chromeUtils"
 import { retrieveCivitaiFileName, retrieveCivitaiFilesList } from "../../utils/objectUtils"
 import { BiSolidBarChartSquare, BiSolidHdd } from 'react-icons/bi';
 import WindowFullInfoModelPanel from './WindowFullInfoModelPanel';
@@ -1011,9 +1011,11 @@ const WindowComponent: React.FC = () => {
                 if (item.action === "offline") {
                     await runOneStagedOffline(item);
                     succeededOfflineUrls.push(item.url);
+                    await addRecentDownloadFilePath(item.downloadFilePath);
                 } else {
                     await runOneStagedBundle(item);
                     succeededBundleUrls.push(item.url);
+                    await addRecentDownloadFilePath(item.downloadFilePath);
                 }
 
                 // remove success from staging
@@ -1046,6 +1048,8 @@ const WindowComponent: React.FC = () => {
         } catch (err) {
             console.error("Post-run refresh failed:", err);
         }
+
+        setIsHandleRefresh(true);
     };
 
     const ImageTooltip: React.FC<any> = (props) => {

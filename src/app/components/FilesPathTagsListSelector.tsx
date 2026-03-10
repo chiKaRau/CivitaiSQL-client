@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { fetchGetTagsList, fetchDeleteDownloadPathCountRecord } from '../api/civitaiSQL_api';
 import { useDispatch } from 'react-redux';
 import { updateDownloadFilePath } from '../store/actions/chromeActions';
+import { getRecentDownloadFilePaths } from '../utils/chromeUtils';
 
 interface FilesPathTagsListSelectorProps {
     selectedPrefix: string;
@@ -19,6 +20,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
     const [topTags, setTopTags] = useState<any[]>([]);
     const [recentAddedTags, setRecentAddedTags] = useState<any[]>([]);
     const [recentUpdatedTags, setRecentUpdatedTags] = useState<any[]>([]);
+    const [recentLocalTags, setRecentLocalTags] = useState<{ path: string; createdAt: number }[]>([]);
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
     const [loading, setLoading] = useState(false);
@@ -27,6 +29,11 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
 
     // cache by prefix
     const cacheRef = useRef<Record<string, { top: any[]; recent: any[]; updated: any[] }>>({});
+
+    const loadRecentLocalTags = async () => {
+        const list = await getRecentDownloadFilePaths();
+        setRecentLocalTags(list);
+    };
 
     const applyResultToState = (result: any) => {
         const nextTop = result?.topTags || [];
@@ -51,10 +58,21 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
 
     useEffect(() => {
         let cancelled = false;
-
+    
         const run = async () => {
             setError(null);
-
+    
+            try {
+                const localList = await getRecentDownloadFilePaths();
+                if (!cancelled) {
+                    setRecentLocalTags(localList);
+                }
+            } catch (e) {
+                if (!cancelled) {
+                    console.error('Failed to load recent local download paths.', e);
+                }
+            }
+    
             if (!selectedPrefix) {
                 setTopTags([]);
                 setRecentAddedTags([]);
@@ -62,7 +80,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                 if (isHandleRefresh) setIsHandleRefresh(false);
                 return;
             }
-
+    
             const cached = cacheRef.current[selectedPrefix];
             if (cached && !isHandleRefresh) {
                 setTopTags(cached.top);
@@ -71,7 +89,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                 if (isHandleRefresh) setIsHandleRefresh(false);
                 return;
             }
-
+    
             try {
                 setLoading(true);
                 const result = await fetchGetTagsList(dispatch, selectedPrefix);
@@ -84,8 +102,9 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                 if (!cancelled && isHandleRefresh) setIsHandleRefresh(false);
             }
         };
-
+    
         run();
+    
         return () => {
             cancelled = true;
         };
@@ -191,12 +210,52 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
         );
     };
 
+    const renderRecentLocalList = () => {
+        return (
+            <>
+                <h6>Recently Added 25 Tags (Local)</h6>
+                <div style={{ maxHeight: '140px', overflowY: 'auto', border: '1px solid #ccc', padding: '3px', marginBottom: '10px' }}>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                        {recentLocalTags.map((item, index) => {
+                            const value = item?.path ?? '';
+                            const isSelected = selectedTag === value;
+
+                            return (
+                                <li
+                                    key={`${value}-${index}`}
+                                    onClick={() => handleTagClick(value)}
+                                    style={{
+                                        margin: '5px 0',
+                                        cursor: 'pointer',
+                                        backgroundColor: isSelected ? '#d3d3d3' : 'transparent',
+                                        fontWeight: isSelected ? 'bold' : 'normal',
+                                        padding: '4px 6px',
+                                        borderRadius: 6,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 8
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', minWidth: 0, flex: 1 }}>
+                                        <span style={{ whiteSpace: 'nowrap', opacity: 0.8 }}>{index + 1}#</span>
+                                        <span style={{ wordBreak: 'break-word' }}>{value}</span>
+                                    </div>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </div>
+            </>
+        );
+    };
+
     return (
         <div>
             {loading && <div style={{ opacity: 0.7 }}>Loading…</div>}
             {error && <div style={{ color: 'red' }}>{error}</div>}
 
             {renderList('Top 10 Tags by Count', topTags, (i) => String(i + 1))}
+            {renderRecentLocalList()}
             {renderList('Recently Added 10 Tags', recentAddedTags, (i) => String(10 - i))}
             {renderList('Recently Updated 10 Tags', recentUpdatedTags, (i) => String(10 - i))}
         </div>

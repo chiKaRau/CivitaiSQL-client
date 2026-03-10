@@ -8,7 +8,7 @@ import { CiWarning } from "react-icons/ci";
 import FolderDropdown from "../FolderDropdown"
 
 //utils
-import { bookmarkThisModel, initializeDatafromChromeStorage, updateDownloadFilePathIntoChromeStorage, updateSelectedCategoryIntoChromeStorage, callChromeBrowserDownload_v2 } from "../../utils/chromeUtils"
+import { bookmarkThisModel, initializeDatafromChromeStorage, updateDownloadFilePathIntoChromeStorage, updateSelectedCategoryIntoChromeStorage, callChromeBrowserDownload_v2, RecentDownloadPathItem, getRecentDownloadFilePaths } from "../../utils/chromeUtils"
 import { fetchAddOfflineDownloadFileIntoOfflineDownloadList, fetchCheckCartList, fetchCivitaiModelInfoFromCivitaiByModelID, fetchCivitaiModelInfoFromCivitaiByVersionID, fetchDatabaseModelInfoByModelID, fetchDeleteDownloadPathCountRecord, fetchDownloadFilesByBrowser_v2, fetchDownloadFilesByServer_v2, fetchGetCategoriesList, fetchGetCategoryPrefixesList, fetchGetFilePathCategoriesList, fetchGetFoldersList, fetchGetTagsList, fetchUpdateRecordAtDatabase } from '../../api/civitaiSQL_api';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppState } from '../../store/configureStore';
@@ -497,6 +497,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
     const [topTags, setTopTags] = useState<any[]>([]);
     const [recentAddedTags, setRecentAddedTags] = useState<any[]>([]);
     const [recentUpdatedTags, setRecentUpdatedTags] = useState<any[]>([]);
+    const [recentLocalTags, setRecentLocalTags] = useState<RecentDownloadPathItem[]>([]);
 
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
@@ -527,7 +528,21 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
         setRecentUpdatedTags(nextRecentUpdated);
     };
 
+    const loadRecentLocalTags = async () => {
+        try {
+            const list = await getRecentDownloadFilePaths();
+            setRecentLocalTags(Array.isArray(list) ? list : []);
+        } catch (e) {
+            console.error("Failed to load recent local download paths.", e);
+        }
+    };
+
     const reload = async (ignoreCache = false) => {
+        setError(null);
+
+        // always load local recent 25
+        await loadRecentLocalTags();
+
         if (!selectedPrefix) {
             setTopTags([]);
             setRecentAddedTags([]);
@@ -544,7 +559,6 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
         }
 
         setLoading(true);
-        setError(null);
         try {
             const result = await fetchGetTagsList(dispatch, selectedPrefix);
             applyResult(result);
@@ -581,13 +595,13 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                 return;
             }
 
-            // clear cache so we don’t show stale results
+            // clear cache so we don’t show stale backend results
             delete cacheRef.current[selectedPrefix];
 
             // if user deleted the currently selected one, clear highlight
             setSelectedTag(prev => (prev === path ? null : prev));
 
-            // re-fetch to fill back to 10 items properly
+            // re-fetch backend list and local list
             await reload(true);
         } catch (e: any) {
             setError(e?.message || 'Delete failed.');
@@ -595,6 +609,44 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
             setDeletingPath(null);
         }
     };
+
+    const renderLocalRecentList = () => (
+        <>
+            <h6>Recently Added 25 Tags (Local)</h6>
+
+            <div style={{ maxHeight: '120px', overflowY: 'auto', border: '1px solid #ccc', padding: '3px', marginBottom: '10px' }}>
+                <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                    {recentLocalTags.map((item, index) => {
+                        const value = item?.path ?? '';
+                        const isSelected = selectedTag === value;
+
+                        return (
+                            <li
+                                key={`${value}-${index}`}
+                                onClick={() => handleTagClick(value)}
+                                style={{
+                                    margin: '5px 0',
+                                    cursor: 'pointer',
+                                    backgroundColor: isSelected ? '#d3d3d3' : 'transparent',
+                                    fontWeight: isSelected ? 'bold' : 'normal',
+                                    padding: '4px 6px',
+                                    borderRadius: 6,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 8
+                                }}
+                            >
+                                <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', minWidth: 0, flex: 1 }}>
+                                    <span style={{ whiteSpace: 'nowrap', opacity: 0.8 }}>{index + 1}#</span>
+                                    <span style={{ wordBreak: 'break-word' }}>{value}</span>
+                                </div>
+                            </li>
+                        );
+                    })}
+                </ul>
+            </div>
+        </>
+    );
 
     const renderList = (title: string, tags: any[], numberLabel: (index: number) => string) => (
         <>
@@ -632,7 +684,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                                 <button
                                     type="button"
                                     onClick={(e) => {
-                                        e.stopPropagation(); // IMPORTANT: don't trigger select when deleting
+                                        e.stopPropagation();
                                         handleDelete(value);
                                     }}
                                     disabled={!!deletingPath || isDeletingThis}
@@ -661,6 +713,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
             {error && <div style={{ color: 'red' }}>{error}</div>}
 
             {renderList('Top 10 Tags by Count', topTags, (i) => String(i + 1))}
+            {renderLocalRecentList()}
             {renderList('Recently Added 10 Tags', recentAddedTags, (i) => String(10 - i))}
             {renderList('Recently Updated 10 Tags', recentUpdatedTags, (i) => String(10 - i))}
         </div>
