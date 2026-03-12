@@ -614,7 +614,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
         <>
             <h6>Recently Added 25 Tags (Local)</h6>
 
-            <div style={{ maxHeight: '120px', overflowY: 'auto', border: '1px solid #ccc', padding: '3px', marginBottom: '10px' }}>
+            <div style={{ maxHeight: '260px', overflowY: 'auto', border: '1px solid #ccc', padding: '3px', marginBottom: '10px' }}>
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                     {recentLocalTags.map((item, index) => {
                         const value = item?.path ?? '';
@@ -652,7 +652,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
         <>
             <h6>{title}</h6>
 
-            <div style={{ maxHeight: '100px', overflowY: 'auto', border: '1px solid #ccc', padding: '3px', marginBottom: '10px' }}>
+            <div style={{ maxHeight: '220px', overflowY: 'auto', border: '1px solid #ccc', padding: '3px', marginBottom: '10px' }}>
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                     {tags.map((tag, index) => {
                         const value = tag?.string_value ?? '';
@@ -714,8 +714,6 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
 
             {renderList('Top 10 Tags by Count', topTags, (i) => String(i + 1))}
             {renderLocalRecentList()}
-            {renderList('Recently Added 10 Tags', recentAddedTags, (i) => String(10 - i))}
-            {renderList('Recently Updated 10 Tags', recentUpdatedTags, (i) => String(10 - i))}
         </div>
     );
 };

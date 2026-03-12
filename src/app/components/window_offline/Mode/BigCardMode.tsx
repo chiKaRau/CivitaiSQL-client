@@ -575,7 +575,18 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                             ) : 'N/A'}
                                         </p>
                                         <p style={{ margin: '4px 0' }}>
-                                            <strong>Creator:</strong> {entry.modelVersionObject?.creator?.username ?? 'N/A'}
+                                            <strong>Creator:</strong>{' '}
+                                            {entry.modelVersionObject?.creator?.username ? (
+                                                <a
+                                                    href={`https://civitai.com/user/${encodeURIComponent(entry.modelVersionObject.creator.username)}/models`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    style={{ color: isDarkMode ? '#1e90ff' : '#007bff' }}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
+                                                    {entry.modelVersionObject.creator.username}
+                                                </a>
+                                            ) : 'N/A'}
                                         </p>
                                         <p style={{ margin: '4px 0' }}>
                                             <strong>File Size:</strong>{' '}

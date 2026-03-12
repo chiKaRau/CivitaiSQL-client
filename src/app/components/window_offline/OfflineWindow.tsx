@@ -1616,6 +1616,14 @@ const OfflineWindow: React.FC = () => {
             return;
         }
 
+        const userConfirmed = window.confirm(
+            `Are you sure you want to download ${selectedIds.size} selected entr${selectedIds.size === 1 ? "y" : "ies"}?`
+        );
+        if (!userConfirmed) {
+            console.log("User canceled the download operation.");
+            return;
+        }
+
         // Collect selected entries from the filtered list
         const entriesToDownload = visibleEntries.filter(entry => {
             // Must be selected

@@ -58,10 +58,10 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
 
     useEffect(() => {
         let cancelled = false;
-    
+
         const run = async () => {
             setError(null);
-    
+
             try {
                 const localList = await getRecentDownloadFilePaths();
                 if (!cancelled) {
@@ -72,7 +72,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                     console.error('Failed to load recent local download paths.', e);
                 }
             }
-    
+
             if (!selectedPrefix) {
                 setTopTags([]);
                 setRecentAddedTags([]);
@@ -80,7 +80,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                 if (isHandleRefresh) setIsHandleRefresh(false);
                 return;
             }
-    
+
             const cached = cacheRef.current[selectedPrefix];
             if (cached && !isHandleRefresh) {
                 setTopTags(cached.top);
@@ -89,7 +89,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                 if (isHandleRefresh) setIsHandleRefresh(false);
                 return;
             }
-    
+
             try {
                 setLoading(true);
                 const result = await fetchGetTagsList(dispatch, selectedPrefix);
@@ -102,9 +102,9 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                 if (!cancelled && isHandleRefresh) setIsHandleRefresh(false);
             }
         };
-    
+
         run();
-    
+
         return () => {
             cancelled = true;
         };
@@ -154,7 +154,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
         return (
             <>
                 <h6>{title}</h6>
-                <div style={{ maxHeight: '100px', overflowY: 'auto', border: '1px solid #ccc', padding: '3px', marginBottom: '10px' }}>
+                <div style={{ maxHeight: '220px', overflowY: 'auto', border: '1px solid #ccc', padding: '3px', marginBottom: '10px' }}>
                     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                         {tags.map((tag, index) => {
                             const value = tag?.string_value ?? '';
@@ -214,7 +214,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
         return (
             <>
                 <h6>Recently Added 25 Tags (Local)</h6>
-                <div style={{ maxHeight: '140px', overflowY: 'auto', border: '1px solid #ccc', padding: '3px', marginBottom: '10px' }}>
+                <div style={{ maxHeight: '260px', overflowY: 'auto', border: '1px solid #ccc', padding: '3px', marginBottom: '10px' }}>
                     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                         {recentLocalTags.map((item, index) => {
                             const value = item?.path ?? '';
@@ -256,8 +256,6 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
 
             {renderList('Top 10 Tags by Count', topTags, (i) => String(i + 1))}
             {renderRecentLocalList()}
-            {renderList('Recently Added 10 Tags', recentAddedTags, (i) => String(10 - i))}
-            {renderList('Recently Updated 10 Tags', recentUpdatedTags, (i) => String(10 - i))}
         </div>
     );
 };
