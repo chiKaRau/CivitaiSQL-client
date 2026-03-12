@@ -173,6 +173,8 @@ const WindowComponent: React.FC = () => {
 
     const [useAgeNav, setUseAgeNav] = useState(true);
 
+    const URLGRID_STORAGE_KEY = "windowUrlGridState";
+
     const [currentTabUrl, setCurrentTabUrl] = useState("");
     const [currentTabCreator, setCurrentTabCreator] = useState("");
     const [isCurrentCreatorInList, setIsCurrentCreatorInList] = useState(false);
@@ -1427,6 +1429,86 @@ const WindowComponent: React.FC = () => {
             setSelectedRating(r);
         }
     }, [currentCreatorUrlIndex, creatorUrlList]);
+
+    useEffect(() => {
+        chrome.storage.local.get(URLGRID_STORAGE_KEY, (result) => {
+            const saved = result?.[URLGRID_STORAGE_KEY];
+            if (!saved) return;
+
+            setUrlList(Array.isArray(saved.urlList) ? saved.urlList : []);
+            setUrlImgSrcMap(saved.urlImgSrcMap || {});
+            setUrlVersionIdMap(saved.urlVersionIdMap || {});
+            setUrlBadgeMap(saved.urlBadgeMap || {});
+            setModelPrimaryVersionIdMap(saved.modelPrimaryVersionIdMap || {});
+        });
+    }, []);
+
+    useEffect(() => {
+        chrome.storage.local.set({
+            [URLGRID_STORAGE_KEY]: {
+                urlList,
+                urlImgSrcMap,
+                urlVersionIdMap,
+                urlBadgeMap,
+                modelPrimaryVersionIdMap,
+            }
+        });
+    }, [
+        urlList,
+        urlImgSrcMap,
+        urlVersionIdMap,
+        urlBadgeMap,
+        modelPrimaryVersionIdMap
+    ]);
+
+
+    useEffect(() => {
+        const keepUrls = new Set(urlList);
+        const keepModelIds = new Set(
+            urlList
+                .map((url) => {
+                    try {
+                        const u = new URL(url);
+                        return u.pathname.match(/\/models\/(\d+)/)?.[1] || "";
+                    } catch {
+                        return url.match(/\/models\/(\d+)/)?.[1] || "";
+                    }
+                })
+                .filter(Boolean)
+        );
+
+        setUrlImgSrcMap(prev => {
+            const next: Record<string, string> = {};
+            for (const k of Object.keys(prev)) {
+                if (keepUrls.has(k)) next[k] = prev[k];
+            }
+            return next;
+        });
+
+        setUrlVersionIdMap(prev => {
+            const next: Record<string, string> = {};
+            for (const k of Object.keys(prev)) {
+                if (keepUrls.has(k)) next[k] = prev[k];
+            }
+            return next;
+        });
+
+        setUrlBadgeMap(prev => {
+            const next: Record<string, string> = {};
+            for (const k of Object.keys(prev)) {
+                if (keepUrls.has(k)) next[k] = prev[k];
+            }
+            return next;
+        });
+
+        setModelPrimaryVersionIdMap(prev => {
+            const next: Record<string, string> = {};
+            for (const k of Object.keys(prev)) {
+                if (keepModelIds.has(k)) next[k] = prev[k];
+            }
+            return next;
+        });
+    }, [urlList]);
 
 
     const handleRatingUp = () => {
