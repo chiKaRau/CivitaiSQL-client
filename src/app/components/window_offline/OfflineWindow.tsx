@@ -189,7 +189,8 @@ const OfflineWindow: React.FC = () => {
         showErrorEntries: true,
         sortDir: "desc",
         aiSuggestedOnly: false,
-        selectedPrefixes: [] as string[],  // store as array (stable)
+        selectedPrefixes: [] as string[],
+        excludedPrefixes: [] as string[],
     }));
 
     // States for filtering
@@ -374,6 +375,12 @@ const OfflineWindow: React.FC = () => {
         { phase: "idle" | "downloading" | "inserting" | "success" | "fail"; text: string; msg?: string; running?: boolean }
     >);
 
+    const getExcludedPrefixes = useCallback(() => {
+        const all = categoriesPrefixsList.map(p => p.downloadFilePath);
+        const selected = new Set(selectedPrefixes);
+        return all.filter(p => !selected.has(p));
+    }, [categoriesPrefixsList, selectedPrefixes]);
+
     const handleBulkPatchSelected = async () => {
         // 1) Targets = selected models (by versionID)
         const modelObjects = visibleEntries
@@ -557,12 +564,15 @@ const OfflineWindow: React.FC = () => {
 
                 const aiPrefixes = getActivePrefixes();
 
+                const excludedPrefixes = getActiveExcludedPrefixes();
+
                 const p = await fetchOfflineDownloadListPage(
                     dispatch,
                     page0,
                     aiItemsPerPage,
                     false,
                     aiPrefixes,
+                    excludedPrefixes,
                     "",
                     "contains",
                     "pending",
@@ -980,7 +990,7 @@ const OfflineWindow: React.FC = () => {
         const onlyNonPending = selected.filter(p => !isPendingPrefix(p));
 
         if (appliedQuery.showPending && appliedQuery.showNonPending) {
-            return selected.length ? selected : []; // no server filter
+            return selected;
         }
 
         if (appliedQuery.showPending && !appliedQuery.showNonPending) {
@@ -988,10 +998,34 @@ const OfflineWindow: React.FC = () => {
         }
 
         if (!appliedQuery.showPending && appliedQuery.showNonPending) {
-            return onlyNonPending.length ? onlyNonPending : [SENTINELS.EXCLUDE_PENDING];
+            return onlyNonPending;
         }
 
-        return [SENTINELS.NONE];
+        return [];
+    }, [appliedQuery]);
+
+    const getActiveExcludedPrefixes = useCallback(() => {
+        const excluded = appliedQuery.excludedPrefixes ?? [];
+
+        const isPendingPrefix = (p: string) =>
+            PENDING_PATHS.includes(p) || /\/@scan@\/ACG\/Pending\/?$/.test(p);
+
+        const onlyPending = excluded.filter(isPendingPrefix);
+        const onlyNonPending = excluded.filter(p => !isPendingPrefix(p));
+
+        if (appliedQuery.showPending && appliedQuery.showNonPending) {
+            return excluded;
+        }
+
+        if (appliedQuery.showPending && !appliedQuery.showNonPending) {
+            return onlyPending;
+        }
+
+        if (!appliedQuery.showPending && appliedQuery.showNonPending) {
+            return onlyNonPending;
+        }
+
+        return [];
     }, [appliedQuery]);
 
     useEffect(() => {
@@ -1039,7 +1073,7 @@ const OfflineWindow: React.FC = () => {
                 setCategoriesPrefixsList(enhanced);
 
                 // Start with everything selected EXCEPT '/@scan@/' and the virtual Updates option
-                const DEFAULT_UNCHECKED = new Set<string>(["/@scan@/", "/@scan@/Update/"]);
+                const DEFAULT_UNCHECKED = new Set<string>(["/@scan@/Update/"]);
                 const initialChecked = enhanced
                     .filter((p) => !DEFAULT_UNCHECKED.has(p.downloadFilePath))
                     .map((p) => p.downloadFilePath);
@@ -1049,9 +1083,14 @@ const OfflineWindow: React.FC = () => {
                 setSelectedPrefixes(new Set(initialChecked));
 
                 // ✅ set initial applied query to match defaults
+                const initialExcluded = enhanced
+                    .map((p) => p.downloadFilePath)
+                    .filter((p) => !initialChecked.includes(p));
+
                 setAppliedQuery((q) => ({
                     ...q,
                     selectedPrefixes: initialChecked,
+                    excludedPrefixes: initialExcluded,
                 }));
 
                 setFiltersReady(true);
@@ -1296,6 +1335,7 @@ const OfflineWindow: React.FC = () => {
             try {
                 const page0 = Math.max(0, currentPage - 1);
                 const prefixes = getActivePrefixes();
+                const excludedPrefixes = getActiveExcludedPrefixes();
 
                 const p = await fetchOfflineDownloadListPage(
                     dispatch,
@@ -1303,6 +1343,7 @@ const OfflineWindow: React.FC = () => {
                     itemsPerPage,
                     false,
                     prefixes,
+                    excludedPrefixes,
                     appliedQuery.filterText.trim(),
                     appliedQuery.filterCondition as any,
                     status,
@@ -1334,7 +1375,7 @@ const OfflineWindow: React.FC = () => {
         }, 200);
 
         return () => { cancelled = true; clearTimeout(timer); };
-    }, [dispatch, currentPage, itemsPerPage, appliedQuery, getActivePrefixes, filtersReady]);
+    }, [dispatch, currentPage, itemsPerPage, appliedQuery, getActivePrefixes, getActiveExcludedPrefixes, filtersReady]);
 
     useEffect(() => {
         // Reset the selection when filterText or filterCondition changes
@@ -1866,6 +1907,31 @@ const OfflineWindow: React.FC = () => {
         [dispatch, modify_downloadFilePath, modify_selectedCategory]
     );
 
+    const normalizePrefix = (p: string) => {
+        const s = (p || "").trim().replace(/\\/g, "/").toLowerCase();
+        return s.endsWith("/") ? s : s + "/";
+    };
+
+    const buildExcludedPrefixes = (
+        allPrefixes: string[],
+        selected: Set<string>
+    ): string[] => {
+        const selectedArr = Array.from(selected).map(normalizePrefix);
+
+        return allPrefixes
+            .filter(p => !selected.has(p))
+            .filter(unchecked => {
+                const uncheckedNorm = normalizePrefix(unchecked);
+
+                // Do NOT exclude this unchecked prefix if it is a parent
+                // of any selected child.
+                const isAncestorOfSelectedChild = selectedArr.some(sel =>
+                    sel.startsWith(uncheckedNorm) && sel !== uncheckedNorm
+                );
+
+                return !isAncestorOfSelectedChild;
+            });
+    };
 
     /**
  * Download selected entries in batches of 10.
@@ -2099,6 +2165,8 @@ const OfflineWindow: React.FC = () => {
         async (page1Based?: number) => {
             const page0 = Math.max(0, (page1Based ?? currentPage) - 1);
             const prefixes = getActivePrefixes(); // <-- your refactored one uses appliedQuery
+            const excludedPrefixes = getActiveExcludedPrefixes();
+
             const status: StatusFilter = deriveStatus(appliedQuery.showPending, appliedQuery.showNonPending);
 
             return await fetchOfflineDownloadListPage(
@@ -2107,6 +2175,7 @@ const OfflineWindow: React.FC = () => {
                 itemsPerPage,
             /* filterEmptyBaseModel */ false,
                 prefixes,
+                excludedPrefixes,
                 appliedQuery.filterText.trim(),
                 appliedQuery.filterCondition as any,
                 status,
@@ -2117,7 +2186,7 @@ const OfflineWindow: React.FC = () => {
                 appliedQuery.aiSuggestedOnly
             );
         },
-        [dispatch, currentPage, itemsPerPage, appliedQuery, getActivePrefixes]
+        [dispatch, currentPage, itemsPerPage, appliedQuery, getActivePrefixes, getActiveExcludedPrefixes]
     );
 
     const applyPagedResultToState = (p: any) => {
@@ -2485,6 +2554,7 @@ const OfflineWindow: React.FC = () => {
             // Refresh current page
             const page0 = Math.max(0, currentPage - 1);
             const prefixes = getActivePrefixes();
+            const excludedPrefixes = getActiveExcludedPrefixes();
             const status: StatusFilter = deriveStatus(showPending, showNonPending);
 
             const p = await fetchPageWithApplied(currentPage);
@@ -3125,6 +3195,13 @@ const OfflineWindow: React.FC = () => {
                                         setSelectedIds(new Set());
                                         setSelectedSuggestedPathByVid({});
 
+                                        const selected = Array.from(selectedPrefixes);
+
+                                        const excluded = buildExcludedPrefixes(
+                                            categoriesPrefixsList.map(p => p.downloadFilePath),
+                                            selectedPrefixes
+                                        );
+
                                         setAppliedQuery({
                                             filterText: filterText.trim(),
                                             filterCondition,
@@ -3135,8 +3212,10 @@ const OfflineWindow: React.FC = () => {
                                             showErrorEntries,
                                             sortDir,
                                             aiSuggestedOnly,
-                                            selectedPrefixes: Array.from(selectedPrefixes),
+                                            selectedPrefixes: selected,
+                                            excludedPrefixes: excluded,
                                         });
+
                                         setCurrentPage(1);
                                     }}
                                     style={{

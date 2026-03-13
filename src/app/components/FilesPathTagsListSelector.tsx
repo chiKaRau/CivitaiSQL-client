@@ -256,6 +256,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
 
             {renderList('Top 10 Tags by Count', topTags, (i) => String(i + 1))}
             {renderRecentLocalList()}
+            {renderList('Top 10 Recent Added Tags', recentAddedTags, (i) => String(i + 1))}
         </div>
     );
 };

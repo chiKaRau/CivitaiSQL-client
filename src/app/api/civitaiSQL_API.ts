@@ -848,6 +848,7 @@ export const fetchOfflineDownloadListPage = async (
     size: number,
     filterEmptyBaseModel: boolean = false,
     prefixes?: string[],
+    excludedPrefixes?: string[],
     search?: string,
     op?: 'contains' | 'does not contain' | 'equals' | 'does not equal' | 'begins with' | 'ends with',
     status?: 'pending' | 'non-pending' | 'both',
@@ -863,12 +864,13 @@ export const fetchOfflineDownloadListPage = async (
         params.set('size', String(size));
         params.set('filterEmptyBaseModel', String(filterEmptyBaseModel));
 
+
         if (Array.isArray(prefixes)) {
-            if (prefixes.length === 0) {
-                params.append('prefix', '__NONE__');
-            } else {
-                prefixes.forEach(p => params.append('prefix', p));
-            }
+            prefixes.forEach(p => params.append('prefix', p));
+        }
+        
+        if (Array.isArray(excludedPrefixes)) {
+            excludedPrefixes.forEach(p => params.append('excludePrefix', p));
         }
 
         if (search && search.trim().length > 0) {
