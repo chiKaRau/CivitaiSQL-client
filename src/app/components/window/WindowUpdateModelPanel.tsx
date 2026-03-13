@@ -19,6 +19,8 @@ import { setError } from '../../store/actions/errorsActions';
 import { clearError } from '../../store/actions/errorsActions';
 import { retrieveCivitaiFileName, retrieveCivitaiFilesList } from '../../utils/objectUtils';
 import { updateDownloadFilePath } from '../../store/actions/chromeActions';
+import { FaFilter, FaChevronUp, FaChevronDown } from 'react-icons/fa';
+import { FaXmark, FaFolderTree, FaHardDrive } from 'react-icons/fa6';
 
 interface Version {
     id: number;
@@ -96,44 +98,244 @@ const updateModelPanel: React.FC<PanelProps> = ({ selectedVersion, modelId, mode
     }, [chrome])
 
     return (
-        <div className="panel-container">
-            <div className="panel-container-content">
-                <div style={{ ...panelContainerStyle, position: 'relative' as 'relative' }}>
-                    <button className="panel-close-button" onClick={onClose}>
-                        &#x2715;
-                    </button>
-                    {/* Left panel */}
-                    <div style={{ ...panelLeftStyle, overflowY: 'scroll' }}>
-                        <DatabaseUpdateModelPanel
-                            modelID={modelId}
-                            url={modelURL}
-                            modelData={modelData}
-                            selectedVersion={selectedVersion}
-                            selectedCategory={selectedCategory}
-                            downloadFilePath={downloadFilePath}
-                            setDownloadFilePath={setDownloadFilePath}
-                            setHasUpdated={setHasUpdated}
-                            closePanel={onClose}
-                        />
+        <div
+            style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(0,0,0,0.45)',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                zIndex: 10000,
+                padding: '20px',
+            }}
+        >
+            <div
+                style={{
+                    width: '100%',
+                    maxWidth: '1400px',
+                    height: '88vh',
+                    background: '#ffffff',
+                    borderRadius: '18px',
+                    boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
+                    border: '1px solid #e5e7eb',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                }}
+            >
+                {/* Header */}
+                <div
+                    style={{
+                        padding: '16px 18px',
+                        borderBottom: '1px solid #eef1f4',
+                        background: '#fbfcfe',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: '12px',
+                    }}
+                >
+                    <div style={{ minWidth: 0 }}>
+                        <div
+                            style={{
+                                fontSize: '20px',
+                                fontWeight: 700,
+                                color: '#1f2937',
+                                lineHeight: 1.3,
+                            }}
+                        >
+                            Update Existing Model
+                        </div>
+
+                        <div
+                            style={{
+                                marginTop: '4px',
+                                fontSize: '13px',
+                                color: '#6b7280',
+                                wordBreak: 'break-word',
+                            }}
+                        >
+                            Model {modelId}_{selectedVersion?.id} : {selectedVersion?.name}
+                        </div>
                     </div>
-                    {/* Right panel */}
-                    <div style={{ ...panelRightStyle, overflowY: 'scroll' }}>
-                        <CategoriesListSelector
-                            downloadFilePath={downloadFilePath}
-                            selectedCategory={selectedCategory}
-                            setSelectCategory={setSelectCategory}
-                        />
 
-                        <DownloadFilePathOptionPanel
-                            downloadFilePath={downloadFilePath}
-                            setDownloadFilePath={setDownloadFilePath}
-                            selectedCategory={selectedCategory}
-                        />
+                    <OverlayTrigger
+                        placement="left"
+                        container={document.body}
+                        overlay={
+                            <Tooltip id="tooltip-close-update-panel" style={{ zIndex: 20000 }}>
+                                Close update panel
+                            </Tooltip>
+                        }
+                    >
+                        <button
+                            onClick={onClose}
+                            style={{
+                                width: '40px',
+                                height: '40px',
+                                borderRadius: '10px',
+                                border: '1px solid #d0d7de',
+                                background: '#fff',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                flexShrink: 0,
+                            }}
+                        >
+                            <FaXmark size={18} />
+                        </button>
+                    </OverlayTrigger>
+                </div>
 
-                        <FolderDropdown />
+                {/* Body */}
+                <div
+                    style={{
+                        flex: 1,
+                        display: 'grid',
+                        gridTemplateColumns: '1.1fr 0.9fr',
+                        minHeight: 0,
+                        background: '#f8fafc',
+                    }}
+                >
+                    {/* Left */}
+                    <div
+                        style={{
+                            minHeight: 0,
+                            overflowY: 'auto',
+                            padding: '16px',
+                            borderRight: '1px solid #e5e7eb',
+                            background: '#f8fafc',
+                        }}
+                    >
+                        <div
+                            style={{
+                                background: '#fff',
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '16px',
+                                padding: '14px',
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                            }}
+                        >
+                            <DatabaseUpdateModelPanel
+                                modelID={modelId}
+                                url={modelURL}
+                                modelData={modelData}
+                                selectedVersion={selectedVersion}
+                                selectedCategory={selectedCategory}
+                                downloadFilePath={downloadFilePath}
+                                setDownloadFilePath={setDownloadFilePath}
+                                setHasUpdated={setHasUpdated}
+                                closePanel={onClose}
+                            />
+                        </div>
                     </div>
 
-                    {/* <FilesPathSettingPanel downloadFilePath={downloadFilePath} setDownloadFilePath={setDownloadFilePath} /> */}
+                    {/* Right */}
+                    <div
+                        style={{
+                            minHeight: 0,
+                            overflowY: 'auto',
+                            padding: '16px',
+                            background: '#fbfcfe',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '14px',
+                        }}
+                    >
+                        <div
+                            style={{
+                                background: '#fff',
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '16px',
+                                padding: '14px',
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                            }}
+                        >
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    marginBottom: '10px',
+                                    fontWeight: 700,
+                                    color: '#1f2937',
+                                }}
+                            >
+                                <FaFilter />
+                                Category Selector
+                            </div>
+
+                            <CategoriesListSelector
+                                downloadFilePath={downloadFilePath}
+                                selectedCategory={selectedCategory}
+                                setSelectCategory={setSelectCategory}
+                            />
+                        </div>
+
+                        <div
+                            style={{
+                                background: '#fff',
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '16px',
+                                padding: '14px',
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                            }}
+                        >
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    marginBottom: '10px',
+                                    fontWeight: 700,
+                                    color: '#1f2937',
+                                }}
+                            >
+                                <FaFolderTree />
+                                Download Path
+                            </div>
+
+                            <DownloadFilePathOptionPanel
+                                downloadFilePath={downloadFilePath}
+                                setDownloadFilePath={setDownloadFilePath}
+                                selectedCategory={selectedCategory}
+                            />
+                        </div>
+
+                        <div
+                            style={{
+                                background: '#fff',
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '16px',
+                                padding: '14px',
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                                minHeight: 0,
+                                overflow: 'hidden',
+                                display: 'flex',
+                                flexDirection: 'column',
+                            }}
+                        >
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    marginBottom: '10px',
+                                    fontWeight: 700,
+                                    color: '#1f2937',
+                                    flexShrink: 0,
+                                }}
+                            >
+                                <FaHardDrive />
+                                Folder Browser
+                            </div>
+
+                            <FolderDropdown />
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -250,16 +452,43 @@ const CategoriesListSelector: React.FC<CategoriesListSelectorProps> = ({ downloa
     }
 
     return (
-        <div className="selector-container">
-            <Form className="selector-form-container">
-                <Form.Group controlId="selectSheet" className="selector-form-group ">
-                    <Form.Label className="selector-form-label"><BiCategory /> </Form.Label>
+        <div
+            style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                flexWrap: 'wrap',
+            }}
+        >
+            <Form style={{ flex: 1, minWidth: 0, margin: 0 }}>
+                <Form.Group controlId="selectSheet" style={{ margin: 0 }}>
+                    <Form.Label
+                        style={{
+                            fontSize: '13px',
+                            fontWeight: 700,
+                            color: '#374151',
+                            marginBottom: '6px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                        }}
+                    >
+                        <BiCategory />
+                        Category
+                    </Form.Label>
+
                     <Form.Select
-                        className="selector-form-select"
                         value={selectedCategory}
                         disabled={isLoading}
                         onChange={(event) => {
                             setSelectCategory(event.target.value);
+                        }}
+                        style={{
+                            borderRadius: '10px',
+                            border: '1px solid #cfd6de',
+                            padding: '10px 12px',
+                            fontSize: '14px',
+                            boxShadow: 'none',
                         }}
                     >
                         <option value="">Select an option</option>
@@ -271,7 +500,36 @@ const CategoriesListSelector: React.FC<CategoriesListSelectorProps> = ({ downloa
                     </Form.Select>
                 </Form.Group>
             </Form>
-            {notMatchSelector && <div style={{ paddingLeft: "5px" }}> <CiWarning /> </div>}
+
+            {notMatchSelector && (
+                <OverlayTrigger
+                    placement="top"
+                    container={document.body}
+                    overlay={
+                        <Tooltip id="tooltip-category-warning" style={{ zIndex: 20000 }}>
+                            Current folder path does not seem to match the selected category.
+                        </Tooltip>
+                    }
+                >
+                    <div
+                        style={{
+                            width: '34px',
+                            height: '34px',
+                            borderRadius: '999px',
+                            background: '#fff3cd',
+                            border: '1px solid #ffe08a',
+                            color: '#8a6d3b',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                            marginTop: '24px',
+                        }}
+                    >
+                        <CiWarning size={18} />
+                    </div>
+                </OverlayTrigger>
+            )}
         </div>
     );
 };
@@ -403,19 +661,47 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
     const areAllSelected = selectedFilteredCategoriesList.every(item => item.display);
 
     return (
-        <div className="collapse-panel-container">
-            <div className="toggle-section"
-                onClick={() => setOpen(!open)} aria-controls="collapse-panel" aria-expanded={open}>
-                <center> Folder Settings </center>
-            </div>
-            <hr />
+        <div
+            style={{
+                border: '1px solid #e5e7eb',
+                borderRadius: '14px',
+                overflow: 'hidden',
+                background: '#fcfcfd',
+            }}
+        >
+            <button
+                type="button"
+                onClick={() => setOpen(!open)}
+                aria-controls="collapse-panel"
+                aria-expanded={open}
+                style={{
+                    width: '100%',
+                    border: 'none',
+                    background: '#f8fafc',
+                    padding: '12px 14px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    cursor: 'pointer',
+                    fontWeight: 700,
+                    color: '#1f2937',
+                }}
+            >
+                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <FaFolderTree />
+                    Folder Settings
+                </span>
+                {open ? <FaChevronUp size={14} /> : <FaChevronDown size={14} />}
+            </button>
 
             <Collapse in={open}>
                 <div id="collapse-panel">
-                    <center> Prefix Suggestions</center>
-                    <hr />
+                    <div style={{ fontWeight: 700, color: '#374151', marginBottom: '8px' }}>
+                        Prefix Suggestions
+                    </div>
+
                     {prefixsList?.map((element, index) => (
-                        <OverlayTrigger placement="bottom" overlay={<Tooltip id="tooltip">{element.downloadFilePath}</Tooltip>}>
+                        <OverlayTrigger placement="bottom" overlay={<Tooltip id="tooltip" style={{ zIndex: 20000 }}>{element.downloadFilePath}</Tooltip>}>
                             <label key={index}
                                 className={`panel-tag-button ${selectedPrefix === element.downloadFilePath ? 'panel-tag-default' : 'panel-tag-selected'}`}
                                 onClick={() => {
@@ -431,7 +717,7 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
                     <center> Suffix Suggestions</center>
                     <hr />
                     {suffixsList?.map((element, index) => (
-                        <OverlayTrigger placement="bottom" overlay={<Tooltip id="tooltip">{element.value}</Tooltip>}>
+                        <OverlayTrigger placement="bottom" overlay={<Tooltip id="tooltip" style={{ zIndex: 20000 }}>{element.value}</Tooltip>}>
                             <label key={index}
                                 className={`panel-tag-button ${selectedSuffix === element.value ? 'panel-tag-default' : 'panel-tag-selected'}`}
                                 onClick={() => setSelectedSuffix(element.value)}>
@@ -652,7 +938,17 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
         <>
             <h6>{title}</h6>
 
-            <div style={{ maxHeight: '220px', overflowY: 'auto', border: '1px solid #ccc', padding: '3px', marginBottom: '10px' }}>
+            <div
+                style={{
+                    maxHeight: '220px',
+                    overflowY: 'auto',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '12px',
+                    padding: '6px',
+                    marginBottom: '12px',
+                    background: '#fafafa'
+                }}
+            >
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                     {tags.map((tag, index) => {
                         const value = tag?.string_value ?? '';
@@ -664,12 +960,13 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                                 key={`${value}-${index}`}
                                 onClick={() => handleTagClick(value)}
                                 style={{
-                                    margin: '5px 0',
+                                    margin: '6px 0',
                                     cursor: 'pointer',
-                                    backgroundColor: isSelected ? '#d3d3d3' : 'transparent',
-                                    fontWeight: isSelected ? 'bold' : 'normal',
-                                    padding: '4px 6px',
-                                    borderRadius: 6,
+                                    backgroundColor: isSelected ? '#e8f0ff' : '#ffffff',
+                                    border: isSelected ? '1px solid #c9dcff' : '1px solid #eceff3',
+                                    fontWeight: isSelected ? 700 : 500,
+                                    padding: '8px 10px',
+                                    borderRadius: 10,
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'space-between',
@@ -690,11 +987,15 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                                     disabled={!!deletingPath || isDeletingThis}
                                     title="Delete"
                                     style={{
-                                        padding: '2px 8px',
-                                        borderRadius: 6,
-                                        border: '1px solid #bbb',
+                                        padding: '5px 10px',
+                                        borderRadius: 8,
+                                        border: '1px solid #d6dbe1',
+                                        background: '#fff',
                                         cursor: !!deletingPath ? 'not-allowed' : 'pointer',
-                                        opacity: isDeletingThis ? 0.7 : 1
+                                        opacity: isDeletingThis ? 0.7 : 1,
+                                        fontWeight: 600,
+                                        fontSize: '12px',
+                                        flexShrink: 0,
                                     }}
                                 >
                                     {isDeletingThis ? 'Deleting…' : 'Delete'}
@@ -844,62 +1145,90 @@ const DownloadFilePathOptionPanel: React.FC<DownloadFilePathOptionPanelProps> = 
         <>
             <FilesPathSettingPanel downloadFilePath={downloadFilePath} setDownloadFilePath={setDownloadFilePath} />
 
-            <div className="autocomplete-container">
-                <div className="autocomplete-container-row">
-                    <div className="select-container" style={{ width: "350px" }}>
-                        <Autocomplete
-                            value={downloadFilePath} // The selected value
-                            onChange={(event, newValue) => {
-                                // Handle when a value is selected from the dropdown
-                                const disallowedRegex = /[<>:"\\|?*]/g;
-                                setDownloadFilePath(newValue?.replace(disallowedRegex, "") || "");
-                            }}
-                            inputValue={downloadFilePath} // The typed input
-                            onInputChange={(event, newInputValue) => {
-                                // Handle when typing in the input field
-                                setDownloadFilePath(newInputValue || "");
-                            }}
-                            id="controllable-states-update"
-                            options={sortedandFilteredfoldersList}
-                            sx={{ width: 350 }}
-                            disablePortal
-                            renderInput={(params) => (
-                                <TextField
-                                    {...params}
-                                    inputRef={inputRef}
-                                    helperText={`Folder name can't contain '"<>:/\\|?*'`}
-                                    label="Folder path"
-                                    onBlur={handleAutocompleteBlur}
-                                    onFocus={() => {
-                                        if (inputRef.current) {
-                                            inputRef.current.scrollLeft =
-                                                inputRef.current.scrollWidth - inputRef.current.offsetWidth + 100;
-                                        }
-                                    }}
-                                />
-                            )}
-                        />
-                    </div>
-
-                    <div style={{ padding: "5px" }} />
-
-                    <OverlayTrigger
-                        placement="bottom"
-                        overlay={<Tooltip id="tooltip">Save this download file path.</Tooltip>}
-                    >
-                        <Button
-                            variant="light"
-                            disabled={isLoading}
-                            className="tooltip-button"
-                            onClick={() => {
-                                updateDownloadFilePathIntoChromeStorage(downloadFilePath);
-                                updateSelectedCategoryIntoChromeStorage(selectedCategory);
-                            }}
-                        >
-                            <BsPencilFill />
-                        </Button>
-                    </OverlayTrigger>
+            <div
+                style={{
+                    marginTop: '14px',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '10px',
+                    flexWrap: 'nowrap',
+                    width: '100%',
+                    minWidth: 0,
+                }}
+            >
+                <div
+                    style={{
+                        flex: 1,
+                        minWidth: 0,
+                    }}
+                >
+                    <Autocomplete
+                        value={downloadFilePath}
+                        onChange={(event, newValue) => {
+                            const disallowedRegex = /[<>:"\\|?*]/g;
+                            setDownloadFilePath(newValue?.replace(disallowedRegex, "") || "");
+                        }}
+                        inputValue={downloadFilePath}
+                        onInputChange={(event, newInputValue) => {
+                            setDownloadFilePath(newInputValue || "");
+                        }}
+                        id="controllable-states-update"
+                        options={sortedandFilteredfoldersList}
+                        disablePortal
+                        renderInput={(params) => (
+                            <TextField
+                                {...params}
+                                inputRef={inputRef}
+                                helperText={`Folder name can't contain '"<>:/\\|?*'`}
+                                label="Folder path"
+                                onBlur={handleAutocompleteBlur}
+                                onFocus={() => {
+                                    if (inputRef.current) {
+                                        inputRef.current.scrollLeft =
+                                            inputRef.current.scrollWidth - inputRef.current.offsetWidth + 100;
+                                    }
+                                }}
+                                fullWidth
+                            />
+                        )}
+                    />
                 </div>
+
+                <OverlayTrigger
+                    placement="top"
+                    container={document.body}
+                    overlay={
+                        <Tooltip id="tooltip-save-download-path" style={{ zIndex: 20000 }}>
+                            Save this download file path
+                        </Tooltip>
+                    }
+                >
+                    <button
+                        type="button"
+                        disabled={isLoading}
+                        onClick={() => {
+                            updateDownloadFilePathIntoChromeStorage(downloadFilePath);
+                            updateSelectedCategoryIntoChromeStorage(selectedCategory);
+                        }}
+                        style={{
+                            width: '56px',
+                            minWidth: '56px',
+                            height: '56px',
+                            borderRadius: '12px',
+                            border: '1px solid #cfd6de',
+                            background: '#f8f9fa',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: isLoading ? 'not-allowed' : 'pointer',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                            flexShrink: 0,
+                            marginTop: '0px',
+                        }}
+                    >
+                        <BsPencilFill size={18} />
+                    </button>
+                </OverlayTrigger>
             </div>
         </>
     );
@@ -1307,184 +1636,436 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
         }
     };
 
-    return (
-        <>
-            <div className="buttonGroup" style={{ padding: "5px", display: "flex", justifyContent: "flex-start", alignItems: "flex-start" }}>
-                <div style={{ marginRight: '10px' }}>
-                    <Button variant="secondary" disabled={isLoading} onClick={handleReverseModelList}>
-                        {isLoading ? <BsArrowRepeat className="spinner" /> : (isSorted ? <BsSortUp /> : <BsSortDown />)}
-                    </Button>
-                </div>
+    const radioCardStyle = (isSelected: boolean): React.CSSProperties => ({
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: '10px',
+        padding: '10px 12px',
+        borderRadius: '10px',
+        border: isSelected ? '1px solid #b7d0ff' : '1px solid #e5e7eb',
+        background: isSelected ? '#edf4ff' : '#fff',
+        cursor: 'pointer',
+        fontSize: '14px',
+        color: '#1f2937',
+        wordBreak: 'break-word',
+    });
 
-                <div className="collapse-panel-container" style={{ flexShrink: 0, margin: 0, padding: "0px 10px 0px 10px" }}>
-                    <div className="toggle-section" onClick={handleToggleColapPanel} aria-controls="collapse-panel-update" aria-expanded={isColapPanelOpen} style={{
-                        textAlign: 'center'
-                    }}>
-                        <BsType />
+    return (
+        <>return (
+            <>
+                <div
+                    style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        justifyContent: 'space-between',
+                        gap: '12px',
+                        flexWrap: 'wrap',
+                        marginBottom: '16px',
+                        paddingBottom: '12px',
+                        borderBottom: '1px solid #eef1f4',
+                    }}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                        <OverlayTrigger
+                            placement="top"
+                            container={document.body}
+                            overlay={
+                                <Tooltip id="tooltip-reverse-model-list" style={{ zIndex: 20000 }}>
+                                    Reverse current model order
+                                </Tooltip>
+                            }
+                        >
+                            <button
+                                type="button"
+                                disabled={isLoading}
+                                onClick={handleReverseModelList}
+                                style={{
+                                    width: '42px',
+                                    height: '42px',
+                                    borderRadius: '10px',
+                                    border: '1px solid #d0d7de',
+                                    background: '#fff',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                }}
+                            >
+                                {isLoading ? <BsArrowRepeat className="spinner" /> : (isSorted ? <BsSortUp /> : <BsSortDown />)}
+                            </button>
+                        </OverlayTrigger>
+
+                        <button
+                            type="button"
+                            onClick={handleToggleColapPanel}
+                            style={{
+                                border: '1px solid #d0d7de',
+                                background: '#fff',
+                                borderRadius: '10px',
+                                padding: '10px 12px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                            }}
+                        >
+                            <FaFilter />
+                            Base Model Filter
+                            {isColapPanelOpen ? <FaChevronUp size={12} /> : <FaChevronDown size={12} />}
+                        </button>
                     </div>
 
-                    <Collapse in={isColapPanelOpen}>
-                        <div id="collapse-panel-update" style={{
-                            marginTop: '10px',
-                            padding: '10px',
-                            borderRadius: '5px',
-                            background: '#f9f9f9',
-                            width: '100%'
-                        }}>
+                    <div
+                        style={{
+                            fontSize: '13px',
+                            color: '#6b7280',
+                            background: '#f8fafc',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '10px',
+                            padding: '10px 12px',
+                        }}
+                    >
+                        {modelsList?.length || 0} records
+                    </div>
+                </div>
+
+                <Collapse in={isColapPanelOpen}>
+                    <div
+                        id="collapse-panel-update"
+                        style={{
+                            marginBottom: '16px',
+                            padding: '12px',
+                            borderRadius: '12px',
+                            background: '#f8fafc',
+                            border: '1px solid #e5e7eb',
+                        }}
+                    >
+                        <div
+                            style={{
+                                display: 'flex',
+                                flexWrap: 'wrap',
+                                gap: '10px 16px',
+                            }}
+                        >
                             {baseModelList.map((item, index) => (
-                                <div key={index}>
-                                    <label>
-                                        <input
-                                            type="checkbox"
-                                            checked={item.display}
-                                            onChange={() => handleToggleBaseModelCheckbox(index)}
-                                        />
-                                        {item.baseModel}
-                                    </label>
-                                </div>
+                                <label
+                                    key={index}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        fontSize: '14px',
+                                        color: '#374151',
+                                    }}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={item.display}
+                                        onChange={() => handleToggleBaseModelCheckbox(index)}
+                                    />
+                                    {item.baseModel}
+                                </label>
                             ))}
                         </div>
-                    </Collapse>
-                </div>
-            </div>
+                    </div>
+                </Collapse>
 
-            {isLoading ?
-                <div className="centered-container">
-                    <Spinner />
-                </div>
-                :
-                <>
-                    {modelsList?.map((model, index) => {
-                        const localScanPath = normalizeLocalPathToScanPath(model?.localPath);
-                        const localUpdatePath = buildUpdatePathFromScanPath(localScanPath);
-                        if (!visibleToasts[index]) return null;
-                        return (
-                            <div key={index} className="panel-toast-container">
-                                <Toast onClose={() => handleClose(index)}>
-                                    <Toast.Header>
-                                        <Col xs={10} className="panel-toast-header">
-                                            <Badge>{model?.baseModel}</Badge><b><span> #{model?.id}</span> : <span>{model?.name}</span></b>
-                                        </Col>
-                                    </Toast.Header>
-                                    <Toast.Body>
-                                        {/* Image Carousel */}
-                                        <div className="panel-image-carousel-container">
-                                            {model?.imageUrls[0]?.url
-                                                &&
-                                                <Carousel fade>
-                                                    {model?.imageUrls?.map((image) => {
-                                                        return (
-                                                            <Carousel.Item >
-                                                                <img
-                                                                    src={image.url || "https://placehold.co/200x250"}
-                                                                    alt={model.name}
-                                                                />
-                                                            </Carousel.Item>
-                                                        )
-                                                    })}
-                                                </Carousel>}
-                                        </div>
+                {isLoading ? (
+                    <div
+                        style={{
+                            minHeight: '180px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                        }}
+                    >
+                        <Spinner />
+                    </div>
+                ) : (
+                    <>
+                        {modelsList?.map((model, index) => {
+                            const localScanPath = normalizeLocalPathToScanPath(model?.localPath);
+                            const localUpdatePath = buildUpdatePathFromScanPath(localScanPath);
 
-                                        {/* Url */}
-                                        <a href={model?.url}> {model?.url} </a>
+                            if (!visibleToasts[index]) return null;
 
-                                        {/**Update Radio Button */}
-                                        <div className="radio-container">
-                                            {localUpdatePath && (
-                                                <label className="radio-label">
-                                                    <input
-                                                        type="radio"
-                                                        value="Database_and_LocalUpdateFolder"
-                                                        checked={updateOption === 'Database_and_LocalUpdateFolder'}
-                                                        onChange={() => setUpdateOption('Database_and_LocalUpdateFolder')}
-                                                        className="radio-input"
-                                                    />
-                                                    <div className="truncated-text-container">
-                                                        <span>
-                                                            Database & Update to {localUpdatePath}
-                                                        </span>
-                                                    </div>
-                                                </label>
-                                            )}
-
-                                            {localScanPath && (
-                                                <label className="radio-label">
-                                                    <input
-                                                        type="radio"
-                                                        value="Database_and_LocalFileFolder"
-                                                        checked={updateOption === 'Database_and_LocalFileFolder'}
-                                                        onChange={() => setUpdateOption('Database_and_LocalFileFolder')}
-                                                        className="radio-input"
-                                                    />
-                                                    <div className="truncated-text-container">
-                                                        <span>
-                                                            Database & {localScanPath}
-                                                        </span>
-                                                    </div>
-                                                </label>
-                                            )}
-                                            <label className="radio-label">
-                                                <input
-                                                    type="radio"
-                                                    value="Database_and_UpdateFolder"
-                                                    checked={updateOption === 'Database_and_UpdateFolder'}
-                                                    onChange={() => setUpdateOption('Database_and_UpdateFolder')}
-                                                    className="radio-input"
-                                                />
-                                                <div className="truncated-text-container">
-                                                    <span>
-                                                        Database & Update to {UpdateDownloadFilePath}
-                                                    </span>
-                                                </div>
-                                            </label>
-                                            <label className="radio-label">
-                                                <input
-                                                    type="radio"
-                                                    value="Database_and_FileFolder"
-                                                    checked={updateOption === 'Database_and_FileFolder'}
-                                                    onChange={() => setUpdateOption('Database_and_FileFolder')}
-                                                    className="radio-input"
-                                                />
-                                                <div className="truncated-text-container">
-                                                    <span>
-                                                        Database & {downloadFilePath}
-                                                    </span>
-                                                </div>
-                                            </label>
-                                            <label className="radio-label">
-                                                <input
-                                                    type="radio"
-                                                    value="Database_Only"
-                                                    checked={updateOption === 'Database_Only'}
-                                                    onChange={() => setUpdateOption('Database_Only')}
-                                                    className="radio-input"
-                                                />
-                                                Database Only
-                                            </label>
-                                        </div>
-
-                                        {/**Update button */}
-
-                                        <div className="panel-update-button-container">
-                                            <Button
-                                                variant={offlineMode ? "success" : "primary"}
-                                                disabled={isLoading}
-                                                onClick={() => handleUpdateModel(model?.id)}
-                                                className="btn btn-primary btn-lg w-100"
+                            return (
+                                <div
+                                    key={index}
+                                    style={{
+                                        marginBottom: '14px',
+                                    }}
+                                >
+                                    <Toast
+                                        onClose={() => handleClose(index)}
+                                        style={{
+                                            width: '100%',
+                                            borderRadius: '16px',
+                                            border: '1px solid #e5e7eb',
+                                            overflow: 'hidden',
+                                            boxShadow: '0 4px 14px rgba(0,0,0,0.06)',
+                                            background: '#fff',
+                                        }}
+                                    >
+                                        <Toast.Header
+                                            style={{
+                                                background: '#f8fafc',
+                                                borderBottom: '1px solid #eef1f4',
+                                                padding: '12px 14px',
+                                            }}
+                                        >
+                                            <div
+                                                style={{
+                                                    width: '100%',
+                                                    display: 'flex',
+                                                    justifyContent: 'space-between',
+                                                    alignItems: 'flex-start',
+                                                    gap: '12px',
+                                                }}
                                             >
-                                                <BsFillFileEarmarkArrowUpFill />
-                                                {isLoading && <span className="button-state-complete">✓</span>}
-                                            </Button>
-                                            {visibleIsCarted[index] ? <BsFillCartCheckFill className="icon" /> : null}
-                                        </div>
+                                                <div style={{ minWidth: 0, flex: 1 }}>
+                                                    <div style={{ marginBottom: '6px' }}>
+                                                        <Badge bg="primary">{model?.baseModel}</Badge>
+                                                    </div>
 
-                                    </Toast.Body>
-                                </Toast>
-                            </div>
-                        );
-                    })}
-                </>
-            }
+                                                    <div
+                                                        style={{
+                                                            fontWeight: 700,
+                                                            color: '#1f2937',
+                                                            lineHeight: 1.35,
+                                                            wordBreak: 'break-word',
+                                                        }}
+                                                    >
+                                                        #{model?.id} : {model?.name}
+                                                    </div>
+                                                </div>
+
+                                                {visibleIsCarted[index] ? (
+                                                    <OverlayTrigger
+                                                        placement="top"
+                                                        container={document.body}
+                                                        overlay={
+                                                            <Tooltip id={`tooltip-carted-${index}`} style={{ zIndex: 20000 }}>
+                                                                Already in cart
+                                                            </Tooltip>
+                                                        }
+                                                    >
+                                                        <div style={{ color: '#198754', flexShrink: 0 }}>
+                                                            <BsFillCartCheckFill size={18} />
+                                                        </div>
+                                                    </OverlayTrigger>
+                                                ) : null}
+                                            </div>
+                                        </Toast.Header>
+
+                                        <Toast.Body style={{ padding: '14px' }}>
+                                            <div
+                                                style={{
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    gap: '14px',
+                                                }}
+                                            >
+                                                <div
+                                                    style={{
+                                                        borderRadius: '12px',
+                                                        overflow: 'hidden',
+                                                        border: '1px solid #e5e7eb',
+                                                        background: '#f8fafc',
+                                                    }}
+                                                >
+                                                    {model?.imageUrls?.[0]?.url ? (
+                                                        <Carousel fade interval={null}>
+                                                            {model?.imageUrls?.map((image, imgIndex) => (
+                                                                <Carousel.Item key={imgIndex}>
+                                                                    <div
+                                                                        style={{
+                                                                            height: '260px',
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            justifyContent: 'center',
+                                                                            background: '#fff',
+                                                                        }}
+                                                                    >
+                                                                        <img
+                                                                            src={image.url || "https://placehold.co/200x250"}
+                                                                            alt={model.name}
+                                                                            style={{
+                                                                                maxWidth: '100%',
+                                                                                maxHeight: '260px',
+                                                                                objectFit: 'contain',
+                                                                            }}
+                                                                        />
+                                                                    </div>
+                                                                </Carousel.Item>
+                                                            ))}
+                                                        </Carousel>
+                                                    ) : (
+                                                        <div
+                                                            style={{
+                                                                height: '180px',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                color: '#6b7280',
+                                                                fontWeight: 600,
+                                                            }}
+                                                        >
+                                                            No image available
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                <div
+                                                    style={{
+                                                        fontSize: '13px',
+                                                        background: '#f8fafc',
+                                                        border: '1px solid #e5e7eb',
+                                                        borderRadius: '10px',
+                                                        padding: '10px 12px',
+                                                        wordBreak: 'break-word',
+                                                    }}
+                                                >
+                                                    <div
+                                                        style={{
+                                                            fontWeight: 700,
+                                                            color: '#374151',
+                                                            marginBottom: '6px',
+                                                        }}
+                                                    >
+                                                        URL
+                                                    </div>
+                                                    <a
+                                                        href={model?.url}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        style={{ color: '#0d6efd', textDecoration: 'none' }}
+                                                    >
+                                                        {model?.url}
+                                                    </a>
+                                                </div>
+
+                                                <div
+                                                    style={{
+                                                        border: '1px solid #e5e7eb',
+                                                        borderRadius: '12px',
+                                                        padding: '12px',
+                                                        background: '#fcfcfd',
+                                                    }}
+                                                >
+                                                    <div
+                                                        style={{
+                                                            fontWeight: 700,
+                                                            color: '#374151',
+                                                            marginBottom: '10px',
+                                                        }}
+                                                    >
+                                                        Update Options
+                                                    </div>
+
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                        {localUpdatePath && (
+                                                            <label style={radioCardStyle(updateOption === 'Database_and_LocalUpdateFolder')}>
+                                                                <input
+                                                                    type="radio"
+                                                                    value="Database_and_LocalUpdateFolder"
+                                                                    checked={updateOption === 'Database_and_LocalUpdateFolder'}
+                                                                    onChange={() => setUpdateOption('Database_and_LocalUpdateFolder')}
+                                                                />
+                                                                <span>
+                                                                    Database & Update to {localUpdatePath}
+                                                                </span>
+                                                            </label>
+                                                        )}
+
+                                                        {localScanPath && (
+                                                            <label style={radioCardStyle(updateOption === 'Database_and_LocalFileFolder')}>
+                                                                <input
+                                                                    type="radio"
+                                                                    value="Database_and_LocalFileFolder"
+                                                                    checked={updateOption === 'Database_and_LocalFileFolder'}
+                                                                    onChange={() => setUpdateOption('Database_and_LocalFileFolder')}
+                                                                />
+                                                                <span>
+                                                                    Database & {localScanPath}
+                                                                </span>
+                                                            </label>
+                                                        )}
+
+                                                        <label style={radioCardStyle(updateOption === 'Database_and_UpdateFolder')}>
+                                                            <input
+                                                                type="radio"
+                                                                value="Database_and_UpdateFolder"
+                                                                checked={updateOption === 'Database_and_UpdateFolder'}
+                                                                onChange={() => setUpdateOption('Database_and_UpdateFolder')}
+                                                            />
+                                                            <span>
+                                                                Database & Update to {UpdateDownloadFilePath}
+                                                            </span>
+                                                        </label>
+
+                                                        <label style={radioCardStyle(updateOption === 'Database_and_FileFolder')}>
+                                                            <input
+                                                                type="radio"
+                                                                value="Database_and_FileFolder"
+                                                                checked={updateOption === 'Database_and_FileFolder'}
+                                                                onChange={() => setUpdateOption('Database_and_FileFolder')}
+                                                            />
+                                                            <span>
+                                                                Database & {downloadFilePath}
+                                                            </span>
+                                                        </label>
+
+                                                        <label style={radioCardStyle(updateOption === 'Database_Only')}>
+                                                            <input
+                                                                type="radio"
+                                                                value="Database_Only"
+                                                                checked={updateOption === 'Database_Only'}
+                                                                onChange={() => setUpdateOption('Database_Only')}
+                                                            />
+                                                            <span>Database Only</span>
+                                                        </label>
+                                                    </div>
+                                                </div>
+
+                                                <button
+                                                    type="button"
+                                                    disabled={isLoading}
+                                                    onClick={() => handleUpdateModel(model?.id)}
+                                                    style={{
+                                                        width: '100%',
+                                                        border: 'none',
+                                                        borderRadius: '12px',
+                                                        padding: '12px 16px',
+                                                        background: offlineMode ? '#198754' : '#0d6efd',
+                                                        color: '#fff',
+                                                        fontWeight: 700,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: '8px',
+                                                        cursor: isLoading ? 'not-allowed' : 'pointer',
+                                                        boxShadow: offlineMode
+                                                            ? '0 4px 12px rgba(25, 135, 84, 0.25)'
+                                                            : '0 4px 12px rgba(13, 110, 253, 0.25)',
+                                                    }}
+                                                >
+                                                    <BsFillFileEarmarkArrowUpFill />
+                                                    <span>{offlineMode ? 'Update & Queue Offline' : 'Update & Download'}</span>
+                                                </button>
+                                            </div>
+                                        </Toast.Body>
+                                    </Toast>
+                                </div>
+                            );
+                        })}
+                    </>
+                )}
+            </>
+            );
 
         </>
 

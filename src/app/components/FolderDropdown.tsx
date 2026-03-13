@@ -96,62 +96,73 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText }) => {
     };
 
     const dropdownToggleStyle: React.CSSProperties = {
-        width: '325px',
+        width: '100%',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap'
     };
 
     return (
-        <div style={{ margin: '20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <Dropdown>
-                    <OverlayTrigger
-                        placement="top"
-                        overlay={
-                            <Tooltip id="dropdown-toggle-tooltip">
+        <div style={{ padding: '4px 0', width: '100%', minWidth: 0 }}>
+            <div
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    width: '100%',
+                    minWidth: 0,
+                    flexWrap: 'nowrap',
+                }}
+            >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <Dropdown style={{ width: '100%' }}>
+                        <OverlayTrigger
+                            placement="top"
+                            overlay={
+                                <Tooltip id="dropdown-toggle-tooltip">
+                                    {selectedFolder
+                                        ? selectedFolder
+                                        : filteredFolders.length > 0
+                                            ? 'Select Folder'
+                                            : 'No matching folders'}
+                                </Tooltip>
+                            }
+                        >
+                            <Dropdown.Toggle variant="secondary" style={dropdownToggleStyle}>
                                 {selectedFolder
                                     ? selectedFolder
                                     : filteredFolders.length > 0
                                         ? 'Select Folder'
                                         : 'No matching folders'}
-                            </Tooltip>
-                        }
-                    >
-                        <Dropdown.Toggle variant="secondary" style={dropdownToggleStyle}>
-                            {selectedFolder
-                                ? selectedFolder
-                                : filteredFolders.length > 0
-                                    ? 'Select Folder'
-                                    : 'No matching folders'}
-                        </Dropdown.Toggle>
-                    </OverlayTrigger>
+                            </Dropdown.Toggle>
+                        </OverlayTrigger>
 
-                    <Dropdown.Menu
-                        style={{
-                            width: '80%',
-                            maxHeight: '400px',
-                            overflowY: 'auto',
-                            whiteSpace: 'normal',
-                        }}
-                    >
-                        {filteredFolders.map((folder, index) => (
-                            <Dropdown.Item
-                                key={index}
-                                as="div"
-                                style={{
-                                    wordWrap: 'break-word',
-                                    whiteSpace: 'normal',
-                                    padding: '8px',
-                                    cursor: 'pointer',
-                                }}
-                                onClick={() => handleSelectFolder(folder)}
-                            >
-                                {folder}
-                            </Dropdown.Item>
-                        ))}
-                    </Dropdown.Menu>
-                </Dropdown>
+                        <Dropdown.Menu
+                            style={{
+                                width: '80%',
+                                maxHeight: '400px',
+                                overflowY: 'auto',
+                                whiteSpace: 'normal',
+                            }}
+                        >
+                            {filteredFolders.map((folder, index) => (
+                                <Dropdown.Item
+                                    key={index}
+                                    as="div"
+                                    style={{
+                                        wordWrap: 'break-word',
+                                        whiteSpace: 'normal',
+                                        padding: '8px',
+                                        cursor: 'pointer',
+                                    }}
+                                    onClick={() => handleSelectFolder(folder)}
+                                >
+                                    {folder}
+                                </Dropdown.Item>
+                            ))}
+                        </Dropdown.Menu>
+                    </Dropdown>
+                </div>
 
                 <FormControl
                     type="number"
@@ -160,7 +171,7 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText }) => {
                     step={0.01}
                     value={threshold}
                     onChange={e => setThreshold(Number(e.target.value))}
-                    style={{ width: '80px' }}
+                    style={{ width: '80px', flexShrink: 0 }}
                     aria-label="Fuzzy threshold"
                     title="0 = exact match, 1 = very fuzzy"
                 />
@@ -173,7 +184,11 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText }) => {
                         </Tooltip>
                     }
                 >
-                    <Button variant="outline-primary" onClick={handleReadClipboard}>
+                    <Button
+                        variant="outline-primary"
+                        onClick={handleReadClipboard}
+                        style={{ flexShrink: 0 }}
+                    >
                         <FaClipboard />
                     </Button>
                 </OverlayTrigger>

@@ -4,6 +4,18 @@ import WindowUpdateModelPanel from './WindowUpdateModelPanel';
 import { fetchFindVersionNumbersForModel } from '../../api/civitaiSQL_api';
 import { useDispatch } from 'react-redux';
 import { updateDownloadFilePath } from '../../store/actions/chromeActions';
+import { OverlayTrigger, Tooltip } from 'react-bootstrap';
+import {
+    FaXmark,
+    FaRotateRight,
+    FaPlus,
+    FaPenToSquare,
+    FaChevronLeft,
+    FaChevronRight,
+    FaDatabase,
+    FaUser,
+    FaTag
+} from 'react-icons/fa6';
 
 interface Version {
     id: number;
@@ -21,13 +33,60 @@ interface Model {
 
 interface PanelProps {
     url: string;
-    setUrlList: (updater: (prevUrlList: string[]) => string[]) => void; // Callback to update the URL list
+    setUrlList: (updater: (prevUrlList: string[]) => string[]) => void;
     onClose: () => void;
     setIsFullInfoModelPanelVisible: (isFullInfoModelPanelVisible: boolean) => void;
-    urlList: string[]; // Pass the list of URLs to check for duplicates
+    urlList: string[];
 }
 
-const FullInfoModelPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, onClose, setIsFullInfoModelPanelVisible }) => {
+const iconButtonStyle: React.CSSProperties = {
+    width: '38px',
+    height: '38px',
+    borderRadius: '10px',
+    border: '1px solid #d0d7de',
+    background: '#ffffff',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+};
+
+const primaryButtonStyle: React.CSSProperties = {
+    padding: '10px 16px',
+    borderRadius: '10px',
+    border: 'none',
+    background: '#0d6efd',
+    color: '#fff',
+    fontWeight: 600,
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px',
+    boxShadow: '0 2px 6px rgba(13, 110, 253, 0.25)',
+};
+
+const secondaryButtonStyle: React.CSSProperties = {
+    padding: '10px 16px',
+    borderRadius: '10px',
+    border: '1px solid #c8d1dc',
+    background: '#f8f9fa',
+    color: '#212529',
+    fontWeight: 600,
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px',
+};
+
+const FullInfoModelPanel: React.FC<PanelProps> = ({
+    url,
+    urlList,
+    setUrlList,
+    onClose,
+    setIsFullInfoModelPanelVisible
+}) => {
     const dispatch = useDispatch();
 
     const [modelData, setModelData] = useState<Model | null>(null);
@@ -35,24 +94,20 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, on
     const [isLoading, setIsLoading] = useState(false);
     const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
     const [existingVersions, setExistingVersions] = useState<any[]>([]);
-    const [renderKey, setRenderKey] = useState(0); // State to manage re-renders
+    const [renderKey, setRenderKey] = useState(0);
     const [hasUpdated, setHasUpdated] = useState(false);
-
-    // Extract modelId from the URL
-    const modelId = url.match(/\/models\/(\d+)/)?.[1] || '';
-
     const [isUpdatePanelVisible, setIsUpdatePanelVisible] = useState(false);
 
-    // Fetch model info when the component is mounted or `renderKey` changes
+    const modelId = url.match(/\/models\/(\d+)/)?.[1] || '';
+
     useEffect(() => {
         fetchModelInfo();
-    }, [renderKey]); // Add renderKey as a dependency
+    }, [renderKey]);
 
-    // Fetch model info when the component is mounted
     useEffect(() => {
         if (hasUpdated) {
             fetchModelInfo();
-            // Remove the processed URL from the urlList
+
             setUrlList(currentUrls => currentUrls.filter(currentUrl => currentUrl !== url));
 
             chrome.storage.local.get('originalTabId', (result) => {
@@ -60,24 +115,22 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, on
                     chrome.tabs.sendMessage(result.originalTabId, { action: "uncheck-url", url: url });
                 }
             });
+
             setHasUpdated(false);
             dispatch(updateDownloadFilePath("/@scan@/ACG/Pending/"));
-            setIsFullInfoModelPanelVisible(false)
+            setIsFullInfoModelPanelVisible(false);
         }
     }, [hasUpdated]);
 
-    // Fetch the model information
     const fetchModelInfo = async () => {
         setIsLoading(true);
         try {
-            console.log("test-fetchModelInfo");
             const response = await axios.post(`https://civitai.com/api/v1/models/${modelId}`);
             const data = response.data;
-            console.log(response);
 
             setModelData(data);
             const firstVersion = data.modelVersions[0];
-            setSelectedVersion(firstVersion); // Select the first version by default
+            setSelectedVersion(firstVersion);
 
             const imagesArray = response?.data?.modelVersions?.map((version: any) => ({
                 id: version.id,
@@ -85,24 +138,18 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, on
                 images: version.images.map((image: any) => image.url)
             }));
 
-            // Get version IDs to check with the API
             const versionIds = imagesArray.map((version: any) => version.id);
 
-            // Check for existing version numbers
             const existingVersionsSet = await fetchFindVersionNumbersForModel(modelId, versionIds, dispatch);
-            console.log(existingVersionsSet);
-            // Safely convert the Set to an array and set state
             setExistingVersions(Array.from(existingVersionsSet || []));
 
             if (!(new URL(url).searchParams.has('modelVersionId'))) {
-                // Use "first one" URL format
                 if (urlList.includes(url)) {
                     setMessage({ text: 'This URL is already in the list.', type: 'error' });
                 } else {
                     setMessage(null);
                 }
             }
-
         } catch (error) {
             console.error('Error fetching model info:', error);
         } finally {
@@ -110,31 +157,24 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, on
         }
     };
 
-    // Handle Dropdown Change
     const handleVersionChange = (versionId: number) => {
         const version = modelData?.modelVersions.find(v => v.id === versionId) || null;
         setSelectedVersion(version);
 
         if (version) {
-
             const formattedUrl =
                 (version.id === modelData?.modelVersions[0].id && !(new URL(url).searchParams.has('modelVersionId')))
                     ? url
                     : `https://civitai.com/models/${modelId}?modelVersionId=${version.id}`;
 
-            console.log(formattedUrl)
-            console.log(urlList)
-
-            // Check if the selected version URL is in the list
             if (urlList.includes(formattedUrl)) {
                 setMessage({ text: 'This URL is already in the list.', type: 'error' });
             } else {
-                setMessage(null); // Clear the message if the version is not in the list
+                setMessage(null);
             }
         }
     };
 
-    // Handle Add Button Click
     const handleAdd = () => {
         if (!selectedVersion || !modelData) return;
 
@@ -146,24 +186,22 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, on
         setUrlList(prevUrlList => {
             if (prevUrlList.includes(formattedUrl)) {
                 setMessage({ text: 'This URL is already in the list.', type: 'error' });
-                return prevUrlList; // Return the original list if duplicate
+                return prevUrlList;
             }
 
             setMessage({ text: 'URL added successfully!', type: 'success' });
-            return [...prevUrlList, formattedUrl]; // Add the new URL if it's not a duplicate
+            return [...prevUrlList, formattedUrl];
         });
 
-        console.log("check-url")
         chrome.storage.local.get('originalTabId', (result) => {
             if (result.originalTabId) {
                 chrome.tabs.sendMessage(result.originalTabId, { action: "check-url", url: formattedUrl });
             }
         });
-
     };
 
     const forceRerender = () => {
-        setRenderKey((prevKey) => prevKey + 1); // Increment renderKey to force a re-render
+        setRenderKey((prevKey) => prevKey + 1);
     };
 
     const toggleUpdateModelPanel = () => {
@@ -171,90 +209,315 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, on
     };
 
     return (
-        <div className="panel-container">
-            <div className="panel-container-content">
-                <button className="panel-close-button" onClick={onClose}>
-                    &#x2715;
-                </button>
+        <div
+            style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(0,0,0,0.45)',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                zIndex: 9999,
+                padding: '24px',
+            }}
+        >
+            <div
+                style={{
+                    width: '100%',
+                    maxWidth: '900px',
+                    maxHeight: '90vh',
+                    overflowY: 'auto',
+                    background: '#ffffff',
+                    borderRadius: '18px',
+                    boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
+                    border: '1px solid #e5e7eb',
+                    padding: '20px',
+                    position: 'relative',
+                }}
+            >
+                {/* Header */}
+                <div
+                    style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                        gap: '12px',
+                        marginBottom: '18px',
+                        borderBottom: '1px solid #eef1f4',
+                        paddingBottom: '14px',
+                    }}
+                >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                            style={{
+                                fontSize: '24px',
+                                fontWeight: 700,
+                                color: '#1f2937',
+                                lineHeight: 1.3,
+                                wordBreak: 'break-word',
+                            }}
+                        >
+                            {modelData?.name || 'Model Info'}
+                        </div>
 
-                <button onClick={forceRerender} style={{ marginBottom: '10px' }}>
-                    Force Re-render
-                </button>
+                        {modelData?.creator?.username && (
+                            <div
+                                style={{
+                                    marginTop: '10px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    color: '#4b5563',
+                                    fontSize: '14px',
+                                }}
+                            >
+                                <FaUser />
+                                <span>Created by: {modelData.creator.username}</span>
+                            </div>
+                        )}
+
+                        {modelData?.tags?.length ? (
+                            <div
+                                style={{
+                                    marginTop: '10px',
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    gap: '8px',
+                                    color: '#4b5563',
+                                    fontSize: '14px',
+                                    flexWrap: 'wrap',
+                                }}
+                            >
+                                <FaTag style={{ marginTop: '3px' }} />
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                    {modelData.tags.slice(0, 12).map((tag, index) => (
+                                        <span
+                                            key={index}
+                                            style={{
+                                                background: '#eef4ff',
+                                                color: '#2457c5',
+                                                border: '1px solid #d8e6ff',
+                                                padding: '4px 8px',
+                                                borderRadius: '999px',
+                                                fontSize: '12px',
+                                                fontWeight: 600,
+                                            }}
+                                        >
+                                            {tag}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : null}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                        <OverlayTrigger overlay={<Tooltip id="tooltip-refresh-model" style={{ zIndex: 20000 }}>Refresh model info</Tooltip>}>
+                            <button onClick={forceRerender} style={iconButtonStyle}>
+                                <FaRotateRight size={16} />
+                            </button>
+                        </OverlayTrigger>
+
+                        <OverlayTrigger overlay={<Tooltip id="tooltip-close-panel" style={{ zIndex: 20000 }}>Close panel</Tooltip>}>
+                            <button onClick={onClose} style={iconButtonStyle}>
+                                <FaXmark size={18} />
+                            </button>
+                        </OverlayTrigger>
+                    </div>
+                </div>
 
                 {isLoading ? (
-                    <p>Loading...</p>
+                    <div
+                        style={{
+                            padding: '40px 20px',
+                            textAlign: 'center',
+                            color: '#6b7280',
+                            fontSize: '16px',
+                            fontWeight: 600,
+                        }}
+                    >
+                        Loading model info...
+                    </div>
                 ) : modelData ? (
-                    <div>
-                        <h3>{modelData.name}</h3>
-                        <p>Created by: {modelData.creator.username}</p>
-
-                        {/* Dropdown */}
-                        <label htmlFor="versionDropdown">Select Version:</label>
-                        <select
-                            id="versionDropdown"
-                            onChange={(e) =>
-                                handleVersionChange(Number(e.target.value))
-                            }
-                            value={selectedVersion?.id || ''}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                        {/* Version selector */}
+                        <div
+                            style={{
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '14px',
+                                padding: '16px',
+                                background: '#fafbfc',
+                            }}
                         >
-                            {modelData.modelVersions.map(version => (
-                                <option key={version.id} value={version.id}>
-                                    {version.name} (Base Model: {version.baseModel}) {existingVersions.includes(version.id.toString()) ? ' *' : ''}
-                                </option>
-                            ))}
-                        </select>
+                            <div
+                                style={{
+                                    fontSize: '15px',
+                                    fontWeight: 700,
+                                    marginBottom: '10px',
+                                    color: '#1f2937',
+                                }}
+                            >
+                                Select Version
+                            </div>
+
+                            <select
+                                id="versionDropdown"
+                                onChange={(e) => handleVersionChange(Number(e.target.value))}
+                                value={selectedVersion?.id || ''}
+                                style={{
+                                    width: '100%',
+                                    padding: '12px 14px',
+                                    borderRadius: '10px',
+                                    border: '1px solid #cfd6de',
+                                    background: '#fff',
+                                    fontSize: '14px',
+                                    outline: 'none',
+                                }}
+                            >
+                                {modelData.modelVersions.map(version => (
+                                    <option key={version.id} value={version.id}>
+                                        {version.name} (Base Model: {version.baseModel || 'No Base Model'})
+                                        {existingVersions.includes(version.id.toString()) ? '  *' : ''}
+                                    </option>
+                                ))}
+                            </select>
+
+                            {selectedVersion && (
+                                <div
+                                    style={{
+                                        marginTop: '12px',
+                                        display: 'flex',
+                                        flexWrap: 'wrap',
+                                        gap: '8px',
+                                    }}
+                                >
+                                    <span
+                                        style={{
+                                            background: '#eef4ff',
+                                            color: '#2457c5',
+                                            border: '1px solid #d8e6ff',
+                                            padding: '6px 10px',
+                                            borderRadius: '999px',
+                                            fontSize: '12px',
+                                            fontWeight: 700,
+                                        }}
+                                    >
+                                        Version ID: {selectedVersion.id}
+                                    </span>
+
+                                    <span
+                                        style={{
+                                            background: '#f3f4f6',
+                                            color: '#374151',
+                                            border: '1px solid #e5e7eb',
+                                            padding: '6px 10px',
+                                            borderRadius: '999px',
+                                            fontSize: '12px',
+                                            fontWeight: 700,
+                                        }}
+                                    >
+                                        Base Model: {selectedVersion.baseModel || 'No Base Model'}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
 
                         {/* Carousel */}
                         {selectedVersion && (
-                            <div style={{ marginTop: '16px' }}>
-                                <h4>Images for {selectedVersion.name}</h4>
+                            <div
+                                style={{
+                                    border: '1px solid #e5e7eb',
+                                    borderRadius: '14px',
+                                    padding: '16px',
+                                    background: '#fff',
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        fontSize: '15px',
+                                        fontWeight: 700,
+                                        marginBottom: '14px',
+                                        color: '#1f2937',
+                                    }}
+                                >
+                                    Images for {selectedVersion.name}
+                                </div>
+
                                 <Carousel images={selectedVersion.images.map(image => image.url)} />
                             </div>
                         )}
 
-                        {/* Add Button */}
+                        {/* Action buttons */}
                         {selectedVersion && (
-                            <>
-                                <button onClick={handleAdd}>Add to Download List</button>
-                                <button onClick={toggleUpdateModelPanel}>Update Existing Model to this Select Model</button>
-                            </>
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    flexWrap: 'wrap',
+                                    gap: '10px',
+                                }}
+                            >
+                                <OverlayTrigger overlay={<Tooltip id="tooltip-add-download-list" style={{ zIndex: 20000 }}>Add selected version URL to download list</Tooltip>}>
+                                    <button onClick={handleAdd} style={primaryButtonStyle}>
+                                        <FaPlus />
+                                        <span>Add to Download List</span>
+                                    </button>
+                                </OverlayTrigger>
+
+                                <OverlayTrigger overlay={<Tooltip id="tooltip-update-existing" style={{ zIndex: 20000 }}>Update existing database record to selected version</Tooltip>}>
+                                    <button onClick={toggleUpdateModelPanel} style={secondaryButtonStyle}>
+                                        <FaPenToSquare />
+                                        <span>Update Existing Model</span>
+                                    </button>
+                                </OverlayTrigger>
+                            </div>
                         )}
 
-                        {selectedVersion && existingVersions.includes(selectedVersion.id.toString())
-                            && (
-                                <div
-                                    style={{
-                                        marginTop: '20px',
-                                        padding: '10px',
-                                        borderRadius: '5px',
-                                        color: 'white',
-                                        backgroundColor: 'lightblue',
-                                        textAlign: 'center',
-                                        animation: 'fade-in 0.5s',
-                                    }}
-                                >
-                                    This version is already existed in the database.
-                                </div>
-                            )}
+                        {/* Already exists info */}
+                        {selectedVersion && existingVersions.includes(selectedVersion.id.toString()) && (
+                            <div
+                                style={{
+                                    marginTop: '2px',
+                                    padding: '14px 16px',
+                                    borderRadius: '12px',
+                                    color: '#0c5460',
+                                    backgroundColor: '#d9f3ff',
+                                    border: '1px solid #a9deef',
+                                    textAlign: 'center',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '10px',
+                                    fontWeight: 700,
+                                }}
+                            >
+                                <FaDatabase />
+                                <span>This version already exists in the database.</span>
+                            </div>
+                        )}
 
-                        {selectedVersion && (isUpdatePanelVisible &&
-                            <WindowUpdateModelPanel selectedVersion={selectedVersion} modelId={modelId}
+                        {selectedVersion && isUpdatePanelVisible && (
+                            <WindowUpdateModelPanel
+                                selectedVersion={selectedVersion}
+                                modelId={modelId}
                                 modelURL={`https://civitai.com/models/${modelId}?modelVersionId=${selectedVersion.id}`}
                                 modelData={modelData}
                                 setHasUpdated={setHasUpdated}
-                                onClose={toggleUpdateModelPanel} />)}
+                                onClose={toggleUpdateModelPanel}
+                            />
+                        )}
 
                         {/* Notification */}
                         {message && (
                             <div
                                 style={{
-                                    marginTop: '20px',
-                                    padding: '10px',
-                                    borderRadius: '5px',
-                                    color: message.type === 'success' ? 'green' : 'red',
-                                    backgroundColor: message.type === 'success' ? '#e6ffe6' : '#ffe6e6',
+                                    marginTop: '4px',
+                                    padding: '14px 16px',
+                                    borderRadius: '12px',
+                                    color: message.type === 'success' ? '#155724' : '#842029',
+                                    backgroundColor: message.type === 'success' ? '#e8f8ec' : '#fdeaea',
+                                    border: `1px solid ${message.type === 'success' ? '#b9e3c3' : '#f4b9bf'}`,
                                     textAlign: 'center',
-                                    animation: 'fade-in 0.5s',
+                                    fontWeight: 700,
                                 }}
                             >
                                 {message.text}
@@ -262,7 +525,17 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({ url, urlList, setUrlList, on
                         )}
                     </div>
                 ) : (
-                    <p>No data available.</p>
+                    <div
+                        style={{
+                            padding: '40px 20px',
+                            textAlign: 'center',
+                            color: '#6b7280',
+                            fontSize: '16px',
+                            fontWeight: 600,
+                        }}
+                    >
+                        No data available.
+                    </div>
                 )}
             </div>
         </div>
@@ -285,53 +558,112 @@ const Carousel: React.FC<CarouselProps> = ({ images }) => {
     };
 
     return (
-        <div style={{ position: 'relative', width: '300px', height: '300px', margin: '0 auto' }}>
-            {images.length > 0 ? (
-                <img
-                    src={images[currentIndex]}
-                    alt={`Image ${currentIndex + 1}`}
-                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                />
-            ) : (
-                <p>No images available</p>
-            )}
+        <div
+            style={{
+                position: 'relative',
+                width: '100%',
+                maxWidth: '520px',
+                margin: '0 auto',
+            }}
+        >
+            <div
+                style={{
+                    width: '100%',
+                    height: '360px',
+                    borderRadius: '14px',
+                    overflow: 'hidden',
+                    background: '#f6f8fa',
+                    border: '1px solid #e5e7eb',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    position: 'relative',
+                }}
+            >
+                {images.length > 0 ? (
+                    <img
+                        src={images[currentIndex]}
+                        alt={`Image ${currentIndex + 1}`}
+                        style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'contain',
+                            display: 'block',
+                            background: '#fff',
+                        }}
+                    />
+                ) : (
+                    <div style={{ color: '#6b7280', fontWeight: 600 }}>
+                        No images available
+                    </div>
+                )}
 
-            <button
-                onClick={handlePrev}
-                style={{
-                    position: 'absolute',
-                    top: '50%',
-                    left: '0',
-                    transform: 'translateY(-50%)',
-                    background: 'rgba(0,0,0,0.5)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '50%',
-                    width: '32px',
-                    height: '32px',
-                    cursor: 'pointer',
-                }}
-            >
-                &#9664;
-            </button>
-            <button
-                onClick={handleNext}
-                style={{
-                    position: 'absolute',
-                    top: '50%',
-                    right: '0',
-                    transform: 'translateY(-50%)',
-                    background: 'rgba(0,0,0,0.5)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '50%',
-                    width: '32px',
-                    height: '32px',
-                    cursor: 'pointer',
-                }}
-            >
-                &#9654;
-            </button>
+                {images.length > 1 && (
+                    <>
+                        <OverlayTrigger overlay={<Tooltip id="tooltip-prev-image" style={{ zIndex: 20000 }}>Previous image</Tooltip>}>
+                            <button
+                                onClick={handlePrev}
+                                style={{
+                                    position: 'absolute',
+                                    top: '50%',
+                                    left: '10px',
+                                    transform: 'translateY(-50%)',
+                                    background: 'rgba(17,24,39,0.72)',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '999px',
+                                    width: '40px',
+                                    height: '40px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                }}
+                            >
+                                <FaChevronLeft size={14} />
+                            </button>
+                        </OverlayTrigger>
+
+                        <OverlayTrigger overlay={<Tooltip id="tooltip-next-image" style={{ zIndex: 20000 }}>Next image</Tooltip>}>
+                            <button
+                                onClick={handleNext}
+                                style={{
+                                    position: 'absolute',
+                                    top: '50%',
+                                    right: '10px',
+                                    transform: 'translateY(-50%)',
+                                    background: 'rgba(17,24,39,0.72)',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '999px',
+                                    width: '40px',
+                                    height: '40px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                }}
+                            >
+                                <FaChevronRight size={14} />
+                            </button>
+                        </OverlayTrigger>
+                    </>
+                )}
+            </div>
+
+            {images.length > 0 && (
+                <div
+                    style={{
+                        marginTop: '10px',
+                        textAlign: 'center',
+                        fontSize: '13px',
+                        color: '#6b7280',
+                        fontWeight: 600,
+                    }}
+                >
+                    {currentIndex + 1} / {images.length}
+                </div>
+            )}
         </div>
     );
 };

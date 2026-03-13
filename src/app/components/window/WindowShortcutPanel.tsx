@@ -1,19 +1,20 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import WindowUpdateModelPanel from './WindowUpdateModelPanel';
 import { fetchAddOfflineDownloadFileIntoOfflineDownloadList, fetchBackupOfflineDownloadList, fetchCivitaiModelInfoFromCivitaiByModelID, fetchFindVersionNumbersForModel, fetchFindVersionNumbersForOfflineDownloadList, fetchGetOfflineRecordByModelAndVersion, fetchRemoveOfflineDownloadFileIntoOfflineDownloadList } from '../../api/civitaiSQL_api';
 import { useDispatch } from 'react-redux';
-import { FaAngleLeft, FaAngleRight } from "react-icons/fa6";
-import { BsDatabaseFillExclamation } from "react-icons/bs";
+import { FaAngleLeft, FaAngleRight, FaLock, FaLockOpen } from "react-icons/fa6";
+import { BsDatabaseFillExclamation, BsSortNumericUpAlt } from "react-icons/bs";
 import { GoChecklist } from "react-icons/go";
+import { SiFirst } from "react-icons/si";
 import { Form, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { PiListDashesFill } from "react-icons/pi";
 // top of file (with the other icon imports)
-import { MdDeleteSweep, MdFirstPage, MdLastPage } from "react-icons/md";
+import { MdDeleteSweep, MdFirstPage, MdKeyboardDoubleArrowLeft, MdKeyboardDoubleArrowRight, MdLastPage } from "react-icons/md";
 
-import { IoIosRefresh } from "react-icons/io";
+import { IoIosClose, IoIosRefresh } from "react-icons/io";
 import { MdAddCircle, MdLibraryAdd, MdRemove } from "react-icons/md";
 import { retrieveCivitaiFileName, retrieveCivitaiFilesList } from '../../utils/objectUtils';
+import { LuPanelLeftOpen, LuPanelRightOpen } from 'react-icons/lu';
 
 
 interface Version {
@@ -47,6 +48,8 @@ interface PanelProps {
     neighborCount: number;
     setNeighborCount: React.Dispatch<React.SetStateAction<number>>;
     handleAddAroundLocked: (direction: "prev" | "next") => void;
+    onToggleFullInfoPanel: () => void;
+    isFullInfoModelPanelVisible: boolean;
 }
 
 const ui = {
@@ -108,6 +111,120 @@ const ui = {
     pillRed: {
         border: '1px solid rgba(255,80,80,0.45)',
         background: 'rgba(255,80,80,0.12)',
+    }, compactGroup: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '6px 8px',
+        borderRadius: '999px',
+        border: '1px solid rgba(255,255,255,0.12)',
+        background: 'rgba(255,255,255,0.04)',
+    },
+    miniBtn: {
+        width: 24,
+        height: 24,
+        borderRadius: 6,
+        border: '1px solid rgba(255,255,255,0.15)',
+        background: 'rgba(255,255,255,0.06)',
+        color: 'inherit',
+        cursor: 'pointer',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 0,
+        lineHeight: 0,
+    },
+    miniInput: {
+        width: '52px',
+        height: '28px',
+        padding: '2px 6px',
+        fontSize: '12px',
+        textAlign: 'center' as const,
+        borderRadius: '6px',
+        border: '1px solid rgba(255,255,255,0.15)',
+        background: 'rgba(0,0,0,0.22)',
+        color: 'inherit',
+    },
+    lockedBadge: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '4px',
+        padding: '3px 8px',
+        borderRadius: '999px',
+        fontSize: '11px',
+        fontWeight: 700,
+        border: '1px solid rgba(245,158,11,0.45)',
+        background: 'rgba(245,158,11,0.12)',
+        color: 'inherit',
+        whiteSpace: 'nowrap' as const,
+    }, topRow: {
+        display: 'grid',
+        gridTemplateColumns: '1fr auto 1fr',
+        alignItems: 'center',
+        gap: '8px',
+        width: '100%',
+    },
+    topLeft: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        flexWrap: 'wrap' as const,
+        justifyContent: 'flex-start',
+        minWidth: 0,
+    },
+    topCenter: {
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    topRight: {
+        display: 'flex',
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+        gap: '6px',
+    },
+    longCenterBtn: {
+        minWidth: '240px',
+        height: '34px',
+        padding: '0 18px',
+        borderRadius: '10px',
+        border: '1px solid rgba(59,130,246,0.35)',
+        background: 'rgba(59,130,246,0.12)',
+        color: 'inherit',
+        fontWeight: 600,
+        cursor: 'pointer',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '8px',
+    },
+    rowBetween: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '8px',
+        flexWrap: 'wrap' as const,
+        width: '100%',
+    },
+    rowLeft: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        flexWrap: 'wrap' as const,
+    },
+    rowRight: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        flexWrap: 'wrap' as const,
+    },
+    dropdownWrap: {
+        position: 'relative' as const,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '6px',
+        flex: '1 1 auto',
+        minWidth: '280px',
     },
 };
 
@@ -158,7 +275,9 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
     setLockedUrl,
     neighborCount,
     setNeighborCount,
-    handleAddAroundLocked
+    handleAddAroundLocked,
+    onToggleFullInfoPanel,
+    isFullInfoModelPanelVisible
 }) => {
 
     const dispatch = useDispatch();
@@ -171,15 +290,12 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
     const [existingOfflineVersions, setExistingOfflineVersions] = useState<string[]>([]);
 
     const [renderKey, setRenderKey] = useState(0); // State to manage re-renders
-    const [hasUpdated, setHasUpdated] = useState(false);
     const [showCarousel, setShowCarousel] = useState(false);
 
     const isLocked = lockedUrl === url;
 
     // Extract modelId from the URL
     const modelId = url.match(/\/models\/(\d+)/)?.[1] || '';
-
-    const [isUpdatePanelVisible, setIsUpdatePanelVisible] = useState(false);
 
     // Fetch model info when the component is mounted or `renderKey` changes
     useEffect(() => {
@@ -665,20 +781,98 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                 <p style={{ margin: 0 }}>Loading...</p>
             ) : modelData ? (
                 <>
-                    {/* Row 1: Refresh + Dropdown + Add actions */}
-                    <div style={ui.row}>
-                        <IconBtn
-                            title="Refresh model info"
-                            ariaLabel="Refresh model info"
-                            onClick={forceRerender}
-                            disabled={isLoading}
-                        >
-                            <IoIosRefresh />
-                        </IconBtn>
+                    {/* Row 1 */}
+                    <div style={ui.topRow}>
+                        <div style={ui.topLeft}>
+                            {selectedVersion && existingVersions.includes(selectedVersion.id.toString()) && (
+                                <OverlayTrigger
+                                    placement="top"
+                                    overlay={<Tooltip id="tooltip-db">This version already exists in the database.</Tooltip>}
+                                >
+                                    <span style={{ ...ui.pill, ...ui.pillBlue, cursor: 'default' }}>
+                                        <BsDatabaseFillExclamation style={{ fontSize: 16 }} />
+                                    </span>
+                                </OverlayTrigger>
+                            )}
 
-                        {/* Dropdown + hover carousel */}
+                            {selectedVersion && existingOfflineVersions.includes(selectedVersion.id.toString()) && (
+                                <OverlayTrigger
+                                    placement="top"
+                                    overlay={<Tooltip id="tooltip-off">This version already exists in the Offline List. Click to remove it.</Tooltip>}
+                                >
+                                    <span
+                                        style={{ ...ui.pill, ...ui.pillBlue, cursor: 'pointer' }}
+                                        onClick={() => handleRemovefromOfflineList(modelId, selectedVersion?.id?.toString() || '')}
+                                    >
+                                        <PiListDashesFill style={{ fontSize: 16 }} />
+                                    </span>
+                                </OverlayTrigger>
+                            )}
+
+                            {message && message.type === 'error' && (
+                                <OverlayTrigger
+                                    placement="top"
+                                    overlay={<Tooltip id="tooltip-dup">This URL is already in the checkbox list.</Tooltip>}
+                                >
+                                    <span style={{ ...ui.pill, ...ui.pillRed }}>
+                                        <GoChecklist style={{ fontSize: 16 }} />
+                                    </span>
+                                </OverlayTrigger>
+                            )}
+                        </div>
+
+                        <div style={ui.topCenter}>
+                            <OverlayTrigger
+                                placement="top"
+                                overlay={<Tooltip id={`tooltip-fullinfo-${modelId}`}>Open full info panel</Tooltip>}
+                            >
+                                <button
+                                    type="button"
+                                    onClick={onToggleFullInfoPanel}
+                                    style={ui.longCenterBtn}
+                                >
+                                    {isFullInfoModelPanelVisible ? <LuPanelLeftOpen /> : <LuPanelRightOpen />}
+                                    Full Info Panel
+                                </button>
+                            </OverlayTrigger>
+                        </div>
+
+                        <div style={ui.topRight}>
+                            <OverlayTrigger
+                                placement="top"
+                                overlay={<Tooltip id={`tooltip-clear-${modelId}`}>Clear selectedUrl</Tooltip>}
+                            >
+                                <span>
+                                    <IconBtn
+                                        title="Clear selectedUrl"
+                                        ariaLabel="Clear selectedUrl"
+                                        onClick={() => setSelectedUrl("")}
+                                        disabled={isLoading}
+                                    >
+                                        <IoIosClose />
+                                    </IconBtn>
+                                </span>
+                            </OverlayTrigger>
+                        </div>
+                    </div>
+
+                    <div style={ui.divider} />
+
+                    {/* Row 2 */}
+                    <div style={ui.rowBetween}>
+                        <div style={ui.rowLeft}>
+                            <IconBtn
+                                title="Refresh model info"
+                                ariaLabel="Refresh model info"
+                                onClick={forceRerender}
+                                disabled={isLoading}
+                            >
+                                <IoIosRefresh />
+                            </IconBtn>
+                        </div>
+
                         <div
-                            style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                            style={ui.dropdownWrap}
                             onMouseEnter={() => setShowCarousel(true)}
                             onMouseLeave={() => setShowCarousel(false)}
                         >
@@ -688,7 +882,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                                 id="versionDropdown"
                                 onChange={(e) => handleVersionChange(Number(e.target.value))}
                                 value={selectedVersion?.id || ''}
-                                style={ui.select}
+                                style={{ ...ui.select, width: '100%', maxWidth: 'unset' }}
                             >
                                 <option value="">Select Version</option>
                                 {modelData.modelVersions.map((version) => (
@@ -700,8 +894,6 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                                 ))}
                             </select>
 
-
-                            {/* Safer carousel overlay */}
                             {showCarousel && selectedVersion && Array.isArray(selectedVersion.images) && selectedVersion.images.length > 0 && (
                                 <div
                                     style={{
@@ -711,7 +903,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                                         padding: '6px',
                                         borderRadius: '10px',
                                         border: '1px solid rgba(255,255,255,0.15)',
-                                        background: 'rgba(15,15,15,0.92)', // looks good in dark mode
+                                        background: 'rgba(15,15,15,0.92)',
                                         boxShadow: '0 10px 24px rgba(0,0,0,0.35)',
                                         zIndex: 9999,
                                     }}
@@ -721,7 +913,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                             )}
                         </div>
 
-                        <div style={ui.group}>
+                        <div style={ui.rowRight}>
                             <IconBtn
                                 title="Add selected version to list"
                                 ariaLabel="Add selected version"
@@ -739,206 +931,104 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                             >
                                 <MdLibraryAdd />
                             </IconBtn>
-
-                            <IconBtn
-                                title="Clear selectedUrl"
-                                ariaLabel="Clear selectedUrl"
-                                onClick={() => setSelectedUrl("")}
-                                disabled={isLoading}
-                            >
-                                <MdRemove />
-                            </IconBtn>
                         </div>
-
-                        <div style={ui.group}>
-                            <div
-                                style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "8px",
-                                    flexWrap: "wrap",
-                                    marginTop: "10px",
-                                    padding: "10px",
-                                    border: "1px solid rgba(255,255,255,0.12)",
-                                    borderRadius: "8px",
-                                    background: "rgba(255,255,255,0.04)",
-                                }}
-                            >
-                                <span
-                                    style={{
-                                        fontSize: "12px",
-                                        fontWeight: 700,
-                                        padding: "4px 8px",
-                                        borderRadius: "999px",
-                                        border: isLocked
-                                            ? "1px solid rgba(245,158,11,0.45)"
-                                            : "1px solid rgba(255,255,255,0.15)",
-                                        background: isLocked
-                                            ? "rgba(245,158,11,0.12)"
-                                            : "rgba(0,0,0,0.18)",
-                                    }}
-                                >
-                                    {isLocked ? "Locked" : "Not Locked"}
-                                </span>
-
-                                <button
-                                    type="button"
-                                    onClick={() => setLockedUrl(isLocked ? "" : url)}
-                                    style={{
-                                        padding: "6px 10px",
-                                        fontSize: "12px",
-                                        borderRadius: "8px",
-                                        border: "1px solid rgba(255,255,255,0.15)",
-                                        background: isLocked ? "rgba(245,158,11,0.18)" : "rgba(255,255,255,0.06)",
-                                        color: "inherit",
-                                        cursor: "pointer",
-                                    }}
-                                >
-                                    {isLocked ? "Unlock" : "Lock This Model"}
-                                </button>
-
-                                <div style={{ display: "flex", alignItems: "center", gap: "6px", marginLeft: "8px" }}>
-                                    <span style={{ fontSize: "12px" }}>N</span>
-
-                                    <button
-                                        type="button"
-                                        onClick={() => setNeighborCount(prev => Math.max(1, prev - 1))}
-                                        disabled={neighborCount <= 1}
-                                        style={{
-                                            width: 28,
-                                            height: 28,
-                                            borderRadius: 6,
-                                            border: "1px solid rgba(255,255,255,0.15)",
-                                            background: "rgba(255,255,255,0.06)",
-                                            color: "inherit",
-                                            cursor: neighborCount <= 1 ? "not-allowed" : "pointer",
-                                            opacity: neighborCount <= 1 ? 0.6 : 1,
-                                        }}
-                                    >
-                                        -
-                                    </button>
-
-                                    <Form.Control
-                                        size="sm"
-                                        type="number"
-                                        min={1}
-                                        value={neighborCount}
-                                        onChange={(e) => {
-                                            const val = Number(e.target.value);
-                                            setNeighborCount(Number.isFinite(val) && val > 0 ? val : 1);
-                                        }}
-                                        style={{ width: "80px" }}
-                                    />
-
-                                    <button
-                                        type="button"
-                                        onClick={() => setNeighborCount(prev => prev + 1)}
-                                        style={{
-                                            width: 28,
-                                            height: 28,
-                                            borderRadius: 6,
-                                            border: "1px solid rgba(255,255,255,0.15)",
-                                            background: "rgba(255,255,255,0.06)",
-                                            color: "inherit",
-                                            cursor: "pointer",
-                                        }}
-                                    >
-                                        +
-                                    </button>
-                                </div>
-
-                                <button
-                                    type="button"
-                                    onClick={() => handleAddAroundLocked("prev")}
-                                    disabled={!isLocked}
-                                    style={{
-                                        padding: "6px 10px",
-                                        fontSize: "12px",
-                                        borderRadius: "8px",
-                                        border: "1px solid rgba(255,255,255,0.15)",
-                                        background: !isLocked ? "rgba(255,255,255,0.04)" : "rgba(59,130,246,0.18)",
-                                        color: "inherit",
-                                        cursor: !isLocked ? "not-allowed" : "pointer",
-                                        opacity: !isLocked ? 0.6 : 1,
-                                    }}
-                                >
-                                    Add Previous N
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={() => handleAddAroundLocked("next")}
-                                    disabled={!isLocked}
-                                    style={{
-                                        padding: "6px 10px",
-                                        fontSize: "12px",
-                                        borderRadius: "8px",
-                                        border: "1px solid rgba(255,255,255,0.15)",
-                                        background: !isLocked ? "rgba(255,255,255,0.04)" : "rgba(34,197,94,0.18)",
-                                        color: "inherit",
-                                        cursor: !isLocked ? "not-allowed" : "pointer",
-                                        opacity: !isLocked ? 0.6 : 1,
-                                    }}
-                                >
-                                    Add Next N
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Spacer pushes right-side group to next line nicely when narrow */}
-                        <div style={ui.grow} />
                     </div>
 
                     <div style={ui.divider} />
 
-                    {/* Row 2: Status + Offline actions */}
-                    <div style={ui.row}>
-                        {/* Status pills (don’t overflow like big icons) */}
-                        <div style={ui.group}>
-                            {selectedVersion && existingVersions.includes(selectedVersion.id.toString()) && (
+                    {/* Row 3 */}
+                    <div style={ui.rowBetween}>
+                        <div style={ui.rowLeft}>
+                            <div style={ui.compactGroup}>
                                 <OverlayTrigger
                                     placement="top"
-                                    overlay={<Tooltip id="tooltip-db">This version already exists in the database.</Tooltip>}
+                                    overlay={
+                                        <Tooltip id={`tooltip-lock-${modelId}`}>
+                                            {isLocked ? "Unlock this model" : "Lock this model"}
+                                        </Tooltip>
+                                    }
                                 >
-                                    <span style={{ ...ui.pill, ...ui.pillBlue, cursor: 'default' }}>
-                                        <BsDatabaseFillExclamation style={{ fontSize: 16 }} />
-                                        In DB
+                                    <span>
+                                        <IconBtn
+                                            title={isLocked ? "Unlock this model" : "Lock this model"}
+                                            ariaLabel={isLocked ? "Unlock this model" : "Lock this model"}
+                                            onClick={() => setLockedUrl(isLocked ? "" : url)}
+                                            disabled={isLoading}
+                                        >
+                                            <span style={{ color: isLocked ? "#f59e0b" : "inherit" }}>
+                                                {isLocked ? <FaLock /> : <FaLockOpen />}
+                                            </span>
+                                        </IconBtn>
                                     </span>
                                 </OverlayTrigger>
-                            )}
 
-                            {selectedVersion && existingOfflineVersions.includes(selectedVersion.id.toString()) && (
-                                <OverlayTrigger
-                                    placement="top"
-                                    overlay={<Tooltip id="tooltip-off">This version already exists in the Offline List. Click to remove it.</Tooltip>}
+                                <button
+                                    type="button"
+                                    onClick={() => setNeighborCount(prev => Math.max(1, prev - 1))}
+                                    disabled={neighborCount <= 1}
+                                    style={{
+                                        ...ui.miniBtn,
+                                        cursor: neighborCount <= 1 ? "not-allowed" : "pointer",
+                                        opacity: neighborCount <= 1 ? 0.6 : 1,
+                                    }}
                                 >
-                                    <span
-                                        style={{ ...ui.pill, ...ui.pillBlue, cursor: 'pointer' }}
-                                        onClick={() => handleRemovefromOfflineList(modelId, selectedVersion?.id?.toString() || '')}
-                                    >
-                                        <PiListDashesFill style={{ fontSize: 16 }} />
-                                        In Offline
-                                    </span>
-                                </OverlayTrigger>
-                            )}
+                                    -
+                                </button>
 
-                            {message && message.type === 'error' && (
+                                <input
+                                    type="number"
+                                    min={1}
+                                    value={neighborCount}
+                                    onChange={(e) => {
+                                        const val = Number(e.target.value);
+                                        setNeighborCount(Number.isFinite(val) && val > 0 ? val : 1);
+                                    }}
+                                    style={ui.miniInput}
+                                />
+
+                                <button
+                                    type="button"
+                                    onClick={() => setNeighborCount(prev => prev + 1)}
+                                    style={ui.miniBtn}
+                                >
+                                    +
+                                </button>
+
                                 <OverlayTrigger
                                     placement="top"
-                                    overlay={<Tooltip id="tooltip-dup">This URL is already in the checkbox list.</Tooltip>}
+                                    overlay={<Tooltip id={`tooltip-prev-${modelId}`}>Add previous N URLs around locked model</Tooltip>}
                                 >
-                                    <span style={{ ...ui.pill, ...ui.pillRed }}>
-                                        <GoChecklist style={{ fontSize: 16 }} />
-                                        Duplicate URL
+                                    <span>
+                                        <IconBtn
+                                            title="Add previous N"
+                                            ariaLabel="Add previous N"
+                                            onClick={() => handleAddAroundLocked("prev")}
+                                            disabled={!isLocked}
+                                        >
+                                            <MdKeyboardDoubleArrowLeft />
+                                        </IconBtn>
                                     </span>
                                 </OverlayTrigger>
-                            )}
+
+                                <OverlayTrigger
+                                    placement="top"
+                                    overlay={<Tooltip id={`tooltip-next-${modelId}`}>Add next N URLs around locked model</Tooltip>}
+                                >
+                                    <span>
+                                        <IconBtn
+                                            title="Add next N"
+                                            ariaLabel="Add next N"
+                                            onClick={() => handleAddAroundLocked("next")}
+                                            disabled={!isLocked}
+                                        >
+                                            <MdKeyboardDoubleArrowRight />
+                                        </IconBtn>
+                                    </span>
+                                </OverlayTrigger>
+                            </div>
                         </div>
 
-                        <div style={ui.grow} />
-
-                        {/* Offline action buttons grouped, consistent sizing */}
-                        <div style={ui.group}>
+                        <div style={ui.rowRight}>
                             <OverlayTrigger
                                 placement="top"
                                 overlay={<Tooltip id="tooltip-remove-all">Remove all versions of this model from Offline List</Tooltip>}
@@ -968,7 +1058,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                                                 onClick={() => handleReplaceOfflineVersion(getFirstVersionId(), "first")}
                                                 disabled={isLoading}
                                             >
-                                                <MdFirstPage />
+                                                <SiFirst />
                                             </IconBtn>
                                         </span>
                                     </OverlayTrigger>
@@ -984,7 +1074,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                                                 onClick={() => handleReplaceOfflineVersion(getMaxVersionId(), "highest")}
                                                 disabled={isLoading}
                                             >
-                                                <MdLastPage />
+                                                <BsSortNumericUpAlt />
                                             </IconBtn>
                                         </span>
                                     </OverlayTrigger>

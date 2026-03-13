@@ -2790,17 +2790,6 @@ const WindowComponent: React.FC = () => {
                                     marginTop: '20px',
                                 }}
                             >
-                                <ButtonWrap
-                                    buttonConfig={{
-                                        placement: "top",
-                                        tooltip: "Full Info Panel",
-                                        variant: "primary",
-                                        buttonIcon: isFullInfoModelPanelVisible ? <LuPanelLeftOpen /> : <LuPanelRightOpen />,
-                                        disable: counting,
-                                    }}
-                                    handleFunctionCall={toggleFullInfoModelPanel}
-                                />
-
                                 {selectedUrl && (
                                     <WindowShortcutPanel
                                         url={selectedUrl}
@@ -2816,6 +2805,8 @@ const WindowComponent: React.FC = () => {
                                         neighborCount={neighborCount}
                                         setNeighborCount={setNeighborCount}
                                         handleAddAroundLocked={handleAddAroundLocked}
+                                        onToggleFullInfoPanel={toggleFullInfoModelPanel}
+                                        isFullInfoModelPanelVisible={isFullInfoModelPanelVisible}
                                     />
                                 )}
                             </div>
