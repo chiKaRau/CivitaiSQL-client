@@ -9,7 +9,7 @@ import { updateDownloadFilePath, updateDownloadPriority } from "../../store/acti
 import { AiFillFolderOpen, AiOutlineArrowUp, AiOutlineArrowDown } from "react-icons/ai"
 import { BsDownload, BsPencilFill } from 'react-icons/bs';
 import { TbDatabaseSearch, TbDatabasePlus, TbDatabaseMinus } from "react-icons/tb";
-import { PiPlusMinusFill } from "react-icons/pi";
+import { PiLockKeyBold, PiLockKeyOpenBold, PiPlusMinusFill } from "react-icons/pi";
 import { FaLeftLong, FaMagnifyingGlass, FaMagnifyingGlassPlus, FaRankingStar } from "react-icons/fa6";
 import { MdOutlineApps, MdOutlineTipsAndUpdates, MdSkipNext, MdSkipPrevious } from "react-icons/md";
 import { FcGenericSortingAsc, FcGenericSortingDesc } from "react-icons/fc";
@@ -110,7 +110,7 @@ import { BiSolidBarChartSquare, BiSolidHdd } from 'react-icons/bi';
 import WindowFullInfoModelPanel from './WindowFullInfoModelPanel';
 import SetOriginalTabButton from './SetOriginalTabButton';
 import WindowShortcutPanel from './WindowShortcutPanel';
-import { FaEdit } from 'react-icons/fa';
+import { FaEdit, FaTrashAlt } from 'react-icons/fa';
 import { ColDef } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { SelectEditor } from './SelectEditor';
@@ -230,6 +230,47 @@ const WindowComponent: React.FC = () => {
         for (const x of ratingConfigList) m[x.rating] = x.expectedMax;
         return m;
     }, [ratingConfigList]);
+
+    const [isPendingLockEnabled, setIsPendingLockEnabled] = useState<boolean>(false);
+
+    const handleClearUrlGrid = () => {
+        if (urlList.length === 0) return;
+
+        const userConfirmed = window.confirm("Are you sure you want to clear all rows in URLGrid?");
+        if (!userConfirmed) return;
+
+        const urlsToClear = [...urlList];
+
+        setUrlList([]);
+        setSelectedUrl("");
+        setLockedUrl("");
+
+        chrome.storage.local.get("originalTabId", (result) => {
+            if (result.originalTabId) {
+                for (const url of urlsToClear) {
+                    chrome.tabs.sendMessage(result.originalTabId, {
+                        action: "uncheck-url",
+                        url,
+                    });
+                }
+            }
+        });
+    };
+
+    const handleClearStagingQueue = () => {
+        if (stagedItems.length === 0) return;
+
+        const userConfirmed = window.confirm("Are you sure you want to clear all rows in the Staging Queue?");
+        if (!userConfirmed) return;
+
+        setStagedItems([]);
+    };
+
+    const hasPendingPathInInbox = useMemo(() => {
+        return urlList.length > 0 && downloadFilePath.toLowerCase().includes("pending");
+    }, [urlList, downloadFilePath]);
+
+    const isStageBlockedByPendingLock = isPendingLockEnabled && hasPendingPathInInbox;
 
     useEffect(() => {
         (async () => {
@@ -2025,6 +2066,15 @@ const WindowComponent: React.FC = () => {
     const handleStageAllFromInbox = async () => {
         if (!urlList.length) return;
 
+        if (isPendingLockEnabled) {
+            const hasPendingInCurrentPath = downloadFilePath.toLowerCase().includes("pending");
+
+            if (hasPendingInCurrentPath) {
+                alert("Pending Lock is enabled. You cannot stage rows while the current download path contains 'Pending'.");
+                return;
+            }
+        }
+
         const now = Date.now();
         const action = offlineMode ? "offline" : "bundle";
 
@@ -2870,6 +2920,58 @@ const WindowComponent: React.FC = () => {
 
                     {/* URLGrid (Scrolls independently of the sticky header/buttons) */}
                     <div>
+                        <div
+                            style={{
+                                display: "flex",
+                                justifyContent: "flex-end",
+                                alignItems: "center",
+                                gap: "6px",
+                                marginBottom: "4px",
+                            }}
+                        >
+                            <OverlayTrigger
+                                placement="top"
+                                overlay={
+                                    <Tooltip id="tooltip">
+                                        {isPendingLockEnabled ? "Pending Lock enabled" : "Pending Lock disabled"}
+                                    </Tooltip>
+                                }
+                            >
+                                <Button
+                                    variant={isPendingLockEnabled ? "warning" : "outline-secondary"}
+                                    size="sm"
+                                    onClick={() => setIsPendingLockEnabled(prev => !prev)}
+                                    style={{
+                                        padding: "4px 8px",
+                                        lineHeight: 1,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                    }}
+                                >
+                                    {isPendingLockEnabled ? <PiLockKeyBold /> : <PiLockKeyOpenBold />}
+                                </Button>
+                            </OverlayTrigger>
+
+                            <OverlayTrigger
+                                placement="top"
+                                overlay={<Tooltip id="tooltip">Clear all rows in URLGrid</Tooltip>}
+                            >
+                                <Button
+                                    variant="outline-danger"
+                                    size="sm"
+                                    onClick={handleClearUrlGrid}
+                                    disabled={urlList.length === 0}
+                                    style={{
+                                        padding: "4px 8px",
+                                        lineHeight: 1,
+                                    }}
+                                >
+                                    <FaTrashAlt />
+                                </Button>
+                            </OverlayTrigger>
+                        </div>
+
                         <URLGrid
                             urlList={urlList}
                             setUrlList={setUrlList}
@@ -2880,6 +2982,7 @@ const WindowComponent: React.FC = () => {
                             modelPrimaryVersionIdMap={modelPrimaryVersionIdMap}
                             urlBadgeMap={urlBadgeMap}
                         />
+
                         <OverlayTrigger
                             placement={"top"}
                             overlay={<Tooltip id="tooltip">Stage current inbox URLs into the Staging Queue (snapshot path/category/etc.)</Tooltip>}
@@ -2887,16 +2990,48 @@ const WindowComponent: React.FC = () => {
                             <Button
                                 variant={"success"}
                                 onClick={handleStageAllFromInbox}
-                                disabled={isLoading || urlList.length === 0 || !checkboxMode}
+                                disabled={isLoading || urlList.length === 0 || !checkboxMode || isStageBlockedByPendingLock}
                                 className="btn btn-success btn-lg w-100"
                             >
                                 {`Stage (${offlineMode ? "offline" : "online"})`}
                             </Button>
                         </OverlayTrigger>
 
+                        {isStageBlockedByPendingLock && (
+                            <div style={{ color: "red", fontSize: "12px", marginTop: "4px" }}>
+                                Pending Lock is enabled. Staging is blocked because current download path contains "Pending".
+                            </div>
+                        )}
 
                         <div style={{ marginTop: 10 }}>
-                            <h5 style={{ margin: "8px 0" }}>Staging Queue</h5>
+                            <div
+                                style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    marginBottom: "4px",
+                                }}
+                            >
+                                <h5 style={{ margin: 0 }}>Staging Queue</h5>
+
+                                <OverlayTrigger
+                                    placement="top"
+                                    overlay={<Tooltip id="tooltip">Clear all rows in Staging Queue</Tooltip>}
+                                >
+                                    <Button
+                                        variant="outline-danger"
+                                        size="sm"
+                                        onClick={handleClearStagingQueue}
+                                        disabled={stagedItems.length === 0}
+                                        style={{
+                                            padding: "4px 8px",
+                                            lineHeight: 1,
+                                        }}
+                                    >
+                                        <FaTrashAlt />
+                                    </Button>
+                                </OverlayTrigger>
+                            </div>
 
                             <div className="ag-theme-alpine" style={{ height: 220, width: "100%" }}>
                                 <AgGridReact
