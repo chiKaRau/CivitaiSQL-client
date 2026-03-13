@@ -200,7 +200,7 @@ const WindowComponent: React.FC = () => {
     type RatingCfg = { rating: string; expectedMax: number };
 
     const [lockedUrl, setLockedUrl] = useState<string>("");
-    const [neighborCount, setNeighborCount] = useState<number>(1);
+    const [neighborCount, setNeighborCount] = useState<number>(5);
 
     // Optional fallback so UI doesn't go blank if API fails.
     // If you truly want zero hardcode, set this to [] and handle empty UI states.
@@ -2864,7 +2864,9 @@ const WindowComponent: React.FC = () => {
                         </div>
                     </div>
 
-                    <FolderDropdown />
+                    <div style={{ "margin": "0% 5% 5% 5%" }}>
+                        <FolderDropdown />
+                    </div>
 
                     {/* URLGrid (Scrolls independently of the sticky header/buttons) */}
                     <div>

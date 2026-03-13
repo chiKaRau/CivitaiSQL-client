@@ -15,6 +15,7 @@ import { IoIosClose, IoIosRefresh } from "react-icons/io";
 import { MdAddCircle, MdLibraryAdd, MdRemove } from "react-icons/md";
 import { retrieveCivitaiFileName, retrieveCivitaiFilesList } from '../../utils/objectUtils';
 import { LuPanelLeftOpen, LuPanelRightOpen } from 'react-icons/lu';
+import { RiMenuAddLine } from 'react-icons/ri';
 
 
 interface Version {
@@ -962,19 +963,6 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                                     </span>
                                 </OverlayTrigger>
 
-                                <button
-                                    type="button"
-                                    onClick={() => setNeighborCount(prev => Math.max(1, prev - 1))}
-                                    disabled={neighborCount <= 1}
-                                    style={{
-                                        ...ui.miniBtn,
-                                        cursor: neighborCount <= 1 ? "not-allowed" : "pointer",
-                                        opacity: neighborCount <= 1 ? 0.6 : 1,
-                                    }}
-                                >
-                                    -
-                                </button>
-
                                 <input
                                     type="number"
                                     min={1}
@@ -985,30 +973,6 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                                     }}
                                     style={ui.miniInput}
                                 />
-
-                                <button
-                                    type="button"
-                                    onClick={() => setNeighborCount(prev => prev + 1)}
-                                    style={ui.miniBtn}
-                                >
-                                    +
-                                </button>
-
-                                <OverlayTrigger
-                                    placement="top"
-                                    overlay={<Tooltip id={`tooltip-prev-${modelId}`}>Add previous N URLs around locked model</Tooltip>}
-                                >
-                                    <span>
-                                        <IconBtn
-                                            title="Add previous N"
-                                            ariaLabel="Add previous N"
-                                            onClick={() => handleAddAroundLocked("prev")}
-                                            disabled={!isLocked}
-                                        >
-                                            <MdKeyboardDoubleArrowLeft />
-                                        </IconBtn>
-                                    </span>
-                                </OverlayTrigger>
 
                                 <OverlayTrigger
                                     placement="top"
@@ -1021,7 +985,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                                             onClick={() => handleAddAroundLocked("next")}
                                             disabled={!isLocked}
                                         >
-                                            <MdKeyboardDoubleArrowRight />
+                                            <RiMenuAddLine />
                                         </IconBtn>
                                     </span>
                                 </OverlayTrigger>
