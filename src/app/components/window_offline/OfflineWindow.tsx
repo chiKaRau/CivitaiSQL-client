@@ -140,6 +140,7 @@ const ALL_PATCH_FIELDS = [
     { key: "hold", label: "Hold" },
     { key: "downloadPriority", label: "Download Priority" },
     { key: "isError", label: "Is Error" },
+    { key: "refreshRecord", label: "Refresh Record" },
 ];
 
 const AI_BATCH_SIZE = 10;
@@ -375,25 +376,20 @@ const OfflineWindow: React.FC = () => {
         { phase: "idle" | "downloading" | "inserting" | "success" | "fail"; text: string; msg?: string; running?: boolean }
     >);
 
-    const getExcludedPrefixes = useCallback(() => {
-        const all = categoriesPrefixsList.map(p => p.downloadFilePath);
-        const selected = new Set(selectedPrefixes);
-        return all.filter(p => !selected.has(p));
-    }, [categoriesPrefixsList, selectedPrefixes]);
-
     const handleBulkPatchSelected = async () => {
-        // 1) Targets = selected models (by versionID)
-        const modelObjects = visibleEntries
-            .filter((entry) => selectedIds.has(entry.civitaiVersionID))
-            .map((entry) => ({
-                civitaiModelID: entry.civitaiModelID,
-                civitaiVersionID: entry.civitaiVersionID,
-            }));
+        const selectedEntries = visibleEntries.filter((entry) =>
+            selectedIds.has(entry.civitaiVersionID)
+        );
+
+        const modelObjects = selectedEntries.map((entry) => ({
+            civitaiModelID: entry.civitaiModelID,
+            civitaiVersionID: entry.civitaiVersionID,
+        }));
 
         if (!modelObjects.length) return;
 
-        // 2) Patch = only fields in second block
         const patch = {} as Parameters<typeof fetchBulkPatchOfflineDownloadList>[1];
+        const shouldRefresh = selectedPatchFields.has("refreshRecord");
 
         if (selectedPatchFields.has("hold")) {
             patch.hold = bulkHold;
@@ -414,33 +410,43 @@ const OfflineWindow: React.FC = () => {
         }
 
         setIsPatching(true);
+        setUiMode("modifying");
+
         try {
-            await fetchBulkPatchOfflineDownloadList(modelObjects, patch, dispatch);
+            const hasPatchFields =
+                selectedPatchFields.has("hold") ||
+                selectedPatchFields.has("downloadPriority") ||
+                selectedPatchFields.has("downloadFilePath") ||
+                selectedPatchFields.has("isError");
 
-            // ---------------------------
-            // ✅ Reset UI to defaults
-            // ---------------------------
+            if (hasPatchFields) {
+                await fetchBulkPatchOfflineDownloadList(modelObjects, patch, dispatch);
+            }
 
-            // 1) Reset bulk controls
-            setBulkHold(true);                 // change to false if your "default" is false
+            if (shouldRefresh) {
+                for (let i = 0; i < selectedEntries.length; i++) {
+                    const entry = selectedEntries[i];
+
+                    if (i > 0) await sleep(1000);
+
+                    await fetchRefreshOfflineDownloadRecord(
+                        {
+                            civitaiModelID: entry.civitaiModelID,
+                            civitaiVersionID: entry.civitaiVersionID,
+                        },
+                        dispatch
+                    );
+                }
+            }
+
+            setBulkHold(true);
             setBulkDownloadPriority(5);
             setBulkIsError(true);
-
-            // reset modify_downloadFilePath to default
             dispatch(updateDownloadFilePath("/@scan@/ACG/Pending/"));
-
-            // 2) Clear the patch-field selection blocks
             setSelectedPatchFields(new Set());
-
-            // 3) Clear selected models
             setSelectedIds(new Set());
 
-            // 4) Refresh list
             await handleRefreshList();
-
-            // Optional UX:
-            // clear selected models after patch
-            // setSelectedIds(new Set());   <-- depends on how you store selectedIds
         } catch (err: any) {
             console.error("Bulk patch failed:", err?.message || err);
             dispatch(setError({
@@ -3807,7 +3813,48 @@ const OfflineWindow: React.FC = () => {
                                             </div>
                                         )}
 
+                                        {selectedPatchFields.has("refreshRecord") && (
+                                            <div
+                                                style={{
+                                                    border: `1px solid ${isDarkMode ? "#444" : "#ddd"}`,
+                                                    borderRadius: 6,
+                                                    padding: 8,
+                                                    marginBottom: 8,
+                                                    backgroundColor: isDarkMode ? "#2a2a2a" : "#fafafa",
+                                                    color: isDarkMode ? "#fff" : "#000",
+                                                }}
+                                            >
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                                                    <div style={{ fontWeight: 600 }}>Refresh Record</div>
 
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removePatchField("refreshRecord")}
+                                                        style={{
+                                                            cursor: "pointer",
+                                                            width: 28,
+                                                            height: 28,
+                                                            borderRadius: 8,
+                                                            border: `1px solid ${isDarkMode ? "#555" : "#ccc"}`,
+                                                            backgroundColor: isDarkMode ? "#333" : "#f6f6f6",
+                                                            color: isDarkMode ? "#fff" : "#111",
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            justifyContent: "center",
+                                                            padding: 0,
+                                                        }}
+                                                        aria-label="Remove refreshRecord"
+                                                        title="Remove"
+                                                    >
+                                                        <AiOutlineClose />
+                                                    </button>
+                                                </div>
+
+                                                <div style={{ fontSize: 12, opacity: isDarkMode ? 0.8 : 0.75, marginTop: 4 }}>
+                                                    Re-fetch selected records from source.
+                                                </div>
+                                            </div>
+                                        )}
 
                                         <button
                                             onClick={handleBulkPatchSelected}
