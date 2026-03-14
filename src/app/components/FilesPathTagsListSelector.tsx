@@ -63,6 +63,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
             setError(null);
 
             try {
+                // ✅ always refresh local recent paths
                 const localList = await getRecentDownloadFilePaths();
                 if (!cancelled) {
                     setRecentLocalTags(localList);
@@ -73,20 +74,31 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                 }
             }
 
+            // ✅ if there is no selectedPrefix, do not fetch prefix-based tables
+            // but do NOT early-return before the local refresh above
             if (!selectedPrefix) {
                 setTopTags([]);
                 setRecentAddedTags([]);
                 setRecentUpdatedTags([]);
-                if (isHandleRefresh) setIsHandleRefresh(false);
+
+                if (!cancelled && isHandleRefresh) {
+                    setIsHandleRefresh(false);
+                }
                 return;
             }
 
             const cached = cacheRef.current[selectedPrefix];
+
             if (cached && !isHandleRefresh) {
-                setTopTags(cached.top);
-                setRecentAddedTags(cached.recent);
-                setRecentUpdatedTags(cached.updated);
-                if (isHandleRefresh) setIsHandleRefresh(false);
+                if (!cancelled) {
+                    setTopTags(cached.top);
+                    setRecentAddedTags(cached.recent);
+                    setRecentUpdatedTags(cached.updated);
+                }
+
+                if (!cancelled && isHandleRefresh) {
+                    setIsHandleRefresh(false);
+                }
                 return;
             }
 

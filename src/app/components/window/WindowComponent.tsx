@@ -2133,7 +2133,10 @@ const WindowComponent: React.FC = () => {
         setDownloadPriority(5);
         dispatch(updateDownloadPriority(5));
 
-        setIsHandleRefresh(true);
+        setIsHandleRefresh(false);
+        setTimeout(() => {
+            setIsHandleRefresh(true);
+        }, 50);
     };
 
     const sendStagedToTab = (tabId: number, list: StagedItem[]) => {
