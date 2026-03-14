@@ -854,6 +854,7 @@ export const fetchOfflineDownloadListPage = async (
     status?: 'pending' | 'non-pending' | 'both',
     includeHold?: boolean,
     includeEarlyAccess?: boolean,
+    sortBy?: 'priority' | 'id',
     sortDir?: 'asc' | 'desc',
     includeErrors: boolean = true,
     aiSuggestedOnly: boolean = false
@@ -868,7 +869,7 @@ export const fetchOfflineDownloadListPage = async (
         if (Array.isArray(prefixes)) {
             prefixes.forEach(p => params.append('prefix', p));
         }
-        
+
         if (Array.isArray(excludedPrefixes)) {
             excludedPrefixes.forEach(p => params.append('excludePrefix', p));
         }
@@ -885,6 +886,7 @@ export const fetchOfflineDownloadListPage = async (
 
         params.set('includeHold', String(includeHold));
         params.set('includeEarlyAccess', String(includeEarlyAccess));
+        params.set('sortBy', String(sortBy));
         params.set('sortDir', String(sortDir));
         params.set('includeErrors', String(includeErrors));
         params.set('aiSuggestedOnly', String(aiSuggestedOnly));

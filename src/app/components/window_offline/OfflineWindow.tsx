@@ -188,7 +188,8 @@ const OfflineWindow: React.FC = () => {
         showHoldEntries: false,
         showEarlyAccess: true,
         showErrorEntries: true,
-        sortDir: "desc",
+        sortBy: "priority" as "priority" | "id",
+        sortDir: "desc" as "asc" | "desc",
         aiSuggestedOnly: false,
         selectedPrefixes: [] as string[],
         excludedPrefixes: [] as string[],
@@ -262,6 +263,8 @@ const OfflineWindow: React.FC = () => {
 
     // NEW: sort direction for date (server-side)
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc'); // if you hate the type, you can drop it
+    const [sortBy, setSortBy] = useState<'priority' | 'id'>('priority');
+    const [idSortDir, setIdSortDir] = useState<'asc' | 'desc'>('desc');
 
     const [categoriesPrefixsList, setCategoriesPrefixsList] = useState<{
         id: number;
@@ -584,6 +587,7 @@ const OfflineWindow: React.FC = () => {
                     "pending",
                     true,
                     true,
+                    'priority',
                     "desc",
                     true,
                     true
@@ -1141,7 +1145,6 @@ const OfflineWindow: React.FC = () => {
     };
 
     const resetDraftFilters = () => {
-        // Draft-only resets (do NOT touch appliedQuery)
         setFilterText("");
         setFilterCondition("contains");
 
@@ -1152,13 +1155,14 @@ const OfflineWindow: React.FC = () => {
         setShowErrorEntries(true);
         setShowEarlyAccess(true);
 
+        setSortBy("priority");
         setSortDir("desc");
+        setIdSortDir("desc");
         setAiSuggestedOnly(false);
 
         setSelectedSuggestedPathByVid({});
         setGoToPageInput("");
 
-        // Reset prefixes to your initial default selection
         const defaults = defaultPrefixesRef.current;
         if (defaults && defaults.length) {
             setSelectedPrefixes(new Set(defaults));
@@ -1166,7 +1170,6 @@ const OfflineWindow: React.FC = () => {
     };
 
     type ModifySnapshot = {
-        // what the UI shows (draft)
         draft: {
             filterText: string;
             filterCondition: typeof filterCondition;
@@ -1175,12 +1178,13 @@ const OfflineWindow: React.FC = () => {
             showHoldEntries: boolean;
             showEarlyAccess: boolean;
             showErrorEntries: boolean;
+            sortBy: typeof sortBy;
             sortDir: typeof sortDir;
+            idSortDir: typeof idSortDir;
             aiSuggestedOnly: boolean;
             selectedPrefixes: string[];
             goToPageInput: string;
         };
-        // what the backend fetch uses
         appliedQuery: typeof appliedQuery;
         currentPage: number;
     };
@@ -1207,7 +1211,9 @@ const OfflineWindow: React.FC = () => {
                     showHoldEntries,
                     showEarlyAccess,
                     showErrorEntries,
+                    sortBy,
                     sortDir,
+                    idSortDir,
                     aiSuggestedOnly,
                     selectedPrefixes: Array.from(selectedPrefixes),
                     goToPageInput,
@@ -1256,7 +1262,9 @@ const OfflineWindow: React.FC = () => {
             setShowHoldEntries(snap.draft.showHoldEntries);
             setShowEarlyAccess(snap.draft.showEarlyAccess);
             setShowErrorEntries(snap.draft.showErrorEntries);
+            setSortBy(snap.draft.sortBy);
             setSortDir(snap.draft.sortDir);
+            setIdSortDir(snap.draft.idSortDir);
 
             setAiSuggestedOnly(snap.draft.aiSuggestedOnly);
             setGoToPageInput(snap.draft.goToPageInput);
@@ -1355,6 +1363,7 @@ const OfflineWindow: React.FC = () => {
                     status,
                     appliedQuery.showHoldEntries,
                     appliedQuery.showEarlyAccess,
+                    appliedQuery.sortBy as any,
                     appliedQuery.sortDir as any,
                     appliedQuery.showErrorEntries,
                     appliedQuery.aiSuggestedOnly
@@ -2167,6 +2176,29 @@ const OfflineWindow: React.FC = () => {
         }
     };
 
+    const getSortToggleStyle = (active: boolean): React.CSSProperties => ({
+        display: 'flex',
+        alignItems: 'center',
+        gap: 4,
+        fontWeight: 600,
+        borderWidth: active ? 2 : 1,
+        borderStyle: 'solid',
+        borderColor: active
+            ? (isDarkMode ? '#66b2ff' : '#0d6efd')
+            : (isDarkMode ? '#777' : '#ccc'),
+        backgroundColor: active
+            ? (isDarkMode ? '#0d3b66' : '#e7f1ff')
+            : (isDarkMode ? '#2b2b2b' : '#fff'),
+        color: active
+            ? (isDarkMode ? '#fff' : '#0b3d91')
+            : (isDarkMode ? '#fff' : '#000'),
+        boxShadow: active
+            ? (isDarkMode
+                ? '0 0 0 1px rgba(102,178,255,0.35)'
+                : '0 0 0 1px rgba(13,110,253,0.2)')
+            : 'none',
+    });
+
     const fetchPageWithApplied = React.useCallback(
         async (page1Based?: number) => {
             const page0 = Math.max(0, (page1Based ?? currentPage) - 1);
@@ -2187,6 +2219,7 @@ const OfflineWindow: React.FC = () => {
                 status,
                 appliedQuery.showHoldEntries,
                 appliedQuery.showEarlyAccess,
+                appliedQuery.sortBy as any,
                 appliedQuery.sortDir as any,
                 appliedQuery.showErrorEntries,
                 appliedQuery.aiSuggestedOnly
@@ -3216,7 +3249,8 @@ const OfflineWindow: React.FC = () => {
                                             showHoldEntries,
                                             showEarlyAccess,
                                             showErrorEntries,
-                                            sortDir,
+                                            sortBy,
+                                            sortDir: sortBy === "priority" ? sortDir : idSortDir,
                                             aiSuggestedOnly,
                                             selectedPrefixes: selected,
                                             excludedPrefixes: excluded,
@@ -3314,23 +3348,50 @@ const OfflineWindow: React.FC = () => {
                                     onChange={e => setShowEarlyAccess(e.target.checked)}
                                 />
 
-                                {/* NEW: Date sort toggle */}
                                 <button
                                     type="button"
-                                    className="btn btn-sm btn-outline-secondary"
+                                    className="btn btn-sm"
                                     disabled={!isPagedMode || isLoading}
-                                    onClick={() => setSortDir(prev => (prev === 'desc' ? 'asc' : 'desc'))}
-                                    style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                                    onClick={() => {
+                                        setSortBy("priority");
+                                        setSortDir(prev => (prev === 'desc' ? 'asc' : 'desc'));
+                                    }}
+                                    style={getSortToggleStyle(sortBy === "priority")}
+                                    title="Sort by download priority"
                                 >
                                     {sortDir === 'desc' ? (
                                         <>
                                             <FcGenericSortingDesc />
-                                            <span>Date: New to Old</span>
+                                            <span>Priority: High to Low</span>
                                         </>
                                     ) : (
                                         <>
                                             <FcGenericSortingAsc />
-                                            <span>Date: Old to New</span>
+                                            <span>Priority: Low to High</span>
+                                        </>
+                                    )}
+                                </button>
+
+                                <button
+                                    type="button"
+                                    className="btn btn-sm"
+                                    disabled={!isPagedMode || isLoading}
+                                    onClick={() => {
+                                        setSortBy("id");
+                                        setIdSortDir(prev => (prev === 'desc' ? 'asc' : 'desc'));
+                                    }}
+                                    style={getSortToggleStyle(sortBy === "id")}
+                                    title="Sort by ID"
+                                >
+                                    {idSortDir === 'desc' ? (
+                                        <>
+                                            <FcGenericSortingDesc />
+                                            <span>ID: New to Old</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <FcGenericSortingAsc />
+                                            <span>ID: Old to New</span>
                                         </>
                                     )}
                                 </button>
