@@ -24,15 +24,16 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText }) => {
     const [selectedFolder, setSelectedFolder] = useState<string>('');
 
     const [threshold, setThreshold] = useState<number>(0.35);
-
+    const [activeFilterSource, setActiveFilterSource] = useState<'prop' | 'clipboard'>('prop');
 
     // Always keep our default folder constant in one place
     const DEFAULT_FOLDER = '/@scan@/ACG/Pending/';
 
     // Decide whether to use prop-based filter or clipboard-based
-    const effectiveFilterText = filterText?.trim().length
-        ? filterText
-        : clipboardText;
+    const effectiveFilterText =
+        activeFilterSource === 'clipboard'
+            ? clipboardText
+            : (filterText?.trim().length ? filterText : clipboardText);
 
     useEffect(() => {
         handleGetFoldersList();
@@ -61,12 +62,18 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText }) => {
         try {
             const text = await navigator.clipboard.readText();
             setClipboardText(text);
-            // Reset the current selection when re-reading the clipboard
             setSelectedFolder('');
+            setActiveFilterSource('clipboard');
         } catch (error) {
             console.error('Error reading clipboard:', error);
         }
     };
+
+    useEffect(() => {
+        if (filterText?.trim().length) {
+            setActiveFilterSource('prop');
+        }
+    }, [filterText]);
 
     // Whenever folders list or the filter text changes, we re-filter
     useEffect(() => {
