@@ -214,9 +214,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const { button, originalText } = pending;
 
       if (status === "success") {
-        displayTemporaryMessage(button, "Success", originalText);
+        displayTemporaryMessage(button, "Success", originalText, message.rating || "N/A");
       } else {
-        console.error("addCreator failed:", reason);
         displayTemporaryMessage(button, "Failed", originalText);
       }
 
@@ -1313,8 +1312,13 @@ function sendActionToReact(message: any): Promise<any> {
   });
 }
 
-function displayTemporaryMessage(button: HTMLButtonElement, message: string, originalText: string) {
-  button.textContent = message;
+function displayTemporaryMessage(
+  button: HTMLButtonElement,
+  message: string,
+  originalText: string,
+  extraText?: string
+) {
+  button.textContent = extraText ? `${message} : ${extraText}` : message;
 
   if (message === "Success") {
     button.classList.add('success');
