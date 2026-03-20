@@ -43,16 +43,20 @@ const DownloadPathEditor: React.FC<DownloadPathEditorProps> = ({
     const dispatch = useDispatch();
 
     const normalizeToScanRoot = (p: string) => {
-        const s = (p ?? "").trim();
+        let s = (p ?? "").trim();
         if (!s) return "";
 
-        if (!s.startsWith("/")) {
-            return ROOT_PREFIX + s.replace(/^\/+/, "");
-        }
-        if (!s.startsWith(ROOT_PREFIX)) {
-            return ROOT_PREFIX + s.replace(/^\/+/, "");
-        }
-        return s;
+        s = s.replace(/\\/g, "/");
+        s = s.replace(/\/+/g, "/");
+        s = s.replace(/^\/+/, "");
+
+        // strip one or more leading @scan@/
+        s = s.replace(/^(@scan@\/)+/i, "");
+
+        // if something still starts with /@scan@/ after rebuild, remove it again
+        s = s.replace(/^\/?@scan@\//i, "");
+
+        return ROOT_PREFIX + s;
     };
 
     const trimTrailingSlashes = (s: string) => (s ?? "").trim().replace(/\/+$/g, "");

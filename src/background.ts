@@ -1,4 +1,5 @@
 import JSZip from 'jszip';
+import { fetchUpdateCreatorUrlList } from './app/api/civitaiSQL_api';
 console.log("Calling background.ts")
 
 function polling() {
@@ -337,4 +338,89 @@ function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array): string {
 }
 
 
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action !== "addCreator") {
+    return false;
+  }
 
+  const creator = message.creator;
+  const requestId = message.requestId;
+
+  if (!creator) {
+    if (sender.tab?.id) {
+      chrome.tabs.sendMessage(sender.tab.id, {
+        action: "addCreatorResult",
+        requestId,
+        status: "failure",
+        reason: "missing creator"
+      });
+    }
+    return false;
+  }
+
+  const creatorUrl = `https://civitai.com/user/${creator}/models`;
+
+  (async () => {
+    try {
+      const response = await fetch("http://localhost:3000/api/update_creator_url_list", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          creatorUrl,
+          status: "new",
+          lastChecked: false,
+          rating: "N/A",
+        }),
+      });
+
+      if (!response.ok) {
+        if (sender.tab?.id) {
+          chrome.tabs.sendMessage(sender.tab.id, {
+            action: "addCreatorResult",
+            requestId,
+            status: "failure",
+            reason: `HTTP ${response.status}`
+          });
+        }
+        return;
+      }
+
+      const data = await response.json();
+
+      if (!data?.success) {
+        if (sender.tab?.id) {
+          chrome.tabs.sendMessage(sender.tab.id, {
+            action: "addCreatorResult",
+            requestId,
+            status: "failure",
+            reason: "API returned success=false"
+          });
+        }
+        return;
+      }
+
+      if (sender.tab?.id) {
+        chrome.tabs.sendMessage(sender.tab.id, {
+          action: "addCreatorResult",
+          requestId,
+          status: "success"
+        });
+      }
+    } catch (error: any) {
+      console.error("[background] addCreator failed:", error);
+
+      if (sender.tab?.id) {
+        chrome.tabs.sendMessage(sender.tab.id, {
+          action: "addCreatorResult",
+          requestId,
+          status: "failure",
+          reason: error?.message || "Unknown error"
+        });
+      }
+    }
+  })();
+
+  return false;
+});

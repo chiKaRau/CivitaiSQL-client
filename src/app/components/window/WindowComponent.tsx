@@ -424,34 +424,40 @@ const WindowComponent: React.FC = () => {
 
                 //setLastUpdateProcessedIndex(message.lastUpdateProcessedIndex)
 
-            } else if (message.action === "addCreator") {
+            }
+            /*
+            else if (message.action === "addCreator") {
                 console.log("[listener] addCreator message received:", message.creator);
 
                 const creator = message.creator;
                 if (!creator) {
-                    console.log("[listener] missing creator, sending failure");
                     sendResponse({ status: "failure", reason: "missing creator" });
-                    return true; // ok, we responded sync
+                    return true;
                 }
 
                 const creatorUrl = `https://civitai.com/user/${creator}/models`;
-                console.log("[listener] calling fetchUpdateCreatorUrlList with:", creatorUrl);
 
                 fetchUpdateCreatorUrlList(creatorUrl, "new", false, "N/A", dispatch)
                     .then((result) => {
                         console.log("[listener] addCreator result from fetch:", result);
-                        const payload = result || { status: "failure" };
-                        console.log("[listener] sending response payload:", payload);
-                        sendResponse(payload);
+
+                        // Treat "no throw" as success
+                        sendResponse({
+                            status: "success",
+                            data: result
+                        });
                     })
                     .catch((err) => {
                         console.error("[listener] addCreator error in fetch:", err);
-                        sendResponse({ status: "failure" });
+                        sendResponse({
+                            status: "failure",
+                            reason: err?.message || "Unknown error"
+                        });
                     });
 
-                console.log("[listener] returning true (async)");
                 return true;
             }
+                */
         };
         chrome.runtime.onMessage.addListener(messageListener);
         return () => {

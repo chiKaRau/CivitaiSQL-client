@@ -203,6 +203,28 @@ function clearLockedBadge(): void {
   cards.forEach((card) => removeLockedBadge(card));
 }
 
+const pendingCreatorButtonMap = new Map<string, { button: HTMLButtonElement; originalText: string }>();
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "addCreatorResult") {
+    const { requestId, status, reason } = message;
+    const pending = pendingCreatorButtonMap.get(requestId);
+
+    if (pending) {
+      const { button, originalText } = pending;
+
+      if (status === "success") {
+        displayTemporaryMessage(button, "Success", originalText);
+      } else {
+        console.error("addCreator failed:", reason);
+        displayTemporaryMessage(button, "Failed", originalText);
+      }
+
+      pendingCreatorButtonMap.delete(requestId);
+    }
+  }
+});
+
 chrome.runtime.onMessage.addListener(
   async (
     message: {
@@ -1325,21 +1347,17 @@ function addCreatorButton(card: HTMLElement) {
     const originalText = `Add ${creatorName} to list`;
     button.textContent = originalText;
 
-    button.addEventListener('click', async () => {
-      button.textContent = "Processing...";
-      try {
-        const response = await sendActionToReact({ action: "addCreator", creator: creatorName });
-        console.log("response");
-        console.log(response);
+    button.addEventListener('click', () => {
+      const requestId = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
-        if (response && response.status === "success") {
-          displayTemporaryMessage(button, "Success", originalText);
-        } else {
-          displayTemporaryMessage(button, "Failed", originalText);
-        }
-      } catch (error) {
-        displayTemporaryMessage(button, "Failed", originalText);
-      }
+      button.textContent = "Processing...";
+      pendingCreatorButtonMap.set(requestId, { button, originalText });
+
+      chrome.runtime.sendMessage({
+        action: "addCreator",
+        creator: creatorName,
+        requestId
+      });
     });
 
     const footer = card.querySelector('.AspectRatioImageCard_footer__FOU7a');

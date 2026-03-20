@@ -14,6 +14,7 @@ import FileNameToggle from '../FileNameToggle';
 import TagList from '../TagList';
 import DownloadPathEditor from '../DownloadPathEditor';
 import { OfflineDownloadEntry } from '../OfflineWindow.types';
+import SmartImage from '../SmartImage';
 
 type DownloadMethod = 'server' | 'browser';
 
@@ -41,6 +42,7 @@ interface BigCardModeProps {
     handlePriorityChange: (entry: OfflineDownloadEntry, nextPriority: number) => void;
     handleRemoveOne: (entry: OfflineDownloadEntry) => void;
     handleCreateAddDummyFromError: (entry: OfflineDownloadEntry) => void;
+    handleOpenDownloadPath: (downloadPath: string) => void | Promise<void>;
     dummyCreateStatusByVid: Record<
         string,
         { phase: 'idle' | 'downloading' | 'inserting' | 'success' | 'fail'; text: string; msg?: string; running?: boolean }
@@ -106,6 +108,7 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
     buildSrcSet,
     mergeSuggestedPathsForEntry,
     normalizePathKey,
+    handleOpenDownloadPath
 }) => {
     const [errorDownloadMethod, setErrorDownloadMethod] = React.useState<'server' | 'browser'>('browser');
 
@@ -152,6 +155,11 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
 
                     const isSelected = selectedIds.has(entry.civitaiVersionID);
                     const showEA = isEntryEarlyAccess(entry);
+
+                    const canOpenPath =
+                        !!entry.downloadFilePath &&
+                        entry.downloadFilePath.trim() !== '' &&
+                        entry.downloadFilePath !== 'N/A';
 
                     return (
                         <Card
@@ -357,17 +365,16 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                             const baseW = 380;
                                             return (
                                                 <Carousel.Item key={imgIndex}>
-                                                    <img
-                                                        className="d-block w-100"
+                                                    <SmartImage
                                                         src={withWidth(url, baseW)}
                                                         srcSet={buildSrcSet(url, [320, 480, 640, 800])}
                                                         sizes="(max-width: 420px) 100vw, 380px"
-                                                        loading={imgIndex === 0 && cardIndex === 0 ? 'eager' : 'lazy'}
-                                                        decoding="async"
+                                                        loading={imgIndex === 0 && cardIndex < 4 ? 'eager' : 'lazy'}
                                                         width={width ?? undefined}
                                                         height={height ?? undefined}
                                                         alt={`Slide ${imgIndex + 1}`}
-                                                        style={{ maxHeight: '300px', objectFit: 'contain', margin: '0 auto' }}
+                                                        isDarkMode={isDarkMode}
+                                                        maxHeight="300px"
                                                     />
                                                 </Carousel.Item>
                                             );
@@ -378,17 +385,16 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                         const first = normalizeImg(entry.imageUrlsArray[0] as any);
                                         const baseW = 380;
                                         return (
-                                            <img
-                                                className="d-block w-100"
+                                            <SmartImage
                                                 src={withWidth(first.url, baseW)}
                                                 srcSet={buildSrcSet(first.url, [320, 480, 640, 800])}
                                                 sizes="(max-width: 420px) 100vw, 380px"
-                                                loading={cardIndex === 0 ? 'eager' : 'lazy'}
-                                                decoding="async"
+                                                loading={cardIndex < 4 ? 'eager' : 'lazy'}
                                                 width={first.width ?? undefined}
                                                 height={first.height ?? undefined}
                                                 alt="Preview"
-                                                style={{ maxHeight: '300px', objectFit: 'contain', margin: '0 auto' }}
+                                                isDarkMode={isDarkMode}
+                                                maxHeight="300px"
                                             />
                                         );
                                     })()
@@ -505,18 +511,36 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                         >
                                             <strong style={{ flexShrink: 0 }}>Download Path:</strong>
 
-                                            <span
+                                            <button
+                                                type="button"
                                                 data-no-select="true"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+
+                                                    if (canOpenPath) {
+                                                        handleOpenDownloadPath(entry.downloadFilePath);
+                                                    }
+                                                }}
+                                                title={entry.downloadFilePath ?? 'N/A'}
+                                                aria-label="Open model download directory"
+                                                disabled={!canOpenPath}
                                                 style={{
                                                     flex: 1,
                                                     whiteSpace: 'normal',
                                                     wordBreak: 'break-word',
                                                     lineHeight: 1.35,
+                                                    textAlign: 'left',
+                                                    border: 'none',
+                                                    background: 'transparent',
+                                                    padding: 0,
+                                                    margin: 0,
+                                                    color: isDarkMode ? '#66b2ff' : '#0d6efd',
+                                                    cursor: entry.downloadFilePath ? 'pointer' : 'default',
+                                                    textDecoration: entry.downloadFilePath ? 'underline' : 'none',
                                                 }}
-                                                title={entry.downloadFilePath ?? 'N/A'}
                                             >
                                                 {entry.downloadFilePath ?? 'N/A'}
-                                            </span>
+                                            </button>
 
                                             <button
                                                 type="button"
@@ -628,7 +652,7 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                             </button>
                                         </p>
 
-                                        {displayMode === 'errorCard' && (
+                                        {(displayMode === 'errorCard' || displayMode === 'failedCard') && (
                                             <p style={{ margin: '4px 0' }}>
                                                 <strong>Civitai Archive URL:</strong>{' '}
                                                 {entry.civitaiModelID && entry.civitaiVersionID ? (

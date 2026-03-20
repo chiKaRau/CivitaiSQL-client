@@ -1261,6 +1261,7 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
         name: string;
         url: string;
         id: number;
+        versionNumber?: number | string | null;
         baseModel: string;
         localPath?: string | null;
         imageUrls: { url: string; height: number; width: number; nsfw: string }[];
@@ -1270,10 +1271,12 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
         name: string;
         url: string;
         id: number;
+        versionNumber?: number | string | null;
         baseModel: string;
         localPath?: string | null;
         imageUrls: { url: string; height: number; width: number; nsfw: string }[];
     }[]>([]);
+
     const [visibleToasts, setVisibleToasts] = useState<boolean[]>([])
     const [visibleIsCarted, setVisibleIsCarted] = useState<boolean[]>([])
     const [isLoading, setIsLoading] = useState(false)
@@ -1309,16 +1312,17 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
     }, [])
 
     useEffect(() => {
-        //Preventing First time update
         if (isInitialMount.current) {
             isInitialMount.current = false;
-        } else {
-            setModelsList(originalModelsList?.reverse().filter(model =>
-                baseModelList.some(baseModelObj => baseModelObj.baseModel === model.baseModel && baseModelObj.display)
-            ));
-            setOriginalModelsList(originalModelsList?.reverse());
+            return;
         }
-    }, [baseModelList]);
+
+        const filtered = originalModelsList.filter(model =>
+            baseModelList.some(baseModelObj => baseModelObj.baseModel === model.baseModel && baseModelObj.display)
+        );
+
+        setModelsList(filtered);
+    }, [baseModelList, originalModelsList]);
 
 
     const handleUpdateModelsList = async () => {
@@ -1337,8 +1341,15 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
 
         console.log("update window record data : ", data)
 
-        setModelsList(data)
-        setOriginalModelsList(data);
+        const sortedData = [...(data || [])].sort((a: any, b: any) => {
+            const aVersion = Number(a.versionNumber ?? 0);
+            const bVersion = Number(b.versionNumber ?? 0);
+            return bVersion - aVersion;
+        });
+
+        setModelsList(sortedData);
+        setOriginalModelsList(sortedData);
+
         const uniqueBaseModels = Array.from(
             new Set(data?.map((obj: any) => obj.baseModel))
         ).map(baseModel => ({ baseModel: baseModel as string, display: true }));
@@ -1533,10 +1544,10 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
     };
 
     const handleReverseModelList = () => {
-        setModelsList(modelsList?.reverse());
-        setOriginalModelsList(originalModelsList?.reverse());
-        setIsSorted(!isSorted)
-    }
+        setModelsList(prev => [...prev].reverse());
+        setOriginalModelsList(prev => [...prev].reverse());
+        setIsSorted(!isSorted);
+    };
 
     const handleAddOfflineDownloadFileintoOfflineDownloadList = async (targetDownloadFilePath?: string) => {
 
@@ -1612,17 +1623,30 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
         if (!localPath) return "";
 
         const normalized = localPath.replace(/\\/g, "/");
-        const marker = "/@scan@/";
-        const markerIndex = normalized.indexOf(marker);
 
-        if (markerIndex === -1) return "";
-
-        let scanPath = normalized.substring(markerIndex);
-        if (!scanPath.endsWith("/")) {
-            scanPath += "/";
+        // Case 1: already contains /@scan@/
+        const scanMarker = "/@scan@/";
+        const scanMarkerIndex = normalized.indexOf(scanMarker);
+        if (scanMarkerIndex !== -1) {
+            let scanPath = normalized.substring(scanMarkerIndex);
+            if (!scanPath.endsWith("/")) {
+                scanPath += "/";
+            }
+            return scanPath;
         }
 
-        return scanPath;
+        // Case 2: local backup path that contains /ACG/
+        const acgMarker = "/ACG/";
+        const acgMarkerIndex = normalized.indexOf(acgMarker);
+        if (acgMarkerIndex !== -1) {
+            let scanPath = `/@scan@${normalized.substring(acgMarkerIndex)}`;
+            if (!scanPath.endsWith("/")) {
+                scanPath += "/";
+            }
+            return scanPath;
+        }
+
+        return "";
     };
 
     const buildUpdatePathFromScanPath = (scanPath: string) => {
@@ -1650,6 +1674,8 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
         color: '#1f2937',
         wordBreak: 'break-word',
     });
+
+    const selectedBaseModel = props.selectedVersion?.baseModel || "";
 
     return (
         <>return (
@@ -1790,6 +1816,8 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                         {modelsList?.map((model, index) => {
                             const localScanPath = normalizeLocalPathToScanPath(model?.localPath);
                             const localUpdatePath = buildUpdatePathFromScanPath(localScanPath);
+                            const isSameBaseModel =
+                                (model?.baseModel || "").toLowerCase() === selectedBaseModel.toLowerCase();
 
                             if (!visibleToasts[index]) return null;
 
@@ -1805,10 +1833,12 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                                         style={{
                                             width: '100%',
                                             borderRadius: '16px',
-                                            border: '1px solid #e5e7eb',
+                                            border: isSameBaseModel ? '2px solid #4f8cff' : '1px solid #e5e7eb',
                                             overflow: 'hidden',
-                                            boxShadow: '0 4px 14px rgba(0,0,0,0.06)',
-                                            background: '#fff',
+                                            boxShadow: isSameBaseModel
+                                                ? '0 6px 18px rgba(79, 140, 255, 0.18)'
+                                                : '0 4px 14px rgba(0,0,0,0.06)',
+                                            background: isSameBaseModel ? '#f4f8ff' : '#fff',
                                         }}
                                     >
                                         <Toast.Header
@@ -1828,8 +1858,12 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                                                 }}
                                             >
                                                 <div style={{ minWidth: 0, flex: 1 }}>
-                                                    <div style={{ marginBottom: '6px' }}>
+                                                    <div style={{ marginBottom: '6px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                                         <Badge bg="primary">{model?.baseModel}</Badge>
+
+                                                        {isSameBaseModel && (
+                                                            <Badge bg="success">Same Base Model</Badge>
+                                                        )}
                                                     </div>
 
                                                     <div
@@ -1840,7 +1874,7 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                                                             wordBreak: 'break-word',
                                                         }}
                                                     >
-                                                        #{model?.id} : {model?.name}
+                                                        {props.modelID}_{model?.versionNumber ?? 'Unknown'} : {model?.name}
                                                     </div>
                                                 </div>
 

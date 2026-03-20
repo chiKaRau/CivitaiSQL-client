@@ -1523,6 +1523,17 @@ const OfflineWindow: React.FC = () => {
 
     const closeLeftOverlay = useCallback(() => setLeftOverlayEntry(null), []);
 
+    const handleOpenDownloadPath = async (downloadPath: string) => {
+        const trimmed = (downloadPath || '').trim();
+
+        if (!trimmed) {
+            alert('Download path is empty.');
+            return;
+        }
+
+        await fetchOpenModelDownloadDirectory(trimmed, dispatch);
+    };
+
     // ESC to close
     useEffect(() => {
         if (!leftOverlayEntry) return;
@@ -4403,6 +4414,7 @@ const OfflineWindow: React.FC = () => {
                                         selectedIds={selectedIds}
                                         toggleSelect={toggleSelect}
                                         handleSelectAll={handleSelectAll}
+                                        handleOpenDownloadPath={handleOpenDownloadPath}
                                         showGalleries={showGalleries}
                                         onToggleOverlay={toggleLeftOverlay}
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
@@ -4465,6 +4477,7 @@ const OfflineWindow: React.FC = () => {
                                         selectedIds={selectedIds}
                                         toggleSelect={toggleSelect}
                                         handleSelectAll={handleSelectAll}
+                                        handleOpenDownloadPath={handleOpenDownloadPath}
                                         showGalleries={false}
                                         onToggleOverlay={toggleLeftOverlay}
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
@@ -4503,6 +4516,7 @@ const OfflineWindow: React.FC = () => {
                                         selectedIds={selectedIds}
                                         toggleSelect={toggleSelect}
                                         handleSelectAll={handleSelectAll}
+                                        handleOpenDownloadPath={handleOpenDownloadPath}
                                         showGalleries={false}
                                         onToggleOverlay={toggleLeftOverlay}
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
@@ -4542,6 +4556,7 @@ const OfflineWindow: React.FC = () => {
                                         selectedIds={selectedIds}
                                         toggleSelect={toggleSelect}
                                         handleSelectAll={handleSelectAll}
+                                        handleOpenDownloadPath={handleOpenDownloadPath}
                                         showGalleries={showGalleries}
                                         onToggleOverlay={toggleLeftOverlay}
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
@@ -4582,6 +4597,7 @@ const OfflineWindow: React.FC = () => {
                                         selectedIds={selectedIds}
                                         toggleSelect={toggleSelect}
                                         handleSelectAll={handleSelectAll}
+                                        handleOpenDownloadPath={handleOpenDownloadPath}
                                         showGalleries={false}
                                         onToggleOverlay={toggleLeftOverlay}
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
@@ -4621,6 +4637,7 @@ const OfflineWindow: React.FC = () => {
                                         selectedIds={selectedIds}
                                         toggleSelect={toggleSelect}
                                         handleSelectAll={handleSelectAll}
+                                        handleOpenDownloadPath={handleOpenDownloadPath}
                                         showGalleries={false}
                                         onToggleOverlay={toggleLeftOverlay}
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
@@ -4661,6 +4678,7 @@ const OfflineWindow: React.FC = () => {
                                         selectedIds={selectedIds}
                                         toggleSelect={toggleSelect}
                                         handleSelectAll={handleSelectAll}
+                                        handleOpenDownloadPath={handleOpenDownloadPath}
                                         showGalleries={showGalleries}
                                         onToggleOverlay={toggleLeftOverlay}
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}

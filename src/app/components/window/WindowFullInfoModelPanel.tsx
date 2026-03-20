@@ -210,6 +210,7 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({
 
     return (
         <div
+            onClick={onClose}
             style={{
                 position: 'fixed',
                 inset: 0,
@@ -222,6 +223,7 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({
             }}
         >
             <div
+                onClick={(e) => e.stopPropagation()}
                 style={{
                     width: '100%',
                     maxWidth: '900px',
@@ -422,6 +424,33 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({
                             )}
                         </div>
 
+                        {/* Action buttons */}
+                        {selectedVersion && (
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    flexWrap: 'wrap',
+                                    gap: '10px',
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                }}
+                            >
+                                <OverlayTrigger overlay={<Tooltip id="tooltip-add-download-list" style={{ zIndex: 20000 }}>Add selected version URL to download list</Tooltip>}>
+                                    <button onClick={handleAdd} style={primaryButtonStyle}>
+                                        <FaPlus />
+                                        <span>Add to Download List</span>
+                                    </button>
+                                </OverlayTrigger>
+
+                                <OverlayTrigger overlay={<Tooltip id="tooltip-update-existing" style={{ zIndex: 20000 }}>Update existing database record to selected version</Tooltip>}>
+                                    <button onClick={toggleUpdateModelPanel} style={secondaryButtonStyle}>
+                                        <FaPenToSquare />
+                                        <span>Update Existing Model</span>
+                                    </button>
+                                </OverlayTrigger>
+                            </div>
+                        )}
+
                         {/* Carousel */}
                         {selectedVersion && (
                             <div
@@ -444,31 +473,6 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({
                                 </div>
 
                                 <Carousel images={selectedVersion.images.map(image => image.url)} />
-                            </div>
-                        )}
-
-                        {/* Action buttons */}
-                        {selectedVersion && (
-                            <div
-                                style={{
-                                    display: 'flex',
-                                    flexWrap: 'wrap',
-                                    gap: '10px',
-                                }}
-                            >
-                                <OverlayTrigger overlay={<Tooltip id="tooltip-add-download-list" style={{ zIndex: 20000 }}>Add selected version URL to download list</Tooltip>}>
-                                    <button onClick={handleAdd} style={primaryButtonStyle}>
-                                        <FaPlus />
-                                        <span>Add to Download List</span>
-                                    </button>
-                                </OverlayTrigger>
-
-                                <OverlayTrigger overlay={<Tooltip id="tooltip-update-existing" style={{ zIndex: 20000 }}>Update existing database record to selected version</Tooltip>}>
-                                    <button onClick={toggleUpdateModelPanel} style={secondaryButtonStyle}>
-                                        <FaPenToSquare />
-                                        <span>Update Existing Model</span>
-                                    </button>
-                                </OverlayTrigger>
                             </div>
                         )}
 

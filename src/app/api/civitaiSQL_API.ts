@@ -321,10 +321,12 @@ export const fetchUpdateCreatorUrlList = async (
     status: string,
     lastChecked: boolean,
     selectedRating: string,
-    dispatch: any
+    dispatch?: any
 ): Promise<{ status: string }> => {
     try {
-        dispatch(clearError());
+        if (dispatch) {
+            dispatch(clearError());
+        }
 
         const response = await axios.post(
             `${config.domain}/api/update_creator_url_list`,
@@ -344,12 +346,14 @@ export const fetchUpdateCreatorUrlList = async (
         return { status: "success" };
     } catch (error: any) {
         console.error("Error during Civitai Info retrieval:", error.message);
-        dispatch(setError({ hasError: true, errorMessage: error.message }));
-        return { status: "failure" }; // <- super important
+
+        if (dispatch) {
+            dispatch(setError({ hasError: true, errorMessage: error.message }));
+        }
+
+        return { status: "failure" };
     }
 };
-
-
 
 export const fetchRemoveFromCreatorUrlList = async (creatorUrl: string, dispatch: any) => {
     try {
