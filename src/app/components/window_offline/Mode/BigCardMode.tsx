@@ -163,7 +163,7 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
 
                     return (
                         <Card
-                            key={cardIndex}
+                            key={`${entry.civitaiModelID}-${entry.civitaiVersionID}`}
                             style={{
                                 width: '100%',
                                 maxWidth: '380px',
