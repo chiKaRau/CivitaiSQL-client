@@ -2154,6 +2154,11 @@ const OfflineWindow: React.FC = () => {
             return;
         }
 
+        const ok = window.confirm(
+            `Apply selectedPath to downloadFilePath for ${items.length} selected entr${items.length === 1 ? "y" : "ies"}?`
+        );
+        if (!ok) return;
+
         setIsBulkUpdatingDownloadPaths(true);
         setUiMode("modifying");
 
@@ -4016,15 +4021,51 @@ const OfflineWindow: React.FC = () => {
                                     </Button>
                                 </div>
 
-                                {aiSuggestRunStatus === "running" && (
-                                    <div style={{ marginTop: 10 }}>
-                                        {currentBatchRange && <div>{currentBatchRange}</div>}
-                                        <div>
-                                            Progress: {aiSuggestProgress.completed}/{aiSuggestProgress.total}
-                                        </div>
-                                        {batchCooldown !== null && (
-                                            <div>
-                                                Cooldown: <strong>{batchCooldown}s</strong>
+                                {(aiSuggestRunStatus === "running" || aiSuggestRunMsg) && (
+                                    <div
+                                        style={{
+                                            marginTop: 12,
+                                            padding: "10px 12px",
+                                            borderRadius: 8,
+                                            background: isDarkMode ? "rgba(59,130,246,0.12)" : "rgba(13,110,253,0.08)",
+                                            border: isDarkMode
+                                                ? "1px solid rgba(96,165,250,0.25)"
+                                                : "1px solid rgba(13,110,253,0.18)",
+                                            color: isDarkMode ? "#f3f4f6" : "#0f172a",
+                                            fontWeight: 500,
+                                        }}
+                                    >
+                                        {aiSuggestRunStatus === "running" && (
+                                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                                {currentBatchRange && (
+                                                    <div style={{ color: isDarkMode ? "#dbeafe" : "#0b3d91" }}>
+                                                        {currentBatchRange}
+                                                    </div>
+                                                )}
+
+                                                <div style={{ color: isDarkMode ? "#f8fafc" : "#111827" }}>
+                                                    Progress: {aiSuggestProgress.completed}/{aiSuggestProgress.total}
+                                                </div>
+
+                                                {batchCooldown !== null && (
+                                                    <div style={{ color: isDarkMode ? "#fde68a" : "#92400e" }}>
+                                                        Cooldown: <strong>{batchCooldown}s</strong>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {aiSuggestRunMsg && (
+                                            <div
+                                                style={{
+                                                    marginTop: aiSuggestRunStatus === "running" ? 8 : 0,
+                                                    color:
+                                                        aiSuggestRunStatus === "fail"
+                                                            ? (isDarkMode ? "#fecaca" : "#991b1b")
+                                                            : (isDarkMode ? "#bbf7d0" : "#166534"),
+                                                }}
+                                            >
+                                                {aiSuggestRunMsg}
                                             </div>
                                         )}
                                     </div>
@@ -4034,14 +4075,14 @@ const OfflineWindow: React.FC = () => {
                                     <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
                                         {batchResults.map((b) => (
                                             <div key={b.batchNo} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                                <span>
+                                                <span style={{ color: isDarkMode ? "#f3f4f6" : "#111827" }}>
                                                     <strong>Batch #{b.batchNo}</strong> ({b.start} ~ {b.end})
                                                 </span>
 
                                                 {b.status === "success" && <Badge bg="success">Success</Badge>}
                                                 {b.status === "fail" && <Badge bg="danger">Fail</Badge>}
                                                 {b.status === "running" && (
-                                                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: isDarkMode ? "#f9fafb" : "#111827" }}>
                                                         <Spinner animation="border" size="sm" variant={isDarkMode ? "light" : "dark"} />
                                                         Processing...
                                                     </span>
@@ -4050,8 +4091,11 @@ const OfflineWindow: React.FC = () => {
                                                 {!!b.msg && b.status !== "running" && (
                                                     <small
                                                         style={{
-                                                            opacity: isDarkMode ? 0.95 : 0.9,
-                                                            color: isDarkMode ? "#e6e6e6" : "#333",
+                                                            opacity: 1,
+                                                            color:
+                                                                b.status === "fail"
+                                                                    ? (isDarkMode ? "#fecaca" : "#991b1b")
+                                                                    : (isDarkMode ? "#e5e7eb" : "#374151"),
                                                             maxWidth: 520,
                                                             overflow: "hidden",
                                                             textOverflow: "ellipsis",

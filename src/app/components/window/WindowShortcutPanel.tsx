@@ -16,7 +16,7 @@ import { MdAddCircle, MdLibraryAdd, MdRemove } from "react-icons/md";
 import { retrieveCivitaiFileName, retrieveCivitaiFilesList } from '../../utils/objectUtils';
 import { LuPanelLeftOpen, LuPanelRightOpen } from 'react-icons/lu';
 import { RiMenuAddLine } from 'react-icons/ri';
-
+import { LuPanelLeft } from "react-icons/lu";
 
 interface Version {
     id: number;
@@ -833,7 +833,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                                     style={ui.longCenterBtn}
                                 >
                                     {isFullInfoModelPanelVisible ? <LuPanelLeftOpen /> : <LuPanelRightOpen />}
-                                    Full Info Panel
+                                    Open Full Info Panel <LuPanelLeft />
                                 </button>
                             </OverlayTrigger>
                         </div>
