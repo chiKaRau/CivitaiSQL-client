@@ -5,6 +5,7 @@ import { Card } from 'react-bootstrap';
 import { TfiCheckBox } from 'react-icons/tfi';
 import { LuPanelLeftOpen } from 'react-icons/lu';
 import { OfflineDownloadEntry } from '../OfflineWindow.types';
+import SmartImage from '../SmartImage';
 
 interface SmallCardModeProps {
     filteredDownloadList: OfflineDownloadEntry[];
@@ -100,7 +101,7 @@ const SmallCardMode: React.FC<SmallCardModeProps> = ({
 
                     return (
                         <Card
-                            key={cardIndex}
+                            key={`${entry.civitaiModelID}-${entry.civitaiVersionID}`}
                             style={{
                                 width: '100%',
                                 maxWidth: '180px',
@@ -227,22 +228,17 @@ const SmallCardMode: React.FC<SmallCardModeProps> = ({
                                 const thumbW = 180;
 
                                 return (
-                                    <img
+                                    <SmartImage
                                         src={withWidth(url, thumbW)}
                                         srcSet={buildSrcSet(url, [160, 200, 320])}
                                         sizes="(max-width: 200px) 100vw, 180px"
                                         loading={isFirstCard ? 'eager' : 'lazy'}
-                                        decoding="async"
                                         width={width ?? undefined}
                                         height={height ?? undefined}
                                         alt={`Thumbnail ${cardIndex + 1}`}
-                                        style={{
-                                            width: '100%',
-                                            maxHeight: '100px',
-                                            objectFit: 'contain',
-                                            borderRadius: '4px',
-                                            marginBottom: '2px',
-                                        }}
+                                        isDarkMode={isDarkMode}
+                                        maxHeight="100px"
+                                        borderRadius="4px"
                                     />
                                 );
                             })() : (

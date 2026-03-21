@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { ColDef } from 'ag-grid-community';
+import SmartImage from '../SmartImage';
 
 export interface ModelOfflineDownloadHistoryEntry {
     civitaiModelID: number;
@@ -90,21 +91,25 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
                 if (!url) return <span>N/A</span>;
 
                 return (
-                    <img
-                        src={url}
-                        alt="History"
+                    <div
                         onMouseEnter={() => setHoveredImageUrl(url)}
                         onMouseLeave={() => setHoveredImageUrl((prev) => (prev === url ? null : prev))}
                         style={{
                             width: "80px",
                             height: "80px",
-                            objectFit: "contain",
-                            borderRadius: "4px",
-                            display: "block",
                             margin: "0 auto",
                             cursor: "zoom-in",
                         }}
-                    />
+                    >
+                        <SmartImage
+                            src={url}
+                            alt="History"
+                            isDarkMode={isDarkMode}
+                            maxHeight="80px"
+                            borderRadius="4px"
+                            loading="lazy"
+                        />
+                    </div>
                 );
             },
             cellStyle: {
@@ -251,16 +256,13 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
                         pointerEvents: "auto",
                     }}
                 >
-                    <img
+                    <SmartImage
                         src={hoveredImageUrl}
                         alt="Preview"
-                        style={{
-                            maxWidth: "70vw",
-                            maxHeight: "70vh",
-                            objectFit: "contain",
-                            borderRadius: "8px",
-                            display: "block",
-                        }}
+                        isDarkMode={isDarkMode}
+                        maxHeight="70vh"
+                        borderRadius="8px"
+                        loading="eager"
                     />
                 </div>
             )}

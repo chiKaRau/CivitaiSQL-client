@@ -37,7 +37,7 @@ const SmartImage: React.FC<SmartImageProps> = ({
             style={{
                 position: 'relative',
                 width: '100%',
-                minHeight: 220,
+                minHeight: maxHeight,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',

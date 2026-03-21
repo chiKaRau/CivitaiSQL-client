@@ -188,6 +188,15 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                             }}
                             onKeyDown={(e) => {
                                 if (!canSelect) return;
+
+                                const target = e.target as HTMLElement | null;
+                                if (
+                                    target &&
+                                    target.closest('input, textarea, select, button, [contenteditable="true"], [data-no-select="true"]')
+                                ) {
+                                    return;
+                                }
+
                                 if (e.key === 'Enter' || e.key === ' ') {
                                     e.preventDefault();
                                     toggleSelect(entry.civitaiVersionID);
