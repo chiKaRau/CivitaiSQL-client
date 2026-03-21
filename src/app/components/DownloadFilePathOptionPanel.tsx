@@ -150,7 +150,14 @@ const DownloadFilePathOptionPanel: React.FC<DownloadFilePathOptionPanelProps> = 
                 setIsHandleRefresh={setIsHandleRefresh}
             />
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div
+                style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '8px',
+                    marginTop: '12px',
+                }}
+            >
                 <Autocomplete
                     freeSolo
                     options={sortedAndFiltered}
