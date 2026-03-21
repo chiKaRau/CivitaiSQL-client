@@ -1340,54 +1340,62 @@ function addCreatorButton(card: HTMLElement) {
 
   const creatorElement =
     card.querySelector('.UserAvatarSimple_username__1HunV') ||
-    Array.from(card.querySelectorAll('span')).find((el) => (el.textContent || '').trim().startsWith('by '));
+    Array.from(card.querySelectorAll('span, p')).find((el) =>
+      (el.textContent || '').trim().startsWith('by ')
+    );
 
-  if (creatorElement) {
-    const rawCreatorText = creatorElement.textContent?.trim() || 'Unknown';
-    const creatorName = rawCreatorText.replace(/^by\s+/i, '').trim() || 'Unknown';
+  if (!creatorElement) return;
 
-    const button = document.createElement('button');
-    button.classList.add('add-creator-button');
-    const originalText = `Add ${creatorName} to list`;
-    button.textContent = originalText;
+  const rawCreatorText = creatorElement.textContent?.trim() || 'Unknown';
+  const creatorName = rawCreatorText.replace(/^by\s+/i, '').trim() || 'Unknown';
 
-    button.addEventListener('click', () => {
-      const requestId = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const button = document.createElement('button');
+  button.classList.add('add-creator-button');
 
-      button.textContent = "Processing...";
-      pendingCreatorButtonMap.set(requestId, { button, originalText });
+  const originalText = `Add ${creatorName} to list`;
+  button.textContent = originalText;
 
-      chrome.runtime.sendMessage({
-        action: "addCreator",
-        creator: creatorName,
-        requestId
-      });
+  button.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const requestId = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+    button.textContent = "Processing...";
+    pendingCreatorButtonMap.set(requestId, { button, originalText });
+
+    chrome.runtime.sendMessage({
+      action: "addCreator",
+      creator: creatorName,
+      requestId
     });
+  });
 
-    const footer = card.querySelector('.AspectRatioImageCard_footer__FOU7a');
-    if (footer) {
-      const footerContent = footer.querySelector('div.flex.w-full.flex-col.items-start.gap-1');
-      if (footerContent) {
-        footerContent.appendChild(button);
-      } else {
-        footer.appendChild(button);
-      }
+  const footer =
+    card.querySelector('.AspectRatioCard_footer__XmvNR') ||
+    card.querySelector('.AspectRatioImageCard_footer__FOU7a') ||
+    card.querySelector('[class*="AspectRatioCard_footer__"]') ||
+    card.querySelector('[class*="AspectRatioImageCard_footer__"]');
 
-      button.style.display = 'block';
-      button.style.marginTop = '10px';
-      return;
-    }
+  if (footer) {
+    const footerContent =
+      footer.querySelector('div.flex.w-full.flex-col.items-start.gap-1') ||
+      footer;
 
-    // civitaiarchive fallback
-    const bottomOverlay = Array.from(card.querySelectorAll('div')).find((el) =>
-      (el.className || '').toString().includes('bg-gradient-to-t')
-    ) as HTMLElement | undefined;
+    footerContent.appendChild(button);
+    button.style.display = 'block';
+    button.style.marginTop = '10px';
+    return;
+  }
 
-    if (bottomOverlay) {
-      bottomOverlay.appendChild(button);
-      button.style.display = 'block';
-      button.style.marginTop = '10px';
-    }
+  const bottomOverlay = Array.from(card.querySelectorAll('div')).find((el) =>
+    (el.className || '').toString().includes('bg-gradient-to-t')
+  ) as HTMLElement | undefined;
+
+  if (bottomOverlay) {
+    bottomOverlay.appendChild(button);
+    button.style.display = 'block';
+    button.style.marginTop = '10px';
   }
 }
 
