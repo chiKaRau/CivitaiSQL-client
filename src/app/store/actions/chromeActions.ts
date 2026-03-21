@@ -4,7 +4,7 @@ import {
     UPDATE_SELECTED_CATEGORY, UPDATE_CATEGORIES_LIST,
     UPDATE_DOWNLOAD_FILEPATH, UPDATE_DOWNLOAD_METHOD, UPDATE_DOWNLOAD_PRIORITY,
     UPDATE_SELECTED_FILTERED_CATEGORIES_LIST,
-    UPDATE_OFFLINEMODE
+    UPDATE_OFFLINEMODE, UPDATE_ISDARKMODE
 } from '../constants/ChromeActionTypes';
 
 export const updateBookmarkID = (newBookmarkID: string) => ({
@@ -50,4 +50,9 @@ export const updateSelectedFilteredCategoriesList = (newSelectedFilteredCategori
 export const updateOfflineMode = (newOfflineMode: boolean) => ({
     type: UPDATE_OFFLINEMODE,
     payload: newOfflineMode
+});
+
+export const updateIsDarkMode = (newIsDarkMode: boolean) => ({
+    type: UPDATE_ISDARKMODE,
+    payload: newIsDarkMode
 });

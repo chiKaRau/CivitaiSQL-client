@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import WindowUpdateModelPanel from './WindowUpdateModelPanel';
 import { fetchFindVersionNumbersForModel } from '../../api/civitaiSQL_api';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { updateDownloadFilePath } from '../../store/actions/chromeActions';
 import { OverlayTrigger, Tooltip } from 'react-bootstrap';
 import {
@@ -16,6 +16,8 @@ import {
     FaUser,
     FaTag
 } from 'react-icons/fa6';
+import { AppState } from '../../store/configureStore';
+import { AppTheme, darkTheme, lightTheme } from '../window_offline/OfflineWindow.theme';
 
 interface Version {
     id: number;
@@ -39,47 +41,6 @@ interface PanelProps {
     urlList: string[];
 }
 
-const iconButtonStyle: React.CSSProperties = {
-    width: '38px',
-    height: '38px',
-    borderRadius: '10px',
-    border: '1px solid #d0d7de',
-    background: '#ffffff',
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-};
-
-const primaryButtonStyle: React.CSSProperties = {
-    padding: '10px 16px',
-    borderRadius: '10px',
-    border: 'none',
-    background: '#0d6efd',
-    color: '#fff',
-    fontWeight: 600,
-    cursor: 'pointer',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '8px',
-    boxShadow: '0 2px 6px rgba(13, 110, 253, 0.25)',
-};
-
-const secondaryButtonStyle: React.CSSProperties = {
-    padding: '10px 16px',
-    borderRadius: '10px',
-    border: '1px solid #c8d1dc',
-    background: '#f8f9fa',
-    color: '#212529',
-    fontWeight: 600,
-    cursor: 'pointer',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '8px',
-};
-
 const FullInfoModelPanel: React.FC<PanelProps> = ({
     url,
     urlList,
@@ -97,8 +58,58 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({
     const [renderKey, setRenderKey] = useState(0);
     const [hasUpdated, setHasUpdated] = useState(false);
     const [isUpdatePanelVisible, setIsUpdatePanelVisible] = useState(false);
+    const chromeData = useSelector((state: AppState) => state.chrome);
+    const { isDarkMode } = chromeData;
+    const theme = isDarkMode ? darkTheme : lightTheme;
 
     const modelId = url.match(/\/models\/(\d+)/)?.[1] || '';
+
+    const getIconButtonStyle = (theme: AppTheme): React.CSSProperties => ({
+        width: '38px',
+        height: '38px',
+        borderRadius: '10px',
+        border: `1px solid ${theme.buttonBorder}`,
+        background: theme.buttonBackground,
+        color: theme.buttonText,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        transition: 'all 0.2s ease',
+        boxShadow: theme.buttonShadow,
+    });
+
+    const getPrimaryButtonStyle = (theme: AppTheme): React.CSSProperties => ({
+        padding: '10px 16px',
+        borderRadius: '10px',
+        border: `1px solid ${theme.buttonBorder}`,
+        background: theme.buttonBackground,
+        color: theme.buttonText,
+        fontWeight: 600,
+        cursor: 'pointer',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '8px',
+        boxShadow: theme.buttonShadow,
+    });
+
+    const getSecondaryButtonStyle = (theme: AppTheme): React.CSSProperties => ({
+        padding: '10px 16px',
+        borderRadius: '10px',
+        border: `1px solid ${theme.buttonBorder}`,
+        background: theme.panelBackground,
+        color: theme.panelText,
+        fontWeight: 600,
+        cursor: 'pointer',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '8px',
+        boxShadow: theme.buttonShadow,
+    });
+
+    const iconButtonStyle = getIconButtonStyle(theme);
+    const primaryButtonStyle = getPrimaryButtonStyle(theme);
+    const secondaryButtonStyle = getSecondaryButtonStyle(theme);
 
     useEffect(() => {
         fetchModelInfo();
@@ -229,10 +240,11 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({
                     maxWidth: '900px',
                     maxHeight: '90vh',
                     overflowY: 'auto',
-                    background: '#ffffff',
+                    background: theme.panelBackground,
+                    color: theme.panelText,
                     borderRadius: '18px',
-                    boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
-                    border: '1px solid #e5e7eb',
+                    boxShadow: theme.buttonShadow,
+                    border: `1px solid ${theme.panelBorder}`,
                     padding: '20px',
                     position: 'relative',
                 }}
@@ -254,7 +266,7 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({
                             style={{
                                 fontSize: '24px',
                                 fontWeight: 700,
-                                color: '#1f2937',
+                                color: theme.panelText,
                                 lineHeight: 1.3,
                                 wordBreak: 'break-word',
                             }}
@@ -269,7 +281,7 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '8px',
-                                    color: '#4b5563',
+                                    color: theme.subText,
                                     fontSize: '14px',
                                 }}
                             >
@@ -345,10 +357,10 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({
                         {/* Version selector */}
                         <div
                             style={{
-                                border: '1px solid #e5e7eb',
+                                background: theme.rowBackgroundColor,
+                                border: `1px solid ${theme.panelBorder}`,
                                 borderRadius: '14px',
                                 padding: '16px',
-                                background: '#fafbfc',
                             }}
                         >
                             <div
@@ -356,7 +368,7 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({
                                     fontSize: '15px',
                                     fontWeight: 700,
                                     marginBottom: '10px',
-                                    color: '#1f2937',
+                                    color: theme.panelText,
                                 }}
                             >
                                 Select Version
@@ -370,14 +382,22 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({
                                     width: '100%',
                                     padding: '12px 14px',
                                     borderRadius: '10px',
-                                    border: '1px solid #cfd6de',
-                                    background: '#fff',
+                                    border: `1px solid ${theme.panelBorder}`,
+                                    background: theme.panelBackground,
+                                    color: theme.panelText,
                                     fontSize: '14px',
                                     outline: 'none',
                                 }}
                             >
                                 {modelData.modelVersions.map(version => (
-                                    <option key={version.id} value={version.id}>
+                                    <option
+                                        key={version.id}
+                                        value={version.id}
+                                        style={{
+                                            background: theme.panelBackground,
+                                            color: theme.panelText,
+                                        }}
+                                    >
                                         {version.name} (Base Model: {version.baseModel || 'No Base Model'})
                                         {existingVersions.includes(version.id.toString()) ? '  *' : ''}
                                     </option>
@@ -409,9 +429,9 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({
 
                                     <span
                                         style={{
-                                            background: '#f3f4f6',
-                                            color: '#374151',
-                                            border: '1px solid #e5e7eb',
+                                            background: theme.rowBackgroundColor,
+                                            color: theme.panelText,
+                                            border: `1px solid ${theme.panelBorder}`,
                                             padding: '6px 10px',
                                             borderRadius: '999px',
                                             fontSize: '12px',
@@ -455,10 +475,11 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({
                         {selectedVersion && (
                             <div
                                 style={{
-                                    border: '1px solid #e5e7eb',
+                                    border: `1px solid ${theme.panelBorder}`,
                                     borderRadius: '14px',
                                     padding: '16px',
-                                    background: '#fff',
+                                    background: theme.panelBackground,
+                                    color: theme.panelText,
                                 }}
                             >
                                 <div
@@ -466,13 +487,16 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({
                                         fontSize: '15px',
                                         fontWeight: 700,
                                         marginBottom: '14px',
-                                        color: '#1f2937',
+                                        color: theme.panelText,
                                     }}
                                 >
                                     Images for {selectedVersion.name}
                                 </div>
 
-                                <Carousel images={selectedVersion.images.map(image => image.url)} />
+                                <Carousel
+                                    images={selectedVersion.images.map(image => image.url)}
+                                    theme={theme}
+                                />
                             </div>
                         )}
 
@@ -483,9 +507,9 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({
                                     marginTop: '2px',
                                     padding: '14px 16px',
                                     borderRadius: '12px',
-                                    color: '#0c5460',
-                                    backgroundColor: '#d9f3ff',
-                                    border: '1px solid #a9deef',
+                                    color: theme.panelText,
+                                    backgroundColor: theme.rowBackgroundColor,
+                                    border: `1px solid ${theme.panelBorder}`,
                                     textAlign: 'center',
                                     display: 'flex',
                                     alignItems: 'center',
@@ -548,9 +572,10 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({
 
 interface CarouselProps {
     images: string[];
+    theme: AppTheme;
 }
 
-const Carousel: React.FC<CarouselProps> = ({ images }) => {
+const Carousel: React.FC<CarouselProps> = ({ images, theme }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
 
     const handlePrev = () => {
@@ -576,8 +601,8 @@ const Carousel: React.FC<CarouselProps> = ({ images }) => {
                     height: '360px',
                     borderRadius: '14px',
                     overflow: 'hidden',
-                    background: '#f6f8fa',
-                    border: '1px solid #e5e7eb',
+                    background: theme.rowBackgroundColor,
+                    border: `1px solid ${theme.panelBorder}`,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -593,11 +618,11 @@ const Carousel: React.FC<CarouselProps> = ({ images }) => {
                             height: '100%',
                             objectFit: 'contain',
                             display: 'block',
-                            background: '#fff',
+                            background: theme.panelBackground,
                         }}
                     />
                 ) : (
-                    <div style={{ color: '#6b7280', fontWeight: 600 }}>
+                    <div style={{ color: theme.subText, fontWeight: 600 }}>
                         No images available
                     </div>
                 )}
@@ -661,7 +686,7 @@ const Carousel: React.FC<CarouselProps> = ({ images }) => {
                         marginTop: '10px',
                         textAlign: 'center',
                         fontSize: '13px',
-                        color: '#6b7280',
+                        color: theme.subText,
                         fontWeight: 600,
                     }}
                 >

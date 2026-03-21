@@ -1,47 +1,73 @@
-import React, { useState, useRef, CSSProperties } from "react";
-
-//Components
+import React, { useState, useRef } from "react";
 import { Button, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { darkTheme, lightTheme } from "../window_offline/OfflineWindow.theme";
 
-//Interface
-interface ButtonWrapProps {
-    buttonConfig: object;
-    handleFunctionCall: () => void;
+interface ButtonConfig {
+    placement?: "top" | "bottom" | "left" | "right";
+    tooltip?: string;
+    variant?: string;
+    buttonIcon?: React.ReactNode;
+    disabled?: boolean;
 }
 
-const ButtonWrap: React.FC<ButtonWrapProps> = (props: any) => {
+interface ButtonWrapProps {
+    buttonConfig: ButtonConfig;
+    handleFunctionCall: () => void | Promise<void>;
+    isDarkMode?: boolean;
+}
+
+const ButtonWrap: React.FC<ButtonWrapProps> = ({
+    buttonConfig,
+    handleFunctionCall,
+    isDarkMode = true
+}) => {
     const buttonRef = useRef(null);
     const [isFunctionCallComplete, setIsFunctionCallComplete] = useState(false);
 
-    const { placement, tooltip, variant, buttonIcon, disabled } = props.buttonConfig;
+    const {
+        placement = "top",
+        tooltip = "",
+        buttonIcon,
+        disabled = false
+    } = buttonConfig;
 
     const renderTooltip = (tooltipText: string) => (
         <Tooltip id="tooltip">{tooltipText}</Tooltip>
     );
 
-    // Function to handle the API call and update the button state
     const handleButtonClick = async () => {
         setIsFunctionCallComplete(true);
-        await props.handleFunctionCall();
-        setIsFunctionCallComplete(false);
+        try {
+            await handleFunctionCall();
+        } finally {
+            setIsFunctionCallComplete(false);
+        }
     };
+
+    const theme = isDarkMode ? darkTheme : lightTheme;
+
 
     return (
         <OverlayTrigger placement={placement} overlay={renderTooltip(tooltip)}>
             <Button
                 ref={buttonRef}
-                variant={variant}
                 onClick={handleButtonClick}
-                disabled={disabled}
+                disabled={disabled || isFunctionCallComplete}
                 className={`button buttonWrap ${isFunctionCallComplete ? "button-state-loading" : "button-state-default"}`}
+                style={{
+                    backgroundColor: theme.rowBackgroundColor,
+                    color: theme.rowFontColor,
+                    border: `1px solid ${theme.evenRowBackgroundColor}`,
+                    boxShadow: isDarkMode
+                        ? "0 4px 12px rgba(0,0,0,0.25)"
+                        : "0 4px 12px rgba(0,0,0,0.08)",
+                }}
             >
                 {buttonIcon}
                 {isFunctionCallComplete && <span className="button-state-complete">✓</span>}
             </Button>
         </OverlayTrigger>
-
     );
 };
 
 export default ButtonWrap;
-

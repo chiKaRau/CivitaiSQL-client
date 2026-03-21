@@ -32,7 +32,11 @@ import ButtonWrap from "./ButtonWrap";
 import DownloadFileButton from "./DownloadFileButton";
 import WindowCollapseButton from "../window/WindowCollapseButton";
 
-const ButtonsGroup: React.FC = () => {
+interface ButtonsGroupProps {
+    isDarkMode?: boolean;
+}
+
+const ButtonsGroup: React.FC<ButtonsGroupProps> = ({ isDarkMode = true }) => {
     const civitaiModel = useSelector((state: AppState) => state.civitaiModel);
     const data: Record<string, any> | undefined = civitaiModel.civitaiModelObject;
     const { civitaiUrl } = civitaiModel
@@ -104,14 +108,19 @@ const ButtonsGroup: React.FC = () => {
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start' }}>
 
             {/**Database's RelatedModelsPanel Button */}
-            <ButtonWrap buttonConfig={{
-                placement: "bottom",
-                tooltip: "Related Models",
-                variant: "secondary",
-                buttonIcon: <TbDatabaseSearch />,
-                disabled: false,
-            }}
-                handleFunctionCall={() => dispatch(togglePanel("DatabaseRelatedModelsPanel"))} />
+            <ButtonWrap
+                buttonConfig={{
+                    placement: "bottom",
+                    tooltip: "Related Models",
+                    variant: "secondary",
+                    buttonIcon: <TbDatabaseSearch />,
+                    disabled: false,
+                }}
+                handleFunctionCall={() => {
+                    dispatch(togglePanel("DatabaseRelatedModelsPanel"));
+                }}
+                isDarkMode={isDarkMode}
+            />
 
             {/**Database's ModelInfoPanel Button */}
             <ButtonWrap buttonConfig={{
@@ -121,7 +130,11 @@ const ButtonsGroup: React.FC = () => {
                 buttonIcon: <TbDatabaseHeart />,
                 disabled: false,
             }}
-                handleFunctionCall={() => dispatch(togglePanel("DatabaseModelInfoPanel"))} />
+                handleFunctionCall={() => {
+                    dispatch(togglePanel("DatabaseModelInfoPanel"));
+                }}
+                isDarkMode={isDarkMode}
+            />
 
             {/**Database's UpdateModelPanel Button */}
             <ButtonWrap buttonConfig={{
@@ -131,7 +144,11 @@ const ButtonsGroup: React.FC = () => {
                 buttonIcon: <TbDatabaseEdit />,
                 disabled: false,
             }}
-                handleFunctionCall={() => dispatch(togglePanel("DatabaseUpdateModelPanel"))} />
+                handleFunctionCall={() => {
+                    dispatch(togglePanel("DatabaseUpdateModelPanel"));
+                }}
+                isDarkMode={isDarkMode}
+            />
 
             <WindowCollapseButton
                 panelId="WindowsButtons"
@@ -150,7 +167,9 @@ const ButtonsGroup: React.FC = () => {
                             ,
                             disabled: false,
                         }}
-                            handleFunctionCall={() => handleOpenModelListModeWindow()} />
+                            handleFunctionCall={() => handleOpenModelListModeWindow()}
+                            isDarkMode={isDarkMode}
+                        />
 
                         {/**Open Offline Window */}
                         <ButtonWrap buttonConfig={{
@@ -161,7 +180,9 @@ const ButtonsGroup: React.FC = () => {
                             ,
                             disabled: false,
                         }}
-                            handleFunctionCall={() => handleOpenOfflineWindow()} />
+                            handleFunctionCall={() => handleOpenOfflineWindow()}
+                            isDarkMode={isDarkMode}
+                        />
 
                         {/**Database's CustomModelPanel Button */}
                         <ButtonWrap buttonConfig={{
@@ -171,7 +192,9 @@ const ButtonsGroup: React.FC = () => {
                             buttonIcon: <TbDatabasePlus />,
                             disabled: false,
                         }}
-                            handleFunctionCall={() => handleOpenCustomWindow()} />
+                            handleFunctionCall={() => handleOpenCustomWindow()}
+                            isDarkMode={isDarkMode}
+                        />
 
                         {/**Database's CustomModelPanel Button */}
                         <ButtonWrap buttonConfig={{
@@ -181,7 +204,9 @@ const ButtonsGroup: React.FC = () => {
                             buttonIcon: <FaEdit />,
                             disabled: false,
                         }}
-                            handleFunctionCall={() => handleOpenEditWindow()} />
+                            handleFunctionCall={() => handleOpenEditWindow()}
+                            isDarkMode={isDarkMode}
+                        />
                     </div>
                 }
             />
@@ -195,7 +220,11 @@ const ButtonsGroup: React.FC = () => {
                 buttonIcon: <AiFillDatabase />,
                 disabled: false,
             }}
-                handleFunctionCall={() => dispatch(togglePanel("DatabaseLastestAddedModelsPanel"))} />
+                handleFunctionCall={() => {
+                    dispatch(togglePanel("DatabaseLastestAddedModelsPanel"));
+                }}
+                isDarkMode={isDarkMode}
+            />
 
 
             {/**Download Button */}
@@ -216,7 +245,9 @@ const ButtonsGroup: React.FC = () => {
                             buttonIcon: <AiFillFolderOpen />,
                             disabled: false,
                         }}
-                            handleFunctionCall={() => fetchOpenDownloadDirectory(dispatch)} />
+                            handleFunctionCall={() => fetchOpenDownloadDirectory(dispatch)}
+                            isDarkMode={isDarkMode}
+                        />
 
                         {/**Must Add List Button */}
                         <ButtonWrap buttonConfig={{
@@ -226,7 +257,9 @@ const ButtonsGroup: React.FC = () => {
                             buttonIcon: <MdAddLocation />,
                             disabled: false,
                         }}
-                            handleFunctionCall={() => fetchAppendToMustAddList(civitaiUrl, dispatch)} />
+                            handleFunctionCall={() => fetchAppendToMustAddList(civitaiUrl, dispatch)}
+                            isDarkMode={isDarkMode}
+                        />
 
                         {/**offline mode button */}
                         <ButtonWrap buttonConfig={{
@@ -236,7 +269,9 @@ const ButtonsGroup: React.FC = () => {
                             buttonIcon: offlineMode ? <MdOutlineDownloadForOffline /> : <MdOutlineDownload />,
                             disabled: false,
                         }}
-                            handleFunctionCall={() => updateOfflineModeIntoChromeStorage(!offlineMode, dispatch)} />
+                            handleFunctionCall={() => updateOfflineModeIntoChromeStorage(!offlineMode, dispatch)}
+                            isDarkMode={isDarkMode}
+                        />
 
                     </div>
                 }
@@ -253,7 +288,9 @@ const ButtonsGroup: React.FC = () => {
                 handleFunctionCall={isBookmarked ?
                     () => unBookmarkThisModel(bookmarkID, dispatch, false)
                     :
-                    () => bookmarkThisModel(data?.type, dispatch)} />
+                    () => bookmarkThisModel(data?.type, dispatch)}
+                isDarkMode={isDarkMode}
+            />
 
         </div>
     );

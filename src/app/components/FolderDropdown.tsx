@@ -8,12 +8,14 @@ import { updateDownloadFilePath, updateDownloadPriority } from '../store/actions
 import { InputGroup, FormControl } from 'react-bootstrap';
 
 import Fuse from 'fuse.js';
+import { darkTheme, lightTheme } from './window_offline/OfflineWindow.theme';
 
 interface FolderDropdownProps {
     filterText?: string;
+    isDarkMode?: boolean;
 }
 
-const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText }) => {
+const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText, isDarkMode = true }) => {
     const dispatch = useDispatch();
 
     const [foldersList, setFoldersList] = useState<string[]>([]);
@@ -102,11 +104,57 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText }) => {
         dispatch(updateDownloadPriority(5));
     };
 
+    const theme = isDarkMode ? darkTheme : lightTheme;
+
     const dropdownToggleStyle: React.CSSProperties = {
         width: '100%',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap'
+    };
+
+    const themedDropdownToggleStyle: React.CSSProperties = {
+        ...dropdownToggleStyle,
+        backgroundColor: theme.buttonBackground,
+        color: theme.buttonText,
+        border: `1px solid ${theme.buttonBorder}`,
+        boxShadow: theme.buttonShadow,
+    };
+
+    const themedDropdownMenuStyle: React.CSSProperties = {
+        width: '80%',
+        maxHeight: '400px',
+        overflowY: 'auto',
+        whiteSpace: 'normal',
+        backgroundColor: theme.panelBackground,
+        color: theme.panelText,
+        border: `1px solid ${theme.panelBorder}`,
+        boxShadow: theme.buttonShadow,
+    };
+
+    const themedDropdownItemStyle: React.CSSProperties = {
+        wordWrap: 'break-word',
+        whiteSpace: 'normal',
+        padding: '8px',
+        cursor: 'pointer',
+        backgroundColor: theme.panelBackground,
+        color: theme.panelText,
+    };
+
+    const themedInputStyle: React.CSSProperties = {
+        width: '80px',
+        flexShrink: 0,
+        backgroundColor: theme.panelBackground,
+        color: theme.panelText,
+        border: `1px solid ${theme.panelBorder}`,
+    };
+
+    const themedButtonStyle: React.CSSProperties = {
+        flexShrink: 0,
+        backgroundColor: theme.buttonBackground,
+        color: theme.buttonText,
+        border: `1px solid ${theme.buttonBorder}`,
+        boxShadow: theme.buttonShadow,
     };
 
     return (
@@ -126,7 +174,15 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText }) => {
                         <OverlayTrigger
                             placement="top"
                             overlay={
-                                <Tooltip id="dropdown-toggle-tooltip">
+                                <Tooltip
+                                    id="dropdown-toggle-tooltip"
+                                    style={{
+                                        backgroundColor: theme.panelBackground,
+                                        color: theme.panelText,
+                                        border: `1px solid ${theme.panelBorder}`,
+                                        boxShadow: theme.buttonShadow,
+                                    }}
+                                >
                                     {selectedFolder
                                         ? selectedFolder
                                         : filteredFolders.length > 0
@@ -135,7 +191,7 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText }) => {
                                 </Tooltip>
                             }
                         >
-                            <Dropdown.Toggle variant="secondary" style={dropdownToggleStyle}>
+                            <Dropdown.Toggle style={themedDropdownToggleStyle}>
                                 {selectedFolder
                                     ? selectedFolder
                                     : filteredFolders.length > 0
@@ -144,23 +200,14 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText }) => {
                             </Dropdown.Toggle>
                         </OverlayTrigger>
 
-                        <Dropdown.Menu
-                            style={{
-                                width: '80%',
-                                maxHeight: '400px',
-                                overflowY: 'auto',
-                                whiteSpace: 'normal',
-                            }}
-                        >
+                        <Dropdown.Menu style={themedDropdownMenuStyle}>
                             {filteredFolders.map((folder, index) => (
                                 <Dropdown.Item
                                     key={index}
                                     as="div"
                                     style={{
-                                        wordWrap: 'break-word',
-                                        whiteSpace: 'normal',
-                                        padding: '8px',
-                                        cursor: 'pointer',
+                                        ...themedDropdownItemStyle,
+                                        backgroundColor: selectedFolder === folder ? theme.rowBackgroundColor : theme.panelBackground,
                                     }}
                                     onClick={() => handleSelectFolder(folder)}
                                 >
@@ -178,7 +225,7 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText }) => {
                     step={0.01}
                     value={threshold}
                     onChange={e => setThreshold(Number(e.target.value))}
-                    style={{ width: '80px', flexShrink: 0 }}
+                    style={themedInputStyle}
                     aria-label="Fuzzy threshold"
                     title="0 = exact match, 1 = very fuzzy"
                 />
@@ -186,15 +233,22 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText }) => {
                 <OverlayTrigger
                     placement="top"
                     overlay={
-                        <Tooltip id="clipboard-tooltip">
+                        <Tooltip
+                            id="clipboard-tooltip"
+                            style={{
+                                backgroundColor: theme.panelBackground,
+                                color: theme.panelText,
+                                border: `1px solid ${theme.panelBorder}`,
+                                boxShadow: theme.buttonShadow,
+                            }}
+                        >
                             {clipboardText ? clipboardText : 'Clipboard is empty'}
                         </Tooltip>
                     }
                 >
                     <Button
-                        variant="outline-primary"
                         onClick={handleReadClipboard}
-                        style={{ flexShrink: 0 }}
+                        style={themedButtonStyle}
                     >
                         <FaClipboard />
                     </Button>
@@ -202,7 +256,7 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText }) => {
             </div>
 
             {isLoading && (
-                <div style={{ marginTop: '10px', color: "white" }}>
+                <div style={{ marginTop: '10px', color: theme.panelText }}>
                     <Spinner animation="border" size="sm" /> Loading folders...
                 </div>
             )}

@@ -8,6 +8,7 @@ export const UPDATE_DOWNLOAD_METHOD = 'UPDATE_DOWNLOAD_METHOD';
 export const UPDATE_DOWNLOAD_PRIORITY = 'UPDATE_DOWNLOAD_PRIORITY';
 export const UPDATE_SELECTED_FILTERED_CATEGORIES_LIST = 'UPDATE_SELECTED_FILTERED_CATEGORIES_LIST';
 export const UPDATE_OFFLINEMODE = 'UPDATE_OFFLINEMODE';
+export const UPDATE_ISDARKMODE = 'UPDATE_ISDARKMODE';
 
 export interface UpdateBookmarkID {
     type: typeof UPDATE_BOOKMARKID;
@@ -54,7 +55,12 @@ export interface UpdateOfflineMode {
     payload: boolean;
 };
 
+export interface UpdateIsDarkMode {
+    type: typeof UPDATE_ISDARKMODE;
+    payload: boolean;
+};
+
 export type ChromeActionTypes = UpdateBookmarkID | SetIsBookmarked |
     UpdateSelectedCategoryAction | UpdateCategoriesListAction |
     UpdateDownloadFilePathAction | UpdateDownloadMethodAction | UpdateDownloadPriorityAction |
-    UpdateSelectedFilteredCategoriesListAction | UpdateOfflineMode;
+    UpdateSelectedFilteredCategoriesListAction | UpdateOfflineMode | UpdateIsDarkMode;

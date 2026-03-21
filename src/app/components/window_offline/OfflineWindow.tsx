@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 
 // Store
 import { useDispatch, useSelector } from 'react-redux';
-import { updateDownloadFilePath } from '../../store/actions/chromeActions';
+import { updateDownloadFilePath, updateIsDarkMode } from '../../store/actions/chromeActions';
 
 // Icons Components
 import { AiFillFolderOpen, AiOutlineClose } from "react-icons/ai";
@@ -159,6 +159,9 @@ const OfflineWindow: React.FC = () => {
 
     const modify_downloadFilePath = chromeData.downloadFilePath;
     const modify_selectedCategory = chromeData.selectedCategory;
+    const isDarkMode = chromeData.isDarkMode;
+
+    const theme = isDarkMode ? darkTheme : lightTheme;
 
     const dispatch = useDispatch();
     const [isLoading, setIsLoading] = useState(false);
@@ -201,9 +204,6 @@ const OfflineWindow: React.FC = () => {
 
     // State for selected IDs
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
-    // Theme state: true for dark mode, false for light mode
-    const [isDarkMode, setIsDarkMode] = useState(true); // Dark mode is default
 
     // Modify Mode state
     const [isModifyMode, setIsModifyMode] = useState(false); // Modify mode is off by default
@@ -1141,7 +1141,7 @@ const OfflineWindow: React.FC = () => {
 
     // Toggle functions
     const toggleTheme = () => {
-        setIsDarkMode(prevMode => !prevMode);
+        dispatch(updateIsDarkMode(!isDarkMode));
     };
 
     const resetDraftFilters = () => {
@@ -2871,7 +2871,7 @@ const OfflineWindow: React.FC = () => {
             <>
                 <div style={styles.leftPanelComputedStyle} ref={leftPanelRef}>
                     <div style={styles.headerStyleContainer}>
-                        <h3 style={{ color: isDarkMode ? '#fff' : '#000' }}>Offline Download List</h3>
+                        <h3 style={{ color: isDarkMode ? '#fff' : '#000' }}>Offline Download Mode</h3>
 
                         <div style={styles.buttonGroupStyle}>
                             {/* Refresh List Button */}
@@ -3137,22 +3137,26 @@ const OfflineWindow: React.FC = () => {
                             {/** Folder Lists Option */}
                             <div
                                 style={{
-                                    backgroundColor: '#ffffff', // White background
+                                    backgroundColor: theme.panelBackground,
+                                    color: theme.panelText,
                                     padding: '15px',
                                     borderRadius: '8px',
-                                    boxShadow: isDarkMode
-                                        ? '0 2px 8px rgba(255, 255, 255, 0.1)'
-                                        : '0 2px 8px rgba(0, 0, 0, 0.1)',
-                                    margin: '10px', // Optional: add spacing as needed
+                                    border: `1px solid ${theme.panelBorder}`,
+                                    boxShadow: theme.buttonShadow,
+                                    margin: '10px',
                                 }}
                             >
                                 <DownloadFilePathOptionPanel
                                     setIsHandleRefresh={setIsHandleRefresh}
                                     isHandleRefresh={isHandleRefresh}
+                                    isDarkMode={isDarkMode}
                                 />
                             </div>
 
-                            <FolderDropdown filterText={filterText} />
+                            <FolderDropdown
+                                filterText={filterText}
+                                isDarkMode={isDarkMode}
+                            />
                         </>
                     )}
 

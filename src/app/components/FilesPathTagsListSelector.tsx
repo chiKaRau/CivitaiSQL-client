@@ -3,17 +3,20 @@ import { fetchGetTagsList, fetchDeleteDownloadPathCountRecord } from '../api/civ
 import { useDispatch } from 'react-redux';
 import { updateDownloadFilePath } from '../store/actions/chromeActions';
 import { getRecentDownloadFilePaths } from '../utils/chromeUtils';
+import { AppTheme } from './window_offline/OfflineWindow.theme';
 
 interface FilesPathTagsListSelectorProps {
     selectedPrefix: string;
     isHandleRefresh: boolean;
     setIsHandleRefresh: (isHandleRefresh: boolean) => void;
+    theme: AppTheme;
 }
 
 const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
     isHandleRefresh,
     selectedPrefix,
-    setIsHandleRefresh
+    setIsHandleRefresh,
+    theme
 }) => {
     const dispatch = useDispatch();
 
@@ -27,13 +30,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
     const [deletingPath, setDeletingPath] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    // cache by prefix
     const cacheRef = useRef<Record<string, { top: any[]; recent: any[]; updated: any[] }>>({});
-
-    const loadRecentLocalTags = async () => {
-        const list = await getRecentDownloadFilePaths();
-        setRecentLocalTags(list);
-    };
 
     const applyResultToState = (result: any) => {
         const nextTop = result?.topTags || [];
@@ -63,7 +60,6 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
             setError(null);
 
             try {
-                // ✅ always refresh local recent paths
                 const localList = await getRecentDownloadFilePaths();
                 if (!cancelled) {
                     setRecentLocalTags(localList);
@@ -74,8 +70,6 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                 }
             }
 
-            // ✅ if there is no selectedPrefix, do not fetch prefix-based tables
-            // but do NOT early-return before the local refresh above
             if (!selectedPrefix) {
                 setTopTags([]);
                 setRecentAddedTags([]);
@@ -125,8 +119,6 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
     const handleTagClick = (tag: string) => {
         setSelectedTag(tag);
         dispatch(updateDownloadFilePath(tag));
-        // if needed:
-        // dispatch(updateDownloadFilePath(`${selectedPrefix}${tag}`));
     };
 
     const handleDelete = async (downloadFilePath: string) => {
@@ -145,13 +137,9 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                 return;
             }
 
-            // Clear cache for this prefix so we don't show stale results
             delete cacheRef.current[selectedPrefix];
-
-            // If the deleted tag was selected, clear highlight
             setSelectedTag(prev => (prev === downloadFilePath ? null : prev));
 
-            // Re-fetch lists to fill back to 10 items correctly
             setLoading(true);
             await fetchAndSet();
         } catch (e: any) {
@@ -162,11 +150,33 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
         }
     };
 
+    const listBoxStyle: React.CSSProperties = {
+        maxHeight: '220px',
+        overflowY: 'auto',
+        border: `1px solid ${theme.panelBorder}`,
+        padding: '3px',
+        marginBottom: '10px',
+        borderRadius: '12px',
+        background: theme.rowBackgroundColor,
+        color: theme.panelText,
+    };
+
+    const recentListBoxStyle: React.CSSProperties = {
+        maxHeight: '260px',
+        overflowY: 'auto',
+        border: `1px solid ${theme.panelBorder}`,
+        padding: '3px',
+        marginBottom: '10px',
+        borderRadius: '12px',
+        background: theme.rowBackgroundColor,
+        color: theme.panelText,
+    };
+
     const renderList = (title: string, tags: any[], numberLabel: (index: number) => string) => {
         return (
             <>
-                <h6>{title}</h6>
-                <div style={{ maxHeight: '220px', overflowY: 'auto', border: '1px solid #ccc', padding: '3px', marginBottom: '10px' }}>
+                <h6 style={{ color: theme.panelText }}>{title}</h6>
+                <div style={listBoxStyle}>
                     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                         {tags.map((tag, index) => {
                             const value = tag?.string_value ?? '';
@@ -180,14 +190,18 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                                     style={{
                                         margin: '5px 0',
                                         cursor: 'pointer',
-                                        backgroundColor: isSelected ? '#d3d3d3' : 'transparent',
+                                        backgroundColor: isSelected ? theme.evenRowBackgroundColor : theme.panelBackground,
+                                        color: theme.panelText,
                                         fontWeight: isSelected ? 'bold' : 'normal',
                                         padding: '4px 6px',
                                         borderRadius: 6,
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'space-between',
-                                        gap: 8
+                                        gap: 8,
+                                        border: isSelected
+                                            ? `1px solid ${theme.buttonBorder}`
+                                            : `1px solid ${theme.panelBorder}`,
                                     }}
                                 >
                                     <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', minWidth: 0, flex: 1 }}>
@@ -198,7 +212,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                                     <button
                                         type="button"
                                         onClick={(e) => {
-                                            e.stopPropagation(); // don't trigger handleTagClick
+                                            e.stopPropagation();
                                             handleDelete(value);
                                         }}
                                         disabled={!!deletingPath || isDeletingThis}
@@ -206,9 +220,12 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                                         style={{
                                             padding: '2px 8px',
                                             borderRadius: 6,
-                                            border: '1px solid #bbb',
+                                            border: `1px solid ${theme.buttonBorder}`,
+                                            background: theme.buttonBackground,
+                                            color: theme.buttonText,
                                             cursor: !!deletingPath ? 'not-allowed' : 'pointer',
-                                            opacity: isDeletingThis ? 0.7 : 1
+                                            opacity: isDeletingThis ? 0.7 : 1,
+                                            boxShadow: theme.buttonShadow,
                                         }}
                                     >
                                         {isDeletingThis ? 'Deleting…' : 'Delete'}
@@ -225,8 +242,8 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
     const renderRecentLocalList = () => {
         return (
             <>
-                <h6>Recently Added 25 Tags (Local)</h6>
-                <div style={{ maxHeight: '260px', overflowY: 'auto', border: '1px solid #ccc', padding: '3px', marginBottom: '10px' }}>
+                <h6 style={{ color: theme.panelText }}>Recently Added 25 Tags (Local)</h6>
+                <div style={recentListBoxStyle}>
                     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                         {recentLocalTags.map((item, index) => {
                             const value = item?.path ?? '';
@@ -239,13 +256,17 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                                     style={{
                                         margin: '5px 0',
                                         cursor: 'pointer',
-                                        backgroundColor: isSelected ? '#d3d3d3' : 'transparent',
+                                        backgroundColor: isSelected ? theme.evenRowBackgroundColor : theme.panelBackground,
+                                        color: theme.panelText,
                                         fontWeight: isSelected ? 'bold' : 'normal',
                                         padding: '4px 6px',
                                         borderRadius: 6,
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: 8
+                                        gap: 8,
+                                        border: isSelected
+                                            ? `1px solid ${theme.buttonBorder}`
+                                            : `1px solid ${theme.panelBorder}`,
                                     }}
                                 >
                                     <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', minWidth: 0, flex: 1 }}>
@@ -263,8 +284,8 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
 
     return (
         <div>
-            {loading && <div style={{ opacity: 0.7 }}>Loading…</div>}
-            {error && <div style={{ color: 'red' }}>{error}</div>}
+            {loading && <div style={{ opacity: 0.7, color: theme.subText }}>Loading…</div>}
+            {error && <div style={{ color: theme.panelText }}>{error}</div>}
 
             {renderList('Top 10 Tags by Count', topTags, (i) => String(i + 1))}
             {renderRecentLocalList()}

@@ -11,6 +11,7 @@ interface ChromeState {
     downloadMethod: string;
     downloadPriority: number;
     offlineMode: boolean;
+    isDarkMode: boolean;
 }
 
 const initialState: ChromeState = {
@@ -22,7 +23,8 @@ const initialState: ChromeState = {
     downloadFilePath: '/@scan@/ACG/Characters (Anime)/',
     downloadMethod: 'server',
     downloadPriority: 5,
-    offlineMode: false
+    offlineMode: false,
+    isDarkMode: true
 };
 
 const chromelReducer = (state = initialState, action: ChromeActionTypes): ChromeState => {
@@ -45,6 +47,8 @@ const chromelReducer = (state = initialState, action: ChromeActionTypes): Chrome
             return { ...state, selectedFilteredCategoriesList: action.payload };
         case 'UPDATE_OFFLINEMODE':
             return { ...state, offlineMode: action.payload };
+        case 'UPDATE_ISDARKMODE':
+            return { ...state, isDarkMode: action.payload };
         default:
             return state;
     }

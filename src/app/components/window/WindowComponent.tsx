@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState, version } from 'react';
 //Store
 import { useSelector, useDispatch } from 'react-redux';
 import { AppState } from '../../store/configureStore';
-import { updateDownloadFilePath, updateDownloadPriority } from "../../store/actions/chromeActions"
+import { updateDownloadFilePath, updateDownloadPriority, updateIsDarkMode } from "../../store/actions/chromeActions"
 
 //Icons Components
 import { AiFillFolderOpen, AiOutlineArrowUp, AiOutlineArrowDown } from "react-icons/ai"
@@ -51,13 +51,6 @@ type Category = {
 };
 type SelectedItem = { category: Category; display: boolean };
 
-type StagedGridRow = StagedItem & {
-    idx: number;
-    imgSrc: string;
-    isPrimary: boolean;
-    modelVersionDisplay: string;
-};
-
 type StagedItem = {
     id: string;
     url: string;
@@ -77,6 +70,8 @@ type StagedItem = {
     status: "staged" | "running" | "done" | "failed";
     error?: string;
 };
+
+type RatingCfg = { rating: string; expectedMax: number };
 
 //Apis
 import {
@@ -110,12 +105,13 @@ import { BiSolidBarChartSquare, BiSolidHdd } from 'react-icons/bi';
 import WindowFullInfoModelPanel from './WindowFullInfoModelPanel';
 import SetOriginalTabButton from './SetOriginalTabButton';
 import WindowShortcutPanel from './WindowShortcutPanel';
-import { FaEdit, FaTrashAlt } from 'react-icons/fa';
+import { FaEdit, FaMoon, FaSun, FaTrashAlt } from 'react-icons/fa';
 import { ColDef } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { SelectEditor } from './SelectEditor';
 import { PathAutocompleteEditor } from './PathAutocompleteEditor';
 import { HoldEditor } from './HoldEditor';
+import { darkTheme, getOfflineWindowStyles, lightTheme } from '../window_offline/OfflineWindow.theme';
 
 interface CreatorUrlItem {
     creatorUrl: string;
@@ -144,24 +140,19 @@ const WindowComponent: React.FC = () => {
     const [urlVersionIdMap, setUrlVersionIdMap] = useState<Record<string, string>>({});
     const [urlBadgeMap, setUrlBadgeMap] = useState<Record<string, string>>({});
 
-    // cache model info so we don’t refetch for the same modelId
-    const modelInfoCacheRef = useRef<Map<string, any>>(new Map());
-    const inflightRef = useRef<Map<string, Promise<any>>>(new Map());
-
     const [checkedUrlList, setCheckedUrlList] = useState<string[]>([]);
 
     //const [originalTabId, setOriginalTabId] = useState(0);
     const [workingModelID, setWorkingModelID] = useState("");
 
     const chromeData = useSelector((state: AppState) => state.chrome);
-    const { downloadMethod, downloadFilePath, selectedCategory, offlineMode, selectedFilteredCategoriesList, downloadPriority: storeDownloadPriority } = chromeData;
+    const { downloadMethod, downloadFilePath, selectedCategory, offlineMode,
+        selectedFilteredCategoriesList, downloadPriority: storeDownloadPriority, isDarkMode } = chromeData;
 
     const [sortedandFilteredfoldersList, setSortedandFilteredfoldersList] = useState<string[]>([]);
     const [foldersList, setFoldersList] = useState([])
 
-    const [startModelName, setStartModelName] = useState("");
     const [processingModelName, setProcessingModelName] = useState("");
-    const [endModelName, setEndModelName] = useState("");
 
     const [selectedUrl, setSelectedUrl] = useState("");
 
@@ -196,9 +187,6 @@ const WindowComponent: React.FC = () => {
 
     const [isHandleRefresh, setIsHandleRefresh] = useState(false);
 
-    // at the top of your component
-    type RatingCfg = { rating: string; expectedMax: number };
-
     const [lockedUrl, setLockedUrl] = useState<string>("");
     const [neighborCount, setNeighborCount] = useState<number>(5);
 
@@ -217,6 +205,19 @@ const WindowComponent: React.FC = () => {
         { rating: "F", expectedMax: 500 },
         { rating: "N/A", expectedMax: 500 },
     ];
+
+    const theme = isDarkMode ? darkTheme : lightTheme;
+
+    const {
+        themedSelectStyle,
+        themedDropdownToggleStyle,
+        themedDropdownMenuStyle,
+        themedCheckLabelStyle,
+        themedButtonStyle,
+        themedPanelStyle,
+        themedSubtlePanelStyle,
+        agGridThemeStyle,
+    } = getOfflineWindowStyles(theme, isDarkMode);
 
     const [ratingConfigList, setRatingConfigList] = useState<RatingCfg[]>(DEFAULT_RATING_CFG);
 
@@ -264,6 +265,10 @@ const WindowComponent: React.FC = () => {
         if (!userConfirmed) return;
 
         setStagedItems([]);
+    };
+
+    const toggleTheme = () => {
+        dispatch(updateIsDarkMode(!isDarkMode));
     };
 
     const hasPendingPathInInbox = useMemo(() => {
@@ -425,39 +430,6 @@ const WindowComponent: React.FC = () => {
                 //setLastUpdateProcessedIndex(message.lastUpdateProcessedIndex)
 
             }
-            /*
-            else if (message.action === "addCreator") {
-                console.log("[listener] addCreator message received:", message.creator);
-
-                const creator = message.creator;
-                if (!creator) {
-                    sendResponse({ status: "failure", reason: "missing creator" });
-                    return true;
-                }
-
-                const creatorUrl = `https://civitai.com/user/${creator}/models`;
-
-                fetchUpdateCreatorUrlList(creatorUrl, "new", false, "N/A", dispatch)
-                    .then((result) => {
-                        console.log("[listener] addCreator result from fetch:", result);
-
-                        // Treat "no throw" as success
-                        sendResponse({
-                            status: "success",
-                            data: result
-                        });
-                    })
-                    .catch((err) => {
-                        console.error("[listener] addCreator error in fetch:", err);
-                        sendResponse({
-                            status: "failure",
-                            reason: err?.message || "Unknown error"
-                        });
-                    });
-
-                return true;
-            }
-                */
         };
         chrome.runtime.onMessage.addListener(messageListener);
         return () => {
@@ -620,8 +592,6 @@ const WindowComponent: React.FC = () => {
         // Otherwise, no override—let pickByNullThenAge do normal cycling
         return null;
     };
-
-
 
     // Normalize URLs for safe comparison
     const normalizeUrl = (u: string) => (u || "").replace(/\/+$/, "").toLowerCase();
@@ -1160,13 +1130,17 @@ const WindowComponent: React.FC = () => {
         if (!src) return null;
 
         return (
-            <div style={{
-                padding: 6,
-                background: "rgba(0,0,0,0.85)",
-                borderRadius: 8,
-                boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
-                maxWidth: 340,
-            }}>
+            <div
+                style={{
+                    padding: 6,
+                    backgroundColor: theme.panelBackground,
+                    color: theme.panelText,
+                    border: `1px solid ${theme.panelBorder}`,
+                    borderRadius: 8,
+                    boxShadow: theme.buttonShadow,
+                    maxWidth: 340,
+                }}
+            >
                 <img
                     src={src}
                     alt="preview"
@@ -1176,7 +1150,7 @@ const WindowComponent: React.FC = () => {
         );
     };
 
-    const stagingComponents = useMemo(() => ({ imageTooltip: ImageTooltip }), []);
+    const stagingComponents = useMemo(() => ({ imageTooltip: ImageTooltip }), [theme]);
 
     const priorityOptions = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
@@ -1210,7 +1184,11 @@ const WindowComponent: React.FC = () => {
             cellStyle: { textAlign: "center" },
             cellRenderer: (p: any) => {
                 const src = p.value as string;
-                if (!src) return <span style={{ opacity: 0.5 }}>—</span>;
+
+                if (!src) {
+                    return <span style={{ opacity: isDarkMode ? 0.65 : 0.45, color: theme.subText }}>—</span>;
+                }
+
                 return (
                     <img
                         src={src}
@@ -1377,74 +1355,6 @@ const WindowComponent: React.FC = () => {
         setResetMode(true);
     }
 
-    const handleMultipleBundle = async () => {
-
-        setStartModelName(urlList[0].split('/').pop() || "");
-        setProcessingModelName("");
-        setEndModelName(urlList[urlList.length - 1].split('/').pop() || "");
-
-        setIsLoading(true)
-        // Utility function to delay execution
-        const delay = async (ms: any) => {
-            for (let i = ms / 1000; i > 0; i--) {
-                setCountdown(i);
-                await new Promise(res => setTimeout(res, 1000));
-            }
-            setCountdown(0);
-        };
-        for (let url of urlList) {
-            //Fetch Civitai ModelInfo
-            const modelId = url.match(/\/models\/(\d+)/)?.[1] || '';
-            setWorkingModelID(modelId)
-            setProcessingModelName(url.split('/').pop() || "");
-            // Fetch data with error handling
-            try {
-                const data = await fetchCivitaiModelInfoFromCivitaiByModelID(modelId, dispatch);
-                if (data) {
-                    //Download File
-                    //handleDownloadMultipleFile(data, url);
-
-                    // Add to database
-                    handleAddModeltoDatabase(url);
-                    //Bookmark this url
-                    bookmarkThisUrl(data.type, url, `${data.name} - ${data.id} | Stable Diffusion LoRA | Civitai`)
-
-                    // Remove the processed URL from the urlList
-                    setUrlList(currentUrls => currentUrls.filter(currentUrl => currentUrl !== url));
-                    chrome.storage.local.get('originalTabId', (result) => {
-                        if (result.originalTabId) {
-                            chrome.tabs.sendMessage(result.originalTabId, { action: "uncheck-url", url: url });
-                        }
-                    });
-                }
-
-            } catch (error) {
-                console.error(error);
-                setProcessingModelName(url.split('/').pop() || "");
-                break;
-            }
-            // Throttle requests
-            await delay(3000);
-        }
-        setWorkingModelID("")
-        setIsLoading(false)
-        setResetMode(true)
-    };
-
-    const parseModelAndVersionFromUrl = (url: string) => {
-        try {
-            const u = new URL(url);
-            const modelId = u.pathname.match(/\/models\/(\d+)/)?.[1] || "";
-            const versionId = u.searchParams.get("modelVersionId") || "";
-            return { modelId, versionId };
-        } catch {
-            // fallback regex if URL() fails
-            const modelId = url.match(/\/models\/(\d+)/)?.[1] || "";
-            const versionId = url.match(/[?&]modelVersionId=(\d+)/)?.[1] || "";
-            return { modelId, versionId };
-        }
-    };
-
     const handleToggleCollapseButton = (panelId: any) => {
         setCollapseButtonStates((prevStates) => ({
             ...prevStates,
@@ -1556,33 +1466,6 @@ const WindowComponent: React.FC = () => {
             return next;
         });
     }, [urlList]);
-
-
-    const handleRatingUp = () => {
-        if (currentCreatorUrlIndex == null) return;
-        const cur = selectedRating;
-        const idx = ratingOrder.indexOf(cur);
-        const next = ratingOrder[Math.max(0, idx - 1)];
-        setSelectedRating(next);
-        setCreatorUrlList(list =>
-            list.map((it, i) =>
-                i === currentCreatorUrlIndex ? { ...it, rating: next } : it
-            )
-        );
-    };
-
-    const handleRatingDown = () => {
-        if (currentCreatorUrlIndex == null) return;
-        const cur = selectedRating;
-        const idx = ratingOrder.indexOf(cur);
-        const next = ratingOrder[Math.min(ratingOrder.length - 1, idx + 1)];
-        setSelectedRating(next);
-        setCreatorUrlList(list =>
-            list.map((it, i) =>
-                i === currentCreatorUrlIndex ? { ...it, rating: next } : it
-            )
-        );
-    };
 
     const handleApplyRating = async () => {
         if (currentCreatorUrlIndex == null) return;
@@ -2171,13 +2054,17 @@ const WindowComponent: React.FC = () => {
 
 
     return (
-        <>
-
-            {/* Header and Buttons */}
+        <div
+            style={{
+                backgroundColor: theme.pageBackground,
+                color: theme.panelText,
+                minHeight: "100vh",
+                padding: "12px",
+            }}
+        >
             <ErrorAlert />
-
             <center>
-                <h1>Window Mode</h1>
+                <h1>Multiple Model Mode</h1>
             </center>
 
             {/* Main Content: Left & Right Panels */}
@@ -2193,23 +2080,15 @@ const WindowComponent: React.FC = () => {
                         style={{
                             position: 'sticky',
                             top: 0,
-                            background: 'white',
+                            background: theme.panelBackground,
+                            color: theme.panelText,
                             zIndex: 1000,
                             padding: '20px',
-                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                            boxShadow: theme.buttonShadow,
+                            border: `1px solid ${theme.panelBorder}`,
+                            borderRadius: '12px',
                         }}
                     >
-
-                        <Form>
-                            <Form.Check
-                                type="switch"
-                                id="custom-switch"
-                                label="Download Mode"
-                                checked={checkboxMode}
-                                onChange={handleToggleCheckBoxMode}
-                            />
-                        </Form>
-
                         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start' }}>
                             {/* Example: WindowCollapseButton for Database Check */}
                             <WindowCollapseButton
@@ -2217,6 +2096,7 @@ const WindowComponent: React.FC = () => {
                                 isPanelOpen={collapseButtonStates['checkDatabaseButton']}
                                 handleTogglePanel={handleToggleCollapseButton}
                                 icons={<TbDatabaseSearch />}
+                                isDarkMode={isDarkMode}
                                 buttons={
                                     <div>
                                         {/**Checked Saved Button for User page*/}
@@ -2225,11 +2105,13 @@ const WindowComponent: React.FC = () => {
                                             tooltip: "Check if database has this model (User Page prefer)",
                                             variant: "primary",
                                             buttonIcon: <FaMagnifyingGlass />,
-                                            disable: urlList.length === 0 || !(checkboxMode),
+                                            disabled: urlList.length === 0 || !(checkboxMode),
                                         }}
                                             handleFunctionCall={() => {
                                                 setResetMode(true)
-                                            }} />
+                                            }}
+                                            isDarkMode={isDarkMode}
+                                        />
 
                                         {/**Checked Saved Button*/}
                                         <OverlayTrigger placement={"top"}
@@ -2257,6 +2139,7 @@ const WindowComponent: React.FC = () => {
                                 isPanelOpen={collapseButtonStates['downloadButton']}
                                 handleTogglePanel={handleToggleCollapseButton}
                                 icons={<BsDownload />}
+                                isDarkMode={isDarkMode}
                                 buttons={
                                     <div>
                                         {/**Switch Download Method Button*/}
@@ -2270,7 +2153,9 @@ const WindowComponent: React.FC = () => {
                                             buttonIcon: <AiFillFolderOpen />,
                                             disabled: false,
                                         }}
-                                            handleFunctionCall={() => fetchOpenDownloadDirectory(dispatch)} />
+                                            handleFunctionCall={() => fetchOpenDownloadDirectory(dispatch)}
+                                            isDarkMode={isDarkMode}
+                                        />
 
                                         {/**offline mode button */}
                                         <ButtonWrap buttonConfig={{
@@ -2280,7 +2165,9 @@ const WindowComponent: React.FC = () => {
                                             buttonIcon: offlineMode ? <MdOutlineDownloadForOffline /> : <MdOutlineDownload />,
                                             disabled: false,
                                         }}
-                                            handleFunctionCall={() => updateOfflineModeIntoChromeStorage(!offlineMode, dispatch)} />
+                                            handleFunctionCall={() => updateOfflineModeIntoChromeStorage(!offlineMode, dispatch)}
+                                            isDarkMode={isDarkMode}
+                                        />
 
                                         {/**Open Offline Window */}
                                         <ButtonWrap buttonConfig={{
@@ -2291,7 +2178,9 @@ const WindowComponent: React.FC = () => {
                                             ,
                                             disabled: false,
                                         }}
-                                            handleFunctionCall={() => handleOpenOfflineWindow()} />
+                                            handleFunctionCall={() => handleOpenOfflineWindow()}
+                                            isDarkMode={isDarkMode}
+                                        />
 
                                         {/**Open Custom Window */}
                                         <ButtonWrap buttonConfig={{
@@ -2302,7 +2191,9 @@ const WindowComponent: React.FC = () => {
                                             ,
                                             disabled: false,
                                         }}
-                                            handleFunctionCall={() => handleOpenCustomWindow()} />
+                                            handleFunctionCall={() => handleOpenCustomWindow()}
+                                            isDarkMode={isDarkMode}
+                                        />
 
                                         {/**Open Edit Window */}
                                         <ButtonWrap buttonConfig={{
@@ -2313,7 +2204,30 @@ const WindowComponent: React.FC = () => {
                                             ,
                                             disabled: false,
                                         }}
-                                            handleFunctionCall={() => handleOpenEditWindow()} />
+                                            handleFunctionCall={() => handleOpenEditWindow()}
+                                            isDarkMode={isDarkMode}
+                                        />
+
+                                        <Button
+                                            onClick={toggleTheme}
+                                            aria-label="Toggle Theme"
+                                            title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+                                            style={{
+                                                display: "inline-flex",
+                                                alignItems: "center",
+                                                justifyContent: "center",
+                                                width: 42,
+                                                height: 42,
+                                                borderRadius: 10,
+                                                backgroundColor: theme.rowBackgroundColor,
+                                                border: `1px solid ${theme.evenRowBackgroundColor}`,
+                                                color: theme.rowFontColor,
+                                                boxShadow: theme.buttonShadow,
+                                                padding: 0,
+                                            }}
+                                        >
+                                            {isDarkMode ? <FaSun color="#fbbf24" /> : <FaMoon color="#6366f1" />}
+                                        </Button>
                                     </div>
                                 }
                             />
@@ -2323,6 +2237,7 @@ const WindowComponent: React.FC = () => {
                                 isPanelOpen={collapseButtonStates['bookmarkButton']}
                                 handleTogglePanel={handleToggleCollapseButton}
                                 icons={<PiPlusMinusFill />}
+                                isDarkMode={isDarkMode}
                                 buttons={
                                     <div>
                                         {/**Bookmark and add to database Button*/}
@@ -2333,7 +2248,9 @@ const WindowComponent: React.FC = () => {
                                             buttonIcon: <TbDatabasePlus />,
                                             disabled: (urlList.length === 0 || !checkboxMode),
                                         }}
-                                            handleFunctionCall={() => handleMultipleBookmarkAndAddtoDatabase()} />
+                                            handleFunctionCall={() => handleMultipleBookmarkAndAddtoDatabase()}
+                                            isDarkMode={isDarkMode}
+                                        />
 
                                         {/**Remove bookmarks */}
                                         <ButtonWrap buttonConfig={{
@@ -2343,7 +2260,9 @@ const WindowComponent: React.FC = () => {
                                             buttonIcon: <TbDatabaseMinus />,
                                             disabled: (urlList.length === 0 || !checkboxMode),
                                         }}
-                                            handleFunctionCall={() => handleRemoveBookmarks()} />
+                                            handleFunctionCall={() => handleRemoveBookmarks()}
+                                            isDarkMode={isDarkMode}
+                                        />
 
                                     </div>
                                 }
@@ -2354,6 +2273,7 @@ const WindowComponent: React.FC = () => {
                                 isPanelOpen={collapseButtonStates['utilsButton']}
                                 handleTogglePanel={handleToggleCollapseButton}
                                 icons={<MdOutlineApps />}
+                                isDarkMode={isDarkMode}
                                 buttons={
                                     <div>
 
@@ -2408,9 +2328,11 @@ const WindowComponent: React.FC = () => {
                                                 tooltip: "handling Sorting",
                                                 variant: "primary",
                                                 buttonIcon: isSorted ? <FcGenericSortingAsc /> : <FcGenericSortingDesc />,
-                                                disable: counting,
+                                                disabled: counting,
                                             }}
-                                                handleFunctionCall={() => handleSorting()} />
+                                                handleFunctionCall={() => handleSorting()}
+                                                isDarkMode={isDarkMode}
+                                            />
 
                                         </div>
 
@@ -2423,6 +2345,7 @@ const WindowComponent: React.FC = () => {
                                 isPanelOpen={collapseButtonStates['tabsButton']}
                                 handleTogglePanel={handleToggleCollapseButton}
                                 icons={<PiTabs />}
+                                isDarkMode={isDarkMode}
                                 buttons={
                                     <div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '8px' }}>
@@ -2465,6 +2388,50 @@ const WindowComponent: React.FC = () => {
                                                             setIsEditingCreatorUrl(false);
                                                         }
                                                     }}
+                                                    sx={{
+                                                        width: 350,
+                                                        "& .MuiOutlinedInput-root": {
+                                                            color: theme.panelText,
+                                                            backgroundColor: theme.panelBackground,
+                                                            "& fieldset": {
+                                                                borderColor: theme.panelBorder,
+                                                            },
+                                                            "&:hover fieldset": {
+                                                                borderColor: theme.buttonBorder,
+                                                            },
+                                                            "&.Mui-focused fieldset": {
+                                                                borderColor: theme.buttonBorder,
+                                                            },
+                                                        },
+                                                        "& .MuiInputLabel-root": {
+                                                            color: theme.subText,
+                                                        },
+                                                        "& .MuiInputLabel-root.Mui-focused": {
+                                                            color: theme.panelText,
+                                                        },
+                                                        "& .MuiFormHelperText-root": {
+                                                            color: theme.subText,
+                                                        },
+                                                        "& .MuiSvgIcon-root": {
+                                                            color: theme.panelText,
+                                                        },
+                                                        "& .MuiAutocomplete-popupIndicator": {
+                                                            color: theme.panelText,
+                                                        },
+                                                        "& .MuiAutocomplete-clearIndicator": {
+                                                            color: theme.panelText,
+                                                        },
+                                                    }}
+                                                    slotProps={{
+                                                        paper: {
+                                                            sx: {
+                                                                backgroundColor: theme.panelBackground,
+                                                                color: theme.panelText,
+                                                                border: `1px solid ${theme.panelBorder}`,
+                                                                boxShadow: theme.buttonShadow,
+                                                            },
+                                                        },
+                                                    }}
                                                     renderInput={(params) => (
                                                         <TextField
                                                             {...params}
@@ -2485,31 +2452,47 @@ const WindowComponent: React.FC = () => {
                                                 />
                                             ) : (
                                                 // Normal mode: show the dropdown.
-                                                <Dropdown onToggle={handleCreatorDropdownToggle} style={{ width: '70%' }}>
+                                                <Dropdown onToggle={handleCreatorDropdownToggle} style={{ width: '100%' }}>
                                                     <Dropdown.Toggle
                                                         variant="secondary"
-                                                        style={{ width: '100%' }}
+                                                        style={{
+                                                            width: '100%',
+                                                            backgroundColor: theme.buttonBackground,
+                                                            color: theme.buttonText,
+                                                            border: `1px solid ${theme.buttonBorder}`,
+                                                            boxShadow: theme.buttonShadow,
+                                                        }}
                                                         onDoubleClick={() => {
-                                                            // Switch to edit mode on double-click.
                                                             setCreatorUrlInputValue(selectedCreatorUrlText);
                                                             setIsEditingCreatorUrl(true);
                                                         }}
                                                     >
                                                         {selectedCreatorUrlText || "-- Creator URL List (choose one) --"}
                                                     </Dropdown.Toggle>
-                                                    <Dropdown.Menu style={{ maxHeight: '400px', overflowY: 'auto' }}>
+
+                                                    <Dropdown.Menu
+                                                        style={{
+                                                            maxHeight: '400px',
+                                                            overflowY: 'auto',
+                                                            backgroundColor: theme.panelBackground,
+                                                            color: theme.panelText,
+                                                            border: `1px solid ${theme.panelBorder}`,
+                                                            boxShadow: theme.buttonShadow,
+                                                            width: '100%',
+                                                        }}
+                                                    >
                                                         <div
                                                             style={{
                                                                 position: 'sticky',
                                                                 top: 0,
                                                                 zIndex: 2,
                                                                 padding: 8,
-                                                                background: 'var(--bs-dropdown-bg, #fff)',
-                                                                borderBottom: '1px solid rgba(0,0,0,0.075)',
+                                                                backgroundColor: theme.panelBackground,
+                                                                borderBottom: `1px solid ${theme.panelBorder}`,
                                                                 fontSize: 12,
-                                                                color: '#6c757d',
+                                                                color: theme.subText,
                                                                 lineHeight: 1.4,
-                                                                boxShadow: '0 2px 4px rgba(0,0,0,0.06)',
+                                                                boxShadow: theme.buttonShadow,
                                                             }}
                                                         >
                                                             <div>
@@ -2517,8 +2500,8 @@ const WindowComponent: React.FC = () => {
                                                                 <span
                                                                     style={
                                                                         overExpected
-                                                                            ? { color: "red", fontWeight: 700 } // inline CSS
-                                                                            : undefined
+                                                                            ? { color: '#dc3545', fontWeight: 700 }
+                                                                            : { color: theme.panelText }
                                                                     }
                                                                 >
                                                                     {newCountText}
@@ -2528,11 +2511,11 @@ const WindowComponent: React.FC = () => {
                                                             <div><strong>(New) - Null:</strong> {creatorAgeHints.nullNewCount}</div>
                                                             <div>{creatorAgeHints.oldestNewLine}</div>
                                                         </div>
+
                                                         {filteredCreatorUrlList.map((item) => (
                                                             <Dropdown.Item
                                                                 as="div"
                                                                 key={item.creatorUrl}
-                                                                // Attach the scroll ref if this is the lastChecked item.
                                                                 ref={item.lastChecked ? scrollItemRef : null}
                                                                 onClick={() => handleSelectCreatorUrl(item)}
                                                                 style={{
@@ -2540,28 +2523,44 @@ const WindowComponent: React.FC = () => {
                                                                     justifyContent: 'space-between',
                                                                     alignItems: 'center',
                                                                     cursor: 'pointer',
+                                                                    backgroundColor: item.lastChecked
+                                                                        ? theme.rowBackgroundColor
+                                                                        : theme.panelBackground,
+                                                                    color: theme.panelText,
+                                                                    padding: '8px 12px',
+                                                                    borderRadius: 6,
                                                                 }}
                                                             >
-                                                                <span>
+                                                                <span style={{ color: theme.panelText }}>
                                                                     {!item.lastChecked ? (
                                                                         <>
                                                                             {item.creatorUrl.split('/')[4]} <em>({item.rating})</em>
                                                                             {item.lastCheckedDate && (
-                                                                                <> <small>({timeAgo(item.lastCheckedDate)})</small></>
+                                                                                <small style={{ color: theme.subText }}>
+                                                                                    {" "}({timeAgo(item.lastCheckedDate)})
+                                                                                </small>
                                                                             )}
                                                                         </>
                                                                     ) : (
-                                                                        <b>
+                                                                        <b style={{ color: theme.panelText }}>
                                                                             {item.creatorUrl.split('/')[4]} <em>({item.rating})</em> <FaLeftLong />
-                                                                            <> <small>(lastchecked{item.lastCheckedDate ? ` - ${timeAgo(item.lastCheckedDate)}` : ""})</small></>
+                                                                            <small style={{ color: theme.subText }}>
+                                                                                {" "}(lastchecked{item.lastCheckedDate ? ` - ${timeAgo(item.lastCheckedDate)}` : ""})
+                                                                            </small>
                                                                         </b>
                                                                     )}
                                                                 </span>
+
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-                                                                    <span>({item.status})</span>
+                                                                    <span style={{ color: theme.subText }}>({item.status})</span>
                                                                     <Button
                                                                         variant="link"
-                                                                        style={{ color: 'red', textDecoration: 'none' }}
+                                                                        style={{
+                                                                            color: '#dc3545',
+                                                                            textDecoration: 'none',
+                                                                            padding: 0,
+                                                                            marginLeft: 6,
+                                                                        }}
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
                                                                             handleRemoveCreatorUrl(item.creatorUrl);
@@ -2664,50 +2663,67 @@ const WindowComponent: React.FC = () => {
 
 
                                         <div style={{ display: 'flex', alignItems: 'end', gap: '3px', margin: '5px', justifyContent: 'flex-end' }}>
-
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
-                                                <span>
+                                                <span style={{ color: theme.panelText }}>
                                                     <FaRankingStar /> : {currentCreatorUrlIndex !== null
                                                         ? creatorUrlList[currentCreatorUrlIndex].rating
                                                         : 'N/A'}
                                                 </span>
+
                                                 <Form.Select
                                                     size="sm"
                                                     value={selectedRating}
                                                     onChange={e => setSelectedRating(e.target.value)}
                                                     style={{
-                                                        width: '10ch',         // or 'auto' / '3rem' if you prefer
-                                                        minWidth: '3ch',      // ensure it never shrinks to 0
+                                                        ...themedSelectStyle,
+                                                        width: '10ch',
+                                                        minWidth: '3ch',
                                                         textAlign: 'center',
-                                                        textAlignLast: 'center' // for most browsers to center the selected option
+                                                        textAlignLast: 'center',
                                                     }}
                                                 >
                                                     {ratingOrder.map(r => (
-                                                        <option key={r} value={r}>{r}</option>
+                                                        <option
+                                                            key={r}
+                                                            value={r}
+                                                            style={{
+                                                                backgroundColor: theme.panelBackground,
+                                                                color: theme.panelText,
+                                                            }}
+                                                        >
+                                                            {r}
+                                                        </option>
                                                     ))}
                                                 </Form.Select>
                                                 <Button
                                                     size="sm"
-                                                    variant="outline-primary"
                                                     onClick={handleApplyRating}
                                                     disabled={currentCreatorUrlIndex == null}
+                                                    style={themedButtonStyle}
                                                 >
                                                     Apply
                                                 </Button>
 
                                                 <Dropdown style={{ marginRight: 12 }}>
-                                                    <Dropdown.Toggle size="sm" variant="outline-secondary">
+                                                    <Dropdown.Toggle
+                                                        size="sm"
+                                                        style={themedDropdownToggleStyle}
+                                                    >
                                                         Filter Ratings
                                                     </Dropdown.Toggle>
-                                                    <Dropdown.Menu style={{ padding: 8, maxHeight: 240, overflowY: 'auto' }}>
+
+                                                    <Dropdown.Menu style={themedDropdownMenuStyle}>
                                                         <Form.Check
                                                             type="checkbox"
                                                             id="filter-all-ratings"
                                                             label={`All (${totalCreators})`}
                                                             checked={allSelected}
                                                             onChange={toggleAllRatings}
+                                                            style={themedCheckLabelStyle}
                                                         />
-                                                        <hr style={{ margin: '8px 0' }} />
+
+                                                        <hr style={{ margin: '8px 0', borderColor: theme.panelBorder, opacity: 1 }} />
+
                                                         {ratingOrder.map(r => (
                                                             <Form.Check
                                                                 key={r}
@@ -2718,6 +2734,7 @@ const WindowComponent: React.FC = () => {
                                                                 onChange={() =>
                                                                     setRatingFilters(prev => ({ ...prev, [r]: !prev[r] }))
                                                                 }
+                                                                style={themedCheckLabelStyle}
                                                             />
                                                         ))}
                                                     </Dropdown.Menu>
@@ -2738,11 +2755,13 @@ const WindowComponent: React.FC = () => {
                                                 tooltip: `Set to Current Tabs: ${tabCreator}`,
                                                 variant: "primary",
                                                 buttonIcon: <PiTabsFill />,
-                                                disable: counting,
+                                                disabled: counting,
                                             }}
                                                 handleFunctionCall={() => {
                                                     handleSetOriginalTab()
-                                                }} />
+                                                }}
+                                                isDarkMode={isDarkMode}
+                                            />
                                         </div>
 
                                         <div
@@ -2766,21 +2785,34 @@ const WindowComponent: React.FC = () => {
 
                                             {/* Download priority dropdown (1..10) */}
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                <span style={{ fontSize: '.9rem' }}>Priority</span>
+                                                <span style={{ fontSize: '.9rem', color: theme.panelText }}>Priority</span>
+
                                                 <Form.Select
                                                     size="sm"
                                                     value={downloadPriority}
                                                     onChange={(e) => {
                                                         const val = Number(e.target.value);
                                                         if (!Number.isNaN(val)) {
-                                                            setDownloadPriority(val);                 // local UI updates immediately
-                                                            dispatch(updateDownloadPriority(val));    // ✅ store updates (so other components sync)
+                                                            setDownloadPriority(val);
+                                                            dispatch(updateDownloadPriority(val));
                                                         }
                                                     }}
-                                                    style={{ width: 80 }}
+                                                    style={{
+                                                        ...themedSelectStyle,
+                                                        width: 80,
+                                                    }}
                                                 >
                                                     {Array.from({ length: 10 }, (_, i) => i + 1).map((v) => (
-                                                        <option key={v} value={v}>{v}</option>
+                                                        <option
+                                                            key={v}
+                                                            value={v}
+                                                            style={{
+                                                                backgroundColor: theme.panelBackground,
+                                                                color: theme.panelText,
+                                                            }}
+                                                        >
+                                                            {v}
+                                                        </option>
                                                     ))}
                                                 </Form.Select>
                                             </div>
@@ -2841,11 +2873,12 @@ const WindowComponent: React.FC = () => {
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '15px',
-                                    border: '2px solid #007bff',
+                                    border: `1px solid ${theme.panelBorder}`,
                                     borderRadius: '8px',
                                     padding: '10px 15px',
-                                    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-                                    backgroundColor: '#f8f9fa',
+                                    boxShadow: theme.buttonShadow,
+                                    backgroundColor: theme.rowBackgroundColor,
+                                    color: theme.panelText,
                                     marginTop: '20px',
                                 }}
                             >
@@ -2883,7 +2916,50 @@ const WindowComponent: React.FC = () => {
                                     key="1"
                                     id="controllable-states-demo"
                                     options={sortedandFilteredfoldersList}
-                                    sx={{ width: 350 }}
+                                    sx={{
+                                        width: 350,
+                                        "& .MuiOutlinedInput-root": {
+                                            color: theme.panelText,
+                                            backgroundColor: theme.panelBackground,
+                                            "& fieldset": {
+                                                borderColor: theme.panelBorder,
+                                            },
+                                            "&:hover fieldset": {
+                                                borderColor: theme.buttonBorder,
+                                            },
+                                            "&.Mui-focused fieldset": {
+                                                borderColor: theme.buttonBorder,
+                                            },
+                                        },
+                                        "& .MuiInputLabel-root": {
+                                            color: theme.subText,
+                                        },
+                                        "& .MuiInputLabel-root.Mui-focused": {
+                                            color: theme.panelText,
+                                        },
+                                        "& .MuiFormHelperText-root": {
+                                            color: theme.subText,
+                                        },
+                                        "& .MuiSvgIcon-root": {
+                                            color: theme.panelText,
+                                        },
+                                        "& .MuiAutocomplete-popupIndicator": {
+                                            color: theme.panelText,
+                                        },
+                                        "& .MuiAutocomplete-clearIndicator": {
+                                            color: theme.panelText,
+                                        },
+                                    }}
+                                    slotProps={{
+                                        paper: {
+                                            sx: {
+                                                backgroundColor: theme.panelBackground,
+                                                color: theme.panelText,
+                                                border: `1px solid ${theme.panelBorder}`,
+                                                boxShadow: theme.buttonShadow,
+                                            },
+                                        },
+                                    }}
                                     renderInput={(params) => (
                                         <TextField
                                             {...params}
@@ -2905,12 +2981,29 @@ const WindowComponent: React.FC = () => {
 
                                 <OverlayTrigger
                                     placement="bottom"
-                                    overlay={<Tooltip id="tooltip">Save this download file path.</Tooltip>}
+                                    overlay={
+                                        <Tooltip
+                                            id="tooltip"
+                                            style={{
+                                                backgroundColor: theme.panelBackground,
+                                                color: theme.panelText,
+                                                border: `1px solid ${theme.panelBorder}`,
+                                                boxShadow: theme.buttonShadow,
+                                            }}
+                                        >
+                                            Save this download file path.
+                                        </Tooltip>
+                                    }
                                 >
                                     <Button
-                                        variant="light"
                                         disabled={isLoading}
                                         className="tooltip-button"
+                                        style={{
+                                            backgroundColor: theme.buttonBackground,
+                                            color: theme.buttonText,
+                                            border: `1px solid ${theme.buttonBorder}`,
+                                            boxShadow: theme.buttonShadow,
+                                        }}
                                         onClick={() => {
                                             updateDownloadFilePathIntoChromeStorage(downloadFilePath);
                                             updateSelectedCategoryIntoChromeStorage(selectedCategory);
@@ -2924,7 +3017,9 @@ const WindowComponent: React.FC = () => {
                     </div>
 
                     <div style={{ "margin": "0% 5% 5% 5%" }}>
-                        <FolderDropdown />
+                        <FolderDropdown
+                            isDarkMode={isDarkMode}
+                        />
                     </div>
 
                     {/* URLGrid (Scrolls independently of the sticky header/buttons) */}
@@ -2956,6 +3051,10 @@ const WindowComponent: React.FC = () => {
                                         display: "flex",
                                         alignItems: "center",
                                         justifyContent: "center",
+                                        backgroundColor: theme.buttonBackground,
+                                        color: theme.buttonText,
+                                        border: `1px solid ${theme.buttonBorder}`,
+                                        boxShadow: theme.buttonShadow,
                                     }}
                                 >
                                     {isPendingLockEnabled ? <PiLockKeyBold /> : <PiLockKeyOpenBold />}
@@ -2974,6 +3073,10 @@ const WindowComponent: React.FC = () => {
                                     style={{
                                         padding: "4px 8px",
                                         lineHeight: 1,
+                                        backgroundColor: theme.buttonBackground,
+                                        color: theme.buttonText,
+                                        border: `1px solid ${theme.buttonBorder}`,
+                                        boxShadow: theme.buttonShadow,
                                     }}
                                 >
                                     <FaTrashAlt />
@@ -2986,6 +3089,7 @@ const WindowComponent: React.FC = () => {
                             setUrlList={setUrlList}
                             selectedUrl={selectedUrl}
                             onUrlSelect={setSelectedUrl}
+                            isDarkMode={isDarkMode}
                             urlImgSrcMap={urlImgSrcMap}
                             urlVersionIdMap={urlVersionIdMap}
                             modelPrimaryVersionIdMap={modelPrimaryVersionIdMap}
@@ -3007,7 +3111,7 @@ const WindowComponent: React.FC = () => {
                         </OverlayTrigger>
 
                         {isStageBlockedByPendingLock && (
-                            <div style={{ color: "red", fontSize: "12px", marginTop: "4px" }}>
+                            <div style={{ color: "#dc3545", fontSize: "12px", marginTop: "4px" }}>
                                 Pending Lock is enabled. Staging is blocked because current download path contains "Pending".
                             </div>
                         )}
@@ -3035,6 +3139,10 @@ const WindowComponent: React.FC = () => {
                                         style={{
                                             padding: "4px 8px",
                                             lineHeight: 1,
+                                            backgroundColor: theme.buttonBackground,
+                                            color: theme.buttonText,
+                                            border: `1px solid ${theme.buttonBorder}`,
+                                            boxShadow: theme.buttonShadow,
                                         }}
                                     >
                                         <FaTrashAlt />
@@ -3042,7 +3150,10 @@ const WindowComponent: React.FC = () => {
                                 </OverlayTrigger>
                             </div>
 
-                            <div className="ag-theme-alpine" style={{ height: 220, width: "100%" }}>
+                            <div
+                                className={isDarkMode ? "ag-theme-quartz-dark" : "ag-theme-quartz"}
+                                style={agGridThemeStyle}
+                            >
                                 <AgGridReact
                                     rowData={stagedRowData}
                                     columnDefs={stagingColumnDefs}
@@ -3094,39 +3205,6 @@ const WindowComponent: React.FC = () => {
 
                     </div>
 
-                    {/* <div>
-                        {
-                            offlineMode ? (
-                                <OverlayTrigger
-                                    placement={"top"}
-                                    overlay={<Tooltip id="tooltip">Add file into offline download list</Tooltip>}
-                                >
-                                    <Button
-                                        variant={"success"}
-                                        onClick={handleAddOfflineDownloadFileintoOfflineDownloadList}
-                                        disabled={isLoading || urlList.length === 0 || !checkboxMode}
-                                        className="btn btn-primary btn-lg w-100"
-                                    >
-                                        Offline Download {isLoading && <span className="button-state-complete">✓</span>}
-                                    </Button>
-                                </OverlayTrigger>
-                            ) : (
-                                <OverlayTrigger
-                                    placement={"top"}
-                                    overlay={<Tooltip id="tooltip">Download | Bookmark | Add Record</Tooltip>}
-                                >
-                                    <Button
-                                        variant={"primary"}
-                                        onClick={handleMultipleBundle_v2}
-                                        disabled={isLoading || urlList.length === 0 || !checkboxMode}
-                                        className="btn btn-primary btn-lg w-100"
-                                    >
-                                        Bundle Action {isLoading && <span className="button-state-complete">✓</span>}
-                                    </Button>
-                                </OverlayTrigger>
-                            )
-                        }
-                    </div> */}
                 </div>
 
                 {/* RIGHT PANEL: Sticky Sidebar */}
@@ -3136,8 +3214,10 @@ const WindowComponent: React.FC = () => {
                         position: 'sticky',
                         top: 0,
                         padding: '20px',
-                        background: 'white',
-                        boxShadow: '-2px 0 4px rgba(0,0,0,0.1)',
+                        backgroundColor: theme.panelBackground,
+                        color: theme.panelText,
+                        border: `1px solid ${theme.panelBorder}`,
+                        boxShadow: theme.buttonShadow,
                         zIndex: 1000,
                     }}
                 >
@@ -3147,7 +3227,6 @@ const WindowComponent: React.FC = () => {
                 </div>
             </div >
 
-            {/* POP OUT SECTION: These elements are rendered separately */}
             <>
                 {
                     selectedUrl !== "" && isFullInfoModelPanelVisible && (
@@ -3161,7 +3240,7 @@ const WindowComponent: React.FC = () => {
                     )
                 }
             </>
-        </>
+        </div>
 
     )
 };

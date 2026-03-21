@@ -10,11 +10,9 @@ import {
 } from '../store/actions/chromeActions';
 import { updateSelectedFilteredCategoriesListIntoChromeStorage } from '../utils/chromeUtils';
 import FilesPathTagsListSelector from './FilesPathTagsListSelector';
-import {
-    fetchGetCategoryPrefixesList,
-    fetchGetFilePathCategoriesList
-} from '../api/civitaiSQL_api';
+import { fetchGetCategoryPrefixesList } from '../api/civitaiSQL_api';
 import { QuickModeControls } from './QuickModeControls';
+import { darkTheme, lightTheme } from './window_offline/OfflineWindow.theme';
 
 interface FilesPathSettingPanelProps {
     isHandleRefresh: boolean;
@@ -29,6 +27,8 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
 }) => {
     const dispatch = useDispatch();
     const chrome = useSelector((s: AppState) => s.chrome);
+    const { isDarkMode } = chrome;
+    const theme = isDarkMode ? darkTheme : lightTheme;
 
     const [open, setOpen] = useState(false);
     const [prefixsList, setPrefixsList] = useState<{
@@ -58,43 +58,34 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
                 downloadPriority: number;
                 createdAt?: string;
                 updatedAt?: string;
-            }; display: boolean
+            };
+            display: boolean;
         }[]
     >([]);
     const [selectedPrefix, setSelectedPrefix] = useState('');
     const [selectedSuffix, setSelectedSuffix] = useState('');
-
 
     const [quickMode, setQuickMode] = useState(false);
     const [lockedPrefix, setLockedPrefix] = useState('');
     const [suffixInput, setSuffixInput] = useState('');
     const [isLocked, setIsLocked] = useState(false);
 
-    // Determine which prefix to use:
     const currentPrefix = isLocked ? lockedPrefix : selectedPrefix;
 
-    // Handler for the Apply button:
     const handleApply = () => {
         dispatch(updateDownloadFilePath(`${currentPrefix}${suffixInput}`));
     };
 
-    // 1) ONE INIT EFFECT that:
-    //    • checks Chrome storage → uses that if present
-    //    • otherwise fetches categories, seeds defaults, **and immediately persists them**
-    //    • then fetches your prefix list
     useEffect(() => {
         const init = async () => {
-            // A) load saved from Chrome?
             if (chrome.selectedFilteredCategoriesList) {
                 const saved = JSON.parse(chrome.selectedFilteredCategoriesList);
                 setSelectedFilteredCategoriesList(saved);
             } else {
-                // B) else fetch the list from your API
                 const cats = await fetchGetCategoryPrefixesList(dispatch);
                 if (cats) {
                     setFilePathCategoriesList(cats);
 
-                    // seed defaults
                     const initial = cats.map((category: {
                         id: number;
                         prefixName: string;
@@ -106,15 +97,13 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
                         category,
                         display: !DEFAULT_OFF.has(String(category.prefixName).trim().toLowerCase())
                     }));
-                    setSelectedFilteredCategoriesList(initial);
 
-                    // persist right away
+                    setSelectedFilteredCategoriesList(initial);
                     updateSelectedFilteredCategoriesListIntoChromeStorage(initial);
                     dispatch(updateSelectedFilteredCategoriesList(JSON.stringify(initial)));
                 }
             }
 
-            // C) fetch your prefixes in parallel or sequence
             const prefixes = await fetchGetCategoryPrefixesList(dispatch);
             if (prefixes) {
                 setPrefixsList(prefixes);
@@ -124,7 +113,6 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
         init();
     }, [dispatch, chrome.selectedFilteredCategoriesList]);
 
-    // 2) any direct toggle now writes straight away
     const persist = (next: typeof selectedFilteredCategoriesList) => {
         updateSelectedFilteredCategoriesListIntoChromeStorage(next);
         dispatch(updateSelectedFilteredCategoriesList(JSON.stringify(next)));
@@ -146,33 +134,75 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
 
     const areAllSelected = selectedFilteredCategoriesList.every(item => item.display);
 
-    // 3) downloadFilePath update stays as is
     useEffect(() => {
         dispatch(updateDownloadFilePath(`${selectedPrefix}${selectedSuffix}`));
     }, [dispatch, selectedPrefix, selectedSuffix]);
 
     const handleToggleLock = () => {
         if (!isLocked && selectedPrefix) {
-            // we’re turning lock _on_, so remember the current selection
             setLockedPrefix(selectedPrefix);
         } else if (isLocked) {
-            // turning lock _off_, clear it
             setLockedPrefix('');
         }
         setIsLocked(l => !l);
     };
 
+    const panelStyle: React.CSSProperties = {
+        border: `1px solid ${theme.panelBorder}`,
+        borderRadius: '14px',
+        overflow: 'hidden',
+        background: theme.panelBackground,
+        color: theme.panelText,
+        boxShadow: theme.buttonShadow,
+    };
+
+    const headerStyle: React.CSSProperties = {
+        width: '100%',
+        background: theme.rowBackgroundColor,
+        color: theme.panelText,
+        padding: '12px 14px',
+        cursor: 'pointer',
+        fontWeight: 700,
+        borderBottom: open ? `1px solid ${theme.panelBorder}` : 'none',
+    };
+
+    const sectionTitleStyle: React.CSSProperties = {
+        color: theme.panelText,
+        fontWeight: 700,
+        marginTop: '6px',
+    };
+
+    const tagStyle = (isSelected: boolean): React.CSSProperties => ({
+        display: 'inline-block',
+        padding: '6px 10px',
+        margin: '4px',
+        borderRadius: '10px',
+        cursor: 'pointer',
+        border: isSelected
+            ? `1px solid ${theme.buttonBorder}`
+            : `1px solid ${theme.panelBorder}`,
+        background: isSelected ? theme.rowBackgroundColor : theme.panelBackground,
+        color: theme.panelText,
+        boxShadow: theme.buttonShadow,
+        fontWeight: 600,
+    });
+
+    const checkboxWrapStyle: React.CSSProperties = {
+        display: 'inline-block',
+        color: theme.panelText,
+        background: theme.panelBackground,
+        border: `1px solid ${theme.panelBorder}`,
+        borderRadius: '12px',
+        padding: '10px 12px',
+    };
+
     return (
-
         <>
-
-            {/* Quick Mode bar */}
             <QuickModeControls
                 quickMode={quickMode}
                 onToggleQuick={() => {
                     setQuickMode(q => !q);
                     if (quickMode) {
-                        // reset when turning Quick Mode off
                         setIsLocked(false);
                         setLockedPrefix('');
                         setSuffixInput('');
@@ -184,35 +214,35 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
                 suffixInput={suffixInput}
                 onSuffixChange={setSuffixInput}
                 onApply={handleApply}
+                theme={theme}
             />
 
-            <div className="collapse-panel-container">
+            <div style={panelStyle}>
                 <div
-                    className="toggle-section"
                     onClick={() => setOpen(o => !o)}
                     aria-controls="collapse-panel"
                     aria-expanded={open}
+                    style={headerStyle}
                 >
-                    <center> Folder Settings </center>
+                    <center>Folder Settings</center>
                 </div>
-                <hr />
 
                 <Collapse in={open}>
-                    <div id="collapse-panel">
-                        <center> Prefix Suggestions</center>
-                        <hr />
-                        {prefixsList.map((el, i) => (
-                            <OverlayTrigger key={i} placement="bottom" overlay={<Tooltip>{el.downloadFilePath}</Tooltip>}>
+                    <div id="collapse-panel" style={{ padding: '12px 14px' }}>
+                        <center style={sectionTitleStyle}>Prefix Suggestions</center>
+                        <hr style={{ borderColor: theme.panelBorder, opacity: 1 }} />
+
+                        {prefixsList.map((el) => (
+                            <OverlayTrigger
+                                key={el.id}
+                                placement="bottom"
+                                overlay={<Tooltip id={`prefix-tooltip-${el.id}`}>{el.downloadFilePath}</Tooltip>}
+                            >
                                 <label
-                                    className={`panel-tag-button ${selectedPrefix === el.downloadFilePath ? 'panel-tag-default' : 'panel-tag-selected'
-                                        }`}
+                                    style={tagStyle(selectedPrefix === el.downloadFilePath)}
                                     onClick={() => {
                                         setSelectedPrefix(el.downloadFilePath);
-
-                                        // ✅ store priority from this prefix row
                                         dispatch(updateDownloadPriority(el.downloadPriority ?? 0));
-
-                                        // keep existing behavior
                                         dispatch(updateDownloadFilePath(`${el.downloadFilePath}${selectedSuffix}`));
                                     }}
                                 >
@@ -220,36 +250,43 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
                                 </label>
                             </OverlayTrigger>
                         ))}
+
                         <br />
 
-                        <center> Suffix Suggestions</center>
-                        <hr />
-                        {/* If your suffix list comes from props or state, render similarly */}
-                        {/* ... you didn’t show suffix fetch but same idea ... */}
+                        <center style={sectionTitleStyle}>Suffix Suggestions</center>
+                        <hr style={{ borderColor: theme.panelBorder, opacity: 1 }} />
 
-                        <hr />
+                        <hr style={{ borderColor: theme.panelBorder, opacity: 1 }} />
+
                         <FilesPathTagsListSelector
                             setIsHandleRefresh={setIsHandleRefresh}
                             selectedPrefix={selectedPrefix}
                             isHandleRefresh={isHandleRefresh}
+                            theme={theme}
                         />
+
                         <br />
 
-                        <center> Selected Categories</center>
-                        <hr />
-                        <div style={{ display: 'inline-block' }}>
-                            <label style={{ marginRight: 10 }}>
-                                <input type="checkbox" checked={areAllSelected} onChange={handleSelectAllCheckbox} />{' '}
+                        <center style={sectionTitleStyle}>Selected Categories</center>
+                        <hr style={{ borderColor: theme.panelBorder, opacity: 1 }} />
+
+                        <div style={checkboxWrapStyle}>
+                            <label style={{ marginRight: 10, color: theme.panelText }}>
+                                <input
+                                    type="checkbox"
+                                    checked={areAllSelected}
+                                    onChange={handleSelectAllCheckbox}
+                                />{' '}
                                 Select/Deselect All
                             </label>
 
                             {selectedFilteredCategoriesList.map((item, idx) => (
-                                <label key={idx} style={{ marginRight: 10 }}>
+                                <label key={item.category.id ?? idx} style={{ marginRight: 10, color: theme.panelText }}>
                                     <input
                                         type="checkbox"
                                         checked={item.display}
                                         onChange={() => handleToggleBaseModelCheckbox(idx)}
-                                    />
+                                    />{' '}
                                     {item.category.prefixName}
                                 </label>
                             ))}
@@ -257,8 +294,6 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
                     </div>
                 </Collapse>
             </div>
-
-
         </>
     );
 };

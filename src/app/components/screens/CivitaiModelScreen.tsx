@@ -37,7 +37,7 @@ const CivitaiModelScreen: React.FC = () => {
     const databaseModelsList = databaseData;
 
     const chrome = useSelector((state: AppState) => state.chrome);
-    const { bookmarkID, isBookmarked } = chrome;
+    const { bookmarkID, isBookmarked, isDarkMode } = chrome;
 
     const panels = useSelector((state: AppState) => state.panel.panels);
     const dispatch = useDispatch();
@@ -63,7 +63,11 @@ const CivitaiModelScreen: React.FC = () => {
             < CategoriesListSelector />
 
             {/**Folder Lists Option */}
-            < DownloadFilePathOptionPanel setIsHandleRefresh={setIsHandleRefresh} isHandleRefresh={isHandleRefresh} />
+            < DownloadFilePathOptionPanel
+                setIsHandleRefresh={setIsHandleRefresh}
+                isHandleRefresh={isHandleRefresh}
+                isDarkMode={isDarkMode}
+            />
 
             <FolderDropdown />
 

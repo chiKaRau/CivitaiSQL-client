@@ -12,39 +12,39 @@ import {
 } from '../utils/chromeUtils'
 import Autocomplete from '@mui/material/Autocomplete'
 import TextField from '@mui/material/TextField'
-import { Button, OverlayTrigger, Tooltip } from 'react-bootstrap'
+import { OverlayTrigger, Tooltip } from 'react-bootstrap'
 import { BsPencilFill } from 'react-icons/bs'
+import { darkTheme, lightTheme } from './window_offline/OfflineWindow.theme'
 
 interface DownloadFilePathOptionPanelProps {
     isHandleRefresh: boolean
     setIsHandleRefresh: (val: boolean) => void
+    isDarkMode: boolean
 }
 
 const DownloadFilePathOptionPanel: React.FC<DownloadFilePathOptionPanelProps> = ({
     isHandleRefresh,
-    setIsHandleRefresh
+    setIsHandleRefresh,
+    isDarkMode
 }) => {
     const dispatch = useDispatch()
     const {
         downloadFilePath,
         selectedFilteredCategoriesList,
-        selectedCategory
+        selectedCategory,
     } = useSelector((s: AppState) => s.chrome)
 
-    // 1) Local typing state
-    const [inputValue, setInputValue] = useState<string>(downloadFilePath)
+    const theme = isDarkMode ? darkTheme : lightTheme
 
-    // 2) Folders from server
+    const [inputValue, setInputValue] = useState<string>(downloadFilePath ?? '')
     const [foldersList, setFoldersList] = useState<string[]>([])
     const [isLoading, setIsLoading] = useState<boolean>(false)
     const inputRef = useRef<HTMLInputElement>(null)
 
-    // Keep local input in sync if Redux changes externally
     useEffect(() => {
-        setInputValue(downloadFilePath)
+        setInputValue(downloadFilePath ?? '')
     }, [downloadFilePath])
 
-    // Fetch function
     const handleGetFoldersList = async () => {
         setIsLoading(true)
         try {
@@ -63,29 +63,25 @@ const DownloadFilePathOptionPanel: React.FC<DownloadFilePathOptionPanelProps> = 
         }
     }
 
-    // Initial fetch on mount
     useEffect(() => {
         handleGetFoldersList()
         // eslint-disable-next-line
     }, [])
 
-    // Refresh when parent tells us
     useEffect(() => {
         if (isHandleRefresh) {
             handleGetFoldersList()
         }
     }, [isHandleRefresh])
 
-    // Parse categories JSON once
     const parsedCategories = useMemo(() => {
         try {
-            return JSON.parse(selectedFilteredCategoriesList)
+            return JSON.parse(selectedFilteredCategoriesList ?? '[]')
         } catch {
             return []
         }
     }, [selectedFilteredCategoriesList])
 
-    // 3) Memoized sort & filter
     const sortedAndFiltered = useMemo(() => {
         const lc = (s: string) => s.toLowerCase()
 
@@ -135,17 +131,16 @@ const DownloadFilePathOptionPanel: React.FC<DownloadFilePathOptionPanelProps> = 
             })
     }, [foldersList, parsedCategories])
 
-    // 4) Commit to Redux on selection or blur
     const commit = (_: any, val: string | null) => {
         const clean = val?.replace(/[<>:"\\|?*]/g, '') || ''
         dispatch(updateDownloadFilePath(clean))
     }
+
     const handleBlur = () => commit(null, inputValue)
 
-    // Save to Chrome storage
     const handleSave = () => {
-        updateDownloadFilePathIntoChromeStorage(downloadFilePath)
-        updateSelectedCategoryIntoChromeStorage(selectedCategory)
+        updateDownloadFilePathIntoChromeStorage(downloadFilePath ?? '')
+        updateSelectedCategoryIntoChromeStorage(selectedCategory ?? '')
     }
 
     return (
@@ -161,10 +156,40 @@ const DownloadFilePathOptionPanel: React.FC<DownloadFilePathOptionPanelProps> = 
                     options={sortedAndFiltered}
                     loading={isLoading}
                     inputValue={inputValue}
-                    onInputChange={(_, v) => setInputValue(v)}
-                    value={downloadFilePath}
+                    onInputChange={(_, v) => setInputValue(v ?? '')}
+                    value={downloadFilePath ?? ''}
                     onChange={commit}
                     sx={{ width: 350 }}
+                    slotProps={{
+                        paper: {
+                            sx: {
+                                backgroundColor: theme.panelBackground,
+                                color: theme.panelText,
+                                border: `1px solid ${theme.panelBorder}`,
+                                boxShadow: theme.buttonShadow,
+                            },
+                        },
+                        listbox: {
+                            sx: {
+                                backgroundColor: theme.panelBackground,
+                                color: theme.panelText,
+                            },
+                        },
+                        popper: {
+                            sx: {
+                                '& .MuiAutocomplete-option': {
+                                    backgroundColor: theme.panelBackground,
+                                    color: theme.panelText,
+                                },
+                                '& .MuiAutocomplete-option.Mui-focused': {
+                                    backgroundColor: theme.rowBackgroundColor,
+                                },
+                                '& .MuiAutocomplete-option[aria-selected="true"]': {
+                                    backgroundColor: theme.evenRowBackgroundColor,
+                                },
+                            },
+                        },
+                    }}
                     renderInput={(params) => (
                         <TextField
                             {...params}
@@ -172,23 +197,76 @@ const DownloadFilePathOptionPanel: React.FC<DownloadFilePathOptionPanelProps> = 
                             label="Folder path"
                             helperText={`Can't contain <>:"\\|?*`}
                             onBlur={handleBlur}
+                            sx={{
+                                '& .MuiOutlinedInput-root': {
+                                    color: theme.panelText,
+                                    backgroundColor: theme.panelBackground,
+                                    '& fieldset': {
+                                        borderColor: theme.panelBorder,
+                                    },
+                                    '&:hover fieldset': {
+                                        borderColor: theme.buttonBorder,
+                                    },
+                                    '&.Mui-focused fieldset': {
+                                        borderColor: theme.buttonBorder,
+                                    },
+                                },
+                                '& .MuiInputLabel-root': {
+                                    color: theme.subText,
+                                },
+                                '& .MuiInputLabel-root.Mui-focused': {
+                                    color: theme.panelText,
+                                },
+                                '& .MuiFormHelperText-root': {
+                                    color: theme.subText,
+                                },
+                                '& .MuiSvgIcon-root': {
+                                    color: theme.panelText,
+                                },
+                                '& .MuiAutocomplete-popupIndicator': {
+                                    color: theme.panelText,
+                                },
+                                '& .MuiAutocomplete-clearIndicator': {
+                                    color: theme.panelText,
+                                },
+                            }}
                         />
                     )}
                     onFocus={() => {
                         if (inputRef.current) {
                             inputRef.current.scrollLeft =
-                                inputRef.current.scrollWidth - inputRef.current.offsetWidth + 100;
+                                inputRef.current.scrollWidth - inputRef.current.offsetWidth + 100
                         }
                     }}
                 />
 
                 <OverlayTrigger
                     placement="bottom"
-                    overlay={<Tooltip id="tooltip">Save this download file path.</Tooltip>}
+                    overlay={<Tooltip id="download-file-path-save-tooltip">Save this download file path.</Tooltip>}
                 >
-                    <Button variant="light" disabled={isLoading} onClick={handleSave}>
+                    <button
+                        type="button"
+                        disabled={isLoading}
+                        onClick={handleSave}
+                        style={{
+                            width: '56px',
+                            minWidth: '56px',
+                            height: '56px',
+                            borderRadius: '12px',
+                            border: `1px solid ${theme.buttonBorder}`,
+                            background: theme.buttonBackground,
+                            color: theme.buttonText,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: isLoading ? 'not-allowed' : 'pointer',
+                            boxShadow: theme.buttonShadow,
+                            flexShrink: 0,
+                            opacity: isLoading ? 0.7 : 1,
+                        }}
+                    >
                         <BsPencilFill />
-                    </Button>
+                    </button>
                 </OverlayTrigger>
             </div>
         </>

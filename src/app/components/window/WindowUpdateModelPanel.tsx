@@ -21,6 +21,7 @@ import { retrieveCivitaiFileName, retrieveCivitaiFilesList } from '../../utils/o
 import { updateDownloadFilePath } from '../../store/actions/chromeActions';
 import { FaFilter, FaChevronUp, FaChevronDown } from 'react-icons/fa';
 import { FaXmark, FaFolderTree, FaHardDrive } from 'react-icons/fa6';
+import { AppTheme, darkTheme, lightTheme } from '../window_offline/OfflineWindow.theme';
 
 interface Version {
     id: number;
@@ -48,43 +49,10 @@ interface PanelProps {
 const updateModelPanel: React.FC<PanelProps> = ({ selectedVersion, modelId, modelURL, modelData, setHasUpdated, onClose }) => {
     const dispatch = useDispatch();
     const chrome = useSelector((state: AppState) => state.chrome);
+    const { isDarkMode } = chrome;
+    const theme = isDarkMode ? darkTheme : lightTheme;
     const [selectedCategory, setSelectCategory] = useState(chrome.selectedCategory || "Characters")
     const [downloadFilePath, setDownloadFilePath] = useState(chrome.downloadFilePath || "")
-    const [isHandleRefresh, setIsHandleRefresh] = useState(false);
-
-    // Inline styles
-    const panelContainerStyle = {
-        position: 'relative',
-        display: 'flex',        // enables side-by-side layout
-        width: '100%',
-        height: '100%',
-        backgroundColor: '#fff',
-        border: '1px solid #ccc',
-    };
-
-    const closeButtonStyle = {
-        position: 'absolute',
-        top: '8px',
-        right: '8px',
-        background: 'transparent',
-        border: 'none',
-        fontSize: '18px',
-        cursor: 'pointer',
-    };
-
-    const panelLeftStyle = {
-        flex: 1,
-        padding: '16px',
-        overflowY: 'auto',
-        backgroundColor: '#f9f9f9', // Example color
-    };
-
-    const panelRightStyle = {
-        flex: 1,
-        padding: '16px',
-        overflowY: 'auto',
-        backgroundColor: '#fafafa', // Example color
-    };
 
     useEffect(() => {
         console.log("test-window-selectedVersion");
@@ -93,9 +61,18 @@ const updateModelPanel: React.FC<PanelProps> = ({ selectedVersion, modelId, mode
     }, []);
 
     useEffect(() => {
-        setDownloadFilePath(chrome.downloadFilePath)
-        setSelectCategory(chrome.selectedCategory)
-    }, [chrome])
+        setDownloadFilePath(chrome.downloadFilePath ?? "");
+        setSelectCategory(chrome.selectedCategory ?? "Characters");
+    }, [chrome.downloadFilePath, chrome.selectedCategory]);
+
+    const sideCardStyle: React.CSSProperties = {
+        background: theme.panelBackground,
+        color: theme.panelText,
+        border: `1px solid ${theme.panelBorder}`,
+        borderRadius: '16px',
+        padding: '14px',
+        boxShadow: theme.buttonShadow,
+    };
 
     return (
         <div
@@ -115,10 +92,11 @@ const updateModelPanel: React.FC<PanelProps> = ({ selectedVersion, modelId, mode
                     width: '100%',
                     maxWidth: '1400px',
                     height: '88vh',
-                    background: '#ffffff',
+                    background: theme.panelBackground,
+                    color: theme.panelText,
                     borderRadius: '18px',
-                    boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
-                    border: '1px solid #e5e7eb',
+                    boxShadow: theme.buttonShadow,
+                    border: `1px solid ${theme.panelBorder}`,
                     display: 'flex',
                     flexDirection: 'column',
                     overflow: 'hidden',
@@ -128,8 +106,8 @@ const updateModelPanel: React.FC<PanelProps> = ({ selectedVersion, modelId, mode
                 <div
                     style={{
                         padding: '16px 18px',
-                        borderBottom: '1px solid #eef1f4',
-                        background: '#fbfcfe',
+                        borderBottom: `1px solid ${theme.panelBorder}`,
+                        background: theme.rowBackgroundColor,
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
@@ -141,7 +119,7 @@ const updateModelPanel: React.FC<PanelProps> = ({ selectedVersion, modelId, mode
                             style={{
                                 fontSize: '20px',
                                 fontWeight: 700,
-                                color: '#1f2937',
+                                color: theme.panelText,
                                 lineHeight: 1.3,
                             }}
                         >
@@ -152,7 +130,7 @@ const updateModelPanel: React.FC<PanelProps> = ({ selectedVersion, modelId, mode
                             style={{
                                 marginTop: '4px',
                                 fontSize: '13px',
-                                color: '#6b7280',
+                                color: theme.subText,
                                 wordBreak: 'break-word',
                             }}
                         >
@@ -175,13 +153,14 @@ const updateModelPanel: React.FC<PanelProps> = ({ selectedVersion, modelId, mode
                                 width: '40px',
                                 height: '40px',
                                 borderRadius: '10px',
-                                border: '1px solid #d0d7de',
-                                background: '#fff',
+                                border: `1px solid ${theme.buttonBorder}`,
+                                background: theme.buttonBackground,
+                                color: theme.buttonText,
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 cursor: 'pointer',
-                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                boxShadow: theme.buttonShadow,
                                 flexShrink: 0,
                             }}
                         >
@@ -197,7 +176,7 @@ const updateModelPanel: React.FC<PanelProps> = ({ selectedVersion, modelId, mode
                         display: 'grid',
                         gridTemplateColumns: '1.1fr 0.9fr',
                         minHeight: 0,
-                        background: '#f8fafc',
+                        background: theme.gridBackgroundColor,
                     }}
                 >
                     {/* Left */}
@@ -206,17 +185,17 @@ const updateModelPanel: React.FC<PanelProps> = ({ selectedVersion, modelId, mode
                             minHeight: 0,
                             overflowY: 'auto',
                             padding: '16px',
-                            borderRight: '1px solid #e5e7eb',
-                            background: '#f8fafc',
+                            borderRight: `1px solid ${theme.panelBorder}`,
+                            background: theme.gridBackgroundColor,
                         }}
                     >
                         <div
                             style={{
-                                background: '#fff',
-                                border: '1px solid #e5e7eb',
                                 borderRadius: '16px',
                                 padding: '14px',
-                                boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                                background: theme.panelBackground,
+                                border: `1px solid ${theme.panelBorder}`,
+                                boxShadow: theme.buttonShadow,
                             }}
                         >
                             <DatabaseUpdateModelPanel
@@ -229,7 +208,10 @@ const updateModelPanel: React.FC<PanelProps> = ({ selectedVersion, modelId, mode
                                 setDownloadFilePath={setDownloadFilePath}
                                 setHasUpdated={setHasUpdated}
                                 closePanel={onClose}
+                                theme={theme}
+                                isDarkMode={isDarkMode}
                             />
+
                         </div>
                     </div>
 
@@ -239,21 +221,13 @@ const updateModelPanel: React.FC<PanelProps> = ({ selectedVersion, modelId, mode
                             minHeight: 0,
                             overflowY: 'auto',
                             padding: '16px',
-                            background: '#fbfcfe',
+                            background: theme.rowBackgroundColor,
                             display: 'flex',
                             flexDirection: 'column',
                             gap: '14px',
                         }}
                     >
-                        <div
-                            style={{
-                                background: '#fff',
-                                border: '1px solid #e5e7eb',
-                                borderRadius: '16px',
-                                padding: '14px',
-                                boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-                            }}
-                        >
+                        <div style={sideCardStyle}>
                             <div
                                 style={{
                                     display: 'flex',
@@ -261,7 +235,7 @@ const updateModelPanel: React.FC<PanelProps> = ({ selectedVersion, modelId, mode
                                     gap: '8px',
                                     marginBottom: '10px',
                                     fontWeight: 700,
-                                    color: '#1f2937',
+                                    color: theme.panelText,
                                 }}
                             >
                                 <FaFilter />
@@ -272,18 +246,12 @@ const updateModelPanel: React.FC<PanelProps> = ({ selectedVersion, modelId, mode
                                 downloadFilePath={downloadFilePath}
                                 selectedCategory={selectedCategory}
                                 setSelectCategory={setSelectCategory}
+                                isDarkMode={isDarkMode}
+                                theme={theme}
                             />
                         </div>
 
-                        <div
-                            style={{
-                                background: '#fff',
-                                border: '1px solid #e5e7eb',
-                                borderRadius: '16px',
-                                padding: '14px',
-                                boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-                            }}
-                        >
+                        <div style={sideCardStyle} >
                             <div
                                 style={{
                                     display: 'flex',
@@ -291,7 +259,7 @@ const updateModelPanel: React.FC<PanelProps> = ({ selectedVersion, modelId, mode
                                     gap: '8px',
                                     marginBottom: '10px',
                                     fontWeight: 700,
-                                    color: '#1f2937',
+                                    color: theme.panelText,
                                 }}
                             >
                                 <FaFolderTree />
@@ -302,22 +270,11 @@ const updateModelPanel: React.FC<PanelProps> = ({ selectedVersion, modelId, mode
                                 downloadFilePath={downloadFilePath}
                                 setDownloadFilePath={setDownloadFilePath}
                                 selectedCategory={selectedCategory}
+                                theme={theme}
                             />
                         </div>
 
-                        <div
-                            style={{
-                                background: '#fff',
-                                border: '1px solid #e5e7eb',
-                                borderRadius: '16px',
-                                padding: '14px',
-                                boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-                                minHeight: 0,
-                                overflow: 'hidden',
-                                display: 'flex',
-                                flexDirection: 'column',
-                            }}
-                        >
+                        <div style={sideCardStyle}>
                             <div
                                 style={{
                                     display: 'flex',
@@ -325,7 +282,7 @@ const updateModelPanel: React.FC<PanelProps> = ({ selectedVersion, modelId, mode
                                     gap: '8px',
                                     marginBottom: '10px',
                                     fontWeight: 700,
-                                    color: '#1f2937',
+                                    color: theme.panelText,
                                     flexShrink: 0,
                                 }}
                             >
@@ -333,7 +290,7 @@ const updateModelPanel: React.FC<PanelProps> = ({ selectedVersion, modelId, mode
                                 Folder Browser
                             </div>
 
-                            <FolderDropdown />
+                            <FolderDropdown isDarkMode={isDarkMode} />
                         </div>
                     </div>
                 </div>
@@ -346,9 +303,11 @@ interface CategoriesListSelectorProps {
     downloadFilePath: string;
     selectedCategory: string;
     setSelectCategory: (category: string) => void;
+    theme: AppTheme;
+    isDarkMode: boolean;
 }
 
-const CategoriesListSelector: React.FC<CategoriesListSelectorProps> = ({ downloadFilePath, selectedCategory, setSelectCategory }) => {
+const CategoriesListSelector: React.FC<CategoriesListSelectorProps> = ({ downloadFilePath, selectedCategory, setSelectCategory, theme, isDarkMode }) => {
 
     const dispatch = useDispatch();
     const [isLoading, setIsLoading] = useState(false)
@@ -466,7 +425,7 @@ const CategoriesListSelector: React.FC<CategoriesListSelectorProps> = ({ downloa
                         style={{
                             fontSize: '13px',
                             fontWeight: 700,
-                            color: '#374151',
+                            color: theme.panelText,
                             marginBottom: '6px',
                             display: 'flex',
                             alignItems: 'center',
@@ -485,13 +444,17 @@ const CategoriesListSelector: React.FC<CategoriesListSelectorProps> = ({ downloa
                         }}
                         style={{
                             borderRadius: '10px',
-                            border: '1px solid #cfd6de',
+                            border: `1px solid ${theme.panelBorder}`,
                             padding: '10px 12px',
                             fontSize: '14px',
                             boxShadow: 'none',
+                            background: theme.panelBackground,
+                            color: theme.panelText,
                         }}
                     >
-                        <option value="">Select an option</option>
+                        <option value="" style={{ background: theme.panelBackground, color: theme.panelText }}>
+                            Select an option
+                        </option>
                         {categoriesList?.map((element, index) => (
                             <option key={index} value={element}>
                                 {element}
@@ -516,9 +479,9 @@ const CategoriesListSelector: React.FC<CategoriesListSelectorProps> = ({ downloa
                             width: '34px',
                             height: '34px',
                             borderRadius: '999px',
-                            background: '#fff3cd',
-                            border: '1px solid #ffe08a',
-                            color: '#8a6d3b',
+                            background: isDarkMode ? '#4a3f16' : '#fff3cd',
+                            border: isDarkMode ? '1px solid #8a6d3b' : '1px solid #ffe08a',
+                            color: isDarkMode ? '#ffd966' : '#8a6d3b',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -537,9 +500,10 @@ const CategoriesListSelector: React.FC<CategoriesListSelectorProps> = ({ downloa
 interface FilesPathSettingPanelProps {
     downloadFilePath: string;
     setDownloadFilePath: (downloadFilePath: string) => void;
+    theme: AppTheme;
 }
 
-const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadFilePath, setDownloadFilePath }) => {
+const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadFilePath, setDownloadFilePath, theme }) => {
     const isInitialMount = useRef(true);
     const dispatch = useDispatch();
 
@@ -663,10 +627,11 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
     return (
         <div
             style={{
-                border: '1px solid #e5e7eb',
+                border: `1px solid ${theme.panelBorder}`,
                 borderRadius: '14px',
                 overflow: 'hidden',
-                background: '#fcfcfd',
+                background: theme.panelBackground,
+                color: theme.panelText,
             }}
         >
             <button
@@ -677,14 +642,14 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
                 style={{
                     width: '100%',
                     border: 'none',
-                    background: '#f8fafc',
+                    background: theme.rowBackgroundColor,
+                    color: theme.panelText,
                     padding: '12px 14px',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     cursor: 'pointer',
                     fontWeight: 700,
-                    color: '#1f2937',
                 }}
             >
                 <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -696,13 +661,13 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
 
             <Collapse in={open}>
                 <div id="collapse-panel">
-                    <div style={{ fontWeight: 700, color: '#374151', marginBottom: '8px' }}>
+                    <div style={{ fontWeight: 700, color: theme.panelText, marginBottom: '8px' }}>
                         Prefix Suggestions
                     </div>
 
                     {prefixsList?.map((element, index) => (
-                        <OverlayTrigger placement="bottom" overlay={<Tooltip id="tooltip" style={{ zIndex: 20000 }}>{element.downloadFilePath}</Tooltip>}>
-                            <label key={index}
+                        <OverlayTrigger key={index} placement="bottom" overlay={<Tooltip id="tooltip" style={{ zIndex: 20000 }}>{element.downloadFilePath}</Tooltip>}>
+                            <label
                                 className={`panel-tag-button ${selectedPrefix === element.downloadFilePath ? 'panel-tag-default' : 'panel-tag-selected'}`}
                                 onClick={() => {
                                     setSelectedPrefix(element.downloadFilePath)
@@ -717,8 +682,8 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
                     <center> Suffix Suggestions</center>
                     <hr />
                     {suffixsList?.map((element, index) => (
-                        <OverlayTrigger placement="bottom" overlay={<Tooltip id="tooltip" style={{ zIndex: 20000 }}>{element.value}</Tooltip>}>
-                            <label key={index}
+                        <OverlayTrigger key={index} placement="bottom" overlay={<Tooltip id="tooltip" style={{ zIndex: 20000 }}>{element.value}</Tooltip>}>
+                            <label
                                 className={`panel-tag-button ${selectedSuffix === element.value ? 'panel-tag-default' : 'panel-tag-selected'}`}
                                 onClick={() => setSelectedSuffix(element.value)}>
                                 {element.name}
@@ -731,7 +696,7 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
 
                     <hr />
 
-                    <FilesPathTagsListSelector downloadFilePath={downloadFilePath} setDownloadFilePath={setDownloadFilePath} selectedPrefix={selectedPrefix} />
+                    <FilesPathTagsListSelector downloadFilePath={downloadFilePath} setDownloadFilePath={setDownloadFilePath} selectedPrefix={selectedPrefix} theme={theme} />
 
                     <br />
 
@@ -739,7 +704,7 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
                     <hr />
                     <div style={{ display: 'inline-block' }}>
 
-                        <label style={{ marginRight: '10px' }}>
+                        <label style={{ marginRight: '10px', color: theme.panelText }}>
                             <input
                                 type="checkbox"
                                 checked={areAllSelected}
@@ -749,7 +714,7 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
                         </label>
 
                         {selectedFilteredCategoriesList.map((item, index) => (
-                            <label key={index} style={{ marginRight: '10px' }}>
+                            <label key={index} style={{ marginRight: '10px', color: theme.panelText }}>
                                 <input
                                     type="checkbox"
                                     checked={item.display}
@@ -771,12 +736,14 @@ interface FilesPathTagsListSelectorProps {
     selectedPrefix: string;
     downloadFilePath: string;
     setDownloadFilePath: (downloadFilePath: string) => void;
+    theme: AppTheme;
 }
 
 const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
     downloadFilePath,
     selectedPrefix,
-    setDownloadFilePath
+    setDownloadFilePath,
+    theme
 }) => {
     const dispatch = useDispatch();
 
@@ -900,7 +867,11 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
         <>
             <h6>Recently Added 25 Tags (Local)</h6>
 
-            <div style={{ maxHeight: '260px', overflowY: 'auto', border: '1px solid #ccc', padding: '3px', marginBottom: '10px' }}>
+            <div style={{
+                maxHeight: '260px', overflowY: 'auto', border: `1px solid ${theme.panelBorder}`,
+                background: theme.rowBackgroundColor,
+                color: theme.panelText, padding: '3px', marginBottom: '10px'
+            }}>
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                     {recentLocalTags.map((item, index) => {
                         const value = item?.path ?? '';
@@ -913,7 +884,8 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                                 style={{
                                     margin: '5px 0',
                                     cursor: 'pointer',
-                                    backgroundColor: isSelected ? '#d3d3d3' : 'transparent',
+                                    backgroundColor: isSelected ? theme.evenRowBackgroundColor : 'transparent',
+                                    color: theme.panelText,
                                     fontWeight: isSelected ? 'bold' : 'normal',
                                     padding: '4px 6px',
                                     borderRadius: 6,
@@ -942,11 +914,12 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                 style={{
                     maxHeight: '220px',
                     overflowY: 'auto',
-                    border: '1px solid #e5e7eb',
+                    border: `1px solid ${theme.panelBorder}`,
+                    background: theme.rowBackgroundColor,
+                    color: theme.panelText,
                     borderRadius: '12px',
                     padding: '6px',
                     marginBottom: '12px',
-                    background: '#fafafa'
                 }}
             >
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
@@ -962,8 +935,11 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                                 style={{
                                     margin: '6px 0',
                                     cursor: 'pointer',
-                                    backgroundColor: isSelected ? '#e8f0ff' : '#ffffff',
-                                    border: isSelected ? '1px solid #c9dcff' : '1px solid #eceff3',
+                                    backgroundColor: isSelected ? theme.evenRowBackgroundColor : theme.panelBackground,
+                                    border: isSelected
+                                        ? `1px solid ${theme.buttonBorder}`
+                                        : `1px solid ${theme.panelBorder}`,
+                                    color: theme.panelText,
                                     fontWeight: isSelected ? 700 : 500,
                                     padding: '8px 10px',
                                     borderRadius: 10,
@@ -989,8 +965,9 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                                     style={{
                                         padding: '5px 10px',
                                         borderRadius: 8,
-                                        border: '1px solid #d6dbe1',
-                                        background: '#fff',
+                                        border: `1px solid ${theme.buttonBorder}`,
+                                        background: theme.buttonBackground,
+                                        color: theme.buttonText,
                                         cursor: !!deletingPath ? 'not-allowed' : 'pointer',
                                         opacity: isDeletingThis ? 0.7 : 1,
                                         fontWeight: 600,
@@ -1024,10 +1001,10 @@ interface DownloadFilePathOptionPanelProps {
     downloadFilePath: string;
     selectedCategory: string;
     setDownloadFilePath: (downloadFilePath: string) => void;
-
+    theme: AppTheme;
 }
 
-const DownloadFilePathOptionPanel: React.FC<DownloadFilePathOptionPanelProps> = ({ downloadFilePath, setDownloadFilePath, selectedCategory }) => {
+const DownloadFilePathOptionPanel: React.FC<DownloadFilePathOptionPanelProps> = ({ downloadFilePath, setDownloadFilePath, selectedCategory, theme }) => {
     const inputRef = useRef<HTMLInputElement>(null);
     const chrome = useSelector((state: AppState) => state.chrome);
     const { selectedFilteredCategoriesList } = chrome;
@@ -1144,7 +1121,7 @@ const DownloadFilePathOptionPanel: React.FC<DownloadFilePathOptionPanelProps> = 
 
     return (
         <>
-            <FilesPathSettingPanel downloadFilePath={downloadFilePath} setDownloadFilePath={setDownloadFilePath} />
+            <FilesPathSettingPanel downloadFilePath={downloadFilePath} setDownloadFilePath={setDownloadFilePath} theme={theme} />
 
             <div
                 style={{
@@ -1176,6 +1153,36 @@ const DownloadFilePathOptionPanel: React.FC<DownloadFilePathOptionPanelProps> = 
                         id="controllable-states-update"
                         options={sortedandFilteredfoldersList}
                         disablePortal
+                        slotProps={{
+                            paper: {
+                                sx: {
+                                    backgroundColor: theme.panelBackground,
+                                    color: theme.panelText,
+                                    border: `1px solid ${theme.panelBorder}`,
+                                    boxShadow: theme.buttonShadow,
+                                },
+                            },
+                            listbox: {
+                                sx: {
+                                    backgroundColor: theme.panelBackground,
+                                    color: theme.panelText,
+                                },
+                            },
+                            popper: {
+                                sx: {
+                                    '& .MuiAutocomplete-option': {
+                                        backgroundColor: theme.panelBackground,
+                                        color: theme.panelText,
+                                    },
+                                    '& .MuiAutocomplete-option.Mui-focused': {
+                                        backgroundColor: theme.rowBackgroundColor,
+                                    },
+                                    '& .MuiAutocomplete-option[aria-selected="true"]': {
+                                        backgroundColor: theme.evenRowBackgroundColor,
+                                    },
+                                },
+                            },
+                        }}
                         renderInput={(params) => (
                             <TextField
                                 {...params}
@@ -1183,13 +1190,41 @@ const DownloadFilePathOptionPanel: React.FC<DownloadFilePathOptionPanelProps> = 
                                 helperText={`Folder name can't contain '"<>:/\\|?*'`}
                                 label="Folder path"
                                 onBlur={handleAutocompleteBlur}
-                                onFocus={() => {
-                                    if (inputRef.current) {
-                                        inputRef.current.scrollLeft =
-                                            inputRef.current.scrollWidth - inputRef.current.offsetWidth + 100;
-                                    }
-                                }}
                                 fullWidth
+                                sx={{
+                                    width: 350,
+                                    "& .MuiOutlinedInput-root": {
+                                        color: theme.panelText,
+                                        backgroundColor: theme.panelBackground,
+                                        "& fieldset": {
+                                            borderColor: theme.panelBorder,
+                                        },
+                                        "&:hover fieldset": {
+                                            borderColor: theme.buttonBorder,
+                                        },
+                                        "&.Mui-focused fieldset": {
+                                            borderColor: theme.buttonBorder,
+                                        },
+                                    },
+                                    "& .MuiInputLabel-root": {
+                                        color: theme.subText,
+                                    },
+                                    "& .MuiInputLabel-root.Mui-focused": {
+                                        color: theme.panelText,
+                                    },
+                                    "& .MuiFormHelperText-root": {
+                                        color: theme.subText,
+                                    },
+                                    "& .MuiSvgIcon-root": {
+                                        color: theme.panelText,
+                                    },
+                                    "& .MuiAutocomplete-popupIndicator": {
+                                        color: theme.panelText,
+                                    },
+                                    "& .MuiAutocomplete-clearIndicator": {
+                                        color: theme.panelText,
+                                    },
+                                }}
                             />
                         )}
                     />
@@ -1216,13 +1251,14 @@ const DownloadFilePathOptionPanel: React.FC<DownloadFilePathOptionPanelProps> = 
                             minWidth: '56px',
                             height: '56px',
                             borderRadius: '12px',
-                            border: '1px solid #cfd6de',
-                            background: '#f8f9fa',
+                            border: `1px solid ${theme.buttonBorder}`,
+                            background: theme.buttonBackground,
+                            color: theme.buttonText,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             cursor: isLoading ? 'not-allowed' : 'pointer',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                            boxShadow: theme.buttonShadow,
                             flexShrink: 0,
                             marginTop: '0px',
                         }}
@@ -1246,8 +1282,9 @@ interface DatabaseUpdateModelPanelProps {
     setDownloadFilePath: (downloadFilePath: string) => void;
     setHasUpdated: (hasUpdated: boolean) => void;
     closePanel: () => void;
+    theme: AppTheme;
+    isDarkMode: boolean;
 }
-
 
 const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props) => {
     const isInitialMount = useRef(true);
@@ -1667,443 +1704,444 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
         gap: '10px',
         padding: '10px 12px',
         borderRadius: '10px',
-        border: isSelected ? '1px solid #b7d0ff' : '1px solid #e5e7eb',
-        background: isSelected ? '#edf4ff' : '#fff',
+        border: isSelected
+            ? `1px solid ${props.theme.buttonBorder}`
+            : `1px solid ${props.theme.panelBorder}`,
+        background: isSelected
+            ? props.theme.rowBackgroundColor
+            : props.theme.panelBackground,
         cursor: 'pointer',
         fontSize: '14px',
-        color: '#1f2937',
+        color: props.theme.panelText,
         wordBreak: 'break-word',
     });
 
     const selectedBaseModel = props.selectedVersion?.baseModel || "";
 
     return (
-        <>return (
-            <>
-                <div
-                    style={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        justifyContent: 'space-between',
-                        gap: '12px',
-                        flexWrap: 'wrap',
-                        marginBottom: '16px',
-                        paddingBottom: '12px',
-                        borderBottom: '1px solid #eef1f4',
-                    }}
-                >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                        <OverlayTrigger
-                            placement="top"
-                            container={document.body}
-                            overlay={
-                                <Tooltip id="tooltip-reverse-model-list" style={{ zIndex: 20000 }}>
-                                    Reverse current model order
-                                </Tooltip>
-                            }
-                        >
-                            <button
-                                type="button"
-                                disabled={isLoading}
-                                onClick={handleReverseModelList}
-                                style={{
-                                    width: '42px',
-                                    height: '42px',
-                                    borderRadius: '10px',
-                                    border: '1px solid #d0d7de',
-                                    background: '#fff',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    cursor: 'pointer',
-                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                                }}
-                            >
-                                {isLoading ? <BsArrowRepeat className="spinner" /> : (isSorted ? <BsSortUp /> : <BsSortDown />)}
-                            </button>
-                        </OverlayTrigger>
-
+        <>
+            <div
+                style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                    flexWrap: 'wrap',
+                    marginBottom: '16px',
+                    paddingBottom: '12px',
+                    borderBottom: `1px solid ${props.theme.panelBorder}`,
+                }}
+            >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                    <OverlayTrigger
+                        placement="top"
+                        container={document.body}
+                        overlay={
+                            <Tooltip id="tooltip-reverse-model-list" style={{ zIndex: 20000 }}>
+                                Reverse current model order
+                            </Tooltip>
+                        }
+                    >
                         <button
                             type="button"
-                            onClick={handleToggleColapPanel}
+                            disabled={isLoading}
+                            onClick={handleReverseModelList}
                             style={{
-                                border: '1px solid #d0d7de',
-                                background: '#fff',
+                                width: '42px',
+                                height: '42px',
                                 borderRadius: '10px',
-                                padding: '10px 12px',
+                                background: props.theme.buttonBackground,
+                                color: props.theme.buttonText,
+                                border: `1px solid ${props.theme.buttonBorder}`,
+                                boxShadow: props.theme.buttonShadow,
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '8px',
-                                fontWeight: 700,
+                                justifyContent: 'center',
                                 cursor: 'pointer',
-                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
                             }}
                         >
-                            <FaFilter />
-                            Base Model Filter
-                            {isColapPanelOpen ? <FaChevronUp size={12} /> : <FaChevronDown size={12} />}
+                            {isLoading ? <BsArrowRepeat className="spinner" /> : (isSorted ? <BsSortUp /> : <BsSortDown />)}
                         </button>
-                    </div>
+                    </OverlayTrigger>
 
-                    <div
+                    <button
+                        type="button"
+                        onClick={handleToggleColapPanel}
                         style={{
-                            fontSize: '13px',
-                            color: '#6b7280',
-                            background: '#f8fafc',
-                            border: '1px solid #e5e7eb',
+                            border: `1px solid ${props.theme.buttonBorder}`,
+                            background: props.theme.buttonBackground,
                             borderRadius: '10px',
                             padding: '10px 12px',
-                        }}
-                    >
-                        {modelsList?.length || 0} records
-                    </div>
-                </div>
-
-                <Collapse in={isColapPanelOpen}>
-                    <div
-                        id="collapse-panel-update"
-                        style={{
-                            marginBottom: '16px',
-                            padding: '12px',
-                            borderRadius: '12px',
-                            background: '#f8fafc',
-                            border: '1px solid #e5e7eb',
-                        }}
-                    >
-                        <div
-                            style={{
-                                display: 'flex',
-                                flexWrap: 'wrap',
-                                gap: '10px 16px',
-                            }}
-                        >
-                            {baseModelList.map((item, index) => (
-                                <label
-                                    key={index}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '6px',
-                                        fontSize: '14px',
-                                        color: '#374151',
-                                    }}
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={item.display}
-                                        onChange={() => handleToggleBaseModelCheckbox(index)}
-                                    />
-                                    {item.baseModel}
-                                </label>
-                            ))}
-                        </div>
-                    </div>
-                </Collapse>
-
-                {isLoading ? (
-                    <div
-                        style={{
-                            minHeight: '180px',
                             display: 'flex',
                             alignItems: 'center',
-                            justifyContent: 'center',
+                            gap: '8px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            boxShadow: props.theme.buttonShadow,
                         }}
                     >
-                        <Spinner />
+                        <FaFilter />
+                        Base Model Filter
+                        {isColapPanelOpen ? <FaChevronUp size={12} /> : <FaChevronDown size={12} />}
+                    </button>
+                </div>
+
+                <div
+                    style={{
+                        fontSize: '13px',
+                        color: props.theme.buttonText,
+                        border: `1px solid ${props.theme.buttonBorder}`,
+                        background: props.theme.buttonBackground,
+                        borderRadius: '10px',
+                        padding: '10px 12px',
+                    }}
+                >
+                    {modelsList?.length || 0} records
+                </div>
+            </div>
+
+            <Collapse in={isColapPanelOpen}>
+                <div
+                    id="collapse-panel-update"
+                    style={{
+                        marginBottom: '16px',
+                        padding: '12px',
+                        borderRadius: '12px',
+                        border: `1px solid ${props.theme.buttonBorder}`,
+                        background: props.theme.buttonBackground,
+                    }}
+                >
+                    <div
+                        style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: '10px 16px',
+                        }}
+                    >
+                        {baseModelList.map((item, index) => (
+                            <label
+                                key={index}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    fontSize: '14px',
+                                    color: props.theme.buttonText,
+                                }}
+                            >
+                                <input
+                                    type="checkbox"
+                                    checked={item.display}
+                                    onChange={() => handleToggleBaseModelCheckbox(index)}
+                                />
+                                {item.baseModel}
+                            </label>
+                        ))}
                     </div>
-                ) : (
-                    <>
-                        {modelsList?.map((model, index) => {
-                            const localScanPath = normalizeLocalPathToScanPath(model?.localPath);
-                            const localUpdatePath = buildUpdatePathFromScanPath(localScanPath);
-                            const isSameBaseModel =
-                                (model?.baseModel || "").toLowerCase() === selectedBaseModel.toLowerCase();
+                </div>
+            </Collapse>
 
-                            if (!visibleToasts[index]) return null;
+            {isLoading ? (
+                <div
+                    style={{
+                        minHeight: '180px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                    }}
+                >
+                    <Spinner />
+                </div>
+            ) : (
+                <>
+                    {modelsList?.map((model, index) => {
+                        const localScanPath = normalizeLocalPathToScanPath(model?.localPath);
+                        const localUpdatePath = buildUpdatePathFromScanPath(localScanPath);
+                        const isSameBaseModel =
+                            (model?.baseModel || "").toLowerCase() === selectedBaseModel.toLowerCase();
 
-                            return (
-                                <div
-                                    key={index}
+                        if (!visibleToasts[index]) return null;
+
+                        return (
+                            <div
+                                key={index}
+                                style={{
+                                    marginBottom: '14px',
+                                }}
+                            >
+                                <Toast
+                                    onClose={() => handleClose(index)}
                                     style={{
-                                        marginBottom: '14px',
+                                        width: '100%',
+                                        borderRadius: '16px',
+                                        background: isSameBaseModel ? props.theme.rowBackgroundColor : props.theme.panelBackground,
+                                        border: isSameBaseModel
+                                            ? `2px solid ${props.theme.buttonBorder}`
+                                            : `1px solid ${props.theme.panelBorder}`,
+                                        color: props.theme.panelText,
+                                        boxShadow: props.theme.buttonShadow,
+                                        overflow: 'hidden',
                                     }}
                                 >
-                                    <Toast
-                                        onClose={() => handleClose(index)}
+                                    <Toast.Header
                                         style={{
-                                            width: '100%',
-                                            borderRadius: '16px',
-                                            border: isSameBaseModel ? '2px solid #4f8cff' : '1px solid #e5e7eb',
-                                            overflow: 'hidden',
-                                            boxShadow: isSameBaseModel
-                                                ? '0 6px 18px rgba(79, 140, 255, 0.18)'
-                                                : '0 4px 14px rgba(0,0,0,0.06)',
-                                            background: isSameBaseModel ? '#f4f8ff' : '#fff',
+                                            background: props.theme.rowBackgroundColor,
+                                            borderBottom: `1px solid ${props.theme.panelBorder}`,
+                                            padding: '12px 14px',
                                         }}
                                     >
-                                        <Toast.Header
+                                        <div
                                             style={{
-                                                background: '#f8fafc',
-                                                borderBottom: '1px solid #eef1f4',
-                                                padding: '12px 14px',
+                                                width: '100%',
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'flex-start',
+                                                gap: '12px',
                                             }}
                                         >
-                                            <div
-                                                style={{
-                                                    width: '100%',
-                                                    display: 'flex',
-                                                    justifyContent: 'space-between',
-                                                    alignItems: 'flex-start',
-                                                    gap: '12px',
-                                                }}
-                                            >
-                                                <div style={{ minWidth: 0, flex: 1 }}>
-                                                    <div style={{ marginBottom: '6px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                                        <Badge bg="primary">{model?.baseModel}</Badge>
+                                            <div style={{ minWidth: 0, flex: 1 }}>
+                                                <div style={{ marginBottom: '6px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                                    <Badge bg="primary">{model?.baseModel}</Badge>
 
-                                                        {isSameBaseModel && (
-                                                            <Badge bg="success">Same Base Model</Badge>
-                                                        )}
-                                                    </div>
-
-                                                    <div
-                                                        style={{
-                                                            fontWeight: 700,
-                                                            color: '#1f2937',
-                                                            lineHeight: 1.35,
-                                                            wordBreak: 'break-word',
-                                                        }}
-                                                    >
-                                                        {props.modelID}_{model?.versionNumber ?? 'Unknown'} : {model?.name}
-                                                    </div>
-                                                </div>
-
-                                                {visibleIsCarted[index] ? (
-                                                    <OverlayTrigger
-                                                        placement="top"
-                                                        container={document.body}
-                                                        overlay={
-                                                            <Tooltip id={`tooltip-carted-${index}`} style={{ zIndex: 20000 }}>
-                                                                Already in cart
-                                                            </Tooltip>
-                                                        }
-                                                    >
-                                                        <div style={{ color: '#198754', flexShrink: 0 }}>
-                                                            <BsFillCartCheckFill size={18} />
-                                                        </div>
-                                                    </OverlayTrigger>
-                                                ) : null}
-                                            </div>
-                                        </Toast.Header>
-
-                                        <Toast.Body style={{ padding: '14px' }}>
-                                            <div
-                                                style={{
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    gap: '14px',
-                                                }}
-                                            >
-                                                <div
-                                                    style={{
-                                                        borderRadius: '12px',
-                                                        overflow: 'hidden',
-                                                        border: '1px solid #e5e7eb',
-                                                        background: '#f8fafc',
-                                                    }}
-                                                >
-                                                    {model?.imageUrls?.[0]?.url ? (
-                                                        <Carousel fade interval={null}>
-                                                            {model?.imageUrls?.map((image, imgIndex) => (
-                                                                <Carousel.Item key={imgIndex}>
-                                                                    <div
-                                                                        style={{
-                                                                            height: '260px',
-                                                                            display: 'flex',
-                                                                            alignItems: 'center',
-                                                                            justifyContent: 'center',
-                                                                            background: '#fff',
-                                                                        }}
-                                                                    >
-                                                                        <img
-                                                                            src={image.url || "https://placehold.co/200x250"}
-                                                                            alt={model.name}
-                                                                            style={{
-                                                                                maxWidth: '100%',
-                                                                                maxHeight: '260px',
-                                                                                objectFit: 'contain',
-                                                                            }}
-                                                                        />
-                                                                    </div>
-                                                                </Carousel.Item>
-                                                            ))}
-                                                        </Carousel>
-                                                    ) : (
-                                                        <div
-                                                            style={{
-                                                                height: '180px',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                color: '#6b7280',
-                                                                fontWeight: 600,
-                                                            }}
-                                                        >
-                                                            No image available
-                                                        </div>
+                                                    {isSameBaseModel && (
+                                                        <Badge bg="success">Same Base Model</Badge>
                                                     )}
                                                 </div>
 
                                                 <div
                                                     style={{
-                                                        fontSize: '13px',
-                                                        background: '#f8fafc',
-                                                        border: '1px solid #e5e7eb',
-                                                        borderRadius: '10px',
-                                                        padding: '10px 12px',
+                                                        fontWeight: 700,
+                                                        color: props.theme.panelText,
+                                                        lineHeight: 1.35,
                                                         wordBreak: 'break-word',
                                                     }}
                                                 >
+                                                    {props.modelID}_{model?.versionNumber ?? 'Unknown'} : {model?.name}
+                                                </div>
+                                            </div>
+
+                                            {visibleIsCarted[index] ? (
+                                                <OverlayTrigger
+                                                    placement="top"
+                                                    container={document.body}
+                                                    overlay={
+                                                        <Tooltip id={`tooltip-carted-${index}`} style={{ zIndex: 20000 }}>
+                                                            Already in cart
+                                                        </Tooltip>
+                                                    }
+                                                >
+                                                    <div style={{ color: props.theme.panelText, flexShrink: 0 }}>
+                                                        <BsFillCartCheckFill size={18} />
+                                                    </div>
+                                                </OverlayTrigger>
+                                            ) : null}
+                                        </div>
+                                    </Toast.Header>
+
+                                    <Toast.Body style={{ padding: '14px' }}>
+                                        <div
+                                            style={{
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: '14px',
+                                            }}
+                                        >
+                                            <div
+                                                style={{
+                                                    borderRadius: '12px',
+                                                    overflow: 'hidden',
+                                                    border: `1px solid ${props.theme.panelBorder}`,
+                                                    background: props.theme.rowBackgroundColor,
+                                                }}
+                                            >
+                                                {model?.imageUrls?.[0]?.url ? (
+                                                    <Carousel fade interval={null}>
+                                                        {model?.imageUrls?.map((image, imgIndex) => (
+                                                            <Carousel.Item key={imgIndex}>
+                                                                <div
+                                                                    style={{
+                                                                        height: '260px',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                        background: props.theme.panelBackground,
+                                                                    }}
+                                                                >
+                                                                    <img
+                                                                        src={image.url || "https://placehold.co/200x250"}
+                                                                        alt={model.name}
+                                                                        style={{
+                                                                            maxWidth: '100%',
+                                                                            maxHeight: '260px',
+                                                                            objectFit: 'contain',
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                            </Carousel.Item>
+                                                        ))}
+                                                    </Carousel>
+                                                ) : (
                                                     <div
                                                         style={{
-                                                            fontWeight: 700,
-                                                            color: '#374151',
-                                                            marginBottom: '6px',
+                                                            height: '180px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            color: props.theme.subText,
+                                                            fontWeight: 600,
                                                         }}
                                                     >
-                                                        URL
+                                                        No image available
                                                     </div>
-                                                    <a
-                                                        href={model?.url}
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        style={{ color: '#0d6efd', textDecoration: 'none' }}
-                                                    >
-                                                        {model?.url}
-                                                    </a>
-                                                </div>
+                                                )}
+                                            </div>
 
+                                            <div
+                                                style={{
+                                                    fontSize: '13px',
+                                                    background: props.theme.rowBackgroundColor,
+                                                    border: `1px solid ${props.theme.panelBorder}`,
+                                                    color: props.theme.panelText,
+                                                    borderRadius: '10px',
+                                                    padding: '10px 12px',
+                                                    wordBreak: 'break-word',
+                                                }}
+                                            >
                                                 <div
                                                     style={{
-                                                        border: '1px solid #e5e7eb',
-                                                        borderRadius: '12px',
-                                                        padding: '12px',
-                                                        background: '#fcfcfd',
+                                                        fontWeight: 700,
+                                                        color: props.theme.panelText,
+                                                        marginBottom: '6px',
                                                     }}
                                                 >
-                                                    <div
-                                                        style={{
-                                                            fontWeight: 700,
-                                                            color: '#374151',
-                                                            marginBottom: '10px',
-                                                        }}
-                                                    >
-                                                        Update Options
-                                                    </div>
+                                                    URL
+                                                </div>
+                                                <a
+                                                    href={model?.url}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    style={{ color: '#0d6efd', textDecoration: 'none' }}
+                                                >
+                                                    {model?.url}
+                                                </a>
+                                            </div>
 
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                        {localUpdatePath && (
-                                                            <label style={radioCardStyle(updateOption === 'Database_and_LocalUpdateFolder')}>
-                                                                <input
-                                                                    type="radio"
-                                                                    value="Database_and_LocalUpdateFolder"
-                                                                    checked={updateOption === 'Database_and_LocalUpdateFolder'}
-                                                                    onChange={() => setUpdateOption('Database_and_LocalUpdateFolder')}
-                                                                />
-                                                                <span>
-                                                                    Database & Update to {localUpdatePath}
-                                                                </span>
-                                                            </label>
-                                                        )}
-
-                                                        {localScanPath && (
-                                                            <label style={radioCardStyle(updateOption === 'Database_and_LocalFileFolder')}>
-                                                                <input
-                                                                    type="radio"
-                                                                    value="Database_and_LocalFileFolder"
-                                                                    checked={updateOption === 'Database_and_LocalFileFolder'}
-                                                                    onChange={() => setUpdateOption('Database_and_LocalFileFolder')}
-                                                                />
-                                                                <span>
-                                                                    Database & {localScanPath}
-                                                                </span>
-                                                            </label>
-                                                        )}
-
-                                                        <label style={radioCardStyle(updateOption === 'Database_and_UpdateFolder')}>
-                                                            <input
-                                                                type="radio"
-                                                                value="Database_and_UpdateFolder"
-                                                                checked={updateOption === 'Database_and_UpdateFolder'}
-                                                                onChange={() => setUpdateOption('Database_and_UpdateFolder')}
-                                                            />
-                                                            <span>
-                                                                Database & Update to {UpdateDownloadFilePath}
-                                                            </span>
-                                                        </label>
-
-                                                        <label style={radioCardStyle(updateOption === 'Database_and_FileFolder')}>
-                                                            <input
-                                                                type="radio"
-                                                                value="Database_and_FileFolder"
-                                                                checked={updateOption === 'Database_and_FileFolder'}
-                                                                onChange={() => setUpdateOption('Database_and_FileFolder')}
-                                                            />
-                                                            <span>
-                                                                Database & {downloadFilePath}
-                                                            </span>
-                                                        </label>
-
-                                                        <label style={radioCardStyle(updateOption === 'Database_Only')}>
-                                                            <input
-                                                                type="radio"
-                                                                value="Database_Only"
-                                                                checked={updateOption === 'Database_Only'}
-                                                                onChange={() => setUpdateOption('Database_Only')}
-                                                            />
-                                                            <span>Database Only</span>
-                                                        </label>
-                                                    </div>
+                                            <div
+                                                style={{
+                                                    border: `1px solid ${props.theme.panelBorder}`,
+                                                    background: props.theme.panelBackground,
+                                                    padding: '12px',
+                                                }}
+                                            >
+                                                <div
+                                                    style={{
+                                                        fontWeight: 700,
+                                                        color: props.theme.panelText,
+                                                        marginBottom: '10px',
+                                                    }}
+                                                >
+                                                    Update Options
                                                 </div>
 
-                                                <button
-                                                    type="button"
-                                                    disabled={isLoading}
-                                                    onClick={() => handleUpdateModel(model?.id)}
-                                                    style={{
-                                                        width: '100%',
-                                                        border: 'none',
-                                                        borderRadius: '12px',
-                                                        padding: '12px 16px',
-                                                        background: offlineMode ? '#198754' : '#0d6efd',
-                                                        color: '#fff',
-                                                        fontWeight: 700,
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        gap: '8px',
-                                                        cursor: isLoading ? 'not-allowed' : 'pointer',
-                                                        boxShadow: offlineMode
-                                                            ? '0 4px 12px rgba(25, 135, 84, 0.25)'
-                                                            : '0 4px 12px rgba(13, 110, 253, 0.25)',
-                                                    }}
-                                                >
-                                                    <BsFillFileEarmarkArrowUpFill />
-                                                    <span>{offlineMode ? 'Update & Queue Offline' : 'Update & Download'}</span>
-                                                </button>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                    {localUpdatePath && (
+                                                        <label style={radioCardStyle(updateOption === 'Database_and_LocalUpdateFolder')}>
+                                                            <input
+                                                                type="radio"
+                                                                value="Database_and_LocalUpdateFolder"
+                                                                checked={updateOption === 'Database_and_LocalUpdateFolder'}
+                                                                onChange={() => setUpdateOption('Database_and_LocalUpdateFolder')}
+                                                            />
+                                                            <span>
+                                                                Database & Update to {localUpdatePath}
+                                                            </span>
+                                                        </label>
+                                                    )}
+
+                                                    {localScanPath && (
+                                                        <label style={radioCardStyle(updateOption === 'Database_and_LocalFileFolder')}>
+                                                            <input
+                                                                type="radio"
+                                                                value="Database_and_LocalFileFolder"
+                                                                checked={updateOption === 'Database_and_LocalFileFolder'}
+                                                                onChange={() => setUpdateOption('Database_and_LocalFileFolder')}
+                                                            />
+                                                            <span>
+                                                                Database & {localScanPath}
+                                                            </span>
+                                                        </label>
+                                                    )}
+
+                                                    <label style={radioCardStyle(updateOption === 'Database_and_UpdateFolder')}>
+                                                        <input
+                                                            type="radio"
+                                                            value="Database_and_UpdateFolder"
+                                                            checked={updateOption === 'Database_and_UpdateFolder'}
+                                                            onChange={() => setUpdateOption('Database_and_UpdateFolder')}
+                                                        />
+                                                        <span>
+                                                            Database & Update to {UpdateDownloadFilePath}
+                                                        </span>
+                                                    </label>
+
+                                                    <label style={radioCardStyle(updateOption === 'Database_and_FileFolder')}>
+                                                        <input
+                                                            type="radio"
+                                                            value="Database_and_FileFolder"
+                                                            checked={updateOption === 'Database_and_FileFolder'}
+                                                            onChange={() => setUpdateOption('Database_and_FileFolder')}
+                                                        />
+                                                        <span>
+                                                            Database & {downloadFilePath}
+                                                        </span>
+                                                    </label>
+
+                                                    <label style={radioCardStyle(updateOption === 'Database_Only')}>
+                                                        <input
+                                                            type="radio"
+                                                            value="Database_Only"
+                                                            checked={updateOption === 'Database_Only'}
+                                                            onChange={() => setUpdateOption('Database_Only')}
+                                                        />
+                                                        <span>Database Only</span>
+                                                    </label>
+                                                </div>
                                             </div>
-                                        </Toast.Body>
-                                    </Toast>
-                                </div>
-                            );
-                        })}
-                    </>
-                )}
-            </>
-            );
 
+                                            <button
+                                                type="button"
+                                                disabled={isLoading}
+                                                onClick={() => handleUpdateModel(model?.id)}
+                                                style={{
+                                                    width: '100%',
+                                                    border: 'none',
+                                                    borderRadius: '12px',
+                                                    padding: '12px 16px',
+                                                    background: offlineMode ? '#198754' : '#0d6efd',
+                                                    color: '#fff',
+                                                    fontWeight: 700,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    gap: '8px',
+                                                    cursor: isLoading ? 'not-allowed' : 'pointer',
+                                                    boxShadow: offlineMode
+                                                        ? '0 4px 12px rgba(25, 135, 84, 0.25)'
+                                                        : '0 4px 12px rgba(13, 110, 253, 0.25)',
+                                                }}
+                                            >
+                                                <BsFillFileEarmarkArrowUpFill />
+                                                <span>{offlineMode ? 'Update & Queue Offline' : 'Update & Download'}</span>
+                                            </button>
+                                        </div>
+                                    </Toast.Body>
+                                </Toast>
+                            </div>
+                        );
+                    })}
+                </>
+            )}
         </>
-
     );
 };
 

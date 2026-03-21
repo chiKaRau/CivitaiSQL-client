@@ -3,65 +3,65 @@ import { AgGridReact } from "ag-grid-react";
 import { ColDef, RowStyle } from "ag-grid-community";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-alpine.css";
+import { darkTheme, lightTheme } from "../window_offline/OfflineWindow.theme";
 
 interface URLGridProps {
     urlList: string[];
     setUrlList: (updater: (prevUrlList: string[]) => string[]) => void;
     selectedUrl: string | null;
     onUrlSelect: (url: string) => void;
-
-    // url -> imgSrc map
+    isDarkMode: boolean;
     urlImgSrcMap?: Record<string, string>;
-
-    // NEW: url -> versionId map (filled ONLY by ShortcutPanel after it fetches API)
     urlVersionIdMap?: Record<string, string>;
-
     modelPrimaryVersionIdMap?: Record<string, string>;
-
     urlBadgeMap?: Record<string, string>;
-
 }
 
-// Tooltip that shows a larger image
-const ImageTooltip: React.FC<any> = (props) => {
-    const src: string = props?.value || "";
-    if (!src) return null;
-
-    return (
-        <div
-            style={{
-                padding: 6,
-                background: "rgba(0,0,0,0.85)",
-                borderRadius: 8,
-                boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
-                maxWidth: 340,
-            }}
-        >
-            <img
-                src={src}
-                alt="preview"
-                style={{
-                    display: "block",
-                    maxWidth: 320,
-                    maxHeight: 420,
-                    borderRadius: 6,
-                }}
-            />
-        </div>
-    );
-};
 
 const URLGrid: React.FC<URLGridProps> = ({
     urlList,
     setUrlList,
     selectedUrl,
     onUrlSelect,
+    isDarkMode,
     urlImgSrcMap = {},
     urlVersionIdMap = {},
     modelPrimaryVersionIdMap = {},
     urlBadgeMap = {}
-
 }) => {
+
+    const theme = isDarkMode ? darkTheme : lightTheme;
+
+    const ImageTooltip: React.FC<any> = (props) => {
+        const src: string = props?.value || "";
+        if (!src) return null;
+
+        return (
+            <div
+                style={{
+                    padding: 6,
+                    backgroundColor: theme.panelBackground,
+                    color: theme.panelText,
+                    border: `1px solid ${theme.panelBorder}`,
+                    borderRadius: 8,
+                    boxShadow: theme.buttonShadow,
+                    maxWidth: 340,
+                }}
+            >
+                <img
+                    src={src}
+                    alt="preview"
+                    style={{
+                        display: "block",
+                        maxWidth: 320,
+                        maxHeight: 420,
+                        borderRadius: 6,
+                    }}
+                />
+            </div>
+        );
+    };
+
     const rowData = useMemo(() => {
         const seenModelIds = new Set<string>();
 
@@ -124,6 +124,7 @@ const URLGrid: React.FC<URLGridProps> = ({
             style={{
                 cursor: "pointer",
                 background: "transparent",
+                color: "#dc3545",
                 border: "none",
                 padding: 6,
                 borderRadius: 6,
@@ -189,7 +190,7 @@ const URLGrid: React.FC<URLGridProps> = ({
             cellStyle: { padding: "5px", textAlign: "center" },
             cellRenderer: (params: any) => {
                 const src = params.value as string;
-                if (!src) return <span style={{ opacity: 0.5 }}>—</span>;
+                if (!src) return <span style={{ opacity: 0.5, color: theme.subText }}>—</span>;
 
                 return (
                     <img
@@ -224,10 +225,26 @@ const URLGrid: React.FC<URLGridProps> = ({
         },
     ];
 
-    const components = useMemo(() => ({ imageTooltip: ImageTooltip }), []);
+    const components = useMemo(() => ({ imageTooltip: ImageTooltip }), [theme]);
 
     return (
-        <div className="ag-theme-alpine" style={{ height: 300, width: "100%" }}>
+        <div
+            className={isDarkMode ? "ag-theme-quartz-dark" : "ag-theme-quartz"}
+            style={{
+                height: 300,
+                width: "100%",
+                backgroundColor: theme.gridBackgroundColor,
+                color: theme.rowFontColor,
+                ["--ag-background-color" as any]: theme.gridBackgroundColor,
+                ["--ag-foreground-color" as any]: theme.rowFontColor,
+                ["--ag-header-background-color" as any]: theme.headerBackgroundColor,
+                ["--ag-header-foreground-color" as any]: theme.headerFontColor,
+                ["--ag-odd-row-background-color" as any]: theme.oddRowBackgroundColor,
+                ["--ag-border-color" as any]: theme.panelBorder,
+                ["--ag-secondary-border-color" as any]: theme.panelBorder,
+                ["--ag-selected-row-background-color" as any]: theme.rowBackgroundColor,
+            }}
+        >
             <AgGridReact
                 rowData={rowData}
                 columnDefs={columnDefs}
@@ -237,8 +254,8 @@ const URLGrid: React.FC<URLGridProps> = ({
                 tooltipShowDelay={250}
                 getRowStyle={(params): RowStyle =>
                     params.data.url === selectedUrl
-                        ? { backgroundColor: "#d1e7fd", padding: "5px" }
-                        : { backgroundColor: "", padding: "5px" }
+                        ? { backgroundColor: theme.rowBackgroundColor, color: theme.rowFontColor, padding: "5px" }
+                        : { backgroundColor: "", color: theme.rowFontColor, padding: "5px" }
                 }
                 onCellClicked={(params) => {
                     if (params.colDef.field !== "actions") onUrlSelect(params.data.url);

@@ -14,7 +14,7 @@ import FolderDropdown from '../FolderDropdown';
 
 const CustomWindow: React.FC = () => {
     const dispatch = useDispatch();
-    const { downloadFilePath, selectedCategory } = useSelector((s: AppState) => s.chrome);
+    const { downloadFilePath, selectedCategory, isDarkMode } = useSelector((s: AppState) => s.chrome);
 
     // Toast state
     const [showToast, setShowToast] = useState(false);
@@ -324,8 +324,9 @@ const CustomWindow: React.FC = () => {
                                 <DownloadFilePathOptionPanel
                                     isHandleRefresh={isHandleRefresh}
                                     setIsHandleRefresh={setIsHandleRefresh}
+                                    isDarkMode={isDarkMode}
                                 />
-                                <FolderDropdown />
+                                <FolderDropdown isDarkMode={isDarkMode} />
                             </div>
                         </div>
                     </Col>
