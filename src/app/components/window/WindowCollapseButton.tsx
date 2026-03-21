@@ -7,9 +7,10 @@ interface CollapsePanelProps {
     isPanelOpen: boolean;
     handleTogglePanel: (panelId: string) => void;
     icons: React.ReactNode;
-    buttons: React.ReactNode;
+    buttons?: React.ReactNode;
     panelId: string;
     isDarkMode?: boolean;
+    hideInlinePanel?: boolean;
 }
 
 const WindowCollapseButton: React.FC<CollapsePanelProps> = ({
@@ -18,9 +19,26 @@ const WindowCollapseButton: React.FC<CollapsePanelProps> = ({
     icons,
     buttons,
     panelId,
-    isDarkMode = true
+    isDarkMode = true,
+    hideInlinePanel = false
 }) => {
     const theme = isDarkMode ? darkTheme : lightTheme;
+
+    const outerShellBorder = isPanelOpen
+        ? `1px solid ${theme.evenRowBackgroundColor}`
+        : '1px solid transparent';
+
+    const outerShellBackground = isPanelOpen
+        ? theme.headerBackgroundColor
+        : 'transparent';
+
+    const outerShellShadow = isPanelOpen
+        ? (
+            isDarkMode
+                ? '0 6px 18px rgba(0,0,0,0.35)'
+                : '0 6px 18px rgba(0,0,0,0.10)'
+        )
+        : 'none';
 
     return (
         <div
@@ -30,7 +48,15 @@ const WindowCollapseButton: React.FC<CollapsePanelProps> = ({
                 margin: '1px 3px',
                 padding: '5px',
                 display: 'inline-block',
-                backgroundColor: 'transparent',
+                verticalAlign: 'top',
+
+                border: outerShellBorder,
+                borderRadius: '10px',
+                background: outerShellBackground,
+                boxShadow: outerShellShadow,
+
+                transition:
+                    'border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease',
             }}
         >
             <div
@@ -59,25 +85,29 @@ const WindowCollapseButton: React.FC<CollapsePanelProps> = ({
                 {icons}
             </div>
 
-            <Collapse in={isPanelOpen} dimension="width">
-                <div
-                    id={`collapse-panel-${panelId}`}
-                    style={{
-                        marginTop: '10px',
-                        padding: '10px',
-                        borderRadius: '8px',
-                        background: theme.headerBackgroundColor,
-                        color: theme.headerFontColor,
-                        border: `1px solid ${theme.evenRowBackgroundColor}`,
-                        boxShadow: isDarkMode
-                            ? '0 6px 18px rgba(0,0,0,0.35)'
-                            : '0 6px 18px rgba(0,0,0,0.10)',
-                        width: isPanelOpen ? 'max-content' : 'auto',
-                    }}
-                >
-                    {buttons}
-                </div>
-            </Collapse>
+            {!hideInlinePanel && (
+                <Collapse in={isPanelOpen}>
+                    <div>
+                        <div
+                            id={`collapse-panel-${panelId}`}
+                            style={{
+                                marginTop: '10px',
+                                padding: '10px',
+                                borderRadius: '8px',
+                                background: theme.headerBackgroundColor,
+                                color: theme.headerFontColor,
+                                border: `1px solid ${theme.evenRowBackgroundColor}`,
+                                boxShadow: isDarkMode
+                                    ? '0 6px 18px rgba(0,0,0,0.35)'
+                                    : '0 6px 18px rgba(0,0,0,0.10)',
+                                width: isPanelOpen ? 'max-content' : 'auto',
+                            }}
+                        >
+                            {buttons}
+                        </div>
+                    </div>
+                </Collapse>
+            )}
         </div>
     );
 };
@@ -86,7 +116,7 @@ WindowCollapseButton.propTypes = {
     isPanelOpen: PropTypes.bool.isRequired,
     handleTogglePanel: PropTypes.func.isRequired,
     icons: PropTypes.node.isRequired,
-    buttons: PropTypes.node.isRequired,
+    buttons: PropTypes.node,
     panelId: PropTypes.string.isRequired,
 };
 

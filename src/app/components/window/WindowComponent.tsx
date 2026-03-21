@@ -27,7 +27,7 @@ import DownloadFilePathOptionPanel from '../DownloadFilePathOptionPanel';
 import WindowDownloadFileButton from "./WindowDownloadFileButton"
 import WindowCollapseButton from "./WindowCollapseButton"
 import ButtonWrap from "../buttons/ButtonWrap";
-import { Button, OverlayTrigger, Tooltip, Form, Dropdown, ButtonGroup } from 'react-bootstrap';
+import { Button, OverlayTrigger, Tooltip, Form, Dropdown, ButtonGroup, Collapse } from 'react-bootstrap';
 import ErrorAlert from '../ErrorAlert';
 import URLGrid from './URLGrid';
 import Autocomplete from '@mui/material/Autocomplete';
@@ -112,6 +112,7 @@ import { SelectEditor } from './SelectEditor';
 import { PathAutocompleteEditor } from './PathAutocompleteEditor';
 import { HoldEditor } from './HoldEditor';
 import { darkTheme, getOfflineWindowStyles, lightTheme } from '../window_offline/OfflineWindow.theme';
+import { HoverImagePreview } from './HoverImagePreview';
 
 interface CreatorUrlItem {
     creatorUrl: string;
@@ -1156,6 +1157,23 @@ const WindowComponent: React.FC = () => {
 
     const stagingColumnDefs: ColDef[] = [
         {
+            headerName: "#",
+            width: 60,
+            minWidth: 50,
+            maxWidth: 70,
+            sortable: false,
+            filter: false,
+            editable: false,
+            pinned: "left",
+            lockPinned: true,
+            suppressMovable: true,
+            valueGetter: (p) => (p.node?.rowIndex ?? 0) + 1,
+            cellStyle: {
+                textAlign: "center",
+                fontWeight: 600,
+            },
+        },
+        {
             headerName: "Model & Version",
             field: "modelVersionDisplay",   // <-- use your real field name
             width: 170,                     // <-- shorter (tweak 150~220)
@@ -1179,23 +1197,15 @@ const WindowComponent: React.FC = () => {
             field: "imgSrc",
             width: 110,
             sortable: false,
-            tooltipField: "imgSrc",
-            tooltipComponent: "imageTooltip",
-            cellStyle: { textAlign: "center" },
-            cellRenderer: (p: any) => {
-                const src = p.value as string;
-
+            resizable: false,
+            cellStyle: { padding: "5px", textAlign: "center" },
+            cellRenderer: (params: any) => {
+                const src = params.value as string;
                 if (!src) {
-                    return <span style={{ opacity: isDarkMode ? 0.65 : 0.45, color: theme.subText }}>—</span>;
+                    return <span style={{ opacity: 0.5, color: theme.subText }}>—</span>;
                 }
 
-                return (
-                    <img
-                        src={src}
-                        alt="thumb"
-                        style={{ width: 52, height: 52, objectFit: "cover", borderRadius: 8 }}
-                    />
-                );
+                return <HoverImagePreview src={src} theme={theme} />;
             },
         },
         {
@@ -2098,7 +2108,14 @@ const WindowComponent: React.FC = () => {
                                 icons={<TbDatabaseSearch />}
                                 isDarkMode={isDarkMode}
                                 buttons={
-                                    <div>
+                                    <div
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            flexWrap: 'wrap',
+                                        }}
+                                    >
                                         {/**Checked Saved Button for User page*/}
                                         <ButtonWrap buttonConfig={{
                                             placement: "top",
@@ -2141,7 +2158,14 @@ const WindowComponent: React.FC = () => {
                                 icons={<BsDownload />}
                                 isDarkMode={isDarkMode}
                                 buttons={
-                                    <div>
+                                    <div
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            flexWrap: 'wrap',
+                                        }}
+                                    >
                                         {/**Switch Download Method Button*/}
                                         <WindowDownloadFileButton />
 
@@ -2239,7 +2263,14 @@ const WindowComponent: React.FC = () => {
                                 icons={<PiPlusMinusFill />}
                                 isDarkMode={isDarkMode}
                                 buttons={
-                                    <div>
+                                    <div
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            flexWrap: 'wrap',
+                                        }}
+                                    >
                                         {/**Bookmark and add to database Button*/}
                                         <ButtonWrap buttonConfig={{
                                             placement: "top",
@@ -2275,66 +2306,55 @@ const WindowComponent: React.FC = () => {
                                 icons={<MdOutlineApps />}
                                 isDarkMode={isDarkMode}
                                 buttons={
-                                    <div>
+                                    <div
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            flexWrap: 'wrap',
+                                        }}
+                                    >
 
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                            {counting && (
-                                                <b style={{
-                                                    whiteSpace: 'nowrap',
-                                                    overflow: 'hidden',
-                                                    textOverflow: 'ellipsis',
-                                                    fontSize: '10px' // Adjust font size as needed
-                                                }}>
-                                                    Checking Model Available: {counter} / {checkingListSize}
-                                                </b>
-                                            )}
-                                        </div>
+                                        {counting && (
+                                            <b style={{
+                                                whiteSpace: 'nowrap',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                fontSize: '10px' // Adjust font size as needed
+                                            }}>
+                                                Checking Model Available: {counter} / {checkingListSize}
+                                            </b>
+                                        )}
 
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                            {/**Checked If update available Button for User page*/}
+                                        {/**Checked Saved Button*/}
+                                        <OverlayTrigger placement={"top"}
+                                            overlay={<Tooltip id="tooltip">{`check if update available or early access`}</Tooltip>}>
+                                            <Dropdown as={ButtonGroup}>
+                                                <Button variant="primary"
+                                                    onClick={handleCheckUpdateAvaliable} >
+                                                    <MdOutlineTipsAndUpdates />
+                                                </Button>
+                                                <Dropdown.Toggle split variant="primary" id="dropdown-split-basic" />
+                                                <Dropdown.Menu>
+                                                    <Dropdown.Item
+                                                        onClick={resetCheckedUpdateList} >
+                                                        Reset
+                                                    </Dropdown.Item>
+                                                </Dropdown.Menu>
+                                            </Dropdown>
+                                        </OverlayTrigger>
 
-                                            {/**Checked Saved Button*/}
-                                            <OverlayTrigger placement={"top"}
-                                                overlay={<Tooltip id="tooltip">{`check if update available or early access`}</Tooltip>}>
-                                                <Dropdown as={ButtonGroup}>
-                                                    <Button variant="primary"
-                                                        onClick={handleCheckUpdateAvaliable} >
-                                                        <MdOutlineTipsAndUpdates />
-                                                    </Button>
-                                                    <Dropdown.Toggle split variant="primary" id="dropdown-split-basic" />
-                                                    <Dropdown.Menu>
-                                                        <Dropdown.Item
-                                                            onClick={resetCheckedUpdateList} >
-                                                            Reset
-                                                        </Dropdown.Item>
-                                                    </Dropdown.Menu>
-                                                </Dropdown>
-                                            </OverlayTrigger>
-
-                                            {/* <div>
-                                        <input
-                                            type="number"
-                                            value={updateCount}
-                                            onChange={handleUpdateCountInputChange}
-                                            style={{ width: '50px' }} // Adjust width as needed
-                                            min="1" // Prevent negative numbers and zero
-                                            max="999"
+                                        {/**Checked If update available Button for User page*/}
+                                        <ButtonWrap buttonConfig={{
+                                            placement: "top",
+                                            tooltip: "handling Sorting",
+                                            variant: "primary",
+                                            buttonIcon: isSorted ? <FcGenericSortingAsc /> : <FcGenericSortingDesc />,
+                                            disabled: counting,
+                                        }}
+                                            handleFunctionCall={() => handleSorting()}
+                                            isDarkMode={isDarkMode}
                                         />
-                                    </div> */}
-
-                                            {/**Checked If update available Button for User page*/}
-                                            <ButtonWrap buttonConfig={{
-                                                placement: "top",
-                                                tooltip: "handling Sorting",
-                                                variant: "primary",
-                                                buttonIcon: isSorted ? <FcGenericSortingAsc /> : <FcGenericSortingDesc />,
-                                                disabled: counting,
-                                            }}
-                                                handleFunctionCall={() => handleSorting()}
-                                                isDarkMode={isDarkMode}
-                                            />
-
-                                        </div>
 
                                     </div>
                                 }
@@ -2346,533 +2366,582 @@ const WindowComponent: React.FC = () => {
                                 handleTogglePanel={handleToggleCollapseButton}
                                 icons={<PiTabs />}
                                 isDarkMode={isDarkMode}
-                                buttons={
-                                    <div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '8px' }}>
-                                            <span style={{ fontWeight: 'bold' }}>Total:</span>
-                                            <span>{totalCreators}</span>
-                                            <span style={{ fontWeight: 'bold' }}>New:</span>
-                                            <span>{newCreatorsCount}</span>
-                                            <Form.Check
-                                                type="checkbox"
-                                                id="nav-by-age"
-                                                label="By last-checked age"
-                                                checked={useAgeNav}
-                                                onChange={(e) => setUseAgeNav(e.target.checked)}
-                                            />
-                                        </div>
+                                hideInlinePanel
+                            />
+                        </div>
 
-                                        {/* Put everything in one row (Flex Container) */}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '3px', margin: '5px' }}>
-                                            {isEditingCreatorUrl ? (
-                                                // Edit mode: show an Autocomplete component for creator URLs.
-                                                <Autocomplete
-                                                    freeSolo
-                                                    fullWidth
-                                                    style={{ width: '150px' }} // Ensure the container is 70% width.
-                                                    options={filteredCreatorUrlList.map((item) => item.creatorUrl.split('/')[4])}
-                                                    inputValue={creatorUrlInputValue}
-                                                    onInputChange={(event, newInputValue) => {
-                                                        setCreatorUrlInputValue(newInputValue);
-                                                    }}
-                                                    onChange={(event, newValue) => {
-                                                        if (newValue) {
-                                                            const found = filteredCreatorUrlList.find(
-                                                                (item) => item.creatorUrl.split('/')[4] === newValue
-                                                            );
-                                                            if (found) {
-                                                                handleSelectCreatorUrl(found);
-                                                            } else {
-                                                                setSelectedCreatorUrlText(newValue);
+                        <div
+                            style={{
+                                width: '100%',
+                                marginTop: collapseButtonStates['tabsButton'] ? '12px' : '0',
+                                padding: collapseButtonStates['tabsButton'] ? '10px' : '0',
+                                borderRadius: '8px',
+                                background: collapseButtonStates['tabsButton']
+                                    ? theme.headerBackgroundColor
+                                    : 'transparent',
+                                color: theme.headerFontColor,
+                                border: collapseButtonStates['tabsButton']
+                                    ? `1px solid ${theme.evenRowBackgroundColor}`
+                                    : 'none',
+                                boxShadow: 'none',
+                                boxSizing: 'border-box',
+                            }}
+                        >
+                            <Collapse in={collapseButtonStates['tabsButton']}>
+                                <div
+                                    style={{
+                                        width: '100%',
+                                        marginTop: collapseButtonStates['tabsButton'] ? '12px' : '0',
+                                    }}
+                                >
+                                    <div
+                                        style={{
+                                            width: '100%',
+                                            padding: '10px',
+                                            borderRadius: '8px',
+                                            background: theme.headerBackgroundColor,
+                                            color: theme.headerFontColor,
+                                            border: `1px solid ${theme.evenRowBackgroundColor}`,
+                                            boxShadow: 'none',
+                                            boxSizing: 'border-box',
+                                        }}
+                                    >
+                                        <div style={{ width: "100%" }}>
+                                            <div
+                                                style={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: "16px",
+                                                    marginTop: "8px",
+                                                    width: "100%",
+                                                    flexWrap: "wrap",
+                                                }}
+                                            >
+                                                <span style={{ fontWeight: 'bold' }}>Total:</span>
+                                                <span>{totalCreators}</span>
+                                                <span style={{ fontWeight: 'bold' }}>New:</span>
+                                                <span>{newCreatorsCount}</span>
+                                                <Form.Check
+                                                    type="checkbox"
+                                                    id="nav-by-age"
+                                                    label="By last-checked age"
+                                                    checked={useAgeNav}
+                                                    onChange={(e) => setUseAgeNav(e.target.checked)}
+                                                />
+                                            </div>
+
+                                            {/* Put everything in one row (Flex Container) */}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', margin: '5px' }}>
+                                                {isEditingCreatorUrl ? (
+                                                    // Edit mode: show an Autocomplete component for creator URLs.
+                                                    <Autocomplete
+                                                        freeSolo
+                                                        fullWidth
+                                                        style={{ width: '150px' }} // Ensure the container is 70% width.
+                                                        options={filteredCreatorUrlList.map((item) => item.creatorUrl.split('/')[4])}
+                                                        inputValue={creatorUrlInputValue}
+                                                        onInputChange={(event, newInputValue) => {
+                                                            setCreatorUrlInputValue(newInputValue);
+                                                        }}
+                                                        onChange={(event, newValue) => {
+                                                            if (newValue) {
+                                                                const found = filteredCreatorUrlList.find(
+                                                                    (item) => item.creatorUrl.split('/')[4] === newValue
+                                                                );
+                                                                if (found) {
+                                                                    handleSelectCreatorUrl(found);
+                                                                } else {
+                                                                    setSelectedCreatorUrlText(newValue);
+                                                                }
+                                                                setIsEditingCreatorUrl(false);
                                                             }
-                                                            setIsEditingCreatorUrl(false);
-                                                        }
-                                                    }}
-                                                    sx={{
-                                                        width: 350,
-                                                        "& .MuiOutlinedInput-root": {
-                                                            color: theme.panelText,
-                                                            backgroundColor: theme.panelBackground,
-                                                            "& fieldset": {
-                                                                borderColor: theme.panelBorder,
+                                                        }}
+                                                        sx={{
+                                                            width: 350,
+                                                            "& .MuiOutlinedInput-root": {
+                                                                color: theme.panelText,
+                                                                backgroundColor: theme.panelBackground,
+                                                                "& fieldset": {
+                                                                    borderColor: theme.panelBorder,
+                                                                },
+                                                                "&:hover fieldset": {
+                                                                    borderColor: theme.buttonBorder,
+                                                                },
+                                                                "&.Mui-focused fieldset": {
+                                                                    borderColor: theme.buttonBorder,
+                                                                },
                                                             },
-                                                            "&:hover fieldset": {
-                                                                borderColor: theme.buttonBorder,
+                                                            "& .MuiInputLabel-root": {
+                                                                color: theme.subText,
                                                             },
-                                                            "&.Mui-focused fieldset": {
-                                                                borderColor: theme.buttonBorder,
+                                                            "& .MuiInputLabel-root.Mui-focused": {
+                                                                color: theme.panelText,
                                                             },
-                                                        },
-                                                        "& .MuiInputLabel-root": {
-                                                            color: theme.subText,
-                                                        },
-                                                        "& .MuiInputLabel-root.Mui-focused": {
-                                                            color: theme.panelText,
-                                                        },
-                                                        "& .MuiFormHelperText-root": {
-                                                            color: theme.subText,
-                                                        },
-                                                        "& .MuiSvgIcon-root": {
-                                                            color: theme.panelText,
-                                                        },
-                                                        "& .MuiAutocomplete-popupIndicator": {
-                                                            color: theme.panelText,
-                                                        },
-                                                        "& .MuiAutocomplete-clearIndicator": {
-                                                            color: theme.panelText,
-                                                        },
-                                                    }}
-                                                    slotProps={{
-                                                        paper: {
-                                                            sx: {
+                                                            "& .MuiFormHelperText-root": {
+                                                                color: theme.subText,
+                                                            },
+                                                            "& .MuiSvgIcon-root": {
+                                                                color: theme.panelText,
+                                                            },
+                                                            "& .MuiAutocomplete-popupIndicator": {
+                                                                color: theme.panelText,
+                                                            },
+                                                            "& .MuiAutocomplete-clearIndicator": {
+                                                                color: theme.panelText,
+                                                            },
+                                                        }}
+                                                        slotProps={{
+                                                            paper: {
+                                                                sx: {
+                                                                    backgroundColor: theme.panelBackground,
+                                                                    color: theme.panelText,
+                                                                    border: `1px solid ${theme.panelBorder}`,
+                                                                    boxShadow: theme.buttonShadow,
+                                                                },
+                                                            },
+                                                        }}
+                                                        renderInput={(params) => (
+                                                            <TextField
+                                                                {...params}
+                                                                fullWidth
+                                                                onBlur={() => {
+                                                                    setSelectedCreatorUrlText(creatorUrlInputValue);
+                                                                    setIsEditingCreatorUrl(false);
+                                                                }}
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter') {
+                                                                        setSelectedCreatorUrlText(creatorUrlInputValue);
+                                                                        setIsEditingCreatorUrl(false);
+                                                                    }
+                                                                }}
+                                                                autoFocus
+                                                            />
+                                                        )}
+                                                    />
+                                                ) : (
+                                                    // Normal mode: show the dropdown.
+                                                    <Dropdown onToggle={handleCreatorDropdownToggle} style={{ width: '100%' }}>
+                                                        <Dropdown.Toggle
+                                                            variant="secondary"
+                                                            style={{
+                                                                width: '100%',
+                                                                backgroundColor: theme.buttonBackground,
+                                                                color: theme.buttonText,
+                                                                border: `1px solid ${theme.buttonBorder}`,
+                                                                boxShadow: theme.buttonShadow,
+                                                            }}
+                                                            onDoubleClick={() => {
+                                                                setCreatorUrlInputValue(selectedCreatorUrlText);
+                                                                setIsEditingCreatorUrl(true);
+                                                            }}
+                                                        >
+                                                            {selectedCreatorUrlText || "-- Creator URL List (choose one) --"}
+                                                        </Dropdown.Toggle>
+
+                                                        <Dropdown.Menu
+                                                            style={{
+                                                                maxHeight: '400px',
+                                                                overflowY: 'auto',
                                                                 backgroundColor: theme.panelBackground,
                                                                 color: theme.panelText,
                                                                 border: `1px solid ${theme.panelBorder}`,
                                                                 boxShadow: theme.buttonShadow,
-                                                            },
-                                                        },
-                                                    }}
-                                                    renderInput={(params) => (
-                                                        <TextField
-                                                            {...params}
-                                                            fullWidth
-                                                            onBlur={() => {
-                                                                setSelectedCreatorUrlText(creatorUrlInputValue);
-                                                                setIsEditingCreatorUrl(false);
-                                                            }}
-                                                            onKeyDown={(e) => {
-                                                                if (e.key === 'Enter') {
-                                                                    setSelectedCreatorUrlText(creatorUrlInputValue);
-                                                                    setIsEditingCreatorUrl(false);
-                                                                }
-                                                            }}
-                                                            autoFocus
-                                                        />
-                                                    )}
-                                                />
-                                            ) : (
-                                                // Normal mode: show the dropdown.
-                                                <Dropdown onToggle={handleCreatorDropdownToggle} style={{ width: '100%' }}>
-                                                    <Dropdown.Toggle
-                                                        variant="secondary"
-                                                        style={{
-                                                            width: '100%',
-                                                            backgroundColor: theme.buttonBackground,
-                                                            color: theme.buttonText,
-                                                            border: `1px solid ${theme.buttonBorder}`,
-                                                            boxShadow: theme.buttonShadow,
-                                                        }}
-                                                        onDoubleClick={() => {
-                                                            setCreatorUrlInputValue(selectedCreatorUrlText);
-                                                            setIsEditingCreatorUrl(true);
-                                                        }}
-                                                    >
-                                                        {selectedCreatorUrlText || "-- Creator URL List (choose one) --"}
-                                                    </Dropdown.Toggle>
-
-                                                    <Dropdown.Menu
-                                                        style={{
-                                                            maxHeight: '400px',
-                                                            overflowY: 'auto',
-                                                            backgroundColor: theme.panelBackground,
-                                                            color: theme.panelText,
-                                                            border: `1px solid ${theme.panelBorder}`,
-                                                            boxShadow: theme.buttonShadow,
-                                                            width: '100%',
-                                                        }}
-                                                    >
-                                                        <div
-                                                            style={{
-                                                                position: 'sticky',
-                                                                top: 0,
-                                                                zIndex: 2,
-                                                                padding: 8,
-                                                                backgroundColor: theme.panelBackground,
-                                                                borderBottom: `1px solid ${theme.panelBorder}`,
-                                                                fontSize: 12,
-                                                                color: theme.subText,
-                                                                lineHeight: 1.4,
-                                                                boxShadow: theme.buttonShadow,
+                                                                width: '100%',
                                                             }}
                                                         >
-                                                            <div>
-                                                                <strong>{newLabel}</strong>{" "}
-                                                                <span
-                                                                    style={
-                                                                        overExpected
-                                                                            ? { color: '#dc3545', fontWeight: 700 }
-                                                                            : { color: theme.panelText }
-                                                                    }
-                                                                >
-                                                                    {newCountText}
-                                                                </span>
-                                                            </div>
-
-                                                            <div><strong>(New) - Null:</strong> {creatorAgeHints.nullNewCount}</div>
-                                                            <div>{creatorAgeHints.oldestNewLine}</div>
-                                                        </div>
-
-                                                        {filteredCreatorUrlList.map((item) => (
-                                                            <Dropdown.Item
-                                                                as="div"
-                                                                key={item.creatorUrl}
-                                                                ref={item.lastChecked ? scrollItemRef : null}
-                                                                onClick={() => handleSelectCreatorUrl(item)}
+                                                            <div
                                                                 style={{
-                                                                    display: 'flex',
-                                                                    justifyContent: 'space-between',
-                                                                    alignItems: 'center',
-                                                                    cursor: 'pointer',
-                                                                    backgroundColor: item.lastChecked
-                                                                        ? theme.rowBackgroundColor
-                                                                        : theme.panelBackground,
-                                                                    color: theme.panelText,
-                                                                    padding: '8px 12px',
-                                                                    borderRadius: 6,
+                                                                    position: 'sticky',
+                                                                    top: 0,
+                                                                    zIndex: 2,
+                                                                    padding: 8,
+                                                                    backgroundColor: theme.panelBackground,
+                                                                    borderBottom: `1px solid ${theme.panelBorder}`,
+                                                                    fontSize: 12,
+                                                                    color: theme.subText,
+                                                                    lineHeight: 1.4,
+                                                                    boxShadow: theme.buttonShadow,
                                                                 }}
                                                             >
-                                                                <span style={{ color: theme.panelText }}>
-                                                                    {!item.lastChecked ? (
-                                                                        <>
-                                                                            {item.creatorUrl.split('/')[4]} <em>({item.rating})</em>
-                                                                            {item.lastCheckedDate && (
-                                                                                <small style={{ color: theme.subText }}>
-                                                                                    {" "}({timeAgo(item.lastCheckedDate)})
-                                                                                </small>
-                                                                            )}
-                                                                        </>
-                                                                    ) : (
-                                                                        <b style={{ color: theme.panelText }}>
-                                                                            {item.creatorUrl.split('/')[4]} <em>({item.rating})</em> <FaLeftLong />
-                                                                            <small style={{ color: theme.subText }}>
-                                                                                {" "}(lastchecked{item.lastCheckedDate ? ` - ${timeAgo(item.lastCheckedDate)}` : ""})
-                                                                            </small>
-                                                                        </b>
-                                                                    )}
-                                                                </span>
-
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-                                                                    <span style={{ color: theme.subText }}>({item.status})</span>
-                                                                    <Button
-                                                                        variant="link"
-                                                                        style={{
-                                                                            color: '#dc3545',
-                                                                            textDecoration: 'none',
-                                                                            padding: 0,
-                                                                            marginLeft: 6,
-                                                                        }}
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            handleRemoveCreatorUrl(item.creatorUrl);
-                                                                        }}
+                                                                <div>
+                                                                    <strong>{newLabel}</strong>{" "}
+                                                                    <span
+                                                                        style={
+                                                                            overExpected
+                                                                                ? { color: '#dc3545', fontWeight: 700 }
+                                                                                : { color: theme.panelText }
+                                                                        }
                                                                     >
-                                                                        <IoCloseOutline />
-                                                                    </Button>
+                                                                        {newCountText}
+                                                                    </span>
                                                                 </div>
-                                                            </Dropdown.Item>
-                                                        ))}
-                                                    </Dropdown.Menu>
-                                                </Dropdown>
-                                            )}
 
-                                            <OverlayTrigger
-                                                placement={"top"}
-                                                overlay={<Tooltip id="tooltip">Go to {selectedCreatorUrlText}</Tooltip>}
-                                            >
-                                                <Button variant="primary" onClick={handleGo} disabled={currentCreatorUrlIndex == null}>
-                                                    <IoNavigate />
-                                                </Button>
-                                            </OverlayTrigger>
+                                                                <div><strong>(New) - Null:</strong> {creatorAgeHints.nullNewCount}</div>
+                                                                <div>{creatorAgeHints.oldestNewLine}</div>
+                                                            </div>
 
-                                            {useAgeNav ? (
-                                                <>
-                                                    <OverlayTrigger
-                                                        placement="top"
-                                                        overlay={<Tooltip id="tooltip">Previous (by last-checked age)</Tooltip>}
-                                                    >
-                                                        <Button variant="primary" onClick={handlePreviousByAge} disabled={!hasFilteredNewItems}>
-                                                            <MdSkipPrevious />
-                                                        </Button>
-                                                    </OverlayTrigger>
+                                                            {filteredCreatorUrlList.map((item) => (
+                                                                <Dropdown.Item
+                                                                    as="div"
+                                                                    key={item.creatorUrl}
+                                                                    ref={item.lastChecked ? scrollItemRef : null}
+                                                                    onClick={() => handleSelectCreatorUrl(item)}
+                                                                    style={{
+                                                                        display: 'flex',
+                                                                        justifyContent: 'space-between',
+                                                                        alignItems: 'center',
+                                                                        cursor: 'pointer',
+                                                                        backgroundColor: item.lastChecked
+                                                                            ? theme.rowBackgroundColor
+                                                                            : theme.panelBackground,
+                                                                        color: theme.panelText,
+                                                                        padding: '8px 12px',
+                                                                        borderRadius: 6,
+                                                                    }}
+                                                                >
+                                                                    <span style={{ color: theme.panelText }}>
+                                                                        {!item.lastChecked ? (
+                                                                            <>
+                                                                                {item.creatorUrl.split('/')[4]} <em>({item.rating})</em>
+                                                                                {item.lastCheckedDate && (
+                                                                                    <small style={{ color: theme.subText }}>
+                                                                                        {" "}({timeAgo(item.lastCheckedDate)})
+                                                                                    </small>
+                                                                                )}
+                                                                            </>
+                                                                        ) : (
+                                                                            <b style={{ color: theme.panelText }}>
+                                                                                {item.creatorUrl.split('/')[4]} <em>({item.rating})</em> <FaLeftLong />
+                                                                                <small style={{ color: theme.subText }}>
+                                                                                    {" "}(lastchecked{item.lastCheckedDate ? ` - ${timeAgo(item.lastCheckedDate)}` : ""})
+                                                                                </small>
+                                                                            </b>
+                                                                        )}
+                                                                    </span>
 
-                                                    <OverlayTrigger
-                                                        placement="top"
-                                                        overlay={<Tooltip id="tooltip">Next (by last-checked age)</Tooltip>}
-                                                    >
-                                                        <Button variant="primary" onClick={handleNextByAge} disabled={!hasFilteredNewItems}>
-                                                            <MdSkipNext />
-                                                        </Button>
-                                                    </OverlayTrigger>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip">Previous Page</Tooltip>}>
-                                                        <Button variant="secondary" onClick={handlePrevious} disabled={!hasFilteredNewItems}>
-                                                            <MdSkipPrevious />
-                                                        </Button>
-                                                    </OverlayTrigger>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                                        <span style={{ color: theme.subText }}>({item.status})</span>
+                                                                        <Button
+                                                                            variant="link"
+                                                                            style={{
+                                                                                color: '#dc3545',
+                                                                                textDecoration: 'none',
+                                                                                padding: 0,
+                                                                                marginLeft: 6,
+                                                                            }}
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleRemoveCreatorUrl(item.creatorUrl);
+                                                                            }}
+                                                                        >
+                                                                            <IoCloseOutline />
+                                                                        </Button>
+                                                                    </div>
+                                                                </Dropdown.Item>
+                                                            ))}
+                                                        </Dropdown.Menu>
+                                                    </Dropdown>
+                                                )}
 
-                                                    <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip">Next Page</Tooltip>}>
-                                                        <Button variant="secondary" onClick={handleNext} disabled={!hasFilteredNewItems}>
-                                                            <MdSkipNext />
-                                                        </Button>
-                                                    </OverlayTrigger>
-                                                </>
-                                            )}
+                                                <OverlayTrigger
+                                                    placement={"top"}
+                                                    overlay={<Tooltip id="tooltip">Go to {selectedCreatorUrlText}</Tooltip>}
+                                                >
+                                                    <Button variant="primary" onClick={handleGo} disabled={currentCreatorUrlIndex == null}>
+                                                        <IoNavigate />
+                                                    </Button>
+                                                </OverlayTrigger>
 
-
-                                            <OverlayTrigger
-                                                placement={"top"}
-                                                overlay={<Tooltip id="tooltip">Refresh Page</Tooltip>}
-                                            >
-                                                <Button variant="warning" onClick={handleRefreshPage}>
-                                                    <IoReloadOutline />
-                                                </Button>
-                                            </OverlayTrigger>
-
-                                            {currentTabCreator && (
-                                                isCurrentCreatorInList ? (
-                                                    <OverlayTrigger
-                                                        placement="top"
-                                                        overlay={<Tooltip id="tooltip">Remove Current Tab Creator Url ({currentTabCreator})</Tooltip>}
-                                                    >
-                                                        <Button
-                                                            variant="danger"
-                                                            onClick={async () => {
-                                                                await handleRemoveCreatorUrl(`https://civitai.com/user/${currentTabCreator}/models`);
-                                                                await refreshCurrentTabCreator();
-                                                            }}
+                                                {useAgeNav ? (
+                                                    <>
+                                                        <OverlayTrigger
+                                                            placement="top"
+                                                            overlay={<Tooltip id="tooltip">Previous (by last-checked age)</Tooltip>}
                                                         >
-                                                            <IoCloseOutline />
-                                                        </Button>
-                                                    </OverlayTrigger>
+                                                            <Button variant="primary" onClick={handlePreviousByAge} disabled={!hasFilteredNewItems}>
+                                                                <MdSkipPrevious />
+                                                            </Button>
+                                                        </OverlayTrigger>
+
+                                                        <OverlayTrigger
+                                                            placement="top"
+                                                            overlay={<Tooltip id="tooltip">Next (by last-checked age)</Tooltip>}
+                                                        >
+                                                            <Button variant="primary" onClick={handleNextByAge} disabled={!hasFilteredNewItems}>
+                                                                <MdSkipNext />
+                                                            </Button>
+                                                        </OverlayTrigger>
+                                                    </>
                                                 ) : (
-                                                    <OverlayTrigger
-                                                        placement="top"
-                                                        overlay={<Tooltip id="tooltip">Add current Tab Creator ({currentTabCreator})</Tooltip>}
-                                                    >
-                                                        <Button variant="success" onClick={handleAddCurrentTabCreator}>
-                                                            +
-                                                        </Button>
-                                                    </OverlayTrigger>
-                                                )
-                                            )}
+                                                    <>
+                                                        <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip">Previous Page</Tooltip>}>
+                                                            <Button variant="secondary" onClick={handlePrevious} disabled={!hasFilteredNewItems}>
+                                                                <MdSkipPrevious />
+                                                            </Button>
+                                                        </OverlayTrigger>
+
+                                                        <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip">Next Page</Tooltip>}>
+                                                            <Button variant="secondary" onClick={handleNext} disabled={!hasFilteredNewItems}>
+                                                                <MdSkipNext />
+                                                            </Button>
+                                                        </OverlayTrigger>
+                                                    </>
+                                                )}
 
 
-                                        </div>
-
-
-                                        <div style={{ display: 'flex', alignItems: 'end', gap: '3px', margin: '5px', justifyContent: 'flex-end' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
-                                                <span style={{ color: theme.panelText }}>
-                                                    <FaRankingStar /> : {currentCreatorUrlIndex !== null
-                                                        ? creatorUrlList[currentCreatorUrlIndex].rating
-                                                        : 'N/A'}
-                                                </span>
-
-                                                <Form.Select
-                                                    size="sm"
-                                                    value={selectedRating}
-                                                    onChange={e => setSelectedRating(e.target.value)}
-                                                    style={{
-                                                        ...themedSelectStyle,
-                                                        width: '10ch',
-                                                        minWidth: '3ch',
-                                                        textAlign: 'center',
-                                                        textAlignLast: 'center',
-                                                    }}
+                                                <OverlayTrigger
+                                                    placement={"top"}
+                                                    overlay={<Tooltip id="tooltip">Refresh Page</Tooltip>}
                                                 >
-                                                    {ratingOrder.map(r => (
-                                                        <option
-                                                            key={r}
-                                                            value={r}
-                                                            style={{
-                                                                backgroundColor: theme.panelBackground,
-                                                                color: theme.panelText,
-                                                            }}
+                                                    <Button variant="warning" onClick={handleRefreshPage}>
+                                                        <IoReloadOutline />
+                                                    </Button>
+                                                </OverlayTrigger>
+
+                                                {currentTabCreator && (
+                                                    isCurrentCreatorInList ? (
+                                                        <OverlayTrigger
+                                                            placement="top"
+                                                            overlay={<Tooltip id="tooltip">Remove Current Tab Creator Url ({currentTabCreator})</Tooltip>}
                                                         >
-                                                            {r}
-                                                        </option>
-                                                    ))}
-                                                </Form.Select>
-                                                <Button
-                                                    size="sm"
-                                                    onClick={handleApplyRating}
-                                                    disabled={currentCreatorUrlIndex == null}
-                                                    style={themedButtonStyle}
-                                                >
-                                                    Apply
-                                                </Button>
+                                                            <Button
+                                                                variant="danger"
+                                                                onClick={async () => {
+                                                                    await handleRemoveCreatorUrl(`https://civitai.com/user/${currentTabCreator}/models`);
+                                                                    await refreshCurrentTabCreator();
+                                                                }}
+                                                            >
+                                                                <IoCloseOutline />
+                                                            </Button>
+                                                        </OverlayTrigger>
+                                                    ) : (
+                                                        <OverlayTrigger
+                                                            placement="top"
+                                                            overlay={<Tooltip id="tooltip">Add current Tab Creator ({currentTabCreator})</Tooltip>}
+                                                        >
+                                                            <Button variant="success" onClick={handleAddCurrentTabCreator}>
+                                                                +
+                                                            </Button>
+                                                        </OverlayTrigger>
+                                                    )
+                                                )}
 
-                                                <Dropdown style={{ marginRight: 12 }}>
-                                                    <Dropdown.Toggle
+
+                                            </div>
+
+
+                                            <div style={{ display: 'flex', alignItems: 'end', gap: '3px', margin: '5px', justifyContent: 'flex-end' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                                                    <span style={{ color: theme.panelText }}>
+                                                        <FaRankingStar /> : {currentCreatorUrlIndex !== null
+                                                            ? creatorUrlList[currentCreatorUrlIndex].rating
+                                                            : 'N/A'}
+                                                    </span>
+
+                                                    <Form.Select
                                                         size="sm"
-                                                        style={themedDropdownToggleStyle}
+                                                        value={selectedRating}
+                                                        onChange={e => setSelectedRating(e.target.value)}
+                                                        style={{
+                                                            ...themedSelectStyle,
+                                                            width: '10ch',
+                                                            minWidth: '3ch',
+                                                            textAlign: 'center',
+                                                            textAlignLast: 'center',
+                                                        }}
                                                     >
-                                                        Filter Ratings
-                                                    </Dropdown.Toggle>
-
-                                                    <Dropdown.Menu style={themedDropdownMenuStyle}>
-                                                        <Form.Check
-                                                            type="checkbox"
-                                                            id="filter-all-ratings"
-                                                            label={`All (${totalCreators})`}
-                                                            checked={allSelected}
-                                                            onChange={toggleAllRatings}
-                                                            style={themedCheckLabelStyle}
-                                                        />
-
-                                                        <hr style={{ margin: '8px 0', borderColor: theme.panelBorder, opacity: 1 }} />
-
                                                         {ratingOrder.map(r => (
-                                                            <Form.Check
+                                                            <option
                                                                 key={r}
+                                                                value={r}
+                                                                style={{
+                                                                    backgroundColor: theme.panelBackground,
+                                                                    color: theme.panelText,
+                                                                }}
+                                                            >
+                                                                {r}
+                                                            </option>
+                                                        ))}
+                                                    </Form.Select>
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={handleApplyRating}
+                                                        disabled={currentCreatorUrlIndex == null}
+                                                        style={themedButtonStyle}
+                                                    >
+                                                        Apply
+                                                    </Button>
+
+                                                    <Dropdown style={{ marginRight: 12 }}>
+                                                        <Dropdown.Toggle
+                                                            size="sm"
+                                                            style={themedDropdownToggleStyle}
+                                                        >
+                                                            Filter Ratings
+                                                        </Dropdown.Toggle>
+
+                                                        <Dropdown.Menu style={themedDropdownMenuStyle}>
+                                                            <Form.Check
                                                                 type="checkbox"
-                                                                id={`filter-${r}`}
-                                                                label={`${r} (${ratingCounts[r] || 0})`}
-                                                                checked={ratingFilters[r]}
-                                                                onChange={() =>
-                                                                    setRatingFilters(prev => ({ ...prev, [r]: !prev[r] }))
-                                                                }
+                                                                id="filter-all-ratings"
+                                                                label={`All (${totalCreators})`}
+                                                                checked={allSelected}
+                                                                onChange={toggleAllRatings}
                                                                 style={themedCheckLabelStyle}
                                                             />
-                                                        ))}
-                                                    </Dropdown.Menu>
-                                                </Dropdown>
-                                            </div>
 
-                                            <OverlayTrigger
-                                                placement={"top"}
-                                                overlay={<Tooltip id="tooltip">Refresh Creator Url List</Tooltip>}
-                                            >
-                                                <Button variant="info" onClick={handleRefreshList}>
-                                                    <WiCloudRefresh />
-                                                </Button>
-                                            </OverlayTrigger>
+                                                            <hr style={{ margin: '8px 0', borderColor: theme.panelBorder, opacity: 1 }} />
 
-                                            <ButtonWrap buttonConfig={{
-                                                placement: "top",
-                                                tooltip: `Set to Current Tabs: ${tabCreator}`,
-                                                variant: "primary",
-                                                buttonIcon: <PiTabsFill />,
-                                                disabled: counting,
-                                            }}
-                                                handleFunctionCall={() => {
-                                                    handleSetOriginalTab()
+                                                            {ratingOrder.map(r => (
+                                                                <Form.Check
+                                                                    key={r}
+                                                                    type="checkbox"
+                                                                    id={`filter-${r}`}
+                                                                    label={`${r} (${ratingCounts[r] || 0})`}
+                                                                    checked={ratingFilters[r]}
+                                                                    onChange={() =>
+                                                                        setRatingFilters(prev => ({ ...prev, [r]: !prev[r] }))
+                                                                    }
+                                                                    style={themedCheckLabelStyle}
+                                                                />
+                                                            ))}
+                                                        </Dropdown.Menu>
+                                                    </Dropdown>
+                                                </div>
+
+                                                <OverlayTrigger
+                                                    placement={"top"}
+                                                    overlay={<Tooltip id="tooltip">Refresh Creator Url List</Tooltip>}
+                                                >
+                                                    <Button variant="info" onClick={handleRefreshList}>
+                                                        <WiCloudRefresh />
+                                                    </Button>
+                                                </OverlayTrigger>
+
+                                                <ButtonWrap buttonConfig={{
+                                                    placement: "top",
+                                                    tooltip: `Set to Current Tabs: ${tabCreator}`,
+                                                    variant: "primary",
+                                                    buttonIcon: <PiTabsFill />,
+                                                    disabled: counting,
                                                 }}
-                                                isDarkMode={isDarkMode}
-                                            />
-                                        </div>
-
-                                        <div
-                                            style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'flex-end',   // ⭐ push content to the right
-                                                gap: '12px',
-                                                margin: '10px 0',
-                                                width: '100%',                // ⭐ make the row span full width
-                                            }}
-                                        >
-                                            {/* Hold checkbox */}
-                                            <Form.Check
-                                                type="checkbox"
-                                                id="offline-hold-flag"
-                                                label="Hold"
-                                                checked={hold}
-                                                onChange={(e) => setHold(e.target.checked)}
-                                            />
-
-                                            {/* Download priority dropdown (1..10) */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                <span style={{ fontSize: '.9rem', color: theme.panelText }}>Priority</span>
-
-                                                <Form.Select
-                                                    size="sm"
-                                                    value={downloadPriority}
-                                                    onChange={(e) => {
-                                                        const val = Number(e.target.value);
-                                                        if (!Number.isNaN(val)) {
-                                                            setDownloadPriority(val);
-                                                            dispatch(updateDownloadPriority(val));
-                                                        }
+                                                    handleFunctionCall={() => {
+                                                        handleSetOriginalTab()
                                                     }}
-                                                    style={{
-                                                        ...themedSelectStyle,
-                                                        width: 80,
-                                                    }}
-                                                >
-                                                    {Array.from({ length: 10 }, (_, i) => i + 1).map((v) => (
-                                                        <option
-                                                            key={v}
-                                                            value={v}
-                                                            style={{
-                                                                backgroundColor: theme.panelBackground,
-                                                                color: theme.panelText,
-                                                            }}
-                                                        >
-                                                            {v}
-                                                        </option>
-                                                    ))}
-                                                </Form.Select>
-                                            </div>
-                                        </div>
-
-                                        <div
-                                            style={{
-                                                display: 'flex',
-                                                flexDirection: 'column',   // ✅ each item on its own line
-                                                alignItems: 'flex-start',
-                                                gap: '8px',
-                                                margin: '10px 0',
-                                                width: '100%',
-                                            }}
-                                        >
-                                            {workingModelID !== "" && (
-                                                <p
-                                                    style={{
-                                                        margin: 0,
-                                                        width: '100%',
-                                                        whiteSpace: 'normal',
-                                                        overflowWrap: 'anywhere', // ✅ wrap long strings/paths
-                                                        wordBreak: 'break-word',
-                                                    }}
-                                                >
-                                                    <b>Processing Queue Model Name: </b> {processingModelName}
-                                                </p>
-                                            )}
-
-                                            <div style={{ width: '400px' }}>
-                                                <p style={{ margin: 0, width: '100%', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
-                                                    <b>Staging DownloadFilePath: </b> {downloadFilePath}
-                                                </p>
+                                                    isDarkMode={isDarkMode}
+                                                />
                                             </div>
 
-                                            {countdown > 0 && (
-                                                <p style={{ margin: 0, width: '100%', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
-                                                    <b>Next request in: </b> {countdown} seconds
-                                                </p>
-                                            )}
+                                            <div
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'flex-end',   // ⭐ push content to the right
+                                                    gap: '12px',
+                                                    margin: '10px 0',
+                                                    width: '100%',                // ⭐ make the row span full width
+                                                }}
+                                            >
+                                                {/* Hold checkbox */}
+                                                <Form.Check
+                                                    type="checkbox"
+                                                    id="offline-hold-flag"
+                                                    label="Hold"
+                                                    checked={hold}
+                                                    onChange={(e) => setHold(e.target.checked)}
+                                                />
 
-                                            {stagedItems.length > 0 && (
-                                                <p style={{ margin: 0, width: '100%', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
-                                                    <b>Total Staging Queue Item: </b> {stagedItems.length}
-                                                </p>
-                                            )}
+                                                {/* Download priority dropdown (1..10) */}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <span style={{ fontSize: '.9rem', color: theme.panelText }}>Priority</span>
+
+                                                    <Form.Select
+                                                        size="sm"
+                                                        value={downloadPriority}
+                                                        onChange={(e) => {
+                                                            const val = Number(e.target.value);
+                                                            if (!Number.isNaN(val)) {
+                                                                setDownloadPriority(val);
+                                                                dispatch(updateDownloadPriority(val));
+                                                            }
+                                                        }}
+                                                        style={{
+                                                            ...themedSelectStyle,
+                                                            width: 80,
+                                                        }}
+                                                    >
+                                                        {Array.from({ length: 10 }, (_, i) => i + 1).map((v) => (
+                                                            <option
+                                                                key={v}
+                                                                value={v}
+                                                                style={{
+                                                                    backgroundColor: theme.panelBackground,
+                                                                    color: theme.panelText,
+                                                                }}
+                                                            >
+                                                                {v}
+                                                            </option>
+                                                        ))}
+                                                    </Form.Select>
+                                                </div>
+                                            </div>
+
+                                            <div
+                                                style={{
+                                                    display: 'flex',
+                                                    flexDirection: 'column',   // ✅ each item on its own line
+                                                    alignItems: 'flex-start',
+                                                    gap: '8px',
+                                                    margin: '10px 0',
+                                                    width: '100%',
+                                                }}
+                                            >
+                                                {workingModelID !== "" && (
+                                                    <p
+                                                        style={{
+                                                            margin: 0,
+                                                            width: '100%',
+                                                            whiteSpace: 'normal',
+                                                            overflowWrap: 'anywhere', // ✅ wrap long strings/paths
+                                                            wordBreak: 'break-word',
+                                                        }}
+                                                    >
+                                                        <b>Processing Queue Model Name: </b> {processingModelName}
+                                                    </p>
+                                                )}
+
+                                                <div style={{ width: '400px' }}>
+                                                    <p style={{ margin: 0, width: '100%', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                                                        <b>Staging DownloadFilePath: </b> {downloadFilePath}
+                                                    </p>
+                                                </div>
+
+                                                {countdown > 0 && (
+                                                    <p style={{ margin: 0, width: '100%', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                                                        <b>Next request in: </b> {countdown} seconds
+                                                    </p>
+                                                )}
+
+                                                {stagedItems.length > 0 && (
+                                                    <p style={{ margin: 0, width: '100%', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                                                        <b>Total Staging Queue Item: </b> {stagedItems.length}
+                                                    </p>
+                                                )}
+                                            </div>
+
                                         </div>
-
                                     </div>
-                                }
-                            />
-
+                                </div>
+                            </Collapse>
                         </div>
 
                         {selectedUrl !== "" && (
                             <div
                                 style={{
                                     display: 'flex',
-                                    alignItems: 'center',
+                                    alignItems: 'stretch',
                                     gap: '15px',
+                                    width: '100%',
                                     border: `1px solid ${theme.panelBorder}`,
                                     borderRadius: '8px',
                                     padding: '10px 15px',
@@ -2880,6 +2949,7 @@ const WindowComponent: React.FC = () => {
                                     backgroundColor: theme.rowBackgroundColor,
                                     color: theme.panelText,
                                     marginTop: '20px',
+                                    boxSizing: 'border-box',
                                 }}
                             >
                                 {selectedUrl && (
@@ -2905,79 +2975,91 @@ const WindowComponent: React.FC = () => {
                         )}
                     </div>
 
-                    <div style={{ margin: "20px" }}>
-                        <div className="autocomplete-container">
-                            <div className="autocomplete-container-row">
-                                <Autocomplete
-                                    value={downloadFilePath}
-                                    onChange={handleFoldersListOnChange}
-                                    inputValue={downloadFilePath}
-                                    onInputChange={handleFoldersListOnChange}
-                                    key="1"
-                                    id="controllable-states-demo"
-                                    options={sortedandFilteredfoldersList}
-                                    sx={{
-                                        width: 350,
-                                        "& .MuiOutlinedInput-root": {
-                                            color: theme.panelText,
-                                            backgroundColor: theme.panelBackground,
-                                            "& fieldset": {
-                                                borderColor: theme.panelBorder,
-                                            },
-                                            "&:hover fieldset": {
-                                                borderColor: theme.buttonBorder,
-                                            },
-                                            "&.Mui-focused fieldset": {
-                                                borderColor: theme.buttonBorder,
-                                            },
-                                        },
-                                        "& .MuiInputLabel-root": {
-                                            color: theme.subText,
-                                        },
-                                        "& .MuiInputLabel-root.Mui-focused": {
-                                            color: theme.panelText,
-                                        },
-                                        "& .MuiFormHelperText-root": {
-                                            color: theme.subText,
-                                        },
-                                        "& .MuiSvgIcon-root": {
-                                            color: theme.panelText,
-                                        },
-                                        "& .MuiAutocomplete-popupIndicator": {
-                                            color: theme.panelText,
-                                        },
-                                        "& .MuiAutocomplete-clearIndicator": {
-                                            color: theme.panelText,
-                                        },
-                                    }}
-                                    slotProps={{
-                                        paper: {
-                                            sx: {
-                                                backgroundColor: theme.panelBackground,
+                    <div style={{ margin: "16px 5% 12px 5%" }}>
+                        <div
+                            className="autocomplete-container"
+                            style={{ width: "100%" }}
+                        >
+                            <div
+                                className="autocomplete-container-row"
+                                style={{
+                                    display: "flex",
+                                    alignItems: "flex-start",
+                                    gap: "8px",
+                                    width: "100%",
+                                }}
+                            >
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <Autocomplete
+                                        value={downloadFilePath}
+                                        onChange={handleFoldersListOnChange}
+                                        inputValue={downloadFilePath}
+                                        onInputChange={handleFoldersListOnChange}
+                                        key="1"
+                                        id="controllable-states-demo"
+                                        options={sortedandFilteredfoldersList}
+                                        sx={{
+                                            width: "100%",
+                                            "& .MuiOutlinedInput-root": {
                                                 color: theme.panelText,
-                                                border: `1px solid ${theme.panelBorder}`,
-                                                boxShadow: theme.buttonShadow,
+                                                backgroundColor: theme.panelBackground,
+                                                "& fieldset": {
+                                                    borderColor: theme.panelBorder,
+                                                },
+                                                "&:hover fieldset": {
+                                                    borderColor: theme.buttonBorder,
+                                                },
+                                                "&.Mui-focused fieldset": {
+                                                    borderColor: theme.buttonBorder,
+                                                },
                                             },
-                                        },
-                                    }}
-                                    renderInput={(params) => (
-                                        <TextField
-                                            {...params}
-                                            inputRef={inputRef}
-                                            helperText={`Folder name can't contain '"<>:/\\|?*'`}
-                                            label="Folder path"
-                                            onBlur={handleAutocompleteBlur}
-                                            onFocus={() => {
-                                                if (inputRef.current) {
-                                                    inputRef.current.scrollLeft =
-                                                        inputRef.current.scrollWidth - inputRef.current.offsetWidth + 100;
-                                                }
-                                            }}
-                                        />
-                                    )}
-                                />
-
-                                <div style={{ padding: "5px" }} />
+                                            "& .MuiInputLabel-root": {
+                                                color: theme.subText,
+                                            },
+                                            "& .MuiInputLabel-root.Mui-focused": {
+                                                color: theme.panelText,
+                                            },
+                                            "& .MuiFormHelperText-root": {
+                                                color: theme.subText,
+                                            },
+                                            "& .MuiSvgIcon-root": {
+                                                color: theme.panelText,
+                                            },
+                                            "& .MuiAutocomplete-popupIndicator": {
+                                                color: theme.panelText,
+                                            },
+                                            "& .MuiAutocomplete-clearIndicator": {
+                                                color: theme.panelText,
+                                            },
+                                        }}
+                                        slotProps={{
+                                            paper: {
+                                                sx: {
+                                                    backgroundColor: theme.panelBackground,
+                                                    color: theme.panelText,
+                                                    border: `1px solid ${theme.panelBorder}`,
+                                                    boxShadow: theme.buttonShadow,
+                                                },
+                                            },
+                                        }}
+                                        renderInput={(params) => (
+                                            <TextField
+                                                {...params}
+                                                fullWidth
+                                                inputRef={inputRef}
+                                                helperText={`Folder name can't contain '"<>:/\\|?*'`}
+                                                label="Folder path"
+                                                onBlur={handleAutocompleteBlur}
+                                                onFocus={() => {
+                                                    if (inputRef.current) {
+                                                        inputRef.current.scrollLeft =
+                                                            inputRef.current.scrollWidth - inputRef.current.offsetWidth + 100;
+                                                    }
+                                                }}
+                                            />
+                                        )}
+                                    />
+                                </div>
 
                                 <OverlayTrigger
                                     placement="bottom"
@@ -3003,6 +3085,11 @@ const WindowComponent: React.FC = () => {
                                             color: theme.buttonText,
                                             border: `1px solid ${theme.buttonBorder}`,
                                             boxShadow: theme.buttonShadow,
+                                            alignSelf: "flex-start",
+                                            flexShrink: 0,
+                                            marginTop: "0px",
+                                            height: "56px",
+                                            minWidth: "44px",
                                         }}
                                         onClick={() => {
                                             updateDownloadFilePathIntoChromeStorage(downloadFilePath);
@@ -3106,7 +3193,7 @@ const WindowComponent: React.FC = () => {
                                 disabled={isLoading || urlList.length === 0 || !checkboxMode || isStageBlockedByPendingLock}
                                 className="btn btn-success btn-lg w-100"
                             >
-                                {`Stage (${offlineMode ? "offline" : "online"})`}
+                                {`Stage Items (${offlineMode ? "offline" : "online"})`}
                             </Button>
                         </OverlayTrigger>
 
@@ -3150,44 +3237,105 @@ const WindowComponent: React.FC = () => {
                                 </OverlayTrigger>
                             </div>
 
+
                             <div
-                                className={isDarkMode ? "ag-theme-quartz-dark" : "ag-theme-quartz"}
-                                style={agGridThemeStyle}
+                                className="staging-queue-grid"
+                                style={
+                                    {
+                                        width: '100%',
+                                        ['--grid-scroll-track' as any]: isDarkMode ? '#2f2f2f' : '#f1f1f1',
+                                        ['--grid-scroll-thumb' as any]: isDarkMode ? '#6a6a6a' : '#b5b5b5',
+                                        ['--grid-scroll-thumb-hover' as any]: isDarkMode ? '#8a8a8a' : '#999999',
+                                    } as React.CSSProperties
+                                }
                             >
-                                <AgGridReact
-                                    rowData={stagedRowData}
-                                    columnDefs={stagingColumnDefs}
-                                    components={stagingComponents}
-                                    rowHeight={64}
-                                    suppressRowTransform={true}
-                                    defaultColDef={{ sortable: true, resizable: true }}
-                                    stopEditingWhenCellsLoseFocus={true}
-                                    singleClickEdit={false}
-                                    context={{ patchStagedById }}
-                                    getRowId={(p) => p.data.id}
-                                    onCellValueChanged={(e: any) => {
-                                        const id = e?.data?.id;
-                                        const field = e?.colDef?.field;
-                                        console.log("CHANGED", field, "old=", e.oldValue, "new=", e.newValue, "dataFieldNow=", e.data?.[field]);
-                                        if (!id || !field) return;
+                                <style>
+                                    {`
+                                    .staging-queue-grid .ag-body-viewport,
+                                    .staging-queue-grid .ag-center-cols-viewport,
+                                    .staging-queue-grid .ag-body-horizontal-scroll-viewport,
+                                    .staging-queue-grid .ag-body-vertical-scroll-viewport {
+                                        scrollbar-color: var(--grid-scroll-thumb) var(--grid-scroll-track);
+                                        scrollbar-width: auto;
+                                    }
 
-                                        if (field === "downloadFilePath") {
-                                            patchStagedById(id, { downloadFilePath: String(e.newValue ?? "") });
-                                            return;
-                                        }
-                                        if (field === "hold") {
-                                            patchStagedById(id, { hold: !!e.newValue });
-                                            return;
-                                        }
-                                        if (field === "downloadPriority") {
-                                            const n = Number(e.newValue);
-                                            patchStagedById(id, { downloadPriority: Number.isFinite(n) ? n : 0 });
-                                            return;
-                                        }
+                                    .staging-queue-grid .ag-body-viewport::-webkit-scrollbar,
+                                    .staging-queue-grid .ag-center-cols-viewport::-webkit-scrollbar,
+                                    .staging-queue-grid .ag-body-horizontal-scroll-viewport::-webkit-scrollbar,
+                                    .staging-queue-grid .ag-body-vertical-scroll-viewport::-webkit-scrollbar {
+                                        width: 12px;
+                                        height: 12px;
+                                    }
+
+                                    .staging-queue-grid .ag-body-viewport::-webkit-scrollbar-track,
+                                    .staging-queue-grid .ag-center-cols-viewport::-webkit-scrollbar-track,
+                                    .staging-queue-grid .ag-body-horizontal-scroll-viewport::-webkit-scrollbar-track,
+                                    .staging-queue-grid .ag-body-vertical-scroll-viewport::-webkit-scrollbar-track {
+                                        background: var(--grid-scroll-track);
+                                        border-radius: 8px;
+                                    }
+
+                                    .staging-queue-grid .ag-body-viewport::-webkit-scrollbar-thumb,
+                                    .staging-queue-grid .ag-center-cols-viewport::-webkit-scrollbar-thumb,
+                                    .staging-queue-grid .ag-body-horizontal-scroll-viewport::-webkit-scrollbar-thumb,
+                                    .staging-queue-grid .ag-body-vertical-scroll-viewport::-webkit-scrollbar-thumb {
+                                        background: var(--grid-scroll-thumb);
+                                        border-radius: 8px;
+                                        border: 2px solid var(--grid-scroll-track);
+                                    }
+
+                                    .staging-queue-grid .ag-body-viewport::-webkit-scrollbar-thumb:hover,
+                                    .staging-queue-grid .ag-center-cols-viewport::-webkit-scrollbar-thumb:hover,
+                                    .staging-queue-grid .ag-body-horizontal-scroll-viewport::-webkit-scrollbar-thumb:hover,
+                                    .staging-queue-grid .ag-body-vertical-scroll-viewport::-webkit-scrollbar-thumb:hover {
+                                        background: var(--grid-scroll-thumb-hover);
+                                    }
+                                `}
+                                </style>
+                                <div
+                                    className={isDarkMode ? 'ag-theme-alpine-dark' : 'ag-theme-alpine'}
+                                    style={{
+                                        width: '100%',
+                                        height: '400px',
+                                        backgroundColor: theme.gridBackgroundColor,
+                                        color: theme.rowFontColor,
                                     }}
+                                >
+                                    <AgGridReact
+                                        rowData={stagedRowData}
+                                        columnDefs={stagingColumnDefs}
+                                        components={stagingComponents}
+                                        rowHeight={64}
+                                        suppressRowTransform={true}
+                                        defaultColDef={{ sortable: true, resizable: true }}
+                                        stopEditingWhenCellsLoseFocus={true}
+                                        singleClickEdit={false}
+                                        context={{ patchStagedById }}
+                                        getRowId={(p) => p.data.id}
+                                        onCellValueChanged={(e: any) => {
+                                            const id = e?.data?.id;
+                                            const field = e?.colDef?.field;
+                                            console.log("CHANGED", field, "old=", e.oldValue, "new=", e.newValue, "dataFieldNow=", e.data?.[field]);
+                                            if (!id || !field) return;
 
-                                    tooltipShowDelay={250}
-                                />
+                                            if (field === "downloadFilePath") {
+                                                patchStagedById(id, { downloadFilePath: String(e.newValue ?? "") });
+                                                return;
+                                            }
+                                            if (field === "hold") {
+                                                patchStagedById(id, { hold: !!e.newValue });
+                                                return;
+                                            }
+                                            if (field === "downloadPriority") {
+                                                const n = Number(e.newValue);
+                                                patchStagedById(id, { downloadPriority: Number.isFinite(n) ? n : 0 });
+                                                return;
+                                            }
+                                        }}
+
+                                        tooltipShowDelay={250}
+                                    />
+                                </div>
                             </div>
 
                             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
@@ -3197,7 +3345,7 @@ const WindowComponent: React.FC = () => {
                                     disabled={isLoading || stagedItems.length === 0}
                                     className="w-100"
                                 >
-                                    {`Run Staged Queue (${offlineMode ? "offline" : "online"})`}
+                                    {`Processes Staged Queue (${offlineMode ? "offline" : "online"})`}
                                 </Button>
                             </div>
                         </div>
@@ -3218,10 +3366,22 @@ const WindowComponent: React.FC = () => {
                         color: theme.panelText,
                         border: `1px solid ${theme.panelBorder}`,
                         boxShadow: theme.buttonShadow,
+                        borderRadius: '12px',
                         zIndex: 1000,
                     }}
                 >
-                    <CategoriesListSelector />
+
+                    <div
+                        style={{
+                            padding: '15px',
+                            boxShadow: theme.buttonShadow,
+                            margin: '10px',
+                        }}
+                    >
+                        <CategoriesListSelector />
+                    </div>
+
+
                     <FilesPathSettingPanel setIsHandleRefresh={setIsHandleRefresh} isHandleRefresh={isHandleRefresh} />
 
                 </div>

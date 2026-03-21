@@ -60,6 +60,9 @@ const ui = {
         borderRadius: '10px',
         border: '1px solid rgba(255,255,255,0.10)',
         background: 'rgba(255,255,255,0.04)',
+        width: '100%',
+        flex: 1,
+        minWidth: 0,
     },
     row: {
         display: 'flex',

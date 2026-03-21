@@ -4,6 +4,7 @@ import { ColDef, RowStyle } from "ag-grid-community";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-alpine.css";
 import { darkTheme, lightTheme } from "../window_offline/OfflineWindow.theme";
+import { HoverImagePreview } from "./HoverImagePreview";
 
 interface URLGridProps {
     urlList: string[];
@@ -116,34 +117,85 @@ const URLGrid: React.FC<URLGridProps> = ({
         });
     };
 
-    const TrashButton = ({ onClick }: { onClick: (e: any) => void }) => (
-        <button
-            type="button"
-            onClick={onClick}
-            title="Delete"
-            style={{
-                cursor: "pointer",
-                background: "transparent",
-                color: "#dc3545",
-                border: "none",
-                padding: 6,
-                borderRadius: 6,
-                lineHeight: 0,
-            }}
-        >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <path
-                    d="M9 3h6m-8 4h10m-9 0 1 14h6l1-14M10 11v7M14 11v7"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                />
-            </svg>
-        </button>
-    );
+    const TrashButton = ({ onClick }: { onClick: (e: any) => void }) => {
+        const deleteColor = isDarkMode ? "#ff9a9a" : "#c62828";
+        const deleteBorder = isDarkMode
+            ? "1px solid rgba(255, 154, 154, 0.18)"
+            : "1px solid rgba(198, 40, 40, 0.18)";
+        const deleteBackground = isDarkMode
+            ? "rgba(255, 154, 154, 0.08)"
+            : "rgba(198, 40, 40, 0.06)";
+
+        return (
+            <button
+                type="button"
+                onClick={onClick}
+                title="Delete"
+                style={{
+                    cursor: "pointer",
+                    background: deleteBackground,
+                    color: deleteColor,
+                    border: deleteBorder,
+                    padding: 6,
+                    borderRadius: 6,
+                    lineHeight: 0,
+                }}
+            >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path
+                        d="M9 3h6m-8 4h10m-9 0 1 14h6l1-14M10 11v7M14 11v7"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                    />
+                </svg>
+            </button>
+        );
+    };
+
+    const TextTooltip: React.FC<any> = (props) => {
+        const value = String(props?.value || "");
+        if (!value) return null;
+
+        return (
+            <div
+                style={{
+                    padding: 8,
+                    backgroundColor: theme.panelBackground,
+                    color: theme.panelText,
+                    border: `1px solid ${theme.panelBorder}`,
+                    borderRadius: 8,
+                    boxShadow: theme.buttonShadow,
+                    maxWidth: 520,
+                    whiteSpace: "normal",
+                    wordBreak: "break-word",
+                    lineHeight: "1.35",
+                }}
+            >
+                {value}
+            </div>
+        );
+    };
 
     const columnDefs: ColDef[] = [
+        {
+            headerName: "#",
+            width: 60,
+            minWidth: 50,
+            maxWidth: 70,
+            sortable: false,
+            filter: false,
+            editable: false,
+            pinned: "left",
+            lockPinned: true,
+            suppressMovable: true,
+            valueGetter: (p) => (p.node?.rowIndex ?? 0) + 1,
+            cellStyle: {
+                textAlign: "center",
+                fontWeight: 600,
+            },
+        },
         {
             headerName: "Model & Version",
             field: "modelVersionDisplay",   // <-- use your real field name
@@ -167,14 +219,23 @@ const URLGrid: React.FC<URLGridProps> = ({
             field: "url",
             flex: 2,
             tooltipField: "url",
+            tooltipComponent: "textTooltip",
             cellStyle: {
                 whiteSpace: "nowrap",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 padding: "5px",
+                color: theme.rowFontColor,
             },
             cellRenderer: (params: any) => (
-                <span style={{ display: "inline-block", width: "100%", userSelect: "text" }}>
+                <span
+                    style={{
+                        display: "inline-block",
+                        width: "100%",
+                        userSelect: "text",
+                        color: theme.rowFontColor,
+                    }}
+                >
                     {params.value}
                 </span>
             ),
@@ -185,26 +246,14 @@ const URLGrid: React.FC<URLGridProps> = ({
             width: 110,
             sortable: false,
             resizable: false,
-            tooltipField: "imgSrc",
-            tooltipComponent: "imageTooltip",
             cellStyle: { padding: "5px", textAlign: "center" },
             cellRenderer: (params: any) => {
                 const src = params.value as string;
-                if (!src) return <span style={{ opacity: 0.5, color: theme.subText }}>—</span>;
+                if (!src) {
+                    return <span style={{ opacity: 0.5, color: theme.subText }}>—</span>;
+                }
 
-                return (
-                    <img
-                        src={src}
-                        alt="thumb"
-                        style={{
-                            width: 52,
-                            height: 52,
-                            objectFit: "cover",
-                            borderRadius: 8,
-                            display: "inline-block",
-                        }}
-                    />
-                );
+                return <HoverImagePreview src={src} theme={theme} />;
             },
         },
         {
@@ -225,7 +274,13 @@ const URLGrid: React.FC<URLGridProps> = ({
         },
     ];
 
-    const components = useMemo(() => ({ imageTooltip: ImageTooltip }), [theme]);
+    const components = useMemo(
+        () => ({
+            imageTooltip: ImageTooltip,
+            textTooltip: TextTooltip,
+        }),
+        [theme]
+    );
 
     return (
         <div
@@ -243,6 +298,8 @@ const URLGrid: React.FC<URLGridProps> = ({
                 ["--ag-border-color" as any]: theme.panelBorder,
                 ["--ag-secondary-border-color" as any]: theme.panelBorder,
                 ["--ag-selected-row-background-color" as any]: theme.rowBackgroundColor,
+                ["--ag-data-color" as any]: theme.rowFontColor,
+                ["--ag-tooltip-background-color" as any]: theme.panelBackground,
             }}
         >
             <AgGridReact

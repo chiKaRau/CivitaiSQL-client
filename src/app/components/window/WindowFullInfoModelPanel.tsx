@@ -41,7 +41,7 @@ interface PanelProps {
     urlList: string[];
 }
 
-const FullInfoModelPanel: React.FC<PanelProps> = ({
+const WindowFullInfoModelPanel: React.FC<PanelProps> = ({
     url,
     urlList,
     setUrlList,
@@ -237,8 +237,9 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({
                 onClick={(e) => e.stopPropagation()}
                 style={{
                     width: '100%',
-                    maxWidth: '900px',
-                    maxHeight: '90vh',
+                    maxWidth: 'none',
+                    height: '100%',
+                    maxHeight: 'calc(100vh - 48px)',
                     overflowY: 'auto',
                     background: theme.panelBackground,
                     color: theme.panelText,
@@ -357,7 +358,7 @@ const FullInfoModelPanel: React.FC<PanelProps> = ({
                         {/* Version selector */}
                         <div
                             style={{
-                                background: theme.rowBackgroundColor,
+                                background: theme.panelBackground,
                                 border: `1px solid ${theme.panelBorder}`,
                                 borderRadius: '14px',
                                 padding: '16px',
@@ -697,4 +698,4 @@ const Carousel: React.FC<CarouselProps> = ({ images, theme }) => {
     );
 };
 
-export default FullInfoModelPanel;
+export default WindowFullInfoModelPanel;
