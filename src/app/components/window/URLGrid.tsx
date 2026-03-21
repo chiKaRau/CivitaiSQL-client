@@ -184,7 +184,7 @@ const URLGrid: React.FC<URLGridProps> = ({
             width: 60,
             minWidth: 50,
             maxWidth: 70,
-            sortable: false,
+            sortable: true,
             filter: false,
             editable: false,
             pinned: "left",

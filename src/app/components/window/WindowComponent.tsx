@@ -1161,7 +1161,7 @@ const WindowComponent: React.FC = () => {
             width: 60,
             minWidth: 50,
             maxWidth: 70,
-            sortable: false,
+            sortable: true,
             filter: false,
             editable: false,
             pinned: "left",
