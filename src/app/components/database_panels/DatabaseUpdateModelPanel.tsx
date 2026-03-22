@@ -35,6 +35,7 @@ import { retrieveCivitaiFileName, retrieveCivitaiFilesList } from "../../utils/o
 //Interface
 interface DatabaseUpdateModelPanelProps {
     toggleDatabaseUpdateModelPanelOpen: () => void;
+    isDarkMode: boolean;
 }
 
 const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props) => {

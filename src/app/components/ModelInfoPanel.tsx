@@ -6,8 +6,13 @@ import { AppState } from '../store/configureStore';
 import { Button } from 'react-bootstrap';
 import { fetchFullRecordFromAllTableModelIDandVersionID, fetchGetOfflineRecordByModelAndVersion } from '../api/civitaiSQL_api';
 
+//Interface
+interface ModelInfoPanelProps {
+    isDarkMode: boolean;
+}
+
 //Model Page
-const ModelInfoPanel: React.FC = () => {
+const ModelInfoPanel: React.FC<ModelInfoPanelProps> = () => {
     //Redux Store will check which Reducer has the "state.[key]" then return appropriate value from the state
     //Any Changes and Updates in Reducer would trigger rerender
     const civitaiModel = useSelector((state: AppState) => state.civitaiModel);

@@ -28,6 +28,7 @@ import { removeBookmarkByUrl, bookmarkThisModel, unBookmarkThisModel } from "../
 //Interface
 interface DatabaseModelInfoPanelProps {
     toggleDatabaseModelInfoPanelOpen: () => void;
+    isDarkMode: boolean;
 }
 
 const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = (props) => {

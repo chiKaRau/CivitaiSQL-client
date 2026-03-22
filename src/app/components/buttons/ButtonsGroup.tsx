@@ -37,6 +37,7 @@ interface ButtonsGroupProps {
 }
 
 const ButtonsGroup: React.FC<ButtonsGroupProps> = ({ isDarkMode = true }) => {
+    const dispatch = useDispatch();
     const civitaiModel = useSelector((state: AppState) => state.civitaiModel);
     const data: Record<string, any> | undefined = civitaiModel.civitaiModelObject;
     const { civitaiUrl } = civitaiModel
@@ -100,197 +101,230 @@ const ButtonsGroup: React.FC<ButtonsGroupProps> = ({ isDarkMode = true }) => {
             //window.close(); // This closes the popup window
         });
     }
+    const tightItemStyle = {
+        display: "inline-flex",
+        alignItems: "flex-start",
+    };
 
-
-    const dispatch = useDispatch();
+    const tightItemShiftStyle = {
+        display: "inline-flex",
+        alignItems: "flex-start",
+        marginLeft: "-10px", // try -3px to -6px
+    };
 
     return (
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-
+        <div
+            style={{
+                display: "flex",
+                flexWrap: "nowrap",
+                alignItems: "flex-start",
+                overflowX: "auto",
+                overflowY: "hidden",
+                width: "100%",
+            }}
+        >
             {/**Database's RelatedModelsPanel Button */}
-            <ButtonWrap
-                buttonConfig={{
-                    placement: "bottom",
-                    tooltip: "Related Models",
-                    variant: "secondary",
-                    buttonIcon: <TbDatabaseSearch />,
-                    disabled: false,
-                }}
-                handleFunctionCall={() => {
-                    dispatch(togglePanel("DatabaseRelatedModelsPanel"));
-                }}
-                isDarkMode={isDarkMode}
-            />
+            <div style={tightItemShiftStyle}>
+                <ButtonWrap
+                    buttonConfig={{
+                        placement: "bottom",
+                        tooltip: "Related Models",
+                        variant: "secondary",
+                        buttonIcon: <TbDatabaseSearch />,
+                        disabled: false,
+                    }}
+                    handleFunctionCall={() => {
+                        dispatch(togglePanel("DatabaseRelatedModelsPanel"));
+                    }}
+                    isDarkMode={isDarkMode}
+                />
+            </div>
 
             {/**Database's ModelInfoPanel Button */}
-            <ButtonWrap buttonConfig={{
-                placement: "bottom",
-                tooltip: "Model Information",
-                variant: "success",
-                buttonIcon: <TbDatabaseHeart />,
-                disabled: false,
-            }}
-                handleFunctionCall={() => {
-                    dispatch(togglePanel("DatabaseModelInfoPanel"));
+            <div style={tightItemShiftStyle}>
+                <ButtonWrap buttonConfig={{
+                    placement: "bottom",
+                    tooltip: "Model Information",
+                    variant: "success",
+                    buttonIcon: <TbDatabaseHeart />,
+                    disabled: false,
                 }}
-                isDarkMode={isDarkMode}
-            />
+                    handleFunctionCall={() => {
+                        dispatch(togglePanel("DatabaseModelInfoPanel"));
+                    }}
+                    isDarkMode={isDarkMode}
+                />
+            </div>
 
             {/**Database's UpdateModelPanel Button */}
-            <ButtonWrap buttonConfig={{
-                placement: "bottom",
-                tooltip: "Update this Model",
-                variant: "success",
-                buttonIcon: <TbDatabaseEdit />,
-                disabled: false,
-            }}
-                handleFunctionCall={() => {
-                    dispatch(togglePanel("DatabaseUpdateModelPanel"));
+            <div style={tightItemShiftStyle}>
+                <ButtonWrap buttonConfig={{
+                    placement: "bottom",
+                    tooltip: "Update this Model",
+                    variant: "success",
+                    buttonIcon: <TbDatabaseEdit />,
+                    disabled: false,
                 }}
-                isDarkMode={isDarkMode}
-            />
+                    handleFunctionCall={() => {
+                        dispatch(togglePanel("DatabaseUpdateModelPanel"));
+                    }}
+                    isDarkMode={isDarkMode}
+                />
+            </div>
 
-            <WindowCollapseButton
-                panelId="WindowsButtons"
-                isPanelOpen={collapseButtonStates['WindowsButtons']}
-                handleTogglePanel={handleToggleCollapseButton}
-                icons={<MdOutlineApps />}
-                buttons={
-                    <div>
+            <div style={tightItemShiftStyle}>
+                <WindowCollapseButton
+                    panelId="WindowsButtons"
+                    isPanelOpen={collapseButtonStates['WindowsButtons']}
+                    handleTogglePanel={handleToggleCollapseButton}
+                    icons={<MdOutlineApps />}
+                    buttons={
+                        <div>
 
-                        {/**Open Offline Window */}
-                        <ButtonWrap buttonConfig={{
-                            placement: "top",
-                            tooltip: "Open Model List Window",
-                            variant: "primary",
-                            buttonIcon: <BsReverseLayoutTextWindowReverse />
-                            ,
-                            disabled: false,
-                        }}
-                            handleFunctionCall={() => handleOpenModelListModeWindow()}
-                            isDarkMode={isDarkMode}
-                        />
+                            {/**Open Offline Window */}
+                            <ButtonWrap buttonConfig={{
+                                placement: "top",
+                                tooltip: "Open Model List Window",
+                                variant: "primary",
+                                buttonIcon: <BsReverseLayoutTextWindowReverse />
+                                ,
+                                disabled: false,
+                            }}
+                                handleFunctionCall={() => handleOpenModelListModeWindow()}
+                                isDarkMode={isDarkMode}
+                                withShell={false}
+                            />
 
-                        {/**Open Offline Window */}
-                        <ButtonWrap buttonConfig={{
-                            placement: "top",
-                            tooltip: "Open Offline Window",
-                            variant: "primary",
-                            buttonIcon: <BsReverseLayoutTextWindowReverse />
-                            ,
-                            disabled: false,
-                        }}
-                            handleFunctionCall={() => handleOpenOfflineWindow()}
-                            isDarkMode={isDarkMode}
-                        />
+                            {/**Open Offline Window */}
+                            <ButtonWrap buttonConfig={{
+                                placement: "top",
+                                tooltip: "Open Offline Window",
+                                variant: "primary",
+                                buttonIcon: <BsReverseLayoutTextWindowReverse />
+                                ,
+                                disabled: false,
+                            }}
+                                handleFunctionCall={() => handleOpenOfflineWindow()}
+                                isDarkMode={isDarkMode}
+                                withShell={false}
+                            />
 
-                        {/**Database's CustomModelPanel Button */}
-                        <ButtonWrap buttonConfig={{
-                            placement: "bottom",
-                            tooltip: "Add a custom model",
-                            variant: "warning",
-                            buttonIcon: <TbDatabasePlus />,
-                            disabled: false,
-                        }}
-                            handleFunctionCall={() => handleOpenCustomWindow()}
-                            isDarkMode={isDarkMode}
-                        />
+                            {/**Database's CustomModelPanel Button */}
+                            <ButtonWrap buttonConfig={{
+                                placement: "bottom",
+                                tooltip: "Add a custom model",
+                                variant: "warning",
+                                buttonIcon: <TbDatabasePlus />,
+                                disabled: false,
+                            }}
+                                handleFunctionCall={() => handleOpenCustomWindow()}
+                                isDarkMode={isDarkMode}
+                                withShell={false}
+                            />
 
-                        {/**Database's CustomModelPanel Button */}
-                        <ButtonWrap buttonConfig={{
-                            placement: "bottom",
-                            tooltip: "edit a model",
-                            variant: "warning",
-                            buttonIcon: <FaEdit />,
-                            disabled: false,
-                        }}
-                            handleFunctionCall={() => handleOpenEditWindow()}
-                            isDarkMode={isDarkMode}
-                        />
-                    </div>
-                }
-            />
-
+                            {/**Database's CustomModelPanel Button */}
+                            <ButtonWrap buttonConfig={{
+                                placement: "bottom",
+                                tooltip: "edit a model",
+                                variant: "warning",
+                                buttonIcon: <FaEdit />,
+                                disabled: false,
+                            }}
+                                handleFunctionCall={() => handleOpenEditWindow()}
+                                isDarkMode={isDarkMode}
+                                withShell={false}
+                            />
+                        </div>
+                    }
+                />
+            </div>
 
             {/**Database's LatestAddedModelsPanel Button */}
-            <ButtonWrap buttonConfig={{
-                placement: "bottom",
-                tooltip: "Latest Added Models",
-                variant: "dark",
-                buttonIcon: <AiFillDatabase />,
-                disabled: false,
-            }}
-                handleFunctionCall={() => {
-                    dispatch(togglePanel("DatabaseLastestAddedModelsPanel"));
+            <div style={tightItemShiftStyle}>
+                <ButtonWrap buttonConfig={{
+                    placement: "bottom",
+                    tooltip: "Latest Added Models",
+                    variant: "dark",
+                    buttonIcon: <AiFillDatabase />,
+                    disabled: false,
                 }}
-                isDarkMode={isDarkMode}
-            />
-
+                    handleFunctionCall={() => {
+                        dispatch(togglePanel("DatabaseLastestAddedModelsPanel"));
+                    }}
+                    isDarkMode={isDarkMode}
+                />
+            </div>
 
             {/**Download Button */}
-            <DownloadFileButton />
+            <div style={tightItemStyle}>
+                <DownloadFileButton />
+            </div>
 
-            <WindowCollapseButton
-                panelId="utilsButton"
-                isPanelOpen={collapseButtonStates['utilsButton']}
-                handleTogglePanel={handleToggleCollapseButton}
-                icons={<MdOutlineApps />}
-                buttons={
-                    <div>
-                        {/**Open Download Button */}
-                        <ButtonWrap buttonConfig={{
-                            placement: "bottom",
-                            tooltip: "Open Download Directory",
-                            variant: "primary",
-                            buttonIcon: <AiFillFolderOpen />,
-                            disabled: false,
-                        }}
-                            handleFunctionCall={() => fetchOpenDownloadDirectory(dispatch)}
-                            isDarkMode={isDarkMode}
-                        />
+            <div style={tightItemShiftStyle}>
+                <WindowCollapseButton
+                    panelId="utilsButton"
+                    isPanelOpen={collapseButtonStates['utilsButton']}
+                    handleTogglePanel={handleToggleCollapseButton}
+                    icons={<MdOutlineApps />}
+                    buttons={
+                        <div>
+                            {/**Open Download Button */}
+                            <ButtonWrap buttonConfig={{
+                                placement: "bottom",
+                                tooltip: "Open Download Directory",
+                                variant: "primary",
+                                buttonIcon: <AiFillFolderOpen />,
+                                disabled: false,
+                            }}
+                                handleFunctionCall={() => fetchOpenDownloadDirectory(dispatch)}
+                                isDarkMode={isDarkMode}
+                            />
 
-                        {/**Must Add List Button */}
-                        <ButtonWrap buttonConfig={{
-                            placement: "bottom",
-                            tooltip: "must add",
-                            variant: "primary",
-                            buttonIcon: <MdAddLocation />,
-                            disabled: false,
-                        }}
-                            handleFunctionCall={() => fetchAppendToMustAddList(civitaiUrl, dispatch)}
-                            isDarkMode={isDarkMode}
-                        />
+                            {/**Must Add List Button */}
+                            <ButtonWrap buttonConfig={{
+                                placement: "bottom",
+                                tooltip: "must add",
+                                variant: "primary",
+                                buttonIcon: <MdAddLocation />,
+                                disabled: false,
+                            }}
+                                handleFunctionCall={() => fetchAppendToMustAddList(civitaiUrl, dispatch)}
+                                isDarkMode={isDarkMode}
+                            />
 
-                        {/**offline mode button */}
-                        <ButtonWrap buttonConfig={{
-                            placement: "bottom",
-                            tooltip: offlineMode ? "offline" : "online",
-                            variant: offlineMode ? "success" : "primary",
-                            buttonIcon: offlineMode ? <MdOutlineDownloadForOffline /> : <MdOutlineDownload />,
-                            disabled: false,
-                        }}
-                            handleFunctionCall={() => updateOfflineModeIntoChromeStorage(!offlineMode, dispatch)}
-                            isDarkMode={isDarkMode}
-                        />
+                            {/**offline mode button */}
+                            <ButtonWrap buttonConfig={{
+                                placement: "bottom",
+                                tooltip: offlineMode ? "offline" : "online",
+                                variant: offlineMode ? "success" : "primary",
+                                buttonIcon: offlineMode ? <MdOutlineDownloadForOffline /> : <MdOutlineDownload />,
+                                disabled: false,
+                            }}
+                                handleFunctionCall={() => updateOfflineModeIntoChromeStorage(!offlineMode, dispatch)}
+                                isDarkMode={isDarkMode}
+                            />
 
-                    </div>
-                }
-            />
+                        </div>
+                    }
+                />
+            </div>
 
             {/**Bookmark Button */}
-            <ButtonWrap buttonConfig={{
-                placement: "bottom",
-                tooltip: isBookmarked ? "Unbookmark this model" : "bookmark this model",
-                variant: "success",
-                buttonIcon: isBookmarked ? <BsStarFill /> : <BsStar />,
-                disabled: false,
-            }}
-                handleFunctionCall={isBookmarked ?
-                    () => unBookmarkThisModel(bookmarkID, dispatch, false)
-                    :
-                    () => bookmarkThisModel(data?.type, dispatch)}
-                isDarkMode={isDarkMode}
-            />
+            <div style={tightItemShiftStyle}>
+                <ButtonWrap buttonConfig={{
+                    placement: "bottom",
+                    tooltip: isBookmarked ? "Unbookmark this model" : "bookmark this model",
+                    variant: "success",
+                    buttonIcon: isBookmarked ? <BsStarFill /> : <BsStar />,
+                    disabled: false,
+                }}
+                    handleFunctionCall={isBookmarked ?
+                        () => unBookmarkThisModel(bookmarkID, dispatch, false)
+                        :
+                        () => bookmarkThisModel(data?.type, dispatch)}
+                    isDarkMode={isDarkMode}
+                />
+            </div>
 
         </div>
     );

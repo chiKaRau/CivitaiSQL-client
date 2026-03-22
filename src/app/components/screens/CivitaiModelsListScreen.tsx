@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { AppState } from '../../store/configureStore';
+import { darkTheme, lightTheme } from '../window_offline/OfflineWindow.theme';
 
 // ModelList page
 // Page which lists a bunch of models
@@ -10,6 +11,10 @@ const CivitaiModelsListScreen: React.FC = () => {
     //const counter = useSelector((state: AppState) => state.counter);
     //const user = useSelector((state: AppState) => state.user);
     //const dispatch = useDispatch();
+
+    const chromeData = useSelector((state: AppState) => state.chrome);
+    const { bookmarkID, isBookmarked, isDarkMode } = chromeData;
+    const theme = isDarkMode ? darkTheme : lightTheme;
 
     useEffect(() => {
         openNewWindow()
@@ -26,7 +31,12 @@ const CivitaiModelsListScreen: React.FC = () => {
     };
 
     return (
-        <div>
+        <div
+            style={{
+                backgroundColor: theme.pageBackground,
+                color: theme.panelText,
+            }}
+        >
             <p> CivitaiModelsListScreen </p>
             <div>
                 <h1>Extension Popup</h1>

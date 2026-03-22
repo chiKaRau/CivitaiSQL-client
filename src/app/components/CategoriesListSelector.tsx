@@ -208,20 +208,21 @@ const CategoriesListSelector: React.FC = () => {
             {notMatchSelector && (
                 <div
                     style={{
-                        paddingLeft: "5px",
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        minWidth: '28px',
-                        height: '28px',
-                        borderRadius: '8px',
-                        background: isDarkMode ? '#4a3f16' : '#fff3cd',
-                        border: isDarkMode ? '1px solid #8a6d3b' : '1px solid #ffe08a',
-                        color: isDarkMode ? '#ffd966' : '#8a6d3b',
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "28px",
+                        height: "28px",
+                        borderRadius: "8px",
+                        background: isDarkMode ? "#4a3f16" : "#fff3cd",
+                        border: isDarkMode ? "1px solid #8a6d3b" : "1px solid #ffe08a",
+                        color: isDarkMode ? "#ffd966" : "#8a6d3b",
+                        lineHeight: 0,
+                        flexShrink: 0,
                     }}
                     title="Selected category does not match current folder path"
                 >
-                    <CiWarning />
+                    <CiWarning size={16} style={{ display: "block" }} />
                 </div>
             )}
         </div>

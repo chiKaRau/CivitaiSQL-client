@@ -18,6 +18,7 @@ import { fetchDatabaseLatestAddedModelsPanel } from "../../api/civitaiSQL_api"
 //Interface
 interface DatabaseDatabaseCustomModelPanelProps {
     toggleDatabaseCustomModelPanelOpen: () => void;
+    isDarkMode: boolean;
 }
 
 const DatabaseCustomModelPanel: React.FC<DatabaseDatabaseCustomModelPanelProps> = (props) => {

@@ -29,7 +29,12 @@ import {
 } from "../../utils/chromeUtils"
 import { retrieveCivitaiFileName, retrieveCivitaiFilesList } from "../../utils/objectUtils"
 
-const BundleButton: React.FC = (props: any) => {
+//Interface
+interface BundleButtonProps {
+    isDarkMode: boolean;
+}
+
+const BundleButton: React.FC<BundleButtonProps> = (props: any) => {
     const isInitialMount = useRef(true);
 
     const civitaiModel = useSelector((state: AppState) => state.civitaiModel);

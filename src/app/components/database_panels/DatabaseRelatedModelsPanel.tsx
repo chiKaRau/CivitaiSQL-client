@@ -26,6 +26,7 @@ import { retrievePossibleCombination } from "../../utils/stringUtils"
 //Interface
 interface DatabaseRelatedModelsPanel {
     toggleDatabaseRelatedModelsPanelOpen: () => void;
+    isDarkMode: boolean;
 }
 
 const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanel> = (props) => {

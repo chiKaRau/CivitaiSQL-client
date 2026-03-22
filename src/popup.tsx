@@ -29,6 +29,7 @@ import {
   fetchDatabaseModelInfoByModelID,
   fetchVerifyConnectingDatabase
 } from "./app/api/civitaiSQL_api"
+import { darkTheme, lightTheme } from "./app/components/window_offline/OfflineWindow.theme";
 
 //README
 //2 Sources: Civitai (web api) and Database (local database)
@@ -47,6 +48,9 @@ const Popup = () => {
   const gloablIsLoading = useSelector((state: AppState) => state.loading.globalIsLoading);
   const [isModelPage, setIsModelPage] = useState(true);
   const [isConnectedToDatabase, setIsConnectedDatabase] = useState(false);
+  const chromeData = useSelector((state: AppState) => state.chrome);
+  const { bookmarkID, isBookmarked, isDarkMode } = chromeData;
+  const theme = isDarkMode ? darkTheme : lightTheme;
 
   //Initialize Models Info
   useEffect(() => {
@@ -142,7 +146,13 @@ const Popup = () => {
           (isConnectedToDatabase ?
             (
               !gloablIsLoading ?
-                <div className="container">
+                <div
+                  className="container"
+                  style={{
+                    backgroundColor: theme.pageBackground,
+                    color: theme.panelText,
+                  }}
+                >
                   <ErrorAlert />
                   <CivitaiModelScreen />
                 </div>
@@ -152,13 +162,25 @@ const Popup = () => {
                 </div>
             )
             :
-            <div className="container">
+            <div
+              className="container"
+              style={{
+                backgroundColor: theme.pageBackground,
+                color: theme.panelText,
+              }}
+            >
               <div className="centered-container">
                 <h2> Connecting to database... </h2>
               </div>
             </div>)
           :
-          <div className="container">
+          <div
+            className="container"
+            style={{
+              backgroundColor: theme.pageBackground,
+              color: theme.panelText,
+            }}
+          >
             <ErrorAlert />
             <CivitaiModelsListScreen />
           </div>

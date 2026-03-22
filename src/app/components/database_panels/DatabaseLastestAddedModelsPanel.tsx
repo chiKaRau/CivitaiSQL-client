@@ -18,6 +18,7 @@ import { fetchDatabaseLatestAddedModelsPanel } from "../../api/civitaiSQL_api"
 //Interface
 interface DatabaseLastestAddedModelsPanelProps {
     toggleDatabaseLastestAddedModelsPanelOpen: () => void;
+    isDarkMode: boolean;
 }
 
 const DatabaseLastestAddedModelsPanel: React.FC<DatabaseLastestAddedModelsPanelProps> = (props) => {
