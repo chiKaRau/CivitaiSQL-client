@@ -226,30 +226,44 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = ({
         if (!localPath) return "";
 
         const normalized = localPath.replace(/\\/g, "/");
-        const marker = "/@scan@/";
-        const markerIndex = normalized.indexOf(marker);
 
-        if (markerIndex === -1) return "";
-
-        let scanPath = normalized.substring(markerIndex);
-        if (!scanPath.endsWith("/")) {
-            scanPath += "/";
+        // Case 1: already contains /@scan@/
+        const scanMarker = "/@scan@/";
+        const scanMarkerIndex = normalized.indexOf(scanMarker);
+        if (scanMarkerIndex !== -1) {
+            let scanPath = normalized.substring(scanMarkerIndex);
+            if (!scanPath.endsWith("/")) {
+                scanPath += "/";
+            }
+            return scanPath;
         }
 
-        return scanPath;
+        // Case 2: local backup path that contains /ACG/
+        const acgMarker = "/ACG/";
+        const acgMarkerIndex = normalized.indexOf(acgMarker);
+        if (acgMarkerIndex !== -1) {
+            let scanPath = `/@scan@${normalized.substring(acgMarkerIndex)}`;
+            if (!scanPath.endsWith("/")) {
+                scanPath += "/";
+            }
+            return scanPath;
+        }
+
+        return "";
     };
 
     const buildUpdatePathFromScanPath = (scanPath: string) => {
         if (!scanPath) return "";
 
-        const updateRegex = /^\/@scan@\/[^\/]+\/?$/;
+        const regex = /^\/@scan@\/[^\/]+\/?$/;
 
-        if (updateRegex.test(scanPath)) {
+        if (regex.test(scanPath)) {
             return `/@scan@/Update/${scanPath.replace("/@scan@/", "")}`;
         } else {
             return `/@scan@/Update/${scanPath.replace("/@scan@/ACG/", "")}`;
         }
     };
+
 
     const handleAddOfflineDownloadFileintoOfflineDownloadList = async (targetDownloadFilePath?: string) => {
         setIsLoading(true);
