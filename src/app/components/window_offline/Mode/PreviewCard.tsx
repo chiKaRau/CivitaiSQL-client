@@ -6,6 +6,7 @@ import { OfflineDownloadEntry } from '../OfflineWindow.types';
 import TitleNameToggle from '../TitleNameToggle';
 import FileNameToggle from '../FileNameToggle';
 import TagList from '../TagList';
+import SmartImage from '../SmartImage';
 
 interface PreviewCardProps {
     entry: OfflineDownloadEntry;
@@ -122,7 +123,7 @@ const PreviewCard: React.FC<PreviewCardProps> = ({
                         onSelect={(next) => setActiveIdx(next as number)}
                     >
                         {entry.imageUrlsArray.map((img, idx) => {
-                            const { url } = normalizeImg(img as any);
+                            const { url, width, height } = normalizeImg(img as any);
                             const len = entry.imageUrlsArray.length;
 
                             const isActive = idx === activeIdx;
@@ -138,32 +139,18 @@ const PreviewCard: React.FC<PreviewCardProps> = ({
 
                             return (
                                 <Carousel.Item key={idx} style={{ height: '400px' }}>
-                                    <div
-                                        style={{
-                                            height: '100%',
-                                            width: '100%',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            background: isDarkMode ? '#2b2b2b' : '#f5f5f5',
-                                            borderRadius: 6,
-                                            overflow: 'hidden',
-                                        }}
-                                    >
-                                        <img
-                                            className="d-block"
+                                    <div style={{ height: '100%', width: '100%' }}>
+                                        <SmartImage
                                             src={withWidth(url, widths[0])}
                                             srcSet={buildSrcSet(url, widths)}
                                             sizes="(max-width: 560px) 100vw, 520px"
                                             loading={isActive ? 'eager' : 'lazy'}
-                                            decoding="async"
+                                            width={width ?? undefined}
+                                            height={height ?? undefined}
                                             alt={`Preview ${idx + 1}`}
-                                            style={{
-                                                width: '100%',
-                                                height: '100%',
-                                                objectFit: 'contain',
-                                                display: 'block',
-                                            }}
+                                            isDarkMode={isDarkMode}
+                                            maxHeight={400}
+                                            borderRadius={6}
                                         />
                                     </div>
                                 </Carousel.Item>

@@ -83,6 +83,16 @@ export const makeOfflineWindowStyles = ({
         color: '#fff',
     };
 
+    const inlineIconBtnActiveStyle: React.CSSProperties = {
+        ...inlineIconBtnStyle,
+        background: isDarkMode ? '#2563eb' : '#dbeafe',
+        border: `1px solid ${isDarkMode ? '#60A5FA' : '#93c5fd'}`,
+        color: isDarkMode ? '#fff' : '#1d4ed8',
+        boxShadow: isDarkMode
+            ? '0 0 0 3px rgba(37,99,235,.35)'
+            : '0 0 0 3px rgba(37,99,235,.2)',
+    };
+
     // Inline styles
     const containerStyle: React.CSSProperties = {
         display: 'flex',
@@ -249,6 +259,7 @@ export const makeOfflineWindowStyles = ({
         downloadButtonDisabledStyle,
         controlRowStyle,
         inlineIconBtnStyle,
+        inlineIconBtnActiveStyle,
         inlineDangerBtnStyle,
         containerStyle,
         leftPanelStyle,

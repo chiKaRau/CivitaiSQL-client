@@ -140,6 +140,8 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
 
                     const canSelect = !selectionDisabled && canChangeSelection;
 
+                    const isPreviewing = activePreviewId === entry.civitaiVersionID;
+
                     const baseBg = isDarkMode ? '#333' : '#fff';
                     const selectedBg = isDarkMode ? '#1f2937' : '#eaf2ff';
                     const baseBorder = isDarkMode ? '#555' : '#ccc';
@@ -905,11 +907,13 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
 
                                     <button
                                         type="button"
-                                        onClick={(e) => { e.stopPropagation(); onToggleOverlay(entry); }}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onToggleOverlay(entry);
+                                        }}
                                         title="Preview in left panel"
                                         aria-label="Preview in left panel"
-                                        style={styles.inlineIconBtnStyle}
-                                    // disabled={isLoading}
+                                        style={isPreviewing ? styles.inlineIconBtnActiveStyle : styles.inlineIconBtnStyle}
                                     >
                                         <LuPanelLeftOpen size={18} />
                                     </button>
