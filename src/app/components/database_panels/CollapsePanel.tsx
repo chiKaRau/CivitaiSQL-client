@@ -1,75 +1,181 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
-//Components
-import { Toast } from 'react-bootstrap';
-import Col from 'react-bootstrap/Col';
-import { Carousel, Collapse } from 'react-bootstrap';
+// Components
+import { Toast, Carousel, Collapse } from "react-bootstrap";
+import Col from "react-bootstrap/Col";
 
-//Interface
+// theme
+import { darkTheme, lightTheme } from "../window_offline/OfflineWindow.theme";
+
+// Interface
 interface CollapsePanelProps {
     collectionName: string;
-    modelsList: any;
+    modelsList: {
+        name: string;
+        url: string;
+        id: number;
+        imageUrls: { url: string; height: number; width: number; nsfw: string }[];
+    }[];
+    isDarkMode?: boolean;
 }
 
-const CollapsePanel: React.FC<CollapsePanelProps> = (props) => {
+const CollapsePanel: React.FC<CollapsePanelProps> = ({
+    collectionName,
+    modelsList: incomingModelsList,
+    isDarkMode = true
+}) => {
+    const theme = isDarkMode ? darkTheme : lightTheme;
 
-    const [modelsList, setModelsList] = useState<{ name: string; url: string; id: number; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
-    const [visibleToasts, setVisibleToasts] = useState<boolean[]>([])
+    const [modelsList, setModelsList] = useState<
+        {
+            name: string;
+            url: string;
+            id: number;
+            imageUrls: { url: string; height: number; width: number; nsfw: string }[];
+        }[]
+    >([]);
+    const [hiddenToastIds, setHiddenToastIds] = useState<number[]>([]);
     const [open, setOpen] = useState(false);
 
     useEffect(() => {
-        setModelsList(props?.modelsList)
-        setVisibleToasts(props?.modelsList?.map(() => true))
-    }, [])
+        setModelsList(incomingModelsList || []);
+        setHiddenToastIds([]);
+    }, [incomingModelsList]);
 
-    const handleClose = (index: any) => {
-        const newVisibleToasts = [...visibleToasts];
-        newVisibleToasts[index] = false;
-        setVisibleToasts(newVisibleToasts);
+    const collapseId = useMemo(
+        () => `collapse-panel-${collectionName.replace(/[^a-zA-Z0-9_-]/g, "-")}`,
+        [collectionName]
+    );
+
+    const handleClose = (id: number) => {
+        setHiddenToastIds((prev) => [...prev, id]);
     };
 
     return (
-
-        <div className="collapse-panel-container">
-            <div className="toggle-section"
-                onClick={() => setOpen(!open)} aria-controls="collapse-panel" aria-expanded={open}>
-                <center>{props?.collectionName}</center>
+        <div
+            style={{
+                marginBottom: "14px",
+                border: `1px solid ${theme.panelBorder}`,
+                borderRadius: "10px",
+                backgroundColor: theme.panelBackground,
+                boxShadow: isDarkMode
+                    ? "0 6px 18px rgba(0,0,0,0.35)"
+                    : "0 6px 18px rgba(0,0,0,0.10)",
+                overflow: "hidden",
+            }}
+        >
+            <div
+                onClick={() => setOpen(!open)}
+                aria-controls={collapseId}
+                aria-expanded={open}
+                style={{
+                    cursor: "pointer",
+                    padding: "12px 14px",
+                    backgroundColor: theme.headerBackgroundColor,
+                    color: theme.headerFontColor,
+                    borderBottom: open ? `1px solid ${theme.panelBorder}` : "none",
+                    fontWeight: 700,
+                    textAlign: "center",
+                    userSelect: "none",
+                }}
+            >
+                {collectionName}
             </div>
-            <hr />
 
             <Collapse in={open}>
-                <div id="collapse-panel">
-                    {modelsList?.map((model, index) => {
-                        if (!visibleToasts[index]) return null; // Hide the toast if the flag is false
+                <div
+                    id={collapseId}
+                    style={{
+                        padding: "12px",
+                        backgroundColor: theme.panelBackground,
+                    }}
+                >
+                    {modelsList?.map((model) => {
+                        if (hiddenToastIds.includes(model.id)) return null;
 
                         return (
-                            <div key={index} className="panel-toast-container">
-                                <Toast onClose={() => handleClose(index)}>
-                                    <Toast.Header>
-                                        <Col xs={10} className="panel-toast-header">
-                                            <b><span>#{model?.id}</span> : <span>{model?.name}</span></b>
+                            <div
+                                key={model.id}
+                                style={{
+                                    marginBottom: "12px",
+                                }}
+                            >
+                                <Toast
+                                    onClose={() => handleClose(model.id)}
+                                    style={{
+                                        width: "100%",
+                                        backgroundColor: theme.panelBackground,
+                                        color: theme.panelText,
+                                        border: `1px solid ${theme.panelBorder}`,
+                                        borderRadius: "10px",
+                                        boxShadow: isDarkMode
+                                            ? "0 6px 18px rgba(0,0,0,0.35)"
+                                            : "0 6px 18px rgba(0,0,0,0.10)",
+                                    }}
+                                >
+                                    <Toast.Header
+                                        style={{
+                                            backgroundColor: theme.headerBackgroundColor,
+                                            color: theme.headerFontColor,
+                                            borderBottom: `1px solid ${theme.panelBorder}`,
+                                        }}
+                                        closeButton
+                                    >
+                                        <Col
+                                            xs={10}
+                                            style={{
+                                                color: theme.headerFontColor,
+                                                display: "flex",
+                                                alignItems: "center",
+                                                flexWrap: "wrap",
+                                            }}
+                                        >
+                                            <b>
+                                                <span>#{model?.id}</span> : <span>{model?.name}</span>
+                                            </b>
                                         </Col>
                                     </Toast.Header>
-                                    <Toast.Body>
-                                        {/* Image Carousel */}
-                                        <div className="panel-image-carousel-container">
-                                            {model?.imageUrls[0]?.url
-                                                &&
-                                                <Carousel fade>
-                                                    {model?.imageUrls?.map((image, index) => {
-                                                        return (
-                                                            <Carousel.Item key={index}>
-                                                                <img
-                                                                    src={image.url || "https://placehold.co/200x250"}
-                                                                    alt={model.name}
-                                                                />
-                                                            </Carousel.Item>
-                                                        )
-                                                    })}
-                                                </Carousel>}
+
+                                    <Toast.Body
+                                        style={{
+                                            backgroundColor: theme.panelBackground,
+                                            color: theme.panelText,
+                                        }}
+                                    >
+                                        <div style={{ marginBottom: "10px" }}>
+                                            {model?.imageUrls?.[0]?.url && (
+                                                <Carousel fade interval={null}>
+                                                    {model?.imageUrls?.map((image, index) => (
+                                                        <Carousel.Item key={index}>
+                                                            <img
+                                                                src={image.url || "https://placehold.co/200x250"}
+                                                                alt={model.name}
+                                                                style={{
+                                                                    width: "100%",
+                                                                    maxHeight: "320px",
+                                                                    objectFit: "contain",
+                                                                    borderRadius: "8px",
+                                                                    backgroundColor: theme.headerBackgroundColor,
+                                                                }}
+                                                            />
+                                                        </Carousel.Item>
+                                                    ))}
+                                                </Carousel>
+                                            )}
                                         </div>
-                                        {/* Url */}
-                                        <a href={model?.url}> {model?.url} </a>
+
+                                        <a
+                                            href={model?.url}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            style={{
+                                                color: theme.subText,
+                                                textDecoration: "underline",
+                                                wordBreak: "break-all",
+                                            }}
+                                        >
+                                            {model?.url}
+                                        </a>
                                     </Toast.Body>
                                 </Toast>
                             </div>
@@ -78,7 +184,6 @@ const CollapsePanel: React.FC<CollapsePanelProps> = (props) => {
                 </div>
             </Collapse>
         </div>
-
     );
 };
 

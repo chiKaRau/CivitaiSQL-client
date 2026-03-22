@@ -1,133 +1,188 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 
-//Components
-import { Toast, Badge, Collapse } from 'react-bootstrap';
-import Col from 'react-bootstrap/Col';
-import { BiUndo } from "react-icons/bi"
-import { Carousel } from 'react-bootstrap';
-import { Button, FormControl, InputGroup } from 'react-bootstrap';
-import { BsCheck, BsArrowRepeat, BsSortDown, BsSortUp, BsType } from 'react-icons/bs';
-import Spinner from 'react-bootstrap/Spinner';
+// Components
+import { Toast, Badge, Carousel, Button, FormControl, InputGroup } from "react-bootstrap";
+import Col from "react-bootstrap/Col";
+import { BiUndo } from "react-icons/bi";
+import { BsArrowRepeat, BsSortDown, BsSortUp, BsType } from "react-icons/bs";
+import Spinner from "react-bootstrap/Spinner";
 
-//Store
-import { useSelector, useDispatch } from 'react-redux';
-import { AppState } from '../../store/configureStore';
-import { setError, clearError } from '../../store/actions/errorsActions';
+// Store
+import { useSelector, useDispatch } from "react-redux";
+import { AppState } from "../../store/configureStore";
+import { setError, clearError } from "../../store/actions/errorsActions";
 
-//api
+// api
 import {
-    fetchDatabaseRelatedModelsByName,
     fetchDatabaseRelatedModelsByTagsList
-} from "../../api/civitaiSQL_api"
+} from "../../api/civitaiSQL_api";
 
-//util
-import { retrievePossibleCombination } from "../../utils/stringUtils"
+// util
+import { retrievePossibleCombination } from "../../utils/stringUtils";
 
-//Interface
-interface DatabaseRelatedModelsPanel {
+// theme
+import { darkTheme, lightTheme } from "../window_offline/OfflineWindow.theme";
+
+// Interface
+interface DatabaseRelatedModelsPanelProps {
     toggleDatabaseRelatedModelsPanelOpen: () => void;
-    isDarkMode: boolean;
+    isDarkMode?: boolean;
 }
 
-const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanel> = (props) => {
-    const isInitialMount = useRef(true);
+type RelatedModel = {
+    name: string;
+    url: string;
+    id: number;
+    baseModel: string;
+    imageUrls: { url: string; height: number; width: number; nsfw: string }[];
+};
+
+const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanelProps> = ({
+    toggleDatabaseRelatedModelsPanelOpen,
+    isDarkMode = true
+}) => {
+    const dispatch = useDispatch();
+    const theme = isDarkMode ? darkTheme : lightTheme;
 
     const civitaiModel = useSelector((state: AppState) => state.civitaiModel);
-    const dispatch = useDispatch();
-    const [originalModelsList, setOriginalModelsList] = useState<{ name: string; url: string; id: number; baseModel: string; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
-    const [modelsList, setModelsList] = useState<{ name: string; url: string; id: number; baseModel: string; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]>([]);
-    const [visibleToasts, setVisibleToasts] = useState<boolean[]>([])
+
+    const [originalModelsList, setOriginalModelsList] = useState<RelatedModel[]>([]);
+    const [modelsList, setModelsList] = useState<RelatedModel[]>([]);
+    const [hiddenToastIds, setHiddenToastIds] = useState<number[]>([]);
     const [possibleCombinationTags, setPossibleCombinationTags] = useState<string[]>([]);
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
-    const [isLoading, setIsLoading] = useState(false)
-    const [inputValue, setInputValue] = useState("")
-    const [isSorted, setIsSorted] = useState(false)
-    const [baseModelList, setBaseModelList] = useState<{ baseModel: string, display: boolean }[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [inputValue, setInputValue] = useState("");
+    const [isSorted, setIsSorted] = useState(false);
+    const [baseModelList, setBaseModelList] = useState<{ baseModel: string; display: boolean }[]>([]);
     const [isColapPanelOpen, setUsColapPanelOpen] = useState(false);
 
     const data: Record<string, any> | undefined = civitaiModel.civitaiModelObject;
-    const modelName = data?.name;
-    const modelTags = data?.tags.concat(data?.modelVersions.map((version: { name: string }) => version.name));
+    const modelName = data?.name ?? "";
+    const modelTags = [
+        ...(data?.tags ?? []),
+        ...((data?.modelVersions ?? []).map((version: { name: string }) => version.name))
+    ];
 
-    //Find Possible tags from civitai name and tags
+    const inputTokens = inputValue
+        .split(/,\s*|\s+/)
+        .map(tag => tag.trim())
+        .filter(Boolean);
+
+    const panelCardStyle: React.CSSProperties = {
+        backgroundColor: theme.panelBackground,
+        color: theme.panelText,
+        border: `1px solid ${theme.panelBorder}`,
+        borderRadius: "10px",
+        boxShadow: isDarkMode
+            ? "0 6px 18px rgba(0,0,0,0.35)"
+            : "0 6px 18px rgba(0,0,0,0.10)",
+    };
+
+    const baseButtonStyle: React.CSSProperties = {
+        backgroundColor: theme.headerBackgroundColor,
+        color: theme.headerFontColor,
+        border: `1px solid ${theme.evenRowBackgroundColor}`,
+        borderRadius: "8px",
+        minHeight: "44px",
+        minWidth: "46px",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        boxShadow: isDarkMode
+            ? "0 4px 12px rgba(0,0,0,0.25)"
+            : "0 4px 12px rgba(0,0,0,0.08)",
+    };
+
+    const applyFiltersToModels = (
+        sourceList: RelatedModel[],
+        nextBaseModelList: { baseModel: string; display: boolean }[],
+        nextIsSorted: boolean
+    ) => {
+        const filtered = [...sourceList].filter(model =>
+            nextBaseModelList.some(
+                baseModelObj => baseModelObj.baseModel === model.baseModel && baseModelObj.display
+            )
+        );
+
+        setModelsList(nextIsSorted ? [...filtered].reverse() : filtered);
+    };
+
     useEffect(() => {
-        console.log(data)
-        console.log(retrievePossibleCombination(modelName, modelTags));
-        setPossibleCombinationTags(retrievePossibleCombination(modelName, modelTags))
-    }, [])
+        setPossibleCombinationTags(retrievePossibleCombination(modelName, modelTags));
+    }, [modelName, JSON.stringify(modelTags)]);
 
     useEffect(() => {
-        //Preventing First time update
-        if (isInitialMount.current) {
-            isInitialMount.current = false;
-        } else {
-            setModelsList(originalModelsList?.reverse().filter(model =>
-                baseModelList.some(baseModelObj => baseModelObj.baseModel === model.baseModel && baseModelObj.display)
-            ));
-            setOriginalModelsList(originalModelsList?.reverse());
-            //flag should be better, but leave it like this for now
-        }
-    }, [baseModelList]);
-
-    const handleAddTagIntoSelectedTagsListBySelecting = (tag: string) => {
-        if (selectedTags.includes(tag)) {
-            // Remove the tag from the array
-            setSelectedTags(selectedTags.filter(t => t !== tag));
-
-            // Remove the tag from inputValue if it exists
-            setInputValue(prevValue => {
-                // Split the inputValue by commas or spaces, trim each part, and filter out the tag
-                const tags = prevValue.split(/[\s,]+/).map(t => t.trim()).filter(t => t !== tag && t !== "");
-                // Rejoin the remaining tags with ", " to form the updated inputValue
-                return tags.join(", ");
-            });
-        } else {
-            // Add the tag to the array
-            setSelectedTags([...selectedTags, tag]);
-
-            // Append the tag to inputValue, ensuring it's properly formatted
-            setInputValue(prevValue => prevValue ? `${prevValue}, ${tag}` : tag);
-        }
-    }
-
-    const handleUpdateModelsList = async () => {
-        setIsLoading(true)
-        dispatch(clearError());
-
-        //Check for null or empty
-        if (inputValue === null || inputValue === undefined || inputValue === "") {
-            dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
-            setIsLoading(false)
+        if (!originalModelsList.length) {
+            setModelsList([]);
             return;
         }
 
-        const data = await fetchDatabaseRelatedModelsByTagsList(inputValue.split(/,\s*|\s+/), dispatch);
-        setModelsList(data)
-        setOriginalModelsList(data);
-        const uniqueBaseModels = Array.from(
-            new Set(data?.map((obj: any) => obj.baseModel))
-        ).map(baseModel => ({ baseModel: baseModel as string, display: true }));
-        setBaseModelList(uniqueBaseModels);
-        setVisibleToasts(data?.map(() => true))
-        setIsLoading(false)
-    }
+        applyFiltersToModels(originalModelsList, baseModelList, isSorted);
+    }, [baseModelList, isSorted, originalModelsList]);
 
-    const handleClose = (index: any) => {
-        const newVisibleToasts = [...visibleToasts];
-        newVisibleToasts[index] = false;
-        setVisibleToasts(newVisibleToasts);
+    const handleAddTagIntoSelectedTagsListBySelecting = (tag: string) => {
+        if (selectedTags.includes(tag)) {
+            setSelectedTags(selectedTags.filter(t => t !== tag));
+            setInputValue(prevValue => {
+                const tags = prevValue
+                    .split(/[\s,]+/)
+                    .map(t => t.trim())
+                    .filter(t => t !== tag && t !== "");
+                return tags.join(", ");
+            });
+        } else {
+            setSelectedTags([...selectedTags, tag]);
+            setInputValue(prevValue => (prevValue ? `${prevValue}, ${tag}` : tag));
+        }
+    };
+
+    const handleUpdateModelsList = async () => {
+        setIsLoading(true);
+        dispatch(clearError());
+
+        if (!inputValue.trim()) {
+            dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
+            setIsLoading(false);
+            return;
+        }
+
+        try {
+            const response = await fetchDatabaseRelatedModelsByTagsList(
+                inputValue.split(/,\s*|\s+/).filter(Boolean),
+                dispatch
+            );
+
+            const data = response || [];
+            setOriginalModelsList(data);
+            setModelsList(data);
+            setHiddenToastIds([]);
+
+            const uniqueBaseModels = Array.from(
+                new Set(data.map((obj: RelatedModel) => obj.baseModel))
+            ).map(baseModel => ({
+                baseModel: baseModel as string,
+                display: true
+            }));
+
+            setBaseModelList(uniqueBaseModels);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleClose = (id: number) => {
+        setHiddenToastIds(prev => [...prev, id]);
     };
 
     const handleReverseModelList = () => {
-        setModelsList(modelsList?.reverse());
-        setOriginalModelsList(originalModelsList?.reverse());
-        setIsSorted(!isSorted)
-    }
+        setIsSorted(prev => !prev);
+    };
 
     const handleClearTags = () => {
-        setSelectedTags([])
-        setInputValue("")
-    }
+        setSelectedTags([]);
+        setInputValue("");
+    };
 
     const handleToggleColapPanel = () => {
         setUsColapPanelOpen(!isColapPanelOpen);
@@ -136,141 +191,336 @@ const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanel> = (props)
     const handleToggleBaseModelCheckbox = (index: number) => {
         setBaseModelList(prevState => {
             const newState = [...prevState];
-            newState[index].display = !newState[index].display;
+            newState[index] = {
+                ...newState[index],
+                display: !newState[index].display,
+            };
             return newState;
         });
     };
 
     return (
-        <div className="panel-container">
-            {/* ... other JSX elements ... */}
-            <button className="panel-close-button" onClick={props.toggleDatabaseRelatedModelsPanelOpen}>
+        <div
+            className="panel-container"
+            style={{
+                ...panelCardStyle,
+                overflow: "hidden",
+            }}
+        >
+            <button
+                className="panel-close-button"
+                onClick={toggleDatabaseRelatedModelsPanelOpen}
+                style={{
+                    backgroundColor: theme.headerBackgroundColor,
+                    color: theme.headerFontColor,
+                    border: `1px solid ${theme.evenRowBackgroundColor}`,
+                    borderRadius: "8px",
+                    boxShadow: isDarkMode
+                        ? "0 4px 12px rgba(0,0,0,0.25)"
+                        : "0 4px 12px rgba(0,0,0,0.08)",
+                }}
+            >
                 <BiUndo />
             </button>
 
-            <div className="panel-container-content">
-
-                <div className="panel-header-text">
+            <div
+                className="panel-container-content"
+                style={{
+                    backgroundColor: theme.panelBackground,
+                    color: theme.panelText,
+                }}
+            >
+                <div
+                    className="panel-header-text"
+                    style={{ color: theme.panelText }}
+                >
                     <h6>Database's Related Models Panel</h6>
                 </div>
 
-                {/*Input Field */}
                 <InputGroup className="mb-3">
-                    <Button variant="danger" disabled={isLoading}
-                        onClick={handleClearTags}>
+                    <Button
+                        disabled={isLoading}
+                        onClick={handleClearTags}
+                        style={{
+                            backgroundColor: "#b02a37",
+                            color: "#fff",
+                            border: "1px solid #8f1f2b",
+                            boxShadow: "none",
+                        }}
+                    >
                         {isLoading ? <BsArrowRepeat className="spinner" /> : "Clear"}
                     </Button>
+
                     <FormControl
                         placeholder="file name"
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
+                        style={{
+                            backgroundColor: theme.rowBackgroundColor,
+                            color: theme.rowFontColor,
+                            border: `1px solid ${theme.evenRowBackgroundColor}`,
+                        }}
                     />
-                    <Button variant="primary" disabled={isLoading}
-                        onClick={() => handleUpdateModelsList()}>
+
+                    <Button
+                        disabled={isLoading}
+                        onClick={handleUpdateModelsList}
+                        style={{
+                            backgroundColor: theme.headerBackgroundColor,
+                            color: theme.headerFontColor,
+                            border: `1px solid ${theme.evenRowBackgroundColor}`,
+                            boxShadow: "none",
+                        }}
+                    >
                         {isLoading ? <BsArrowRepeat className="spinner" /> : "Submit"}
                     </Button>
                 </InputGroup>
 
-                <div className="buttonGroup" style={{ padding: "5px", display: "flex", justifyContent: "flex-start", alignItems: "flex-start" }}>
-                    <div style={{ marginRight: '10px' }}>
-                        <Button variant="secondary" disabled={isLoading} onClick={handleReverseModelList}>
-                            {isLoading ? <BsArrowRepeat className="spinner" /> : (isSorted ? <BsSortUp /> : <BsSortDown />)}
-                        </Button>
-                    </div>
+                <div
+                    style={{
+                        padding: "5px 0",
+                        display: "flex",
+                        justifyContent: "flex-start",
+                        alignItems: "flex-start",
+                        gap: "8px",
+                        marginBottom: "12px",
+                    }}
+                >
+                    <Button
+                        disabled={isLoading}
+                        onClick={handleReverseModelList}
+                        style={baseButtonStyle}
+                    >
+                        {isLoading ? <BsArrowRepeat className="spinner" /> : (isSorted ? <BsSortUp /> : <BsSortDown />)}
+                    </Button>
 
-                    <div className="collapse-panel-container" style={{ flexShrink: 0, margin: 0, padding: "0px 10px 0px 10px" }}>
-                        <div className="toggle-section" onClick={handleToggleColapPanel} aria-controls="collapse-panel-related" aria-expanded={isColapPanelOpen} style={{
-                            textAlign: 'center'
-                        }}>
+                    <div
+                        style={{
+                            flexShrink: 0,
+                            margin: 0,
+                            padding: 0,
+                            display: "inline-block",
+                            verticalAlign: "top",
+                            position: "relative",
+                            background: "transparent",
+                            overflow: "visible",
+                        }}
+                    >
+                        <div
+                            onClick={handleToggleColapPanel}
+                            aria-controls="collapse-panel-related"
+                            aria-expanded={isColapPanelOpen}
+                            style={{
+                                ...baseButtonStyle,
+                                cursor: "pointer",
+                                padding: "10px 12px",
+                                textAlign: "center",
+                            }}
+                        >
                             <BsType />
                         </div>
 
-                        <Collapse in={isColapPanelOpen}>
-                            <div id="collapse-panel-related" style={{
-                                marginTop: '10px',
-                                padding: '10px',
-                                borderRadius: '5px',
-                                background: '#f9f9f9',
-                                width: '100%'
-                            }}>
-                                {baseModelList.map((item, index) => (
-                                    <div key={index}>
-                                        <label>
+                        {isColapPanelOpen && (
+                            <div
+                                style={{
+                                    position: "absolute",
+                                    top: "calc(100% + 10px)",
+                                    left: 0,
+                                    zIndex: 1000,
+                                    background: "transparent",
+                                }}
+                            >
+                                <div
+                                    id="collapse-panel-related"
+                                    style={{
+                                        padding: "10px 12px",
+                                        borderRadius: "8px",
+                                        background: theme.headerBackgroundColor,
+                                        color: theme.headerFontColor,
+                                        border: `1px solid ${theme.evenRowBackgroundColor}`,
+                                        boxShadow: isDarkMode
+                                            ? "0 6px 18px rgba(0,0,0,0.35)"
+                                            : "0 6px 18px rgba(0,0,0,0.10)",
+                                        width: "max-content",
+                                        minWidth: "180px",
+                                    }}
+                                >
+                                    {baseModelList.map((item, index) => (
+                                        <label
+                                            key={item.baseModel}
+                                            style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: "8px",
+                                                marginBottom: "6px",
+                                                color: theme.headerFontColor,
+                                                cursor: "pointer",
+                                            }}
+                                        >
                                             <input
                                                 type="checkbox"
                                                 checked={item.display}
                                                 onChange={() => handleToggleBaseModelCheckbox(index)}
                                             />
-                                            {item.baseModel}
+                                            <span>{item.baseModel}</span>
                                         </label>
-                                    </div>
-                                ))}
+                                    ))}
+                                </div>
                             </div>
-                        </Collapse>
+                        )}
                     </div>
                 </div>
 
-                {/*Possible Tags */}
-                {possibleCombinationTags.map((tag, index) => (
-                    <label key={index}
-                        className={`panel-tag-button ${inputValue.split(/,\s*|\s+/).includes(tag) ? 'panel-tag-default' : 'panel-tag-selected'}`}
-                        onClick={() => handleAddTagIntoSelectedTagsListBySelecting(tag)}>
-                        {tag}
-                    </label>
-                ))}
+                <div
+                    style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "8px",
+                        marginBottom: "12px",
+                    }}
+                >
+                    {possibleCombinationTags.map((tag, index) => {
+                        const isSelected = inputTokens.includes(tag);
 
-                {isLoading ?
-                    <div className="centered-container">
-                        <Spinner />
+                        return (
+                            <button
+                                key={`${tag}-${index}`}
+                                onClick={() => handleAddTagIntoSelectedTagsListBySelecting(tag)}
+                                style={{
+                                    border: `1px solid ${theme.evenRowBackgroundColor}`,
+                                    borderRadius: "999px",
+                                    padding: "6px 10px",
+                                    backgroundColor: isSelected
+                                        ? theme.rowBackgroundColor
+                                        : theme.headerBackgroundColor,
+                                    color: isSelected
+                                        ? theme.rowFontColor
+                                        : theme.headerFontColor,
+                                    cursor: "pointer",
+                                    boxShadow: isDarkMode
+                                        ? "0 2px 8px rgba(0,0,0,0.20)"
+                                        : "0 2px 8px rgba(0,0,0,0.06)",
+                                }}
+                            >
+                                {tag}
+                            </button>
+                        );
+                    })}
+                </div>
+
+                {isLoading ? (
+                    <div
+                        style={{
+                            display: "flex",
+                            justifyContent: "center",
+                            padding: "18px 0",
+                        }}
+                    >
+                        <Spinner animation="border" style={{ color: theme.headerFontColor }} />
                     </div>
-                    :
+                ) : (
                     <>
-                        {modelsList?.map((model, index) => {
-                            if (!visibleToasts[index]) return null;
+                        {modelsList?.map((model) => {
+                            if (hiddenToastIds.includes(model.id)) return null;
 
                             return (
-                                <div key={index} className="panel-toast-container">
-                                    <Toast onClose={() => handleClose(index)}>
-                                        <Toast.Header>
-                                            <Col xs={10} className="panel-toast-header">
-                                                <Badge>{model?.baseModel}</Badge>  <b><span> #{model?.id}</span> : <span>{model?.name}</span></b>
+                                <div key={model.id} style={{ marginBottom: "12px" }}>
+                                    <Toast
+                                        onClose={() => handleClose(model.id)}
+                                        style={{
+                                            width: "100%",
+                                            backgroundColor: theme.panelBackground,
+                                            color: theme.panelText,
+                                            border: `1px solid ${theme.panelBorder}`,
+                                            borderRadius: "10px",
+                                            boxShadow: isDarkMode
+                                                ? "0 6px 18px rgba(0,0,0,0.35)"
+                                                : "0 6px 18px rgba(0,0,0,0.10)",
+                                        }}
+                                    >
+                                        <Toast.Header
+                                            style={{
+                                                backgroundColor: theme.headerBackgroundColor,
+                                                color: theme.headerFontColor,
+                                                borderBottom: `1px solid ${theme.panelBorder}`,
+                                            }}
+                                            closeButton
+                                        >
+                                            <Col
+                                                xs={10}
+                                                style={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: "8px",
+                                                    flexWrap: "wrap",
+                                                    color: theme.headerFontColor,
+                                                }}
+                                            >
+                                                <Badge
+                                                    style={{
+                                                        backgroundColor: theme.rowBackgroundColor,
+                                                        color: theme.rowFontColor,
+                                                        border: `1px solid ${theme.evenRowBackgroundColor}`,
+                                                    }}
+                                                >
+                                                    {model?.baseModel}
+                                                </Badge>
+                                                <b>
+                                                    <span>#{model?.id}</span> : <span>{model?.name}</span>
+                                                </b>
                                             </Col>
                                         </Toast.Header>
-                                        <Toast.Body>
-                                            {/* Image Carousel */}
-                                            <div className="panel-image-carousel-container">
-                                                {model?.imageUrls[0]?.url
-                                                    &&
-                                                    <Carousel fade>
-                                                        {model?.imageUrls?.map((image, index) => {
-                                                            return (
-                                                                <Carousel.Item key={index}>
-                                                                    <img
-                                                                        src={image.url || "https://placehold.co/200x250"}
-                                                                        alt={model.name}
-                                                                    />
-                                                                </Carousel.Item>
-                                                            )
-                                                        })}
-                                                    </Carousel>}
+
+                                        <Toast.Body
+                                            style={{
+                                                backgroundColor: theme.panelBackground,
+                                                color: theme.panelText,
+                                            }}
+                                        >
+                                            <div style={{ marginBottom: "10px" }}>
+                                                {model?.imageUrls?.[0]?.url && (
+                                                    <Carousel fade interval={null}>
+                                                        {model?.imageUrls?.map((image, index) => (
+                                                            <Carousel.Item key={index}>
+                                                                <img
+                                                                    src={image.url || "https://placehold.co/200x250"}
+                                                                    alt={model.name}
+                                                                    style={{
+                                                                        width: "100%",
+                                                                        maxHeight: "320px",
+                                                                        objectFit: "contain",
+                                                                        borderRadius: "8px",
+                                                                        backgroundColor: theme.headerBackgroundColor,
+                                                                    }}
+                                                                />
+                                                            </Carousel.Item>
+                                                        ))}
+                                                    </Carousel>
+                                                )}
                                             </div>
 
-                                            {/* Url */}
-                                            <a href={model?.url}> {model?.url} </a>
-
+                                            <a
+                                                href={model?.url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                style={{
+                                                    color: theme.subText,
+                                                    textDecoration: "underline",
+                                                    wordBreak: "break-all",
+                                                }}
+                                            >
+                                                {model?.url}
+                                            </a>
                                         </Toast.Body>
                                     </Toast>
                                 </div>
                             );
                         })}
                     </>
-                }
-
+                )}
             </div>
         </div>
-
     );
 };
 
 export default DatabaseRelatedModelsPanel;
-

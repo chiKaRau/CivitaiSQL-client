@@ -1,91 +1,83 @@
-import React, { useEffect, useState, useRef } from "react";
-//Components
-import { Toast } from 'react-bootstrap';
-import Col from 'react-bootstrap/Col';
-import { BiUndo } from "react-icons/bi"
-import { Carousel, Collapse } from 'react-bootstrap';
-import Spinner from 'react-bootstrap/Spinner';
-import { BsFillFileEarmarkArrowUpFill, BsFillCartCheckFill, BsType, BsArrowRepeat, BsSortDown, BsSortUp } from 'react-icons/bs';
-import { Button, Badge } from 'react-bootstrap';
+import React, { useEffect, useState } from "react";
+import { Toast, Carousel, Spinner, Button, Badge } from "react-bootstrap";
+import Col from "react-bootstrap/Col";
+import { BiUndo } from "react-icons/bi";
+import {
+    BsFillFileEarmarkArrowUpFill,
+    BsFillCartCheckFill,
+    BsType,
+    BsArrowRepeat,
+    BsSortDown,
+    BsSortUp
+} from "react-icons/bs";
 
-//Store
-import { useSelector, useDispatch } from 'react-redux';
-import { AppState } from '../../store/configureStore';
-import { updateDownloadFilePath } from "../../store/actions/chromeActions"
-import { setError, clearError } from '../../store/actions/errorsActions';
+// Store
+import { useSelector, useDispatch } from "react-redux";
+import { AppState } from "../../store/configureStore";
+import { updateDownloadFilePath } from "../../store/actions/chromeActions";
+import { setError, clearError } from "../../store/actions/errorsActions";
 
-//api
+// api
 import {
     fetchUpdateRecordAtDatabase,
     fetchDatabaseModelInfoByModelID,
-    fetchDownloadFilesByServer,
-    fetchDownloadFilesByBrowser,
-    fetchCheckCartList,
     fetchDownloadFilesByServer_v2,
     fetchDownloadFilesByBrowser_v2,
+    fetchCheckCartList,
     fetchCivitaiModelInfoFromCivitaiByVersionID,
     fetchAddOfflineDownloadFileIntoOfflineDownloadList,
     fetchCivitaiModelInfoFromCivitaiByModelID
-} from "../../api/civitaiSQL_api"
+} from "../../api/civitaiSQL_api";
 
-//utils
-import { bookmarkThisModel, callChromeBrowserDownload, callChromeBrowserDownload_v2 } from "../../utils/chromeUtils"
-import { retrieveCivitaiFileName, retrieveCivitaiFilesList } from "../../utils/objectUtils"
+// utils
+import { bookmarkThisModel, callChromeBrowserDownload_v2 } from "../../utils/chromeUtils";
+import { retrieveCivitaiFileName, retrieveCivitaiFilesList } from "../../utils/objectUtils";
 
-//Interface
+// theme
+import { darkTheme, lightTheme } from "../window_offline/OfflineWindow.theme";
+
 interface DatabaseUpdateModelPanelProps {
     toggleDatabaseUpdateModelPanelOpen: () => void;
-    isDarkMode: boolean;
+    isDarkMode?: boolean;
 }
 
-const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props) => {
-    const isInitialMount = useRef(true);
+type ModelEntry = {
+    name: string;
+    url: string;
+    id: number;
+    baseModel: string;
+    localPath?: string | null;
+    imageUrls: { url: string; height: number; width: number; nsfw: string }[];
+};
 
+const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = ({
+    toggleDatabaseUpdateModelPanelOpen,
+    isDarkMode = true
+}) => {
     const dispatch = useDispatch();
+    const theme = isDarkMode ? darkTheme : lightTheme;
 
     const civitaiModel = useSelector((state: AppState) => state.civitaiModel);
     const civitaiData: Record<string, any> | undefined = civitaiModel.civitaiModelObject;
-    const { civitaiUrl, civitaiVersionID, civitaiModelID } = civitaiModel
-
-    const databaseModel = useSelector((state: AppState) => state.databaseModel);
-    const databaseData: Record<string, any> | undefined = databaseModel.databaseModelObject;
-    const databaseModelsList = databaseData;
+    const { civitaiUrl, civitaiVersionID, civitaiModelID } = civitaiModel;
 
     const chrome = useSelector((state: AppState) => state.chrome);
     const { selectedCategory, downloadMethod, downloadFilePath, offlineMode } = chrome;
 
-    const [originalModelsList, setOriginalModelsList] = useState<{
-        name: string;
-        url: string;
-        id: number;
-        baseModel: string;
-        localPath?: string | null;
-        imageUrls: { url: string; height: number; width: number; nsfw: string }[];
-    }[]>([]);
-
-    const [modelsList, setModelsList] = useState<{
-        name: string;
-        url: string;
-        id: number;
-        baseModel: string;
-        localPath?: string | null;
-        imageUrls: { url: string; height: number; width: number; nsfw: string }[];
-    }[]>([]);
-    const [visibleToasts, setVisibleToasts] = useState<boolean[]>([])
-    const [visibleIsCarted, setVisibleIsCarted] = useState<boolean[]>([])
-    const [isLoading, setIsLoading] = useState(false)
-    const [updateOption, setUpdateOption] = useState("Database_and_UpdateFolder")
-    const [hasUpdateCompleted, setHasUpdateCompleted] = useState(false)
-
-    const [isSorted, setIsSorted] = useState(false)
-    const [baseModelList, setBaseModelList] = useState<{ baseModel: string, display: boolean }[]>([]);
+    const [originalModelsList, setOriginalModelsList] = useState<ModelEntry[]>([]);
+    const [modelsList, setModelsList] = useState<ModelEntry[]>([]);
+    const [hiddenToastIds, setHiddenToastIds] = useState<number[]>([]);
+    const [cartedById, setCartedById] = useState<Record<number, boolean>>({});
+    const [isLoading, setIsLoading] = useState(false);
+    const [updateOption, setUpdateOption] = useState("Database_and_UpdateFolder");
+    const [hasUpdateCompleted, setHasUpdateCompleted] = useState(false);
+    const [isSorted, setIsSorted] = useState(false);
+    const [baseModelList, setBaseModelList] = useState<{ baseModel: string; display: boolean }[]>([]);
     const [isColapPanelOpen, setUsColapPanelOpen] = useState(false);
     const [effectiveDownloadFilePath, setEffectiveDownloadFilePath] = useState("");
 
     let UpdateDownloadFilePath = "";
-
-    // Check if downloadFilePath matches the format /@scan@/{some word} (with optional trailing slash)
-    const regex = /^\/@scan@\/[^\/]+\/?$/; // Matches /@scan@/{some word} or /@scan@/{some word}/
+    const regex = /^\/@scan@\/[^\/]+\/?$/;
 
     if (regex.test(downloadFilePath)) {
         UpdateDownloadFilePath = `/@scan@/Update/${downloadFilePath.replace("/@scan@/", "")}`;
@@ -93,68 +85,58 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
         UpdateDownloadFilePath = `/@scan@/Update/${downloadFilePath.replace("/@scan@/ACG/", "")}`;
     }
 
-    //Retrivie Modellist when pane is open
+    const panelCardStyle: React.CSSProperties = {
+        backgroundColor: theme.panelBackground,
+        color: theme.panelText,
+        border: `1px solid ${theme.panelBorder}`,
+        borderRadius: "10px",
+        boxShadow: isDarkMode
+            ? "0 6px 18px rgba(0,0,0,0.35)"
+            : "0 6px 18px rgba(0,0,0,0.10)",
+    };
+
+    const baseButtonStyle: React.CSSProperties = {
+        backgroundColor: theme.headerBackgroundColor,
+        color: theme.headerFontColor,
+        border: `1px solid ${theme.evenRowBackgroundColor}`,
+        borderRadius: "8px",
+        minHeight: "44px",
+        minWidth: "46px",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        boxShadow: isDarkMode
+            ? "0 4px 12px rgba(0,0,0,0.25)"
+            : "0 4px 12px rgba(0,0,0,0.08)",
+    };
+
+    const applyFiltersToModels = (
+        sourceList: ModelEntry[],
+        nextBaseModelList: { baseModel: string; display: boolean }[],
+        nextIsSorted: boolean
+    ) => {
+        const filtered = [...sourceList].filter(model =>
+            nextBaseModelList.some(
+                baseModelObj => baseModelObj.baseModel === model.baseModel && baseModelObj.display
+            )
+        );
+
+        setModelsList(nextIsSorted ? [...filtered].reverse() : filtered);
+    };
+
     useEffect(() => {
         handleUpdateModelsList();
-    }, [])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     useEffect(() => {
-        //Preventing First time update
-        if (isInitialMount.current) {
-            console.log("test-civitaiUrl");
-            console.log(civitaiUrl);
-            isInitialMount.current = false;
-        } else {
-            setModelsList(originalModelsList?.reverse().filter(model =>
-                baseModelList.some(baseModelObj => baseModelObj.baseModel === model.baseModel && baseModelObj.display)
-            ));
-            setOriginalModelsList(originalModelsList?.reverse());
-        }
-    }, [baseModelList]);
-
-
-    const handleUpdateModelsList = async () => {
-        setIsLoading(true)
-        dispatch(clearError());
-
-        let modelID = civitaiModel.civitaiModelID;
-        //Check for null or empty
-        if (
-            modelID === null || modelID === "") {
-            dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
-            setIsLoading(false)
+        if (!originalModelsList.length) {
+            setModelsList([]);
             return;
         }
 
-        const data = await fetchDatabaseModelInfoByModelID(modelID, dispatch);
-
-        console.log("update panel record data : ", data)
-
-        setModelsList(data)
-        setOriginalModelsList(data);
-        const uniqueBaseModels = Array.from(
-            new Set(data?.map((obj: any) => obj.baseModel))
-        ).map(baseModel => ({ baseModel: baseModel as string, display: true }));
-        setBaseModelList(uniqueBaseModels);
-        setVisibleToasts(data?.map(() => true))
-
-        const cartListData = data || [];
-        const cartedStatusArray = await Promise.all(
-            cartListData.map(async (element: any) => {
-                return await handleCheckCartList(element.url);
-            })
-        );
-        setVisibleIsCarted(cartedStatusArray);
-
-        setIsLoading(false)
-    }
-
-    const handleClose = (index: any) => {
-        const newVisibleToasts = [...visibleToasts];
-        newVisibleToasts[index] = false;
-        setVisibleToasts(newVisibleToasts);
-    };
-
+        applyFiltersToModels(originalModelsList, baseModelList, isSorted);
+    }, [originalModelsList, baseModelList, isSorted]);
 
     useEffect(() => {
         if (hasUpdateCompleted) {
@@ -162,189 +144,237 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                 handleAddOfflineDownloadFileintoOfflineDownloadList(effectiveDownloadFilePath);
             } else {
                 handleDownload_v2(effectiveDownloadFilePath);
-                bookmarkThisModel(civitaiData?.type, dispatch);
-                setHasUpdateCompleted(false);
-                props.toggleDatabaseUpdateModelPanelOpen();
             }
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [hasUpdateCompleted, effectiveDownloadFilePath]);
 
-    const handleAddOfflineDownloadFileintoOfflineDownloadList = async (targetDownloadFilePath?: string) => {
+    const handleUpdateModelsList = async () => {
+        setIsLoading(true);
+        dispatch(clearError());
 
-        setIsLoading(true)
-        // Utility function to delay execution
+        if (!civitaiModelID) {
+            dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
+            setIsLoading(false);
+            return;
+        }
+
+        try {
+            const data = (await fetchDatabaseModelInfoByModelID(civitaiModelID, dispatch)) || [];
+
+            setOriginalModelsList(data);
+            setModelsList(data);
+            setHiddenToastIds([]);
+
+            const uniqueBaseModels = Array.from(
+                new Set(data.map((obj: ModelEntry) => obj.baseModel))
+            ).map(baseModel => ({
+                baseModel: baseModel as string,
+                display: true
+            }));
+
+            setBaseModelList(uniqueBaseModels);
+
+            const cartStatuses = await Promise.all(
+                data.map(async (element: ModelEntry) => {
+                    const isCarted = await handleCheckCartListSilently(element.url);
+                    return [element.id, isCarted] as const;
+                })
+            );
+
+            setCartedById(Object.fromEntries(cartStatuses));
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleCheckCartListSilently = async (url: string) => {
+        if (!url) return false;
+        try {
+            const isCarted = await fetchCheckCartList(url, dispatch);
+            return !!isCarted;
+        } catch (error) {
+            console.error("Error checking cart list:", error);
+            return false;
+        }
+    };
+
+    const handleClose = (id: number) => {
+        setHiddenToastIds(prev => [...prev, id]);
+    };
+
+    const handleToggleColapPanel = () => {
+        setUsColapPanelOpen(!isColapPanelOpen);
+    };
+
+    const handleToggleBaseModelCheckbox = (index: number) => {
+        setBaseModelList(prevState => {
+            const newState = [...prevState];
+            newState[index] = {
+                ...newState[index],
+                display: !newState[index].display,
+            };
+            return newState;
+        });
+    };
+
+    const handleReverseModelList = () => {
+        setIsSorted(prev => !prev);
+    };
+
+    const normalizeLocalPathToScanPath = (localPath?: string | null) => {
+        if (!localPath) return "";
+
+        const normalized = localPath.replace(/\\/g, "/");
+        const marker = "/@scan@/";
+        const markerIndex = normalized.indexOf(marker);
+
+        if (markerIndex === -1) return "";
+
+        let scanPath = normalized.substring(markerIndex);
+        if (!scanPath.endsWith("/")) {
+            scanPath += "/";
+        }
+
+        return scanPath;
+    };
+
+    const buildUpdatePathFromScanPath = (scanPath: string) => {
+        if (!scanPath) return "";
+
+        const updateRegex = /^\/@scan@\/[^\/]+\/?$/;
+
+        if (updateRegex.test(scanPath)) {
+            return `/@scan@/Update/${scanPath.replace("/@scan@/", "")}`;
+        } else {
+            return `/@scan@/Update/${scanPath.replace("/@scan@/ACG/", "")}`;
+        }
+    };
+
+    const handleAddOfflineDownloadFileintoOfflineDownloadList = async (targetDownloadFilePath?: string) => {
+        setIsLoading(true);
 
         const finalDownloadFilePath = targetDownloadFilePath || downloadFilePath;
+        const modelId = civitaiUrl.match(/\/models\/(\d+)/)?.[1] || "";
 
-        //Fetch Civitai ModelInfo
-        const modelId = civitaiUrl.match(/\/models\/(\d+)/)?.[1] || '';
-        // Fetch data with error handling
         try {
             const data = await fetchCivitaiModelInfoFromCivitaiByModelID(modelId, dispatch);
-            if (data) {
 
+            if (data) {
                 let versionIndex = 0;
                 const uri = new URL(civitaiUrl);
 
-                if (uri.searchParams.has('modelVersionId')) {
-                    let modelVersionId = uri.searchParams.get('modelVersionId');
+                if (uri.searchParams.has("modelVersionId")) {
+                    const modelVersionId = uri.searchParams.get("modelVersionId");
                     versionIndex = data.modelVersions.findIndex((version: any) => {
-                        return version.id == modelVersionId
+                        return version.id == modelVersionId;
                     });
                 }
 
-                let civitaiVersionID = data?.modelVersions[versionIndex]?.id.toString();
-                let civitaiModelID = modelId;
+                const resolvedVersionID = data?.modelVersions[versionIndex]?.id?.toString();
+                const resolvedModelID = modelId;
+                const civitaiFileName = retrieveCivitaiFileName(data, resolvedVersionID);
+                const civitaiModelFileList = retrieveCivitaiFilesList(data, resolvedVersionID);
+                const civitaiTags = data?.tags;
 
-                let civitaiFileName = retrieveCivitaiFileName(data, civitaiVersionID);
-                //the fileList would contains the urls of all files such as safetensor, training data, ...
-                let civitaiModelFileList = retrieveCivitaiFilesList(data, civitaiVersionID)
-
-                let civitaiTags = data?.tags;
-
-                //Check for null or empty
                 if (
-                    civitaiUrl === null || civitaiUrl === "" ||
-                    civitaiFileName === null || civitaiFileName === "" ||
-                    civitaiModelID === null || civitaiModelID === "" ||
-                    civitaiVersionID === null || civitaiVersionID === "" ||
-                    downloadFilePath === null || downloadFilePath === "" ||
-                    selectedCategory === null || selectedCategory === "" ||
-                    civitaiModelFileList === null || !civitaiModelFileList.length ||
-                    civitaiTags === null
+                    !civitaiUrl ||
+                    !civitaiFileName ||
+                    !resolvedModelID ||
+                    !resolvedVersionID ||
+                    !finalDownloadFilePath ||
+                    !selectedCategory ||
+                    !civitaiModelFileList?.length ||
+                    civitaiTags == null
                 ) {
-                    console.log("fail in handleAddOfflineDownloadFileintoOfflineDownloadList()")
+                    console.log("fail in handleAddOfflineDownloadFileintoOfflineDownloadList()");
                     return;
                 }
 
-                let modelObject = {
+                const modelObject = {
                     downloadFilePath: finalDownloadFilePath,
                     civitaiFileName,
-                    civitaiModelID,
-                    civitaiVersionID,
+                    civitaiModelID: resolvedModelID,
+                    civitaiVersionID: resolvedVersionID,
                     civitaiModelFileList,
                     civitaiUrl,
                     selectedCategory,
                     civitaiTags
-                }
+                };
 
                 await fetchAddOfflineDownloadFileIntoOfflineDownloadList(modelObject, false, dispatch);
-                props.toggleDatabaseUpdateModelPanelOpen();
+                setHasUpdateCompleted(false);
+                toggleDatabaseUpdateModelPanelOpen();
             }
-
         } catch (error) {
             console.error(error);
         }
 
-        setIsLoading(false)
+        setIsLoading(false);
     };
 
-    const handleDownload = async () => {
-
-        setIsLoading(true);
-        dispatch(clearError());
-
-        let civitaiFileName = retrieveCivitaiFileName(civitaiData, civitaiVersionID);
-        let filesList = retrieveCivitaiFilesList(civitaiData, civitaiVersionID)
-
-        //Check for null or empty
-        if (
-            civitaiUrl === null || civitaiUrl === "" ||
-            civitaiFileName === null || civitaiFileName === "" ||
-            civitaiModelID === null || civitaiModelID === "" ||
-            civitaiVersionID === null || civitaiVersionID === "" ||
-            downloadFilePath === null || downloadFilePath === "" ||
-            filesList === null || !filesList.length
-        ) {
-            dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
-            setIsLoading(false)
-            return;
-        }
-
-        if (downloadMethod === "server") {
-            //If download Method is server, the server will download the file into server's folder
-            await fetchDownloadFilesByServer(civitaiUrl, civitaiFileName, civitaiModelID,
-                civitaiVersionID, downloadFilePath, filesList, dispatch);
-        } else {
-            //if download Method is browser, the chrome browser will download the file into server's folder
-            await fetchDownloadFilesByBrowser(civitaiUrl, downloadFilePath, dispatch);
-            callChromeBrowserDownload({
-                name: civitaiFileName, modelID: civitaiModelID,
-                versionID: civitaiVersionID, downloadFilePath: downloadFilePath, filesList: filesList
-            })
-        }
-
-        setIsLoading(false)
-    }
-
     const handleDownload_v2 = async (targetDownloadFilePath?: string) => {
-
         setIsLoading(true);
         dispatch(clearError());
 
         const finalDownloadFilePath = targetDownloadFilePath || downloadFilePath;
 
-        let civitaiFileName = retrieveCivitaiFileName(civitaiData, civitaiVersionID);
-        //the fileList would contains the urls of all files such as safetensor, training data, ...
-        let civitaiModelFileList = retrieveCivitaiFilesList(civitaiData, civitaiVersionID)
+        const civitaiFileName = retrieveCivitaiFileName(civitaiData, civitaiVersionID);
+        const civitaiModelFileList = retrieveCivitaiFilesList(civitaiData, civitaiVersionID);
 
-        //Check for null or empty
         if (
-            civitaiUrl === null || civitaiUrl === "" ||
-            civitaiFileName === null || civitaiFileName === "" ||
-            civitaiModelID === null || civitaiModelID === "" ||
-            civitaiVersionID === null || civitaiVersionID === "" ||
-            finalDownloadFilePath === null || finalDownloadFilePath === "" ||
-            civitaiModelFileList === null || !civitaiModelFileList.length
+            !civitaiUrl ||
+            !civitaiFileName ||
+            !civitaiModelID ||
+            !civitaiVersionID ||
+            !finalDownloadFilePath ||
+            !civitaiModelFileList?.length
         ) {
             dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
-            setIsLoading(false)
+            setIsLoading(false);
             return;
         }
 
-        let modelObject = {
+        const modelObject = {
             downloadFilePath: finalDownloadFilePath,
             civitaiFileName,
             civitaiModelID,
             civitaiVersionID,
             civitaiModelFileList,
             civitaiUrl
-        }
+        };
 
         if (downloadMethod === "server") {
-            //If download Method is server, the server will download the file into server's folder
             await fetchDownloadFilesByServer_v2(modelObject, dispatch);
         } else {
-            //if download Method is browser, the chrome browser will download the file into server's folder
             await fetchDownloadFilesByBrowser_v2(civitaiUrl, finalDownloadFilePath, dispatch);
 
             try {
                 const data = await fetchCivitaiModelInfoFromCivitaiByVersionID(civitaiVersionID, dispatch);
                 if (data) {
-                    callChromeBrowserDownload_v2({ ...modelObject, modelVersionObject: data })
+                    callChromeBrowserDownload_v2({ ...modelObject, modelVersionObject: data });
                 } else {
                     throw new Error();
                 }
             } catch (error) {
-                console.error('Error fetching data for civitaiVersionID:', civitaiVersionID, error);
+                console.error("Error fetching data for civitaiVersionID:", civitaiVersionID, error);
                 dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
             }
-
         }
 
-        setIsLoading(false)
-    }
+        bookmarkThisModel(civitaiData?.type, dispatch);
+        setHasUpdateCompleted(false);
+        toggleDatabaseUpdateModelPanelOpen();
+        setIsLoading(false);
+    };
 
     const handleUpdateModel = async (id: number) => {
-        setIsLoading(true)
+        setIsLoading(true);
         dispatch(clearError());
 
-        //Check for null or empty
-        if (civitaiUrl === "" || selectedCategory === "" ||
-            civitaiUrl === undefined || selectedCategory === undefined || id === undefined ||
-            civitaiUrl === null || selectedCategory === null || id === null) {
+        if (!civitaiUrl || !selectedCategory || id == null) {
             dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
-            setIsLoading(false)
+            setIsLoading(false);
             return;
         }
 
@@ -374,285 +404,416 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                 selectedPath = downloadFilePath;
                 break;
             default:
-                selectedPath = '/@scan@/ACG/Temp/';
+                selectedPath = "/@scan@/ACG/Temp/";
                 break;
         }
 
         dispatch(updateDownloadFilePath(selectedPath));
         setEffectiveDownloadFilePath(selectedPath);
 
-        fetchUpdateRecordAtDatabase(id, civitaiUrl, selectedCategory, dispatch);
+        await fetchUpdateRecordAtDatabase(id, civitaiUrl, selectedCategory, dispatch);
 
         if (updateOption !== "Database_Only") {
-            setHasUpdateCompleted(true)
+            setHasUpdateCompleted(true);
         } else {
-            bookmarkThisModel(civitaiData?.type, dispatch)
-            setHasUpdateCompleted(false)
-            props.toggleDatabaseUpdateModelPanelOpen()
-        }
-        setIsLoading(false)
-    }
-
-    const handleCheckCartList = async (url: string) => {
-        setIsLoading(true)
-        dispatch(clearError());
-
-        //Check for null or empty
-        if (url === "" || url === undefined || url === null) {
-            dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
-            setIsLoading(false)
-            return false;
+            bookmarkThisModel(civitaiData?.type, dispatch);
+            setHasUpdateCompleted(false);
+            toggleDatabaseUpdateModelPanelOpen();
         }
 
-        let isCarted = await fetchCheckCartList(url, dispatch);
-
-        setIsLoading(false)
-        return isCarted ? true : false;
-    }
-
-    const handleToggleColapPanel = () => {
-        setUsColapPanelOpen(!isColapPanelOpen);
-    };
-
-    const handleToggleBaseModelCheckbox = (index: number) => {
-        setBaseModelList(prevState => {
-            const newState = [...prevState];
-            newState[index].display = !newState[index].display;
-            return newState;
-        });
-    };
-
-    const handleReverseModelList = () => {
-        setModelsList(modelsList?.reverse());
-        setOriginalModelsList(originalModelsList?.reverse());
-        setIsSorted(!isSorted)
-    }
-
-    const normalizeLocalPathToScanPath = (localPath?: string | null) => {
-        if (!localPath) return "";
-
-        const normalized = localPath.replace(/\\/g, "/");
-        const marker = "/@scan@/";
-        const markerIndex = normalized.indexOf(marker);
-
-        if (markerIndex === -1) return "";
-
-        let scanPath = normalized.substring(markerIndex);
-        if (!scanPath.endsWith("/")) {
-            scanPath += "/";
-        }
-
-        return scanPath;
-    };
-
-    const buildUpdatePathFromScanPath = (scanPath: string) => {
-        if (!scanPath) return "";
-
-        const regex = /^\/@scan@\/[^\/]+\/?$/;
-
-        if (regex.test(scanPath)) {
-            return `/@scan@/Update/${scanPath.replace("/@scan@/", "")}`;
-        } else {
-            return `/@scan@/Update/${scanPath.replace("/@scan@/ACG/", "")}`;
-        }
+        setIsLoading(false);
     };
 
     return (
-        <div className="panel-container">
-            {/* ... other JSX elements ... */}
-            <button className="panel-close-button" onClick={props.toggleDatabaseUpdateModelPanelOpen}>
+        <div
+            className="panel-container"
+            style={{
+                ...panelCardStyle,
+                overflow: "hidden",
+            }}
+        >
+            <button
+                className="panel-close-button"
+                onClick={toggleDatabaseUpdateModelPanelOpen}
+                style={{
+                    backgroundColor: theme.headerBackgroundColor,
+                    color: theme.headerFontColor,
+                    border: `1px solid ${theme.evenRowBackgroundColor}`,
+                    borderRadius: "8px",
+                    boxShadow: isDarkMode
+                        ? "0 4px 12px rgba(0,0,0,0.25)"
+                        : "0 4px 12px rgba(0,0,0,0.08)",
+                }}
+            >
                 <BiUndo />
             </button>
 
-            <div className="panel-container-content">
-
-                <div className="panel-header-text">
+            <div
+                className="panel-container-content"
+                style={{
+                    backgroundColor: theme.panelBackground,
+                    color: theme.panelText,
+                }}
+            >
+                <div className="panel-header-text" style={{ color: theme.panelText }}>
                     <h6>Database's Update Model Panel</h6>
                 </div>
 
-                <div className="buttonGroup" style={{ padding: "5px", display: "flex", justifyContent: "flex-start", alignItems: "flex-start" }}>
-                    <div style={{ marginRight: '10px' }}>
-                        <Button variant="secondary" disabled={isLoading} onClick={handleReverseModelList}>
-                            {isLoading ? <BsArrowRepeat className="spinner" /> : (isSorted ? <BsSortUp /> : <BsSortDown />)}
-                        </Button>
-                    </div>
+                <div
+                    style={{
+                        padding: "5px",
+                        display: "flex",
+                        justifyContent: "flex-start",
+                        alignItems: "flex-start",
+                        gap: "8px",
+                        flexWrap: "wrap",
+                    }}
+                >
+                    <Button
+                        disabled={isLoading}
+                        onClick={handleReverseModelList}
+                        style={baseButtonStyle}
+                    >
+                        {isLoading ? <BsArrowRepeat className="spinner" /> : (isSorted ? <BsSortUp /> : <BsSortDown />)}
+                    </Button>
 
-                    <div className="collapse-panel-container" style={{ flexShrink: 0, margin: 0, padding: "0px 10px 0px 10px" }}>
-                        <div className="toggle-section" onClick={handleToggleColapPanel} aria-controls="collapse-panel-update" aria-expanded={isColapPanelOpen} style={{
-                            textAlign: 'center'
-                        }}>
+                    <div
+                        style={{
+                            flexShrink: 0,
+                            margin: 0,
+                            padding: 0,
+                            display: "inline-block",
+                            verticalAlign: "top",
+                            position: "relative",
+                            background: "transparent",
+                            overflow: "visible",
+                        }}
+                    >
+                        <div
+                            onClick={handleToggleColapPanel}
+                            aria-controls="collapse-panel-update"
+                            aria-expanded={isColapPanelOpen}
+                            style={{
+                                ...baseButtonStyle,
+                                cursor: "pointer",
+                                padding: "10px 12px",
+                                textAlign: "center",
+                            }}
+                        >
                             <BsType />
                         </div>
 
-                        <Collapse in={isColapPanelOpen}>
-                            <div id="collapse-panel-update" style={{
-                                marginTop: '10px',
-                                padding: '10px',
-                                borderRadius: '5px',
-                                background: '#f9f9f9',
-                                width: '100%'
-                            }}>
-                                {baseModelList.map((item, index) => (
-                                    <div key={index}>
-                                        <label>
+                        {isColapPanelOpen && (
+                            <div
+                                style={{
+                                    position: "absolute",
+                                    top: "calc(100% + 10px)",
+                                    left: 0,
+                                    zIndex: 1000,
+                                    background: "transparent",
+                                }}
+                            >
+                                <div
+                                    id="collapse-panel-update"
+                                    style={{
+                                        padding: "10px 12px",
+                                        borderRadius: "8px",
+                                        background: theme.headerBackgroundColor,
+                                        color: theme.headerFontColor,
+                                        border: `1px solid ${theme.evenRowBackgroundColor}`,
+                                        boxShadow: isDarkMode
+                                            ? "0 6px 18px rgba(0,0,0,0.35)"
+                                            : "0 6px 18px rgba(0,0,0,0.10)",
+                                        width: "max-content",
+                                        minWidth: "180px",
+                                    }}
+                                >
+                                    {baseModelList.map((item, index) => (
+                                        <label
+                                            key={item.baseModel}
+                                            style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: "8px",
+                                                marginBottom: "6px",
+                                                color: theme.headerFontColor,
+                                                cursor: "pointer",
+                                            }}
+                                        >
                                             <input
                                                 type="checkbox"
                                                 checked={item.display}
                                                 onChange={() => handleToggleBaseModelCheckbox(index)}
                                             />
-                                            {item.baseModel}
+                                            <span>{item.baseModel}</span>
                                         </label>
-                                    </div>
-                                ))}
+                                    ))}
+                                </div>
                             </div>
-                        </Collapse>
+                        )}
                     </div>
                 </div>
 
-                {isLoading ?
-                    <div className="centered-container">
-                        <Spinner />
+                {isLoading ? (
+                    <div
+                        className="centered-container"
+                        style={{ color: theme.panelText }}
+                    >
+                        <Spinner animation="border" style={{ color: theme.headerFontColor }} />
                     </div>
-                    :
+                ) : (
                     <>
-                        {modelsList?.map((model, index) => {
+                        {modelsList.map((model) => {
                             const localScanPath = normalizeLocalPathToScanPath(model?.localPath);
                             const localUpdatePath = buildUpdatePathFromScanPath(localScanPath);
-                            if (!visibleToasts[index]) return null;
+
+                            if (hiddenToastIds.includes(model.id)) return null;
+
                             return (
-                                <div key={index} className="panel-toast-container">
-                                    <Toast onClose={() => handleClose(index)}>
-                                        <Toast.Header>
-                                            <Col xs={10} className="panel-toast-header">
-                                                <Badge>{model?.baseModel}</Badge><b><span> #{model?.id}</span> : <span>{model?.name}</span></b>
+                                <div
+                                    key={model.id}
+                                    className="panel-toast-container"
+                                    style={{ marginBottom: "12px" }}
+                                >
+                                    <Toast
+                                        onClose={() => handleClose(model.id)}
+                                        style={{
+                                            width: "100%",
+                                            backgroundColor: theme.panelBackground,
+                                            color: theme.panelText,
+                                            border: `1px solid ${theme.panelBorder}`,
+                                            borderRadius: "10px",
+                                            boxShadow: isDarkMode
+                                                ? "0 6px 18px rgba(0,0,0,0.35)"
+                                                : "0 6px 18px rgba(0,0,0,0.10)",
+                                        }}
+                                    >
+                                        <Toast.Header
+                                            style={{
+                                                backgroundColor: theme.headerBackgroundColor,
+                                                color: theme.headerFontColor,
+                                                borderBottom: `1px solid ${theme.panelBorder}`,
+                                            }}
+                                            closeButton
+                                        >
+                                            <Col
+                                                xs={10}
+                                                className="panel-toast-header"
+                                                style={{
+                                                    color: theme.headerFontColor,
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: "8px",
+                                                    flexWrap: "wrap",
+                                                }}
+                                            >
+                                                <Badge
+                                                    style={{
+                                                        backgroundColor: theme.rowBackgroundColor,
+                                                        color: theme.rowFontColor,
+                                                        border: `1px solid ${theme.evenRowBackgroundColor}`,
+                                                    }}
+                                                >
+                                                    {model?.baseModel}
+                                                </Badge>
+                                                <b>
+                                                    <span> #{model?.id}</span> : <span>{model?.name}</span>
+                                                </b>
                                             </Col>
                                         </Toast.Header>
-                                        <Toast.Body>
-                                            {/* Image Carousel */}
+
+                                        <Toast.Body
+                                            style={{
+                                                backgroundColor: theme.panelBackground,
+                                                color: theme.panelText,
+                                            }}
+                                        >
                                             <div className="panel-image-carousel-container">
-                                                {model?.imageUrls[0]?.url
-                                                    &&
-                                                    <Carousel fade>
-                                                        {model?.imageUrls?.map((image) => {
-                                                            return (
-                                                                <Carousel.Item >
-                                                                    <img
-                                                                        src={image.url || "https://placehold.co/200x250"}
-                                                                        alt={model.name}
-                                                                    />
-                                                                </Carousel.Item>
-                                                            )
-                                                        })}
-                                                    </Carousel>}
+                                                {model?.imageUrls?.[0]?.url && (
+                                                    <Carousel fade interval={null}>
+                                                        {model.imageUrls.map((image, imageIndex) => (
+                                                            <Carousel.Item key={`${model.id}-${imageIndex}`}>
+                                                                <img
+                                                                    src={image.url || "https://placehold.co/200x250"}
+                                                                    alt={model.name}
+                                                                    style={{
+                                                                        width: "100%",
+                                                                        maxHeight: "320px",
+                                                                        objectFit: "contain",
+                                                                        borderRadius: "8px",
+                                                                        backgroundColor: theme.headerBackgroundColor,
+                                                                    }}
+                                                                />
+                                                            </Carousel.Item>
+                                                        ))}
+                                                    </Carousel>
+                                                )}
                                             </div>
 
-                                            {/* Url */}
-                                            <a href={model?.url}> {model?.url} </a>
+                                            <div style={{ marginTop: "10px", marginBottom: "12px", wordBreak: "break-all" }}>
+                                                <a
+                                                    href={model?.url}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    style={{
+                                                        color: theme.subText,
+                                                        textDecoration: "underline",
+                                                    }}
+                                                >
+                                                    {model?.url}
+                                                </a>
+                                            </div>
 
-                                            {/**Update Radio Button */}
-                                            <div className="radio-container">
-
+                                            <div
+                                                style={{
+                                                    display: "flex",
+                                                    flexDirection: "column",
+                                                    gap: "8px",
+                                                    marginBottom: "12px",
+                                                }}
+                                            >
                                                 {localUpdatePath && (
-                                                    <label className="radio-label">
+                                                    <label
+                                                        style={{
+                                                            display: "flex",
+                                                            alignItems: "flex-start",
+                                                            gap: "8px",
+                                                            color: theme.panelText,
+                                                            cursor: "pointer",
+                                                        }}
+                                                    >
                                                         <input
                                                             type="radio"
                                                             value="Database_and_LocalUpdateFolder"
-                                                            checked={updateOption === 'Database_and_LocalUpdateFolder'}
-                                                            onChange={() => setUpdateOption('Database_and_LocalUpdateFolder')}
-                                                            className="radio-input"
+                                                            checked={updateOption === "Database_and_LocalUpdateFolder"}
+                                                            onChange={() => setUpdateOption("Database_and_LocalUpdateFolder")}
                                                         />
-                                                        <div className="truncated-text-container">
-                                                            <span>
-                                                                Database & Update to {localUpdatePath}
-                                                            </span>
-                                                        </div>
+                                                        <span style={{ wordBreak: "break-word" }}>
+                                                            Database & Update to {localUpdatePath}
+                                                        </span>
                                                     </label>
                                                 )}
 
                                                 {localScanPath && (
-                                                    <label className="radio-label">
+                                                    <label
+                                                        style={{
+                                                            display: "flex",
+                                                            alignItems: "flex-start",
+                                                            gap: "8px",
+                                                            color: theme.panelText,
+                                                            cursor: "pointer",
+                                                        }}
+                                                    >
                                                         <input
                                                             type="radio"
                                                             value="Database_and_LocalFileFolder"
-                                                            checked={updateOption === 'Database_and_LocalFileFolder'}
-                                                            onChange={() => setUpdateOption('Database_and_LocalFileFolder')}
-                                                            className="radio-input"
+                                                            checked={updateOption === "Database_and_LocalFileFolder"}
+                                                            onChange={() => setUpdateOption("Database_and_LocalFileFolder")}
                                                         />
-                                                        <div className="truncated-text-container">
-                                                            <span>
-                                                                Database & {localScanPath}
-                                                            </span>
-                                                        </div>
+                                                        <span style={{ wordBreak: "break-word" }}>
+                                                            Database & {localScanPath}
+                                                        </span>
                                                     </label>
                                                 )}
 
-                                                <label className="radio-label">
+                                                <label
+                                                    style={{
+                                                        display: "flex",
+                                                        alignItems: "flex-start",
+                                                        gap: "8px",
+                                                        color: theme.panelText,
+                                                        cursor: "pointer",
+                                                    }}
+                                                >
                                                     <input
                                                         type="radio"
                                                         value="Database_and_UpdateFolder"
-                                                        checked={updateOption === 'Database_and_UpdateFolder'}
-                                                        onChange={() => setUpdateOption('Database_and_UpdateFolder')}
-                                                        className="radio-input"
+                                                        checked={updateOption === "Database_and_UpdateFolder"}
+                                                        onChange={() => setUpdateOption("Database_and_UpdateFolder")}
                                                     />
-                                                    <div className="truncated-text-container">
-                                                        <span>
-                                                            Database & Update to {UpdateDownloadFilePath}
-                                                        </span>
-                                                    </div>
+                                                    <span style={{ wordBreak: "break-word" }}>
+                                                        Database & Update to {UpdateDownloadFilePath}
+                                                    </span>
                                                 </label>
-                                                <label className="radio-label">
+
+                                                <label
+                                                    style={{
+                                                        display: "flex",
+                                                        alignItems: "flex-start",
+                                                        gap: "8px",
+                                                        color: theme.panelText,
+                                                        cursor: "pointer",
+                                                    }}
+                                                >
                                                     <input
                                                         type="radio"
                                                         value="Database_and_FileFolder"
-                                                        checked={updateOption === 'Database_and_FileFolder'}
-                                                        onChange={() => setUpdateOption('Database_and_FileFolder')}
-                                                        className="radio-input"
+                                                        checked={updateOption === "Database_and_FileFolder"}
+                                                        onChange={() => setUpdateOption("Database_and_FileFolder")}
                                                     />
-                                                    <div className="truncated-text-container">
-                                                        <span>
-                                                            Database & {downloadFilePath}
-                                                        </span>
-                                                    </div>
+                                                    <span style={{ wordBreak: "break-word" }}>
+                                                        Database & {downloadFilePath}
+                                                    </span>
                                                 </label>
-                                                <label className="radio-label">
+
+                                                <label
+                                                    style={{
+                                                        display: "flex",
+                                                        alignItems: "flex-start",
+                                                        gap: "8px",
+                                                        color: theme.panelText,
+                                                        cursor: "pointer",
+                                                    }}
+                                                >
                                                     <input
                                                         type="radio"
                                                         value="Database_Only"
-                                                        checked={updateOption === 'Database_Only'}
-                                                        onChange={() => setUpdateOption('Database_Only')}
-                                                        className="radio-input"
+                                                        checked={updateOption === "Database_Only"}
+                                                        onChange={() => setUpdateOption("Database_Only")}
                                                     />
-                                                    Database Only
+                                                    <span>Database Only</span>
                                                 </label>
                                             </div>
 
-                                            {/**Update button */}
-                                            <div className="panel-update-button-container">
+                                            <div
+                                                className="panel-update-button-container"
+                                                style={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: "8px",
+                                                }}
+                                            >
                                                 <Button
                                                     variant={offlineMode ? "success" : "primary"}
                                                     disabled={isLoading}
                                                     onClick={() => handleUpdateModel(model?.id)}
-                                                    className="btn btn-primary btn-lg w-100"
+                                                    className="btn btn-lg w-100"
                                                 >
-                                                    <BsFillFileEarmarkArrowUpFill />
+                                                    <BsFillFileEarmarkArrowUpFill style={{ marginRight: "6px" }} />
+                                                    Update
                                                     {isLoading && <span className="button-state-complete">✓</span>}
                                                 </Button>
-                                                {visibleIsCarted[index] ? <BsFillCartCheckFill className="icon" /> : null}
-                                            </div>
 
+                                                {cartedById[model.id] ? (
+                                                    <BsFillCartCheckFill
+                                                        style={{
+                                                            fontSize: "1.3rem",
+                                                            color: theme.headerFontColor,
+                                                            flexShrink: 0,
+                                                        }}
+                                                    />
+                                                ) : null}
+                                            </div>
                                         </Toast.Body>
                                     </Toast>
                                 </div>
                             );
                         })}
                     </>
-                }
-
-            </div >
-        </div >
-
+                )}
+            </div>
+        </div>
     );
 };
 
 export default DatabaseUpdateModelPanel;
-

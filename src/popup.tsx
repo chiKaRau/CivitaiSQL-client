@@ -140,7 +140,12 @@ const Popup = () => {
   };
 
   return (
-    <>
+    <div
+      style={{
+        backgroundColor: theme.pageBackground,
+        color: theme.panelText,
+      }}
+    >
       {
         isModelPage ?
           (isConnectedToDatabase ?
@@ -186,7 +191,7 @@ const Popup = () => {
           </div>
       }
 
-    </>
+    </div>
   );
 };
 

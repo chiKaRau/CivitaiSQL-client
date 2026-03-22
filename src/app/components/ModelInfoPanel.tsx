@@ -1,34 +1,41 @@
 import React, { useEffect, useState } from 'react';
 
-//Store
+// Store
 import { useSelector, useDispatch } from 'react-redux';
 import { AppState } from '../store/configureStore';
 import { Button } from 'react-bootstrap';
-import { fetchFullRecordFromAllTableModelIDandVersionID, fetchGetOfflineRecordByModelAndVersion } from '../api/civitaiSQL_api';
+import {
+    fetchFullRecordFromAllTableModelIDandVersionID,
+    fetchGetOfflineRecordByModelAndVersion
+} from '../api/civitaiSQL_api';
 
-//Interface
+// theme
+import { darkTheme, lightTheme } from './window_offline/OfflineWindow.theme';
+
+// Interface
 interface ModelInfoPanelProps {
-    isDarkMode: boolean;
+    isDarkMode?: boolean;
 }
 
-//Model Page
-const ModelInfoPanel: React.FC<ModelInfoPanelProps> = () => {
-    //Redux Store will check which Reducer has the "state.[key]" then return appropriate value from the state
-    //Any Changes and Updates in Reducer would trigger rerender
+// Model Page
+const ModelInfoPanel: React.FC<ModelInfoPanelProps> = ({
+    isDarkMode = true
+}) => {
+    const theme = isDarkMode ? darkTheme : lightTheme;
+
     const civitaiModel = useSelector((state: AppState) => state.civitaiModel);
     const { civitaiUrl, civitaiModelID, civitaiVersionID } = civitaiModel;
     const civitaiData: Record<string, any> | undefined = civitaiModel.civitaiModelObject;
     const modelName = civitaiData?.name;
-    const [isLoading, setIsLoading] = useState(false)
+    const [isLoading, setIsLoading] = useState(false);
     const dispatch = useDispatch();
 
     const databaseModel = useSelector((state: AppState) => state.databaseModel);
-    const { isInDatabase } = databaseModel
+    const { isInDatabase } = databaseModel;
     const databaseData: Record<string, any> | undefined = databaseModel.databaseModelObject;
     const databaseModelsList = databaseData;
 
     const [showDatabaseSection, setShowDatabaseSection] = useState(false);
-
     const [fullRecord, setFullRecord] = useState<any | null>(null);
     const [offlineRecord, setOfflineRecord] = useState<any | null>(null);
 
@@ -37,18 +44,16 @@ const ModelInfoPanel: React.FC<ModelInfoPanelProps> = () => {
     const handleRetrieveFullInfoData = async () => {
         setIsLoading(true);
 
-        console.log("calling handleRetrieveFullInfoData ")
-
-        const data = await fetchFullRecordFromAllTableModelIDandVersionID(
-            civitaiModelID,
-            civitaiVersionID,
-            dispatch
-        );
-        console.log("full record data : ", data)
-
-        // expect the shape you showed: data.payload.model
-        setFullRecord(data ?? null);
-        setIsLoading(false);
+        try {
+            const data = await fetchFullRecordFromAllTableModelIDandVersionID(
+                civitaiModelID,
+                civitaiVersionID,
+                dispatch
+            );
+            setFullRecord(data ?? null);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleRetrieveOfflineRecord = async () => {
@@ -64,18 +69,14 @@ const ModelInfoPanel: React.FC<ModelInfoPanelProps> = () => {
                 dispatch
             );
 
-            console.log("offline record data : ", data);
             setOfflineRecord(data ?? null);
         } catch (error) {
-            console.error("Failed to load offline record:", error);
+            console.error('Failed to load offline record:', error);
             setOfflineRecord(null);
         }
     };
 
     useEffect(() => {
-        console.log(civitaiModelID)
-        console.log(civitaiVersionID)
-
         if (civitaiModelID && civitaiVersionID) {
             handleRetrieveFullInfoData();
             handleRetrieveOfflineRecord();
@@ -86,111 +87,217 @@ const ModelInfoPanel: React.FC<ModelInfoPanelProps> = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [civitaiModelID, civitaiVersionID]);
 
-    // auto-load when IDs are available/changed (or call the handler from a button if you prefer)
-    useEffect(() => {
-        console.log(civitaiModelID)
-        console.log(civitaiVersionID)
-        if (civitaiModelID && civitaiVersionID) {
-            handleRetrieveFullInfoData();
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [civitaiModelID, civitaiVersionID]);
-
     const toggleDatabaseSection = () => {
         setShowDatabaseSection(!showDatabaseSection);
     };
 
-    return (
-        <div className="infoContainer">
-            <div className="modelSection">
-                <div className="modelDetails">
-                    <div className="modelVersionContainer">
-                        <p><b>Model ID: {civitaiModelID}</b></p>
-                        <p><b>Version ID: {civitaiVersionID}</b></p>
-                    </div>
+    const panelStyle: React.CSSProperties = {
+        backgroundColor: theme.panelBackground,
+        color: theme.panelText,
+        border: `1px solid ${theme.panelBorder}`,
+        borderRadius: '10px',
+        padding: '14px',
+        boxShadow: isDarkMode
+            ? '0 6px 18px rgba(0,0,0,0.35)'
+            : '0 6px 18px rgba(0,0,0,0.10)',
+    };
 
-                    {fullRecord && (
-                        <div className="modelTimestamps">
-                            <div><strong>Created:</strong> {fmt(fullRecord?.model?.createdAt)}</div>
-                            <div><strong>Updated:</strong> {fmt(fullRecord?.model?.updatedAt)}</div>
+    const rowStyle: React.CSSProperties = {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        marginBottom: '10px',
+        flexWrap: 'wrap',
+    };
+
+    const labelStyle: React.CSSProperties = {
+        minWidth: '150px',
+        fontWeight: 600,
+        color: theme.panelText,
+    };
+
+    const inputStyle: React.CSSProperties = {
+        flex: 1,
+        minWidth: 0,
+        backgroundColor: theme.rowBackgroundColor,
+        color: theme.rowFontColor,
+        border: `1px solid ${theme.evenRowBackgroundColor}`,
+        borderRadius: '8px',
+        padding: '8px 10px',
+        outline: 'none',
+    };
+
+    const readOnlyPathStyle: React.CSSProperties = {
+        ...inputStyle,
+        direction: 'rtl',
+        textAlign: 'left',
+        width: '100%',
+        boxSizing: 'border-box',
+    };
+
+    return (
+        <div style={panelStyle}>
+            <div style={{ marginBottom: '12px' }}>
+                <div
+                    style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        justifyContent: 'space-between',
+                        gap: '12px',
+                        flexWrap: 'wrap',
+                    }}
+                >
+                    <div>
+                        <div style={{ fontWeight: 700, color: theme.panelText }}>
+                            Model ID: {civitaiModelID || '—'}
                         </div>
-                    )}
+                        <div style={{ fontWeight: 700, color: theme.panelText }}>
+                            Version ID: {civitaiVersionID || '—'}
+                        </div>
+                    </div>
 
                     {isInDatabase && (
                         <Button
-                            onClick={() => toggleDatabaseSection()}
-                            variant={showDatabaseSection ? 'danger' : 'primary'}
+                            onClick={toggleDatabaseSection}
+                            disabled={isLoading}
+                            style={{
+                                backgroundColor: theme.headerBackgroundColor,
+                                color: theme.headerFontColor,
+                                border: `1px solid ${theme.evenRowBackgroundColor}`,
+                                borderRadius: '8px',
+                                minHeight: '40px',
+                                minWidth: '46px',
+                                boxShadow: isDarkMode
+                                    ? '0 4px 12px rgba(0,0,0,0.25)'
+                                    : '0 4px 12px rgba(0,0,0,0.08)',
+                            }}
                         >
-                            {databaseModelsList?.length}
+                            {databaseModelsList?.length ?? 0}
                         </Button>
                     )}
                 </div>
 
-                {isInDatabase && <hr />}
+                {fullRecord && (
+                    <div
+                        style={{
+                            marginTop: '10px',
+                            color: theme.subText,
+                            fontSize: '0.95rem',
+                        }}
+                    >
+                        <div><strong>Created:</strong> {fmt(fullRecord?.model?.createdAt)}</div>
+                        <div><strong>Updated:</strong> {fmt(fullRecord?.model?.updatedAt)}</div>
+                    </div>
+                )}
+            </div>
 
-                <div className="inputContainer">
-                    <label className="inputLabel">Name:</label>
-                    <input className="inputField" type="text" placeholder="Name" value={modelName} />
-                </div>
-                <div className="inputContainer">
-                    <label className="inputLabel">Url:</label>
-                    <input className="inputField" type="text" placeholder="Url" value={civitaiUrl} />
-                </div>
-                {fullRecord?.model && (<div className="inputContainer">
-                    <label className="inputLabel">LocalPath:</label>
+            {isInDatabase && (
+                <hr
+                    style={{
+                        border: 0,
+                        borderTop: `1px solid ${theme.panelBorder}`,
+                        margin: '12px 0',
+                    }}
+                />
+            )}
+
+            <div style={rowStyle}>
+                <label style={labelStyle}>Name:</label>
+                <input
+                    style={inputStyle}
+                    type="text"
+                    placeholder="Name"
+                    value={modelName ?? ''}
+                    readOnly
+                />
+            </div>
+
+            <div style={rowStyle}>
+                <label style={labelStyle}>Url:</label>
+                <input
+                    style={inputStyle}
+                    type="text"
+                    placeholder="Url"
+                    value={civitaiUrl ?? ''}
+                    readOnly
+                />
+            </div>
+
+            {fullRecord?.model && (
+                <div style={rowStyle}>
+                    <label style={labelStyle}>LocalPath:</label>
                     <input
                         type="text"
                         value={fullRecord?.model?.localPath ?? ''}
                         placeholder="Local Path"
                         readOnly
                         title={fullRecord?.model?.localPath ?? ''}
-                        style={{
-                            direction: 'rtl',
-                            textAlign: 'left',
-                            width: '100%',          // keep full width
-                            boxSizing: 'border-box' // include padding/border in width
-                        }}
+                        style={readOnlyPathStyle}
                     />
+                </div>
+            )}
 
-                </div>)}
+            {offlineRecord?.downloadFilePath && (
+                <div style={rowStyle}>
+                    <label style={labelStyle}>Offline DownloadPath:</label>
+                    <input
+                        type="text"
+                        value={offlineRecord?.downloadFilePath ?? ''}
+                        placeholder="Offline DownloadPath"
+                        readOnly
+                        title={offlineRecord?.downloadFilePath ?? ''}
+                        style={readOnlyPathStyle}
+                    />
+                </div>
+            )}
 
-                {offlineRecord?.downloadFilePath && (
-                    <div className="inputContainer">
-                        <label className="inputLabel">Offline DownloadPath:</label>
-                        <input
-                            type="text"
-                            value={offlineRecord?.downloadFilePath ?? ''}
-                            placeholder="Offline DownloadPath"
-                            readOnly
-                            title={offlineRecord?.downloadFilePath ?? ''}
-                            style={{
-                                direction: 'rtl',
-                                textAlign: 'left',
-                                width: '100%',
-                                boxSizing: 'border-box'
-                            }}
-                        />
-                    </div>
-                )}
-            </div>
             {isInDatabase && showDatabaseSection && (
-                <div className="databaseSection">
-                    {databaseModelsList?.map((element: any, index: any) => (
-                        <div>
-                            <div key={index} className="databaseModelRow">
-                                <div className="databaseIdContainer">
-                                    <p className="databaseIdText">ID: {element.id}</p>
-                                </div>
-                                <div className="modelVersionContainer">
-                                    <p className="databaseIdText">mID: {element.modelNumber}</p>
-                                    {!(civitaiVersionID === element.versionNumber) ?
-                                        <p className="databaseIdText">vID: {element.versionNumber}</p>
-                                        :
-                                        <p className="databaseIdText">vID: <b> {element.versionNumber} </b></p>
-                                    }
-                                </div>
+                <div
+                    style={{
+                        marginTop: '14px',
+                        padding: '12px',
+                        backgroundColor: theme.headerBackgroundColor,
+                        color: theme.headerFontColor,
+                        border: `1px solid ${theme.evenRowBackgroundColor}`,
+                        borderRadius: '8px',
+                        boxShadow: isDarkMode
+                            ? '0 6px 18px rgba(0,0,0,0.35)'
+                            : '0 6px 18px rgba(0,0,0,0.10)',
+                    }}
+                >
+                    {databaseModelsList?.map((element: any, index: number) => (
+                        <div
+                            key={element.id ?? index}
+                            style={{
+                                padding: '10px 0',
+                                borderBottom:
+                                    index !== databaseModelsList.length - 1
+                                        ? `1px solid ${theme.panelBorder}`
+                                        : 'none',
+                            }}
+                        >
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    flexWrap: 'wrap',
+                                    gap: '14px',
+                                    marginBottom: '6px',
+                                    color: theme.subText,
+                                }}
+                            >
+                                <span>ID: {element.id}</span>
+                                <span>mID: {element.modelNumber}</span>
+                                <span>
+                                    vID:{' '}
+                                    {civitaiVersionID === element.versionNumber
+                                        ? <b>{element.versionNumber}</b>
+                                        : element.versionNumber}
+                                </span>
                             </div>
-                            <p>{index + 1}# : {element.name}</p>
+
+                            <div style={{ color: theme.panelText }}>
+                                {index + 1}# : {element.name}
+                            </div>
                         </div>
                     ))}
                 </div>
@@ -200,4 +307,3 @@ const ModelInfoPanel: React.FC<ModelInfoPanelProps> = () => {
 };
 
 export default ModelInfoPanel;
-

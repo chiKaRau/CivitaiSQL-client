@@ -1,27 +1,25 @@
 import React, { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppState } from '../../store/configureStore';
-import { Container, Row, Col, Form, Button, Toast } from 'react-bootstrap';
+import { Container, Row, Col, Form, Button, Toast, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { fetchAddRecordToDatabaseInCustom, fetchDownloadFilesByServer_v2ForCustom } from '../../api/civitaiSQL_api';
-
-import { OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { CiWarning } from 'react-icons/ci';
 import { AiOutlineCheckCircle, AiOutlineCloseCircle } from 'react-icons/ai';
 
 import CategoriesListSelector from '../CategoriesListSelector';
 import DownloadFilePathOptionPanel from '../DownloadFilePathOptionPanel';
 import FolderDropdown from '../FolderDropdown';
+import { darkTheme, lightTheme } from '../window_offline/OfflineWindow.theme';
 
 const CustomWindow: React.FC = () => {
     const dispatch = useDispatch();
     const { downloadFilePath, selectedCategory, isDarkMode } = useSelector((s: AppState) => s.chrome);
+    const theme = isDarkMode ? darkTheme : lightTheme;
 
-    // Toast state
     const [showToast, setShowToast] = useState(false);
     const [toastMsg, setToastMsg] = useState('');
     const [toastVariant, setToastVariant] = useState<'success' | 'danger'>('success');
 
-    // Required fields
     const [name, setName] = useState('');
     const [mainModelName, setMainModelName] = useState('');
     const [url, setUrl] = useState('');
@@ -30,10 +28,8 @@ const CustomWindow: React.FC = () => {
     const [type, setType] = useState('');
     const [baseModel, setBaseModel] = useState('');
 
-    // Dynamic Image URLs (must have at least 1)
     const [imageUrls, setImageUrls] = useState<string[]>(['']);
 
-    // Optional fields
     const [tags, setTags] = useState('');
     const [localTags, setLocalTags] = useState('');
     const [aliases, setAliases] = useState('');
@@ -50,11 +46,11 @@ const CustomWindow: React.FC = () => {
     const [downloadUrlInput, setDownloadUrlInput] = useState('https://huggingface.co/Ukado/Cream/resolve/main/easynegative.safetensors');
 
     const [prevData, setPrevData] = useState<any>(null);
+    const [isHandleRefresh, setIsHandleRefresh] = useState(false);
 
     const toArray = (s: string) =>
         s.split(',').map(x => x.trim()).filter(Boolean);
 
-    // Add/remove image URL inputs
     const handleAddImage = () => setImageUrls(prev => [...prev, '']);
     const handleRemoveImage = () => {
         if (imageUrls.length > 1) setImageUrls(prev => prev.slice(0, -1));
@@ -62,9 +58,7 @@ const CustomWindow: React.FC = () => {
     const handleImageChange = (i: number, v: string) =>
         setImageUrls(prev => prev.map((val, idx) => idx === i ? v : val));
 
-    // Reset everything
     const handleClear = () => {
-        // 1) snapshot current values
         setPrevData({
             name,
             mainModelName,
@@ -88,19 +82,33 @@ const CustomWindow: React.FC = () => {
             urlAccessable,
             downloadUrlInput,
         });
-        // 2) then clear
-        setName(''); setMainModelName(''); setUrl('');
-        setVersionNumber(''); setModelNumber(''); setType(''); setBaseModel('');
+
+        setName('');
+        setMainModelName('');
+        setUrl('');
+        setVersionNumber('');
+        setModelNumber('');
+        setType('');
+        setBaseModel('');
         setImageUrls(['']);
-        setTags(''); setLocalTags(''); setAliases(''); setTriggerWords('');
-        setDescription(''); setStats(''); setHash(''); setUsageTips('');
-        setCreatorName(''); setNsfw(false); setFlag(false); setUrlAccessable(false);
+        setTags('');
+        setLocalTags('');
+        setAliases('');
+        setTriggerWords('');
+        setDescription('');
+        setStats('');
+        setHash('');
+        setUsageTips('');
+        setCreatorName('');
+        setNsfw(false);
+        setFlag(false);
+        setUrlAccessable(false);
         setDownloadUrlInput('');
     };
 
     const handleUndo = () => {
         if (!prevData) return;
-        // prevData is now `any`, so no TS errors:
+
         setName(prevData.name);
         setMainModelName(prevData.mainModelName);
         setUrl(prevData.url);
@@ -122,14 +130,12 @@ const CustomWindow: React.FC = () => {
         setFlag(prevData.flag);
         setUrlAccessable(prevData.urlAccessable);
         setDownloadUrlInput(prevData.downloadUrlInput);
-        // clear the snapshot so Undo only works once
         setPrevData(null);
     };
 
-
-    // Submit handler
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
         const dto: any = {
             name,
             mainModelName,
@@ -169,42 +175,39 @@ const CustomWindow: React.FC = () => {
         }
     };
 
-    // Force-refresh DownloadFilePath panel when needed
-    const [isHandleRefresh, setIsHandleRefresh] = useState(false);
-
     const handleScrapEverything = async () => {
         try {
             // @ts-ignore
             if (!chrome?.tabs) throw new Error('Chrome extension APIs not available');
 
-            // Step 1: normal window → active tab
+            // @ts-ignore
             const windows = await chrome.windows.getAll({ populate: false });
-            const normalWindow = windows.find(win => win.type === 'normal');
+            const normalWindow = windows.find((win: any) => win.type === 'normal');
             if (!normalWindow) throw new Error('No normal window found');
 
+            // @ts-ignore
             const [activeTab] = await chrome.tabs.query({ active: true, windowId: normalWindow.id });
             if (!activeTab?.id) throw new Error('No active tab found');
 
+            // @ts-ignore
             await chrome.storage.local.set({ originalTabId: activeTab.id });
 
-            // Step 2: put the tab URL into Model URL input + extract IDs
             if (activeTab.url) {
                 setUrl(activeTab.url);
                 try {
                     const u = new URL(activeTab.url);
-                    const versionId = u.searchParams.get('modelVersionId'); // version number
-                    const modelIdMatch = u.pathname.match(/\/models\/(\d+)/); // model number before version
+                    const versionId = u.searchParams.get('modelVersionId');
+                    const modelIdMatch = u.pathname.match(/\/models\/(\d+)/);
                     if (versionId) setVersionNumber(versionId);
                     if (modelIdMatch?.[1]) setModelNumber(modelIdMatch[1]);
                 } catch {
-                    /* ignore parse error */
                 }
             }
 
-            // Step 3: scrape images (>50x50 preferred; fallback to any)
             // @ts-ignore
             if (!chrome?.scripting) throw new Error('Missing "scripting" permission in manifest');
 
+            // @ts-ignore
             const [{ result }] = await chrome.scripting.executeScript({
                 target: { tabId: activeTab.id },
                 func: () => {
@@ -247,20 +250,76 @@ const CustomWindow: React.FC = () => {
         }
     };
 
+    const panelStyle: React.CSSProperties = {
+        maxWidth: 900,
+        backgroundColor: theme.panelBackground,
+        color: theme.panelText,
+        border: `1px solid ${theme.panelBorder}`,
+        borderRadius: '10px',
+        padding: '24px',
+        boxShadow: isDarkMode
+            ? '0 6px 18px rgba(0,0,0,0.35)'
+            : '0 6px 18px rgba(0,0,0,0.10)',
+    };
 
+    const sectionBoxStyle: React.CSSProperties = {
+        backgroundColor: theme.headerBackgroundColor,
+        color: theme.headerFontColor,
+        padding: 12,
+        borderRadius: 8,
+        display: 'flex',
+        gap: '1rem',
+        border: `1px solid ${theme.evenRowBackgroundColor}`,
+        boxShadow: isDarkMode
+            ? '0 4px 12px rgba(0,0,0,0.25)'
+            : '0 4px 12px rgba(0,0,0,0.08)',
+    };
 
+    const inputStyle: React.CSSProperties = {
+        backgroundColor: theme.rowBackgroundColor,
+        color: theme.rowFontColor,
+        border: `1px solid ${theme.evenRowBackgroundColor}`,
+    };
+
+    const primaryButtonStyle: React.CSSProperties = {
+        backgroundColor: theme.headerBackgroundColor,
+        color: theme.headerFontColor,
+        border: `1px solid ${theme.evenRowBackgroundColor}`,
+        borderRadius: '8px',
+        boxShadow: isDarkMode
+            ? '0 4px 12px rgba(0,0,0,0.25)'
+            : '0 4px 12px rgba(0,0,0,0.08)',
+    };
+
+    const secondaryButtonStyle: React.CSSProperties = {
+        backgroundColor: theme.panelBackground,
+        color: theme.panelText,
+        border: `1px solid ${theme.panelBorder}`,
+        borderRadius: '8px',
+        boxShadow: isDarkMode
+            ? '0 4px 12px rgba(0,0,0,0.25)'
+            : '0 4px 12px rgba(0,0,0,0.08)',
+    };
+
+    const successButtonStyle: React.CSSProperties = {
+        backgroundColor: theme.headerBackgroundColor,
+        color: theme.headerFontColor,
+        border: `1px solid ${theme.evenRowBackgroundColor}`,
+        borderRadius: '8px',
+        boxShadow: isDarkMode
+            ? '0 4px 12px rgba(0,0,0,0.25)'
+            : '0 4px 12px rgba(0,0,0,0.08)',
+    };
 
     return (
-        <Container fluid className="bg-dark text-light p-4 rounded" style={{ maxWidth: 900 }}>
+        <Container fluid style={panelStyle}>
             <h2 className="text-center mb-4">Adding Custom Model</h2>
 
             <Form onSubmit={handleSubmit}>
-
-                <Button variant="outline-light" onClick={handleScrapEverything}>
+                <Button style={secondaryButtonStyle} onClick={handleScrapEverything} className="mb-3">
                     Scrape
                 </Button>
 
-                {/* Row 1: Name, Main Model */}
                 <Row>
                     <Col md={6} className="mb-3">
                         <Form.Group controlId="name">
@@ -268,9 +327,10 @@ const CustomWindow: React.FC = () => {
                             <Form.Control
                                 type="text"
                                 value={name}
-                                placeholder='illustrious_XL_zuihou.safetensors'
+                                placeholder="illustrious_XL_zuihou.safetensors"
                                 onChange={e => setName(e.target.value)}
                                 required
+                                style={inputStyle}
                             />
                         </Form.Group>
                     </Col>
@@ -280,41 +340,34 @@ const CustomWindow: React.FC = () => {
                             <Form.Control
                                 type="text"
                                 value={mainModelName}
-                                placeholder='model title'
+                                placeholder="model title"
                                 onChange={e => setMainModelName(e.target.value)}
                                 required
+                                style={inputStyle}
                             />
                         </Form.Group>
                     </Col>
                 </Row>
 
-                {/* Row 2 */}
                 <Row>
                     <Col md={12} className="mb-3">
                         <Form.Group controlId="url">
                             <Form.Label>Model URL*</Form.Label>
                             <Form.Control
-                                type="url" value={url}
-                                placeholder='https://civitaiarchive.com/models/1722778?modelVersionId=1949611'
-                                onChange={e => setUrl(e.target.value)} required
+                                type="url"
+                                value={url}
+                                placeholder="https://civitaiarchive.com/models/1722778?modelVersionId=1949611"
+                                onChange={e => setUrl(e.target.value)}
+                                required
+                                style={inputStyle}
                             />
                         </Form.Group>
                     </Col>
                 </Row>
 
-                {/* Combined Category + Download Path in white box */}
                 <Row className="mb-3">
                     <Col>
-                        <div
-                            style={{
-                                backgroundColor: '#fff',
-                                color: '#000',
-                                padding: 12,
-                                borderRadius: 4,
-                                display: 'flex',
-                                gap: '1rem',
-                            }}
-                        >
+                        <div style={sectionBoxStyle}>
                             <div style={{ flex: 1 }}>
                                 <Form.Label>Category*</Form.Label>
                                 <CategoriesListSelector />
@@ -332,17 +385,17 @@ const CustomWindow: React.FC = () => {
                     </Col>
                 </Row>
 
-                {/* Row 2: Version, Model#, Type, Base Model */}
                 <Row>
                     <Col md={3} className="mb-3">
                         <Form.Group controlId="modelNumber">
                             <Form.Label>Model Number*</Form.Label>
                             <Form.Control
                                 type="text"
-                                placeholder='1722778'
+                                placeholder="1722778"
                                 value={modelNumber}
                                 onChange={e => setModelNumber(e.target.value)}
                                 required
+                                style={inputStyle}
                             />
                         </Form.Group>
                     </Col>
@@ -351,10 +404,11 @@ const CustomWindow: React.FC = () => {
                             <Form.Label>Version Number*</Form.Label>
                             <Form.Control
                                 type="text"
-                                placeholder='1949611'
+                                placeholder="1949611"
                                 value={versionNumber}
                                 onChange={e => setVersionNumber(e.target.value)}
                                 required
+                                style={inputStyle}
                             />
                         </Form.Group>
                     </Col>
@@ -363,10 +417,11 @@ const CustomWindow: React.FC = () => {
                             <Form.Label>Type*</Form.Label>
                             <Form.Control
                                 type="text"
-                                placeholder='LORA'
+                                placeholder="LORA"
                                 value={type}
                                 onChange={e => setType(e.target.value)}
                                 required
+                                style={inputStyle}
                             />
                         </Form.Group>
                     </Col>
@@ -375,16 +430,16 @@ const CustomWindow: React.FC = () => {
                             <Form.Label>Base Model*</Form.Label>
                             <Form.Control
                                 type="text"
-                                placeholder='Illustrious'
+                                placeholder="Illustrious"
                                 value={baseModel}
                                 onChange={e => setBaseModel(e.target.value)}
                                 required
+                                style={inputStyle}
                             />
                         </Form.Group>
                     </Col>
                 </Row>
 
-                {/* Image URLs with + and – */}
                 <Form.Group className="mb-3">
                     <div className="d-flex justify-content-between align-items-center">
                         <Form.Label className="mb-0">Image URLs*</Form.Label>
@@ -392,22 +447,20 @@ const CustomWindow: React.FC = () => {
 
                     {imageUrls.map((u, i) => (
                         <div key={i} className="mb-2">
-                            {/* Preview above input — 50x100 box, show whole image */}
                             {u ? (
                                 <div
                                     style={{
                                         width: 100,
                                         height: 50,
-                                        border: '1px solid #666',
+                                        border: `1px solid ${theme.panelBorder}`,
                                         borderRadius: 4,
                                         marginBottom: 6,
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        background: '#111'
+                                        background: theme.headerBackgroundColor
                                     }}
                                 >
-                                    {/* show full image (no crop) */}
                                     <img
                                         src={u}
                                         alt={`preview-${i}`}
@@ -416,7 +469,7 @@ const CustomWindow: React.FC = () => {
                                     />
                                 </div>
                             ) : (
-                                <div style={{ height: 56 }} /> /* keep layout consistent */
+                                <div style={{ height: 56 }} />
                             )}
 
                             <div className="d-flex align-items-center">
@@ -426,17 +479,18 @@ const CustomWindow: React.FC = () => {
                                     placeholder="https://image.example.com/abc.jpg"
                                     onChange={e => handleImageChange(i, e.target.value)}
                                     required
+                                    style={inputStyle}
                                 />
                                 <Button
-                                    variant="outline-light"
-                                    onClick={() => setImageUrls(prev => [...prev, ''])}
+                                    style={secondaryButtonStyle}
+                                    onClick={handleAddImage}
                                     className="ms-2"
                                 >
                                     +
                                 </Button>
                                 <Button
-                                    variant="outline-light"
-                                    onClick={() => imageUrls.length > 1 && setImageUrls(prev => prev.slice(0, -1))}
+                                    style={secondaryButtonStyle}
+                                    onClick={handleRemoveImage}
                                     className="ms-1"
                                     disabled={imageUrls.length === 1}
                                 >
@@ -447,8 +501,6 @@ const CustomWindow: React.FC = () => {
                     ))}
                 </Form.Group>
 
-
-                {/* Non-required fields */}
                 <Row>
                     <Col md={4} className="mb-3">
                         <Form.Group controlId="tags">
@@ -459,18 +511,19 @@ const CustomWindow: React.FC = () => {
                                 placeholder="anime, style, woman, onimai, anime style, styles, onii-chan wa oshimai!"
                                 value={tags}
                                 onChange={e => setTags(e.target.value)}
+                                style={inputStyle}
                             />
                         </Form.Group>
-
                     </Col>
                     <Col md={4} className="mb-3">
                         <Form.Group controlId="localTags">
                             <Form.Label>Local Tags</Form.Label>
                             <Form.Control
                                 type="text"
-                                placeholder='Miki'
+                                placeholder="Miki"
                                 value={localTags}
                                 onChange={e => setLocalTags(e.target.value)}
+                                style={inputStyle}
                             />
                         </Form.Group>
                     </Col>
@@ -479,9 +532,10 @@ const CustomWindow: React.FC = () => {
                             <Form.Label>Aliases</Form.Label>
                             <Form.Control
                                 type="text"
-                                placeholder='Style'
+                                placeholder="Style"
                                 value={aliases}
                                 onChange={e => setAliases(e.target.value)}
+                                style={inputStyle}
                             />
                         </Form.Group>
                     </Col>
@@ -493,9 +547,10 @@ const CustomWindow: React.FC = () => {
                             <Form.Label>Trigger Words</Form.Label>
                             <Form.Control
                                 type="text"
-                                placeholder='onimastyle'
+                                placeholder="onimastyle"
                                 value={triggerWords}
                                 onChange={e => setTriggerWords(e.target.value)}
+                                style={inputStyle}
                             />
                         </Form.Group>
                     </Col>
@@ -507,6 +562,7 @@ const CustomWindow: React.FC = () => {
                                 placeholder='{"downloadCount":704,"ratingCount":1,"rating":5}'
                                 value={stats}
                                 onChange={e => setStats(e.target.value)}
+                                style={inputStyle}
                             />
                         </Form.Group>
                     </Col>
@@ -521,6 +577,7 @@ const CustomWindow: React.FC = () => {
                                 rows={3}
                                 value={description}
                                 onChange={e => setDescription(e.target.value)}
+                                style={inputStyle}
                             />
                         </Form.Group>
                     </Col>
@@ -535,6 +592,7 @@ const CustomWindow: React.FC = () => {
                                 placeholder='{"SHA256":null,"CRC32":null,"AutoV1":null,"AutoV2":"253A861FE4","AutoV3":null,"BLAKE3":null}'
                                 value={hash}
                                 onChange={e => setHash(e.target.value)}
+                                style={inputStyle}
                             />
                         </Form.Group>
                     </Col>
@@ -543,9 +601,10 @@ const CustomWindow: React.FC = () => {
                             <Form.Label>Usage Tips</Form.Label>
                             <Form.Control
                                 type="text"
-                                placeholder='Clip Skip: 2'
+                                placeholder="Clip Skip: 2"
                                 value={usageTips}
                                 onChange={e => setUsageTips(e.target.value)}
+                                style={inputStyle}
                             />
                         </Form.Group>
                     </Col>
@@ -557,31 +616,43 @@ const CustomWindow: React.FC = () => {
                             <Form.Label>Creator Name</Form.Label>
                             <Form.Control
                                 type="text"
-                                placeholder='ShadowxArt'
+                                placeholder="ShadowxArt"
                                 value={creatorName}
                                 onChange={e => setCreatorName(e.target.value)}
+                                style={inputStyle}
                             />
                         </Form.Group>
                     </Col>
                     <Col md={6}>
-                        <Form.Check
-                            type="checkbox"
-                            label="NSFW"
-                            checked={nsfw}
-                            onChange={e => setNsfw(e.target.checked)}
-                        />
-                        <Form.Check
-                            type="checkbox"
-                            label="Flag"
-                            checked={flag}
-                            onChange={e => setFlag(e.target.checked)}
-                        />
-                        <Form.Check
-                            type="checkbox"
-                            label="URL Accessible"
-                            checked={urlAccessable}
-                            onChange={e => setUrlAccessable(e.target.checked)}
-                        />
+                        <div
+                            style={{
+                                backgroundColor: theme.headerBackgroundColor,
+                                color: theme.headerFontColor,
+                                border: `1px solid ${theme.evenRowBackgroundColor}`,
+                                borderRadius: '8px',
+                                padding: '12px',
+                                marginTop: '30px',
+                            }}
+                        >
+                            <Form.Check
+                                type="checkbox"
+                                label="NSFW"
+                                checked={nsfw}
+                                onChange={e => setNsfw(e.target.checked)}
+                            />
+                            <Form.Check
+                                type="checkbox"
+                                label="Flag"
+                                checked={flag}
+                                onChange={e => setFlag(e.target.checked)}
+                            />
+                            <Form.Check
+                                type="checkbox"
+                                label="URL Accessible"
+                                checked={urlAccessable}
+                                onChange={e => setUrlAccessable(e.target.checked)}
+                            />
+                        </div>
                     </Col>
                 </Row>
 
@@ -594,6 +665,7 @@ const CustomWindow: React.FC = () => {
                                 placeholder="https://example.com/file.safetensors"
                                 value={downloadUrlInput}
                                 onChange={e => setDownloadUrlInput(e.target.value)}
+                                style={inputStyle}
                             />
                         </Form.Group>
                     </Col>
@@ -615,21 +687,19 @@ const CustomWindow: React.FC = () => {
                             return (
                                 <>
                                     <Button
-                                        variant="light"
+                                        style={primaryButtonStyle}
                                         onClick={async () => {
                                             try {
-                                                const ok = await fetchDownloadFilesByServer_v2ForCustom(
-                                                    {
-                                                        downloadFilePath,
-                                                        civitaiFileName: name,
-                                                        civitaiModelID: modelNumber,
-                                                        civitaiVersionID: versionNumber,
-                                                        civitaiUrl: url,
-                                                        baseModel,
-                                                        downloadUrl: downloadUrlInput,
-                                                        imageUrls
-                                                    }
-                                                );
+                                                const ok = await fetchDownloadFilesByServer_v2ForCustom({
+                                                    downloadFilePath,
+                                                    civitaiFileName: name,
+                                                    civitaiModelID: modelNumber,
+                                                    civitaiVersionID: versionNumber,
+                                                    civitaiUrl: url,
+                                                    baseModel,
+                                                    downloadUrl: downloadUrlInput,
+                                                    imageUrls
+                                                });
                                                 setToastMsg(ok ? 'Download Successful' : 'Download failed');
                                                 setToastVariant(ok ? 'success' : 'danger');
                                             } catch (err: any) {
@@ -684,37 +754,41 @@ const CustomWindow: React.FC = () => {
                     </Col>
                 </Row>
 
-                {/* Submit + Clear */}
                 <div className="d-flex justify-content-between mt-4">
                     <div>
                         <Button
-                            variant="outline-light"
+                            style={secondaryButtonStyle}
                             onClick={handleUndo}
                             disabled={!prevData}
                             className="me-2"
                         >
                             Undo
                         </Button>
-                        <Button variant="outline-light" onClick={handleClear}>
+                        <Button style={secondaryButtonStyle} onClick={handleClear}>
                             Clear
                         </Button>
                     </div>
-                    <Button variant="light" type="submit">
+                    <Button style={successButtonStyle} type="submit">
                         Submit
                     </Button>
                 </div>
             </Form>
 
-            {/* Toast */}
             <Toast
                 onClose={() => setShowToast(false)}
                 show={showToast}
-                bg={toastVariant}
                 delay={3000}
                 autohide
                 className="position-fixed bottom-0 end-0 m-3"
+                style={{
+                    backgroundColor: toastVariant === 'success' ? '#198754' : '#b02a37',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    boxShadow: '0 6px 18px rgba(0,0,0,0.25)',
+                }}
             >
-                <Toast.Body className="text-light">{toastMsg}</Toast.Body>
+                <Toast.Body>{toastMsg}</Toast.Body>
             </Toast>
         </Container>
     );
