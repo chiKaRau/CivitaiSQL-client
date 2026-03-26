@@ -2818,17 +2818,11 @@ const WindowComponent: React.FC = () => {
                                                     </Button>
                                                 </OverlayTrigger>
 
-                                                <ButtonWrap buttonConfig={{
-                                                    placement: "top",
-                                                    tooltip: `Set to Current Tabs: ${tabCreator}`,
-                                                    variant: "primary",
-                                                    buttonIcon: <PiTabsFill />,
-                                                    disabled: counting,
-                                                }}
-                                                    handleFunctionCall={() => {
-                                                        handleSetOriginalTab()
-                                                    }}
+                                                <SetOriginalTabButton
+                                                    handleSetOriginalTab={handleSetOriginalTab}
                                                     isDarkMode={isDarkMode}
+                                                    disabled={counting}
+                                                    tabCreator={tabCreator}
                                                 />
                                             </div>
 
