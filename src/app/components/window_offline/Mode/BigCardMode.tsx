@@ -393,11 +393,17 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                     </Carousel>
                                 ) : (
                                     (() => {
-                                        const first = normalizeImg(entry.imageUrlsArray[0] as any);
+                                        const normalizedImages = entry.imageUrlsArray
+                                            .map((img) => normalizeImg(img as any))
+                                            .filter((img) => img.url);
+
+                                        const first = normalizedImages[0];
                                         const baseW = 380;
+
                                         return (
                                             <SmartImage
                                                 src={withWidth(first.url, baseW)}
+                                                fallbackSources={normalizedImages.slice(1).map(img => withWidth(img.url, baseW))}
                                                 srcSet={buildSrcSet(first.url, [320, 480, 640, 800])}
                                                 sizes="(max-width: 420px) 100vw, 380px"
                                                 loading={cardIndex < 4 ? 'eager' : 'lazy'}
