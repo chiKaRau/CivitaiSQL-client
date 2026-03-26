@@ -497,11 +497,33 @@ const WindowComponent: React.FC = () => {
             .map(({ i }) => i);
     }, [creatorUrlList, ratingFilters]);
 
+    const reverseByModelGroup = <T extends { modelId: string; isPrimary?: boolean }>(rows: T[]) => {
+        const groups: T[][] = [];
+        const groupIndexMap = new Map<string, number>();
+
+        rows.forEach((row) => {
+            const existingIndex = groupIndexMap.get(row.modelId);
+
+            if (existingIndex === undefined) {
+                groupIndexMap.set(row.modelId, groups.length);
+                groups.push([row]);
+            } else {
+                groups[existingIndex].push(row);
+            }
+        });
+
+        return groups
+            .reverse()
+            .flatMap((group) => {
+                const mainRows = group.filter((row) => row.isPrimary);
+                const otherRows = group.filter((row) => !row.isPrimary);
+
+                return [...mainRows, ...otherRows];
+            });
+    };
 
     const stagedRowData = useMemo(() => {
-        const seenModelIds = new Set<string>();
-
-        return stagedItems.map((it, i) => {
+        const rawRows = stagedItems.map((it) => {
             const primaryVid = modelPrimaryVersionIdMap[it.modelId] || "";
             const effectiveVersionId =
                 it.versionId && it.versionId !== "Selecting" ? it.versionId : "";
@@ -517,12 +539,16 @@ const WindowComponent: React.FC = () => {
 
             return {
                 ...it,
-                idx: i + 1,
                 isPrimary,
                 modelVersionDisplay,
                 imgSrc: it.imgSrc || "",
             };
         });
+
+        return reverseByModelGroup(rawRows).map((row, index) => ({
+            ...row,
+            idx: index + 1,
+        }));
     }, [stagedItems, modelPrimaryVersionIdMap, urlBadgeMap]);
 
     const pickByNullThenAge = (direction: 1 | -1): number | null => {

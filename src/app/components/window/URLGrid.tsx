@@ -64,10 +64,33 @@ const URLGrid: React.FC<URLGridProps> = ({
         );
     };
 
-    const rowData = useMemo(() => {
-        const seenModelIds = new Set<string>();
+    const reverseByModelGroup = <T extends { modelId: string; isPrimary?: boolean }>(rows: T[]) => {
+        const groups: T[][] = [];
+        const groupIndexMap = new Map<string, number>();
 
-        return urlList.map((url) => {
+        rows.forEach((row) => {
+            const existingIndex = groupIndexMap.get(row.modelId);
+
+            if (existingIndex === undefined) {
+                groupIndexMap.set(row.modelId, groups.length);
+                groups.push([row]);
+            } else {
+                groups[existingIndex].push(row);
+            }
+        });
+
+        return groups
+            .reverse()
+            .flatMap((group) => {
+                const mainRows = group.filter((row) => row.isPrimary);
+                const otherRows = group.filter((row) => !row.isPrimary);
+
+                return [...mainRows, ...otherRows];
+            });
+    };
+
+    const rowData = useMemo(() => {
+        const rawRows = urlList.map((url) => {
             let modelId = "Unknown";
             let versionFromUrl = "";
 
@@ -85,7 +108,6 @@ const URLGrid: React.FC<URLGridProps> = ({
             const isPrimary =
                 !!primaryVid && !!effectiveVersionId && effectiveVersionId === primaryVid;
 
-            // IMPORTANT: if we still don't know versionId, show ONLY modelId (your request)
             const badge = urlBadgeMap?.[url] || "";
 
             const modelVersionDisplay = effectiveVersionId
@@ -103,6 +125,8 @@ const URLGrid: React.FC<URLGridProps> = ({
                 imgSrc,
             };
         });
+
+        return reverseByModelGroup(rawRows);
     }, [urlList, urlImgSrcMap, urlVersionIdMap, modelPrimaryVersionIdMap, urlBadgeMap]);
 
     const handleDelete = (urlToRemove: string) => {
