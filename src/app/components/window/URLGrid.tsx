@@ -5,6 +5,7 @@ import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-alpine.css";
 import { darkTheme, lightTheme } from "../window_offline/OfflineWindow.theme";
 import { HoverImagePreview } from "./HoverImagePreview";
+import { TrashButton } from "./TrashButton";
 
 interface URLGridProps {
     urlList: string[];
@@ -117,43 +118,6 @@ const URLGrid: React.FC<URLGridProps> = ({
         });
     };
 
-    const TrashButton = ({ onClick }: { onClick: (e: any) => void }) => {
-        const deleteColor = isDarkMode ? "#ff9a9a" : "#c62828";
-        const deleteBorder = isDarkMode
-            ? "1px solid rgba(255, 154, 154, 0.18)"
-            : "1px solid rgba(198, 40, 40, 0.18)";
-        const deleteBackground = isDarkMode
-            ? "rgba(255, 154, 154, 0.08)"
-            : "rgba(198, 40, 40, 0.06)";
-
-        return (
-            <button
-                type="button"
-                onClick={onClick}
-                title="Delete"
-                style={{
-                    cursor: "pointer",
-                    background: deleteBackground,
-                    color: deleteColor,
-                    border: deleteBorder,
-                    padding: 6,
-                    borderRadius: 6,
-                    lineHeight: 0,
-                }}
-            >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                    <path
-                        d="M9 3h6m-8 4h10m-9 0 1 14h6l1-14M10 11v7M14 11v7"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                    />
-                </svg>
-            </button>
-        );
-    };
-
     const TextTooltip: React.FC<any> = (props) => {
         const value = String(props?.value || "");
         if (!value) return null;
@@ -257,7 +221,7 @@ const URLGrid: React.FC<URLGridProps> = ({
             },
         },
         {
-            headerName: "Actions",
+            headerName: "Remove",
             field: "actions",
             width: 90,
             sortable: false,
@@ -265,10 +229,8 @@ const URLGrid: React.FC<URLGridProps> = ({
             cellStyle: { textAlign: "center", padding: "5px" },
             cellRenderer: (params: any) => (
                 <TrashButton
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(params.data.url);
-                    }}
+                    onClick={() => handleDelete(params.data.url)}
+                    isDarkMode={isDarkMode}
                 />
             ),
         },

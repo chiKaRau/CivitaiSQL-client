@@ -156,8 +156,15 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
         const matchedPrefix = findBestPrefixMatch(fullPath, prefixsList);
 
         if (matchedPrefix) {
-            setSelectedPrefix(matchedPrefix.downloadFilePath);
+            const prefix = matchedPrefix.downloadFilePath;
+            const suffix = fullPath.slice(prefix.length);
+
+            setSelectedPrefix(prefix);
+            setSelectedSuffix(suffix);
             dispatch(updateDownloadPriority(matchedPrefix.downloadPriority ?? 0));
+        } else {
+            setSelectedPrefix('');
+            setSelectedSuffix(fullPath);
         }
 
         dispatch(updateDownloadFilePath(fullPath));

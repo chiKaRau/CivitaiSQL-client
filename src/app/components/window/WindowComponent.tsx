@@ -113,6 +113,7 @@ import { PathAutocompleteEditor } from './PathAutocompleteEditor';
 import { HoldEditor } from './HoldEditor';
 import { darkTheme, getOfflineWindowStyles, lightTheme } from '../window_offline/OfflineWindow.theme';
 import { HoverImagePreview } from './HoverImagePreview';
+import { TrashButton } from './TrashButton';
 
 interface CreatorUrlItem {
     creatorUrl: string;
@@ -615,6 +616,31 @@ const WindowComponent: React.FC = () => {
 
     const patchStagedById = (id: string, patch: Partial<StagedItem>) => {
         setStagedItems(prev => prev.map(it => (it.id === id ? { ...it, ...patch } : it)));
+    };
+
+    const handleUnstageItem = (item: StagedItem) => {
+        setUrlList(prev => {
+            if (prev.includes(item.url)) return prev;
+            return [...prev, item.url];
+        });
+
+        const restoredImgSrc = item.imgSrc || "";
+        if (restoredImgSrc) {
+            setUrlImgSrcMap(prev => ({
+                ...prev,
+                [item.url]: restoredImgSrc,
+            }));
+        }
+
+        const restoredVersionId = item.versionId || "";
+        if (restoredVersionId && restoredVersionId !== "Selecting") {
+            setUrlVersionIdMap(prev => ({
+                ...prev,
+                [item.url]: restoredVersionId,
+            }));
+        }
+
+        setStagedItems(prev => prev.filter(x => x.id !== item.id));
     };
 
     // Read current tab, extract creator if URL matches /user/<creator>/models
@@ -1151,6 +1177,35 @@ const WindowComponent: React.FC = () => {
         );
     };
 
+    const actionButtonBaseStyle: React.CSSProperties = {
+        cursor: "pointer",
+        border: "none",
+        padding: 6,
+        borderRadius: 6,
+        lineHeight: 0,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+    };
+
+    const unstageButtonStyle: React.CSSProperties = {
+        ...actionButtonBaseStyle,
+        background: isDarkMode ? "rgba(120, 190, 255, 0.10)" : "rgba(25, 118, 210, 0.08)",
+        color: isDarkMode ? "#9fd0ff" : "#1565c0",
+        border: isDarkMode
+            ? "1px solid rgba(159, 208, 255, 0.22)"
+            : "1px solid rgba(21, 101, 192, 0.18)",
+    };
+
+    const deleteButtonStyle: React.CSSProperties = {
+        ...actionButtonBaseStyle,
+        background: isDarkMode ? "rgba(255, 154, 154, 0.08)" : "rgba(198, 40, 40, 0.06)",
+        color: isDarkMode ? "#ff9a9a" : "#c62828",
+        border: isDarkMode
+            ? "1px solid rgba(255, 154, 154, 0.18)"
+            : "1px solid rgba(198, 40, 40, 0.18)",
+    };
+
     const stagingComponents = useMemo(() => ({ imageTooltip: ImageTooltip }), [theme]);
 
     const priorityOptions = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -1172,6 +1227,16 @@ const WindowComponent: React.FC = () => {
                 textAlign: "center",
                 fontWeight: 600,
             },
+        },
+        {
+            headerName: "Pri",
+            field: "downloadPriority",
+            width: 70,
+
+            editable: true,
+            cellEditor: SelectEditor,
+            cellEditorPopup: true,
+            cellEditorParams: () => ({ options: priorityOptions })
         },
         {
             headerName: "Model & Version",
@@ -1241,41 +1306,41 @@ const WindowComponent: React.FC = () => {
             cellEditor: HoldEditor,
             cellEditorPopup: true,
         },
-
         {
-            headerName: "Pri",
-            field: "downloadPriority",
-            width: 70,
-
-            editable: true,
-            cellEditor: SelectEditor,
-            cellEditorPopup: true,
-            cellEditorParams: () => ({ options: priorityOptions })
-        },
-        {
-            headerName: "X",
-            width: 60,
+            headerName: "",
+            field: "unstageAction",
+            width: 54,
+            minWidth: 54,
+            maxWidth: 54,
             sortable: false,
+            filter: false,
+            editable: false,
+            resizable: false,
+            pinned: "right",
+            lockPinned: true,
+            suppressMovable: true,
+            headerTooltip: "Unstage",
+            cellStyle: {
+                textAlign: "center",
+                padding: "2px",
+            },
             cellRenderer: (p: any) => (
                 <button
                     type="button"
                     onClick={(e) => {
                         e.stopPropagation();
-                        setStagedItems(prev => prev.filter(x => x.id !== p.data.id));
+                        handleUnstageItem(p.data);
                     }}
-                    title="Delete"
+                    title="Unstage"
                     style={{
-                        cursor: "pointer",
-                        background: "transparent",
-                        border: "none",
-                        padding: 6,
-                        borderRadius: 6,
-                        lineHeight: 0,
+                        ...unstageButtonStyle,
+                        padding: 4,
+                        borderRadius: 5,
                     }}
                 >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                         <path
-                            d="M9 3h6m-8 4h10m-9 0 1 14h6l1-14M10 11v7M14 11v7"
+                            d="M15 6l-6 6 6 6"
                             stroke="currentColor"
                             strokeWidth="2"
                             strokeLinecap="round"
@@ -1283,6 +1348,35 @@ const WindowComponent: React.FC = () => {
                         />
                     </svg>
                 </button>
+            ),
+        },
+        {
+            headerName: "",
+            field: "deleteAction",
+            width: 54,
+            minWidth: 54,
+            maxWidth: 54,
+            sortable: false,
+            filter: false,
+            editable: false,
+            resizable: false,
+            pinned: "right",
+            lockPinned: true,
+            suppressMovable: true,
+            headerTooltip: "Remove",
+            cellStyle: {
+                textAlign: "center",
+                padding: "2px",
+            },
+            cellRenderer: (p: any) => (
+                <TrashButton
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setStagedItems(prev => prev.filter(x => x.id !== p.data.id));
+                    }}
+                    isDarkMode={isDarkMode}
+                    compact
+                />
             ),
         },
     ];
@@ -1297,8 +1391,6 @@ const WindowComponent: React.FC = () => {
     const newLabel = selectedRatings.length === 1
         ? `(New) ${selectedRatings[0]}:`
         : `(New):`;
-
-
 
     const handleOpenOfflineWindow = () => {
         console.log("open offline window")
