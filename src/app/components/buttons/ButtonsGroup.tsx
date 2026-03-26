@@ -104,23 +104,35 @@ const ButtonsGroup: React.FC<ButtonsGroupProps> = ({ isDarkMode = true }) => {
     const tightItemStyle = {
         display: "inline-flex",
         alignItems: "flex-start",
+        flex: "0 1 auto",
+        minWidth: 0,
+        maxWidth: "100%",
     };
 
     const tightItemShiftStyle = {
         display: "inline-flex",
         alignItems: "flex-start",
-        marginLeft: "-10px", // try -3px to -6px
+        flex: "0 1 auto",
+        minWidth: 0,
+        maxWidth: "100%",
+        marginLeft: "-8px",
     };
 
     return (
         <div
             style={{
                 display: "flex",
-                flexWrap: "nowrap",
+                flexWrap: "wrap",
                 alignItems: "flex-start",
-                overflowX: "auto",
-                overflowY: "hidden",
+                justifyContent: "flex-start",
+                columnGap: "2px",
+                rowGap: "6px",
                 width: "100%",
+                maxWidth: "100%",
+                minWidth: 0,
+                boxSizing: "border-box",
+                overflowX: "hidden",
+                overflowY: "visible",
             }}
         >
             {/**Database's RelatedModelsPanel Button */}

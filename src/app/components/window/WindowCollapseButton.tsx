@@ -45,9 +45,11 @@ const WindowCollapseButton: React.FC<CollapsePanelProps> = ({
             className="collapse-panel-container"
             style={{
                 flexShrink: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-start',
                 margin: '1px 3px',
                 padding: '5px',
-                display: 'inline-block',
                 verticalAlign: 'top',
 
                 border: outerShellBorder,
@@ -86,8 +88,8 @@ const WindowCollapseButton: React.FC<CollapsePanelProps> = ({
             </div>
 
             {!hideInlinePanel && (
-                <Collapse in={isPanelOpen}>
-                    <div>
+                <Collapse in={isPanelOpen} mountOnEnter unmountOnExit>
+                    <div style={{ width: '100%' }}>
                         <div
                             id={`collapse-panel-${panelId}`}
                             style={{
@@ -100,7 +102,8 @@ const WindowCollapseButton: React.FC<CollapsePanelProps> = ({
                                 boxShadow: isDarkMode
                                     ? '0 6px 18px rgba(0,0,0,0.35)'
                                     : '0 6px 18px rgba(0,0,0,0.10)',
-                                width: isPanelOpen ? 'max-content' : 'auto',
+                                width: 'max-content',
+                                maxWidth: '100%',
                             }}
                         >
                             {buttons}

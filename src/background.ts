@@ -38,9 +38,9 @@ async function openOrFocusPopup() {
     const win = await chrome.windows.create({
       url: POPUP_URL,
       type: 'popup',
-      width: 1600,
+      width: 1550,
       height: 1100,
-      left: 1700,
+      left: 1800,
       focused: true
     });
 

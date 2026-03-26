@@ -1213,9 +1213,9 @@ const WindowComponent: React.FC = () => {
     const stagingColumnDefs: ColDef[] = [
         {
             headerName: "#",
-            width: 60,
+            width: 50,
             minWidth: 50,
-            maxWidth: 70,
+            maxWidth: 50,
             sortable: true,
             filter: false,
             editable: false,
@@ -1231,7 +1231,7 @@ const WindowComponent: React.FC = () => {
         {
             headerName: "Pri",
             field: "downloadPriority",
-            width: 70,
+            width: 55,
 
             editable: true,
             cellEditor: SelectEditor,
@@ -1277,7 +1277,7 @@ const WindowComponent: React.FC = () => {
             headerName: "Path",
             field: "downloadFilePath",
             flex: 1,
-            minWidth: 240,
+            minWidth: 230,
             wrapText: true,
             autoHeight: true,
             cellStyle: {
