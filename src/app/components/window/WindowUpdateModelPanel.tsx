@@ -585,11 +585,33 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
             dispatch(updateDownloadPriority(matchedPrefix.downloadPriority ?? 0));
         } else {
             setSelectedPrefix("");
-            setSelectedSuffix(fullPath);
+            setSelectedSuffix(fullPath || "");
         }
 
         setDownloadFilePath(fullPath);
         dispatch(updateDownloadFilePath(fullPath));
+    };
+
+    const handlePrefixClick = (element: {
+        id: number;
+        prefixName: string;
+        downloadFilePath: string;
+        downloadPriority: number;
+        createdAt?: string;
+        updatedAt?: string;
+    }) => {
+        setSelectedPrefix(element.downloadFilePath);
+        setSelectedSuffix("");
+        setDownloadFilePath(element.downloadFilePath);
+        dispatch(updateDownloadPriority(element.downloadPriority ?? 0));
+        dispatch(updateDownloadFilePath(element.downloadFilePath));
+    };
+
+    const handleSuffixClick = (suffixValue: string) => {
+        const nextPath = `${selectedPrefix || ""}${suffixValue || ""}`;
+        setSelectedSuffix(suffixValue || "");
+        setDownloadFilePath(nextPath);
+        dispatch(updateDownloadFilePath(nextPath));
     };
 
     useEffect(() => {
@@ -628,11 +650,6 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
 
     }, [chrome.selectedFilteredCategoriesList])
 
-    useEffect(() => {
-        setDownloadFilePath(`${selectedPrefix}${selectedSuffix}`)
-    }, [selectedPrefix, selectedSuffix])
-
-
     const handleToggleBaseModelCheckbox = (index: number) => {
         setSelectedFilteredCategoriesList(prevState => {
             const newState = [...prevState];
@@ -647,6 +664,25 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
             prevState.map(item => ({ ...item, display: isChecked }))
         );
     };
+
+    useEffect(() => {
+        if (!prefixsList.length) return;
+
+        const matchedPrefix = findBestPrefixMatch(downloadFilePath || "", prefixsList);
+
+        if (matchedPrefix) {
+            const prefix = matchedPrefix.downloadFilePath;
+            const suffix = (downloadFilePath || "").startsWith(prefix)
+                ? (downloadFilePath || "").slice(prefix.length)
+                : "";
+
+            setSelectedPrefix(prefix);
+            setSelectedSuffix(suffix);
+        } else {
+            setSelectedPrefix("");
+            setSelectedSuffix(downloadFilePath || "");
+        }
+    }, [downloadFilePath, prefixsList]);
 
     // Determine if all checkboxes are selected
     const areAllSelected = selectedFilteredCategoriesList.every(item => item.display);
@@ -713,11 +749,7 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
                                         background: isSelected ? (tone?.bg ?? theme.rowBackgroundColor) : theme.panelBackground,
                                         border: `1px solid ${isSelected ? (tone?.border ?? theme.buttonBorder) : theme.panelBorder}`,
                                     }}
-                                    onClick={() => {
-                                        setSelectedPrefix(element.downloadFilePath);
-                                        dispatch(updateDownloadPriority(element.downloadPriority ?? 0));
-                                        dispatch(updateDownloadFilePath(`${element.downloadFilePath}${selectedSuffix}`));
-                                    }}
+                                    onClick={() => handlePrefixClick(element)}
                                 >
                                     {element.prefixName}
                                 </label>
@@ -732,7 +764,7 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
                         <OverlayTrigger key={index} placement="bottom" overlay={<Tooltip id="tooltip" style={{ zIndex: 20000 }}>{element.value}</Tooltip>}>
                             <label
                                 className={`panel-tag-button ${selectedSuffix === element.value ? 'panel-tag-default' : 'panel-tag-selected'}`}
-                                onClick={() => setSelectedSuffix(element.value)}>
+                                onClick={() => handleSuffixClick(element.value)}>
                                 {element.name}
                             </label>
                         </OverlayTrigger>

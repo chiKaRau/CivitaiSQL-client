@@ -28,7 +28,8 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
 }) => {
     const dispatch = useDispatch();
     const chrome = useSelector((s: AppState) => s.chrome);
-    const { isDarkMode } = chrome;
+    const { isDarkMode, downloadFilePath } = chrome;
+
     const theme = isDarkMode ? darkTheme : lightTheme;
 
     const [open, setOpen] = useState(false);
@@ -114,6 +115,55 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
         init();
     }, [dispatch, chrome.selectedFilteredCategoriesList]);
 
+
+    const splitFullPath = (fullPath: string) => {
+        const matchedPrefix = findBestPrefixMatch(fullPath, prefixsList);
+
+        if (!matchedPrefix) {
+            return {
+                matchedPrefix: null,
+                prefix: '',
+                suffix: fullPath || '',
+            };
+        }
+
+        const prefix = matchedPrefix.downloadFilePath;
+        const suffix = fullPath.slice(prefix.length);
+
+        return {
+            matchedPrefix,
+            prefix,
+            suffix,
+        };
+    };
+
+    const handlePrefixClick = (el: {
+        id: number;
+        prefixName: string;
+        downloadFilePath: string;
+        downloadPriority: number;
+        createdAt?: string;
+        updatedAt?: string;
+    }) => {
+        setSelectedPrefix(el.downloadFilePath);
+        setSelectedSuffix('');
+        dispatch(updateDownloadPriority(el.downloadPriority ?? 0));
+        dispatch(updateDownloadFilePath(el.downloadFilePath));
+    };
+
+    const handleFullPathSelection = (fullPath: string) => {
+        const { matchedPrefix, prefix, suffix } = splitFullPath(fullPath);
+
+        setSelectedPrefix(prefix);
+        setSelectedSuffix(suffix);
+
+        if (matchedPrefix) {
+            dispatch(updateDownloadPriority(matchedPrefix.downloadPriority ?? 0));
+        }
+
+        dispatch(updateDownloadFilePath(fullPath));
+    };
+
     const persist = (next: typeof selectedFilteredCategoriesList) => {
         updateSelectedFilteredCategoriesListIntoChromeStorage(next);
         dispatch(updateSelectedFilteredCategoriesList(JSON.stringify(next)));
@@ -139,10 +189,6 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
 
     const areAllSelected = selectedFilteredCategoriesList.every(item => item.display);
 
-    useEffect(() => {
-        dispatch(updateDownloadFilePath(`${selectedPrefix}${selectedSuffix}`));
-    }, [dispatch, selectedPrefix, selectedSuffix]);
-
     const handleToggleLock = () => {
         if (!isLocked && selectedPrefix) {
             setLockedPrefix(selectedPrefix);
@@ -150,24 +196,6 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
             setLockedPrefix('');
         }
         setIsLocked(l => !l);
-    };
-
-    const handleFullPathSelection = (fullPath: string) => {
-        const matchedPrefix = findBestPrefixMatch(fullPath, prefixsList);
-
-        if (matchedPrefix) {
-            const prefix = matchedPrefix.downloadFilePath;
-            const suffix = fullPath.slice(prefix.length);
-
-            setSelectedPrefix(prefix);
-            setSelectedSuffix(suffix);
-            dispatch(updateDownloadPriority(matchedPrefix.downloadPriority ?? 0));
-        } else {
-            setSelectedPrefix('');
-            setSelectedSuffix(fullPath);
-        }
-
-        dispatch(updateDownloadFilePath(fullPath));
     };
 
     const panelStyle: React.CSSProperties = {
@@ -278,11 +306,7 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
                                             boxShadow: theme.buttonShadow,
                                             fontWeight: 600,
                                         }}
-                                        onClick={() => {
-                                            setSelectedPrefix(el.downloadFilePath);
-                                            dispatch(updateDownloadPriority(el.downloadPriority ?? 0));
-                                            dispatch(updateDownloadFilePath(`${el.downloadFilePath}${selectedSuffix}`));
-                                        }}
+                                        onClick={() => handlePrefixClick(el)}
                                     >
                                         {el.prefixName}
                                     </label>
