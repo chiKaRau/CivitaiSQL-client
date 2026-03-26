@@ -4,19 +4,26 @@ import { useDispatch } from 'react-redux';
 import { updateDownloadFilePath } from '../store/actions/chromeActions';
 import { getRecentDownloadFilePaths } from '../utils/chromeUtils';
 import { AppTheme } from './window_offline/OfflineWindow.theme';
+import { findBestPrefixMatch, PrefixItem, PrefixTone } from '../utils/ColorUtils';
 
 interface FilesPathTagsListSelectorProps {
     selectedPrefix: string;
     isHandleRefresh: boolean;
     setIsHandleRefresh: (isHandleRefresh: boolean) => void;
     theme: AppTheme;
+    prefixsList: PrefixItem[];
+    prefixToneMap: Record<string, PrefixTone>;
+    onSelectFullPath: (fullPath: string) => void;
 }
 
 const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
     isHandleRefresh,
     selectedPrefix,
     setIsHandleRefresh,
-    theme
+    theme,
+    prefixsList,
+    prefixToneMap,
+    onSelectFullPath
 }) => {
     const dispatch = useDispatch();
 
@@ -116,9 +123,37 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
         };
     }, [dispatch, selectedPrefix, isHandleRefresh, setIsHandleRefresh]);
 
+    const renderColoredPath = (fullPath: string) => {
+        const matchedPrefix = findBestPrefixMatch(fullPath, prefixsList);
+
+        if (!matchedPrefix) {
+            return <span style={{ wordBreak: 'break-word' }}>{fullPath}</span>;
+        }
+
+        const prefix = matchedPrefix.downloadFilePath;
+        const suffix = fullPath.slice(prefix.length);
+        const tone = prefixToneMap[prefix];
+
+        return (
+            <span style={{ wordBreak: 'break-word' }}>
+                <span
+                    style={{
+                        color: tone?.text ?? theme.panelText,
+                        fontWeight: 700,
+                    }}
+                >
+                    {prefix}
+                </span>
+                <span style={{ color: theme.panelText }}>
+                    {suffix}
+                </span>
+            </span>
+        );
+    };
+
     const handleTagClick = (tag: string) => {
         setSelectedTag(tag);
-        dispatch(updateDownloadFilePath(tag));
+        onSelectFullPath(tag);
     };
 
     const handleDelete = async (downloadFilePath: string) => {
@@ -206,7 +241,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                                 >
                                     <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', minWidth: 0, flex: 1 }}>
                                         <span style={{ whiteSpace: 'nowrap', opacity: 0.8 }}>{numberLabel(index)}#</span>
-                                        <span style={{ wordBreak: 'break-word' }}>{value}</span>
+                                        {renderColoredPath(value)}
                                     </div>
 
                                     <button
@@ -271,7 +306,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                                 >
                                     <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', minWidth: 0, flex: 1 }}>
                                         <span style={{ whiteSpace: 'nowrap', opacity: 0.8 }}>{index + 1}#</span>
-                                        <span style={{ wordBreak: 'break-word' }}>{value}</span>
+                                        {renderColoredPath(value)}
                                     </div>
                                 </li>
                             );

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import axios from 'axios';
 
 //components
@@ -18,10 +18,11 @@ import Autocomplete from '@mui/material/Autocomplete';
 import { setError } from '../../store/actions/errorsActions';
 import { clearError } from '../../store/actions/errorsActions';
 import { retrieveCivitaiFileName, retrieveCivitaiFilesList } from '../../utils/objectUtils';
-import { updateDownloadFilePath } from '../../store/actions/chromeActions';
+import { updateDownloadFilePath, updateDownloadPriority } from '../../store/actions/chromeActions';
 import { FaFilter, FaChevronUp, FaChevronDown } from 'react-icons/fa';
 import { FaXmark, FaFolderTree, FaHardDrive } from 'react-icons/fa6';
 import { AppTheme, darkTheme, lightTheme } from '../window_offline/OfflineWindow.theme';
+import { buildPrefixToneMap, findBestPrefixMatch, PrefixItem, PrefixTone } from '../../utils/ColorUtils';
 
 interface Version {
     id: number;
@@ -524,6 +525,7 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
     modelTagsList?.push({ "name": "Temp", "value": "Temp" });
 
     const chrome = useSelector((state: AppState) => state.chrome);
+    const { isDarkMode } = chrome;
 
     const [open, setOpen] = useState(false);
 
@@ -564,6 +566,31 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
             display: true
         }))
     );
+
+    const prefixToneMap = useMemo(() => {
+        return buildPrefixToneMap(prefixsList, theme, isDarkMode);
+    }, [prefixsList, theme, isDarkMode]);
+
+    const handleFullPathSelection = (fullPath: string) => {
+        const matchedPrefix = findBestPrefixMatch(fullPath, prefixsList);
+
+        if (matchedPrefix) {
+            const prefix = matchedPrefix.downloadFilePath;
+            const suffix = fullPath.startsWith(prefix)
+                ? fullPath.slice(prefix.length)
+                : "";
+
+            setSelectedPrefix(prefix);
+            setSelectedSuffix(suffix);
+            dispatch(updateDownloadPriority(matchedPrefix.downloadPriority ?? 0));
+        } else {
+            setSelectedPrefix("");
+            setSelectedSuffix(fullPath);
+        }
+
+        setDownloadFilePath(fullPath);
+        dispatch(updateDownloadFilePath(fullPath));
+    };
 
     useEffect(() => {
         const fetchPrefixsList = async () => {
@@ -665,18 +692,38 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
                         Prefix Suggestions
                     </div>
 
-                    {prefixsList?.map((element, index) => (
-                        <OverlayTrigger key={index} placement="bottom" overlay={<Tooltip id="tooltip" style={{ zIndex: 20000 }}>{element.downloadFilePath}</Tooltip>}>
-                            <label
-                                className={`panel-tag-button ${selectedPrefix === element.downloadFilePath ? 'panel-tag-default' : 'panel-tag-selected'}`}
-                                onClick={() => {
-                                    setSelectedPrefix(element.downloadFilePath)
-                                    dispatch(updateDownloadFilePath(`${element.downloadFilePath}${selectedSuffix}`));
-                                }}>
-                                {element.prefixName}
-                            </label>
-                        </OverlayTrigger>
-                    ))}
+                    {prefixsList?.map((element, index) => {
+                        const tone = prefixToneMap[element.downloadFilePath];
+                        const isSelected = selectedPrefix === element.downloadFilePath;
+
+                        return (
+                            <OverlayTrigger
+                                key={index}
+                                placement="bottom"
+                                overlay={
+                                    <Tooltip id="tooltip" style={{ zIndex: 20000 }}>
+                                        {element.downloadFilePath}
+                                    </Tooltip>
+                                }
+                            >
+                                <label
+                                    className={`panel-tag-button ${isSelected ? 'panel-tag-default' : 'panel-tag-selected'}`}
+                                    style={{
+                                        color: tone?.text ?? theme.panelText,
+                                        background: isSelected ? (tone?.bg ?? theme.rowBackgroundColor) : theme.panelBackground,
+                                        border: `1px solid ${isSelected ? (tone?.border ?? theme.buttonBorder) : theme.panelBorder}`,
+                                    }}
+                                    onClick={() => {
+                                        setSelectedPrefix(element.downloadFilePath);
+                                        dispatch(updateDownloadPriority(element.downloadPriority ?? 0));
+                                        dispatch(updateDownloadFilePath(`${element.downloadFilePath}${selectedSuffix}`));
+                                    }}
+                                >
+                                    {element.prefixName}
+                                </label>
+                            </OverlayTrigger>
+                        );
+                    })}
                     <br />
 
                     <center> Suffix Suggestions</center>
@@ -696,7 +743,14 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
 
                     <hr />
 
-                    <FilesPathTagsListSelector downloadFilePath={downloadFilePath} setDownloadFilePath={setDownloadFilePath} selectedPrefix={selectedPrefix} theme={theme} />
+                    <FilesPathTagsListSelector
+                        downloadFilePath={downloadFilePath}
+                        selectedPrefix={selectedPrefix}
+                        theme={theme}
+                        prefixsList={prefixsList}
+                        prefixToneMap={prefixToneMap}
+                        onSelectFullPath={handleFullPathSelection}
+                    />
 
                     <br />
 
@@ -735,15 +789,19 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
 interface FilesPathTagsListSelectorProps {
     selectedPrefix: string;
     downloadFilePath: string;
-    setDownloadFilePath: (downloadFilePath: string) => void;
     theme: AppTheme;
+    prefixsList: PrefixItem[];
+    prefixToneMap: Record<string, PrefixTone>;
+    onSelectFullPath: (fullPath: string) => void;
 }
 
 const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
     downloadFilePath,
     selectedPrefix,
-    setDownloadFilePath,
-    theme
+    theme,
+    prefixsList,
+    prefixToneMap,
+    onSelectFullPath
 }) => {
     const dispatch = useDispatch();
 
@@ -790,6 +848,34 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
         }
     };
 
+    const renderColoredPath = (fullPath: string) => {
+        const matchedPrefix = findBestPrefixMatch(fullPath, prefixsList);
+
+        if (!matchedPrefix) {
+            return <span style={{ wordBreak: 'break-word' }}>{fullPath}</span>;
+        }
+
+        const prefix = matchedPrefix.downloadFilePath;
+        const suffix = fullPath.slice(prefix.length);
+        const tone = prefixToneMap[prefix];
+
+        return (
+            <span style={{ wordBreak: 'break-word' }}>
+                <span
+                    style={{
+                        color: tone?.text ?? theme.panelText,
+                        fontWeight: 700,
+                    }}
+                >
+                    {prefix}
+                </span>
+                <span style={{ color: theme.panelText }}>
+                    {suffix}
+                </span>
+            </span>
+        );
+    };
+
     const reload = async (ignoreCache = false) => {
         setError(null);
 
@@ -829,7 +915,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
 
     const handleTagClick = (path: string) => {
         setSelectedTag(path);
-        setDownloadFilePath(path);
+        onSelectFullPath(path);
     };
 
     const handleDelete = async (path: string) => {
@@ -896,7 +982,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                             >
                                 <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', minWidth: 0, flex: 1 }}>
                                     <span style={{ whiteSpace: 'nowrap', opacity: 0.8 }}>{index + 1}#</span>
-                                    <span style={{ wordBreak: 'break-word' }}>{value}</span>
+                                    {renderColoredPath(value)}
                                 </div>
                             </li>
                         );
@@ -951,7 +1037,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                             >
                                 <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', minWidth: 0, flex: 1 }}>
                                     <span style={{ whiteSpace: 'nowrap', opacity: 0.8 }}>{numberLabel(index)}#</span>
-                                    <span style={{ wordBreak: 'break-word' }}>{value}</span>
+                                    {renderColoredPath(value)}
                                 </div>
 
                                 <button

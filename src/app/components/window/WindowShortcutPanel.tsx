@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { fetchAddOfflineDownloadFileIntoOfflineDownloadList, fetchBackupOfflineDownloadList, fetchCivitaiModelInfoFromCivitaiByModelID, fetchFindVersionNumbersForModel, fetchFindVersionNumbersForOfflineDownloadList, fetchGetOfflineRecordByModelAndVersion, fetchRemoveOfflineDownloadFileIntoOfflineDownloadList } from '../../api/civitaiSQL_api';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { FaAngleLeft, FaAngleRight, FaLock, FaLockOpen } from "react-icons/fa6";
 import { BsDatabaseFillExclamation, BsSortNumericUpAlt } from "react-icons/bs";
 import { GoChecklist } from "react-icons/go";
@@ -17,6 +17,8 @@ import { retrieveCivitaiFileName, retrieveCivitaiFilesList } from '../../utils/o
 import { LuPanelLeftOpen, LuPanelRightOpen } from 'react-icons/lu';
 import { RiMenuAddLine } from 'react-icons/ri';
 import { LuPanelLeft } from "react-icons/lu";
+import { AppState } from '../../store/configureStore';
+import { AppTheme, darkTheme, getOfflineWindowStyles, getShortcutPanelStyles, lightTheme } from '../window_offline/OfflineWindow.theme';
 
 interface Version {
     id: number;
@@ -53,192 +55,14 @@ interface PanelProps {
     isFullInfoModelPanelVisible: boolean;
 }
 
-const ui = {
-    panel: {
-        position: 'relative' as const,
-        padding: '8px',
-        borderRadius: '10px',
-        border: '1px solid rgba(255,255,255,0.10)',
-        background: 'rgba(255,255,255,0.04)',
-        width: '100%',
-        flex: 1,
-        minWidth: 0,
-    },
-    row: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        flexWrap: 'wrap' as const,
-    },
-    grow: { flex: '1 1 auto' },
-    group: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '6px',
-        flexWrap: 'wrap' as const,
-    },
-    divider: {
-        width: '100%',
-        height: '1px',
-        background: 'rgba(255,255,255,0.10)',
-        margin: '8px 0',
-    },
-    label: {
-        opacity: 0.9,
-        fontSize: '12px',
-        whiteSpace: 'nowrap' as const,
-    },
-    select: {
-        padding: '6px 8px',
-        fontSize: '13px',
-        borderRadius: '8px',
-        border: '1px solid rgba(255,255,255,0.15)',
-        background: 'rgba(0,0,0,0.25)',
-        color: 'inherit',
-        maxWidth: '520px',
-    },
-    pill: {
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '6px',
-        padding: '4px 8px',
-        borderRadius: '999px',
-        fontSize: '12px',
-        border: '1px solid rgba(255,255,255,0.15)',
-        background: 'rgba(0,0,0,0.18)',
-        whiteSpace: 'nowrap' as const,
-    },
-    pillBlue: {
-        border: '1px solid rgba(80,140,255,0.45)',
-        background: 'rgba(80,140,255,0.12)',
-    },
-    pillRed: {
-        border: '1px solid rgba(255,80,80,0.45)',
-        background: 'rgba(255,80,80,0.12)',
-    }, compactGroup: {
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '6px',
-        padding: '6px 8px',
-        borderRadius: '999px',
-        border: '1px solid rgba(255,255,255,0.12)',
-        background: 'rgba(255,255,255,0.04)',
-    },
-    miniBtn: {
-        width: 24,
-        height: 24,
-        borderRadius: 6,
-        border: '1px solid rgba(255,255,255,0.15)',
-        background: 'rgba(255,255,255,0.06)',
-        color: 'inherit',
-        cursor: 'pointer',
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 0,
-        lineHeight: 0,
-    },
-    miniInput: {
-        width: '52px',
-        height: '28px',
-        padding: '2px 6px',
-        fontSize: '12px',
-        textAlign: 'center' as const,
-        borderRadius: '6px',
-        border: '1px solid rgba(255,255,255,0.15)',
-        background: 'rgba(0,0,0,0.22)',
-        color: 'inherit',
-    },
-    lockedBadge: {
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '4px',
-        padding: '3px 8px',
-        borderRadius: '999px',
-        fontSize: '11px',
-        fontWeight: 700,
-        border: '1px solid rgba(245,158,11,0.45)',
-        background: 'rgba(245,158,11,0.12)',
-        color: 'inherit',
-        whiteSpace: 'nowrap' as const,
-    }, topRow: {
-        display: 'grid',
-        gridTemplateColumns: '1fr auto 1fr',
-        alignItems: 'center',
-        gap: '8px',
-        width: '100%',
-    },
-    topLeft: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '6px',
-        flexWrap: 'wrap' as const,
-        justifyContent: 'flex-start',
-        minWidth: 0,
-    },
-    topCenter: {
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    topRight: {
-        display: 'flex',
-        justifyContent: 'flex-end',
-        alignItems: 'center',
-        gap: '6px',
-    },
-    longCenterBtn: {
-        minWidth: '240px',
-        height: '34px',
-        padding: '0 18px',
-        borderRadius: '10px',
-        border: '1px solid rgba(59,130,246,0.35)',
-        background: 'rgba(59,130,246,0.12)',
-        color: 'inherit',
-        fontWeight: 600,
-        cursor: 'pointer',
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '8px',
-    },
-    rowBetween: {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '8px',
-        flexWrap: 'wrap' as const,
-        width: '100%',
-    },
-    rowLeft: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        flexWrap: 'wrap' as const,
-    },
-    rowRight: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '6px',
-        flexWrap: 'wrap' as const,
-    },
-    dropdownWrap: {
-        position: 'relative' as const,
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '6px',
-        flex: '1 1 auto',
-        minWidth: '280px',
-    },
-};
-
 const IconBtn: React.FC<{
     title: string;
     ariaLabel: string;
     onClick?: () => void;
     disabled?: boolean;
     children: React.ReactNode;
-}> = ({ title, ariaLabel, onClick, disabled, children }) => {
+    theme: AppTheme;
+}> = ({ title, ariaLabel, onClick, disabled, children, theme }) => {
     return (
         <button
             onClick={onClick}
@@ -249,22 +73,22 @@ const IconBtn: React.FC<{
                 width: 30,
                 height: 30,
                 borderRadius: 8,
-                border: '1px solid rgba(255,255,255,0.12)',
-                background: disabled ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.06)',
-                color: 'inherit',
+                border: `1px solid ${theme.buttonBorder}`,
+                background: disabled ? theme.rowBackgroundColor : theme.buttonBackground,
+                color: theme.buttonText,
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: disabled ? 'not-allowed' : 'pointer',
                 opacity: disabled ? 0.55 : 1,
                 lineHeight: 0,
+                boxShadow: theme.buttonShadow,
             }}
         >
             <span style={{ fontSize: 18, display: 'inline-flex' }}>{children}</span>
         </button>
     );
 };
-
 
 const WindowShortcutPanel: React.FC<PanelProps> = ({
     url,
@@ -285,6 +109,20 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
 }) => {
 
     const dispatch = useDispatch();
+
+    const chromeData = useSelector((state: AppState) => state.chrome);
+    const { isDarkMode } = chromeData;
+    const theme = isDarkMode ? darkTheme : lightTheme;
+
+    const sharedStyles = useMemo(
+        () => getOfflineWindowStyles(theme, isDarkMode),
+        [theme, isDarkMode]
+    );
+
+    const ui = useMemo(
+        () => getShortcutPanelStyles(theme, isDarkMode, sharedStyles),
+        [theme, isDarkMode, sharedStyles]
+    );
 
     const [modelData, setModelData] = useState<Model | null>(null);
     const [selectedVersion, setSelectedVersion] = useState<Version | null>(null);
@@ -852,6 +690,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                                         ariaLabel="Clear selectedUrl"
                                         onClick={() => setSelectedUrl("")}
                                         disabled={isLoading}
+                                        theme={theme}
                                     >
                                         <IoIosClose />
                                     </IconBtn>
@@ -870,6 +709,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                                 ariaLabel="Refresh model info"
                                 onClick={forceRerender}
                                 disabled={isLoading}
+                                theme={theme}
                             >
                                 <IoIosRefresh />
                             </IconBtn>
@@ -912,7 +752,10 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                                         zIndex: 9999,
                                     }}
                                 >
-                                    <Carousel images={(selectedVersion.images || []).map((image) => image?.url).filter(Boolean)} />
+                                    <Carousel
+                                        images={(selectedVersion.images || []).map((image) => image?.url).filter(Boolean)}
+                                        theme={theme}
+                                    />
                                 </div>
                             )}
                         </div>
@@ -923,6 +766,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                                 ariaLabel="Add selected version"
                                 onClick={handleAdd}
                                 disabled={!selectedVersion || isLoading}
+                                theme={theme}
                             >
                                 <MdAddCircle />
                             </IconBtn>
@@ -932,6 +776,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                                 ariaLabel="Add all versions"
                                 onClick={handleAddAll}
                                 disabled={!modelData?.modelVersions?.length || isLoading}
+                                theme={theme}
                             >
                                 <MdLibraryAdd />
                             </IconBtn>
@@ -958,6 +803,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                                             ariaLabel={isLocked ? "Unlock this model" : "Lock this model"}
                                             onClick={() => setLockedUrl(isLocked ? "" : url)}
                                             disabled={isLoading}
+                                            theme={theme}
                                         >
                                             <span style={{ color: isLocked ? "#f59e0b" : "inherit" }}>
                                                 {isLocked ? <FaLock /> : <FaLockOpen />}
@@ -987,6 +833,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                                             ariaLabel="Add next N"
                                             onClick={() => handleAddAroundLocked("next")}
                                             disabled={!isLocked}
+                                            theme={theme}
                                         >
                                             <RiMenuAddLine />
                                         </IconBtn>
@@ -1006,6 +853,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                                         ariaLabel="Remove all offline versions for this model"
                                         onClick={handleRemoveAllFromOfflineList}
                                         disabled={offlineIdsInThisModel.length === 0 || isLoading}
+                                        theme={theme}
                                     >
                                         <MdDeleteSweep />
                                     </IconBtn>
@@ -1024,6 +872,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                                                 ariaLabel="Replace with first version"
                                                 onClick={() => handleReplaceOfflineVersion(getFirstVersionId(), "first")}
                                                 disabled={isLoading}
+                                                theme={theme}
                                             >
                                                 <SiFirst />
                                             </IconBtn>
@@ -1040,6 +889,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                                                 ariaLabel="Replace with highest version"
                                                 onClick={() => handleReplaceOfflineVersion(getMaxVersionId(), "highest")}
                                                 disabled={isLoading}
+                                                theme={theme}
                                             >
                                                 <BsSortNumericUpAlt />
                                             </IconBtn>
@@ -1060,9 +910,10 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
 
 interface CarouselProps {
     images: string[];
+    theme: AppTheme;
 }
 
-const Carousel: React.FC<CarouselProps> = ({ images = [] }) => {
+const Carousel: React.FC<CarouselProps> = ({ images = [], theme }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
 
     const handlePrev = () => {

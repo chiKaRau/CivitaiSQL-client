@@ -395,3 +395,31 @@
     width: auto;
     transform: translateX(calc(300px - 110%));
 }
+
+.themed-button {
+    background: var(--btn-bg);
+    color: var(--btn-text);
+    border: 1px solid var(--btn-border);
+    box-shadow: var(--btn-shadow);
+    transition: var(--btn-transition);
+}
+
+.themed-button:hover {
+    background: var(--btn-bg-hover);
+    color: var(--btn-text-hover);
+    border-color: var(--btn-border-hover);
+    box-shadow: var(--btn-shadow-hover);
+    transform: translateY(-1px);
+}
+
+.themed-button:active {
+    background: var(--btn-bg-active);
+    color: var(--btn-text-active);
+    border-color: var(--btn-border-active);
+    box-shadow: var(--btn-shadow-active);
+    transform: translateY(0);
+}
+
+.themed-button:focus-visible {
+    box-shadow: var(--btn-shadow), 0 0 0 3px var(--focus-ring);
+}

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { Collapse, OverlayTrigger, Tooltip } from 'react-bootstrap';
 
@@ -13,6 +13,7 @@ import FilesPathTagsListSelector from './FilesPathTagsListSelector';
 import { fetchGetCategoryPrefixesList } from '../api/civitaiSQL_api';
 import { QuickModeControls } from './QuickModeControls';
 import { darkTheme, lightTheme } from './window_offline/OfflineWindow.theme';
+import { buildPrefixToneMap, findBestPrefixMatch } from '../utils/ColorUtils';
 
 interface FilesPathSettingPanelProps {
     isHandleRefresh: boolean;
@@ -126,6 +127,10 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
         persist(next);
     };
 
+    const prefixToneMap = useMemo(() => {
+        return buildPrefixToneMap(prefixsList, theme, isDarkMode);
+    }, [prefixsList, theme, isDarkMode]);
+
     const handleSelectAllCheckbox = (e: React.ChangeEvent<HTMLInputElement>) => {
         const allOn = e.target.checked;
         const next = selectedFilteredCategoriesList.map(item => ({ ...item, display: allOn }));
@@ -145,6 +150,17 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
             setLockedPrefix('');
         }
         setIsLocked(l => !l);
+    };
+
+    const handleFullPathSelection = (fullPath: string) => {
+        const matchedPrefix = findBestPrefixMatch(fullPath, prefixsList);
+
+        if (matchedPrefix) {
+            setSelectedPrefix(matchedPrefix.downloadFilePath);
+            dispatch(updateDownloadPriority(matchedPrefix.downloadPriority ?? 0));
+        }
+
+        dispatch(updateDownloadFilePath(fullPath));
     };
 
     const panelStyle: React.CSSProperties = {
@@ -232,24 +248,40 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
                         <center style={sectionTitleStyle}>Prefix Suggestions</center>
                         <hr style={{ borderColor: theme.panelBorder, opacity: 1 }} />
 
-                        {prefixsList.map((el) => (
-                            <OverlayTrigger
-                                key={el.id}
-                                placement="bottom"
-                                overlay={<Tooltip id={`prefix-tooltip-${el.id}`}>{el.downloadFilePath}</Tooltip>}
-                            >
-                                <label
-                                    style={tagStyle(selectedPrefix === el.downloadFilePath)}
-                                    onClick={() => {
-                                        setSelectedPrefix(el.downloadFilePath);
-                                        dispatch(updateDownloadPriority(el.downloadPriority ?? 0));
-                                        dispatch(updateDownloadFilePath(`${el.downloadFilePath}${selectedSuffix}`));
-                                    }}
+                        {prefixsList.map((el) => {
+                            const tone = prefixToneMap[el.downloadFilePath];
+                            const isSelected = selectedPrefix === el.downloadFilePath;
+
+                            return (
+                                <OverlayTrigger
+                                    key={el.id}
+                                    placement="bottom"
+                                    overlay={<Tooltip id={`prefix-tooltip-${el.id}`}>{el.downloadFilePath}</Tooltip>}
                                 >
-                                    {el.prefixName}
-                                </label>
-                            </OverlayTrigger>
-                        ))}
+                                    <label
+                                        style={{
+                                            display: 'inline-block',
+                                            padding: '6px 10px',
+                                            margin: '4px',
+                                            borderRadius: '10px',
+                                            cursor: 'pointer',
+                                            border: `1px solid ${isSelected ? tone?.border ?? theme.buttonBorder : theme.panelBorder}`,
+                                            background: isSelected ? tone?.bg ?? theme.rowBackgroundColor : theme.panelBackground,
+                                            color: tone?.text ?? theme.panelText,
+                                            boxShadow: theme.buttonShadow,
+                                            fontWeight: 600,
+                                        }}
+                                        onClick={() => {
+                                            setSelectedPrefix(el.downloadFilePath);
+                                            dispatch(updateDownloadPriority(el.downloadPriority ?? 0));
+                                            dispatch(updateDownloadFilePath(`${el.downloadFilePath}${selectedSuffix}`));
+                                        }}
+                                    >
+                                        {el.prefixName}
+                                    </label>
+                                </OverlayTrigger>
+                            );
+                        })}
 
                         <br />
 
@@ -263,6 +295,9 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
                             selectedPrefix={selectedPrefix}
                             isHandleRefresh={isHandleRefresh}
                             theme={theme}
+                            prefixsList={prefixsList}
+                            prefixToneMap={prefixToneMap}
+                            onSelectFullPath={handleFullPathSelection}
                         />
 
                         <br />
