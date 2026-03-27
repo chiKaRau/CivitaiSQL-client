@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
-import { ColDef } from 'ag-grid-community';
+import { CellStyle, ColDef } from 'ag-grid-community';
 import SmartImage from '../SmartImage';
 
 export interface ModelOfflineDownloadHistoryEntry {
@@ -49,17 +49,36 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
         fallbackSources: string[];
     } | null>(null);
 
-    const cellStyle = {
+    const cellStyle = useMemo<CellStyle>(() => ({
         color: currentTheme.rowFontColor,
-    };
+    }), [currentTheme.rowFontColor]);
 
-    const defaultColDef: ColDef = {
+    const centeredImageCellStyle = useMemo<CellStyle>(() => ({
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "6px",
+    }), []);
+
+    const numberCellStyle = useMemo<CellStyle>(() => ({
+        ...cellStyle,
+        textAlign: "center",
+        fontWeight: 700,
+    }), [cellStyle]);
+
+    const countCellStyle = useMemo<CellStyle>(() => ({
+        ...cellStyle,
+        textAlign: "center",
+        fontWeight: 600,
+    }), [cellStyle]);
+
+    const defaultColDef = useMemo<ColDef>(() => ({
         flex: 1,
         minWidth: 150,
         resizable: true,
-    };
+    }), []);
 
-    const getRowStyle = (params: any) => {
+    const getRowStyle = useCallback((params: any) => {
         const isEven = params.node.rowIndex % 2 === 0;
         return {
             backgroundColor: isEven
@@ -67,9 +86,13 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
                 : currentTheme.oddRowBackgroundColor,
             color: currentTheme.rowFontColor,
         };
-    };
+    }, [
+        currentTheme.evenRowBackgroundColor,
+        currentTheme.oddRowBackgroundColor,
+        currentTheme.rowFontColor,
+    ]);
 
-    const columnDefs: ColDef[] = [
+    const columnDefs = useMemo<ColDef[]>(() => [
         {
             headerName: "#",
             width: 80,
@@ -78,11 +101,7 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
             valueGetter: (params: any) => {
                 return (params.node?.rowIndex ?? 0) + 1;
             },
-            cellStyle: {
-                ...cellStyle,
-                textAlign: "center",
-                fontWeight: 700,
-            },
+            cellStyle: numberCellStyle,
         },
         {
             headerName: "Image",
@@ -101,10 +120,11 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
                 return (
                     <div
                         onMouseEnter={() =>
-                            setHoveredImage({
-                                src: url,
-                                fallbackSources,
-                            })
+                            setHoveredImage((prev) =>
+                                prev?.src === url
+                                    ? prev
+                                    : { src: url, fallbackSources }
+                            )
                         }
                         onMouseLeave={() =>
                             setHoveredImage((prev) =>
@@ -130,12 +150,7 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
                     </div>
                 );
             },
-            cellStyle: {
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "6px",
-            },
+            cellStyle: centeredImageCellStyle,
         },
         {
             headerName: "Image Count",
@@ -143,11 +158,7 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
             width: 110,
             sortable: true,
             filter: false,
-            cellStyle: {
-                ...cellStyle,
-                textAlign: "center",
-                fontWeight: 600,
-            },
+            cellStyle: countCellStyle,
         },
         {
             headerName: "Model ID",
@@ -228,7 +239,7 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
             },
             cellStyle,
         }
-    ];
+    ], [cellStyle, numberCellStyle, countCellStyle, centeredImageCellStyle, isDarkMode]);
 
     const rowData = useMemo(() => {
         return entries.map((entry) => {
