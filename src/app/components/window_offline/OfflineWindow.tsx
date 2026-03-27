@@ -496,7 +496,18 @@ const OfflineWindow: React.FC = () => {
                 if (!cancelled) {
                     const rows = Array.isArray(payload?.content) ? payload.content : [];
 
-                    setModelOfflineDownloadHistoryList(rows);
+                    const normalizedRows: ModelOfflineDownloadHistoryEntry[] = rows.map((row: any) => ({
+                        id: row?.id,
+                        civitaiModelID: row?.civitaiModelID,
+                        civitaiVersionID: row?.civitaiVersionID,
+                        imageUrlList: Array.isArray(row?.imageUrlList)
+                            ? row.imageUrlList.filter((x: any) => typeof x === "string" && x.trim() !== "")
+                            : [],
+                        createdAt: row?.createdAt ?? "",
+                        updatedAt: row?.updatedAt ?? "",
+                    }));
+
+                    setModelOfflineDownloadHistoryList(normalizedRows);
                     setHistoryTotalItems(payload?.totalElements ?? 0);
                     setHistoryTotalPages(payload?.totalPages ?? 1);
                 }

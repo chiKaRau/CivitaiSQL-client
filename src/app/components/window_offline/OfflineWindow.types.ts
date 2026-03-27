@@ -139,9 +139,10 @@ export interface OfflineDownloadEntry {
 }
 
 export interface ModelOfflineDownloadHistoryEntry {
+    id?: number;
     civitaiModelID: number;
     civitaiVersionID: number;
-    imageUrl: string;
+    imageUrlList: string[];
     createdAt: string;
     updatedAt: string;
 }

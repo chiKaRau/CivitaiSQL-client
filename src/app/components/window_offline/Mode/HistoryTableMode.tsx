@@ -4,9 +4,10 @@ import { ColDef } from 'ag-grid-community';
 import SmartImage from '../SmartImage';
 
 export interface ModelOfflineDownloadHistoryEntry {
+    id?: number;
     civitaiModelID: number;
     civitaiVersionID: number;
-    imageUrl: string;
+    imageUrlList: string[];
     createdAt: string;
     updatedAt: string;
 }
@@ -43,7 +44,10 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
     agGridStyle,
     currentTheme,
 }) => {
-    const [hoveredImageUrl, setHoveredImageUrl] = useState<string | null>(null);
+    const [hoveredImage, setHoveredImage] = useState<{
+        src: string;
+        fallbackSources: string[];
+    } | null>(null);
 
     const cellStyle = {
         color: currentTheme.rowFontColor,
@@ -82,18 +86,31 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
         },
         {
             headerName: "Image",
-            field: "imageUrl",
+            field: "previewImageUrl",
             width: 130,
             sortable: false,
             filter: false,
             cellRenderer: (params: any) => {
                 const url = params.value;
+                const fallbackSources = Array.isArray(params.data?.fallbackImageUrls)
+                    ? params.data.fallbackImageUrls
+                    : [];
+
                 if (!url) return <span>N/A</span>;
 
                 return (
                     <div
-                        onMouseEnter={() => setHoveredImageUrl(url)}
-                        onMouseLeave={() => setHoveredImageUrl((prev) => (prev === url ? null : prev))}
+                        onMouseEnter={() =>
+                            setHoveredImage({
+                                src: url,
+                                fallbackSources,
+                            })
+                        }
+                        onMouseLeave={() =>
+                            setHoveredImage((prev) =>
+                                prev?.src === url ? null : prev
+                            )
+                        }
                         style={{
                             width: "80px",
                             height: "80px",
@@ -103,6 +120,7 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
                     >
                         <SmartImage
                             src={url}
+                            fallbackSources={fallbackSources}
                             alt="History"
                             isDarkMode={isDarkMode}
                             maxHeight="80px"
@@ -117,6 +135,18 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
                 alignItems: "center",
                 justifyContent: "center",
                 padding: "6px",
+            },
+        },
+        {
+            headerName: "Image Count",
+            field: "imageCount",
+            width: 110,
+            sortable: true,
+            filter: false,
+            cellStyle: {
+                ...cellStyle,
+                textAlign: "center",
+                fontWeight: 600,
             },
         },
         {
@@ -201,20 +231,29 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
     ];
 
     const rowData = useMemo(() => {
-        return entries.map((entry) => ({
-            civitaiModelID: entry.civitaiModelID ?? "N/A",
-            civitaiVersionID: entry.civitaiVersionID ?? "N/A",
-            imageUrl: entry.imageUrl ?? "",
-            civitaiUrl:
-                entry.civitaiModelID && entry.civitaiVersionID
-                    ? `https://civitai.com/models/${entry.civitaiModelID}?modelVersionId=${entry.civitaiVersionID}`
-                    : "",
-            civitaiArchiveUrl:
-                entry.civitaiModelID && entry.civitaiVersionID
-                    ? `https://civitaiarchive.com/models/${entry.civitaiModelID}?modelVersionId=${entry.civitaiVersionID}`
-                    : "",
-            createdAt: formatHistoryDateTime(entry.createdAt),
-        }));
+        return entries.map((entry) => {
+            const imageUrlList = Array.isArray(entry.imageUrlList) ? entry.imageUrlList : [];
+            const previewImageUrl = imageUrlList[0] ?? "";
+            const fallbackImageUrls = imageUrlList.slice(1);
+
+            return {
+                civitaiModelID: entry.civitaiModelID ?? "N/A",
+                civitaiVersionID: entry.civitaiVersionID ?? "N/A",
+                previewImageUrl,
+                fallbackImageUrls,
+                imageCount: imageUrlList.length,
+                civitaiUrl:
+                    entry.civitaiModelID && entry.civitaiVersionID
+                        ? `https://civitai.com/models/${entry.civitaiModelID}?modelVersionId=${entry.civitaiVersionID}`
+                        : "",
+                civitaiArchiveUrl:
+                    entry.civitaiModelID && entry.civitaiVersionID
+                        ? `https://civitaiarchive.com/models/${entry.civitaiModelID}?modelVersionId=${entry.civitaiVersionID}`
+                        : "",
+                createdAt: formatHistoryDateTime(entry.createdAt),
+                updatedAt: formatHistoryDateTime(entry.updatedAt),
+            };
+        });
     }, [entries]);
 
     return (
@@ -233,10 +272,10 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
                 />
             </div>
 
-            {hoveredImageUrl && (
+            {hoveredImage && (
                 <div
-                    onMouseEnter={() => setHoveredImageUrl(hoveredImageUrl)}
-                    onMouseLeave={() => setHoveredImageUrl(null)}
+                    onMouseEnter={() => setHoveredImage(hoveredImage)}
+                    onMouseLeave={() => setHoveredImage(null)}
                     style={{
                         position: "fixed",
                         top: "50%",
@@ -257,7 +296,8 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
                     }}
                 >
                     <SmartImage
-                        src={hoveredImageUrl}
+                        src={hoveredImage.src}
+                        fallbackSources={hoveredImage.fallbackSources}
                         alt="Preview"
                         isDarkMode={isDarkMode}
                         maxHeight="70vh"
