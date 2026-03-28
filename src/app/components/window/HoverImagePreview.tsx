@@ -1,13 +1,28 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import { AppTheme } from "../window_offline/OfflineWindow.theme";
-import SmartImage from "../window_offline/SmartImage";
 
-export const HoverImagePreview: React.FC<{ src: string; theme: AppTheme; isDarkMode: boolean }> = ({
-    src,
-    theme,
-    isDarkMode,
-}) => {
+const CIVITAI_IMAGE_SEGMENT = "anim=false,width=450,optimized=true";
+
+const rewriteCivitaiImageUrl = (value: string) => {
+    const url = (value || "").trim();
+    if (!url) return "";
+
+    if (!url.includes("image.civitai.com")) {
+        return url;
+    }
+
+    return url.replace(
+        /(https:\/\/image\.civitai\.com\/[^/]+\/[^/]+\/)([^/]+)(\/[^?#]+)(\?[^#]*)?(#.*)?$/i,
+        `$1${CIVITAI_IMAGE_SEGMENT}$3$4$5`
+    );
+};
+
+export const HoverImagePreview: React.FC<{
+    src: string;
+    theme: AppTheme;
+    isDarkMode: boolean;
+}> = React.memo(({ src, theme, isDarkMode }) => {
     const [isOpen, setIsOpen] = React.useState(false);
     const [position, setPosition] = React.useState({ left: 0, bottom: 0 });
     const thumbRef = React.useRef<HTMLSpanElement | null>(null);
@@ -17,7 +32,9 @@ export const HoverImagePreview: React.FC<{ src: string; theme: AppTheme; isDarkM
     const GAP = 10;
     const SIDE_PADDING = 12;
 
-    const updatePosition = () => {
+    const normalizedSrc = React.useMemo(() => rewriteCivitaiImageUrl(src), [src]);
+
+    const updatePosition = React.useCallback(() => {
         const el = thumbRef.current;
         if (!el) return;
 
@@ -37,12 +54,12 @@ export const HoverImagePreview: React.FC<{ src: string; theme: AppTheme; isDarkM
         );
 
         setPosition({ left, bottom });
-    };
+    }, []);
 
-    const handleOpen = () => {
+    const handleOpen = React.useCallback(() => {
         updatePosition();
         setIsOpen(true);
-    };
+    }, [updatePosition]);
 
     React.useEffect(() => {
         if (!isOpen) return;
@@ -56,7 +73,11 @@ export const HoverImagePreview: React.FC<{ src: string; theme: AppTheme; isDarkM
             window.removeEventListener("scroll", handleScrollOrResize, true);
             window.removeEventListener("resize", handleScrollOrResize);
         };
-    }, [isOpen]);
+    }, [isOpen, updatePosition]);
+
+    if (!normalizedSrc) {
+        return <span style={{ opacity: 0.5, color: theme.subText }}>—</span>;
+    }
 
     return (
         <>
@@ -68,18 +89,24 @@ export const HoverImagePreview: React.FC<{ src: string; theme: AppTheme; isDarkM
                     display: "inline-block",
                     lineHeight: 0,
                     cursor: "zoom-in",
+                    width: 52,
+                    height: 52,
                 }}
             >
-                <SmartImage
-                    src={src}
+                <img
+                    src={normalizedSrc}
                     alt="thumb"
-                    isDarkMode={isDarkMode}
-                    width={52}
-                    height={52}
-                    maxHeight="52px"
-                    borderRadius={8}
                     loading="lazy"
-                    showRetryButton={false}
+                    decoding="async"
+                    draggable={false}
+                    style={{
+                        display: "block",
+                        width: 52,
+                        height: 52,
+                        objectFit: "contain",
+                        borderRadius: 8,
+                        backgroundColor: isDarkMode ? "#444" : "#f3f4f6",
+                    }}
                 />
             </span>
 
@@ -103,18 +130,31 @@ export const HoverImagePreview: React.FC<{ src: string; theme: AppTheme; isDarkM
                         transition: "opacity 0.12s ease",
                     }}
                 >
-                    <SmartImage
-                        src={src}
-                        alt="preview"
-                        isDarkMode={isDarkMode}
-                        maxHeight={PREVIEW_MAX_HEIGHT}
-                        borderRadius={6}
-                        loading="lazy"
-                        showRetryButton={false}
-                    />
+                    {isOpen && (
+                        <img
+                            src={normalizedSrc}
+                            alt="preview"
+                            loading="eager"
+                            decoding="async"
+                            draggable={false}
+                            style={{
+                                display: "block",
+                                maxWidth: PREVIEW_WIDTH,
+                                maxHeight: PREVIEW_MAX_HEIGHT,
+                                objectFit: "contain",
+                                margin: "0 auto",
+                                borderRadius: 6,
+                                backgroundColor: isDarkMode ? "#444" : "#f3f4f6",
+                            }}
+                        />
+                    )}
                 </div>,
                 document.body
             )}
         </>
     );
-};
+}, (prev, next) =>
+    prev.src === next.src &&
+    prev.theme === next.theme &&
+    prev.isDarkMode === next.isDarkMode
+);
