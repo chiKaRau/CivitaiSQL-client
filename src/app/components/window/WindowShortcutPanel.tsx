@@ -19,6 +19,7 @@ import { RiMenuAddLine } from 'react-icons/ri';
 import { LuPanelLeft } from "react-icons/lu";
 import { AppState } from '../../store/configureStore';
 import { AppTheme, darkTheme, getOfflineWindowStyles, getShortcutPanelStyles, lightTheme } from '../window_offline/OfflineWindow.theme';
+import SmartImage from '../window_offline/SmartImage';
 
 interface Version {
     id: number;
@@ -163,10 +164,15 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                 const firstVersionId = data?.modelVersions?.[0]?.id ? String(data.modelVersions[0].id) : "";
 
                 if (firstVersionId && setModelPrimaryVersionIdMap) {
-                    setModelPrimaryVersionIdMap(prev => ({
-                        ...prev,
-                        [String(modelId)]: firstVersionId
-                    }));
+                    setModelPrimaryVersionIdMap(prev => {
+                        const key = String(modelId);
+                        if (prev[key] === firstVersionId) return prev;
+
+                        return {
+                            ...prev,
+                            [key]: firstVersionId
+                        };
+                    });
                 }
 
                 const firstImg = data?.modelVersions?.[0]?.images?.[0]?.url || "";
@@ -175,15 +181,18 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
 
                 // 1) If the selected URL is the "plain" one, store its versionId so URLGrid can display it
                 if (!urlHasParam && firstVersionId && setUrlVersionIdMap) {
-                    setUrlVersionIdMap(prev => ({ ...prev, [url]: firstVersionId }));
+                    setUrlVersionIdMap(prev => {
+                        if (prev[url] === firstVersionId) return prev;
+                        return { ...prev, [url]: firstVersionId };
+                    });
                 }
 
                 // 2) Fill image map for any URLs from this model that are in urlList but missing images
                 if (setUrlImgSrcMap) {
                     setUrlImgSrcMap(prev => {
-                        const next = { ...prev };
+                        let changed = false;
+                        let next = prev;
 
-                        // helper to build the version URL format your panel uses
                         const makeUrl = (vid: string) => `https://civitai.com/models/${modelId}?modelVersionId=${vid}`;
 
                         for (const v of data.modelVersions || []) {
@@ -191,22 +200,27 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                             const img = v?.images?.[0]?.url || "";
                             if (!img) continue;
 
-                            // the "plain" url represents first version when it has no param
                             const candidateUrl =
                                 !urlHasParam && vid === firstVersionId ? url : makeUrl(vid);
 
-                            // only fill if it exists in the current list AND missing in map
-                            if (urlList.includes(candidateUrl) && !next[candidateUrl]) {
+                            if (urlList.includes(candidateUrl) && !prev[candidateUrl]) {
+                                if (!changed) {
+                                    next = { ...prev };
+                                    changed = true;
+                                }
                                 next[candidateUrl] = img;
                             }
                         }
 
-                        // also fill plain-url image if missing
-                        if (!urlHasParam && firstImg && urlList.includes(url) && !next[url]) {
+                        if (!urlHasParam && firstImg && urlList.includes(url) && !prev[url]) {
+                            if (!changed) {
+                                next = { ...prev };
+                                changed = true;
+                            }
                             next[url] = firstImg;
                         }
 
-                        return next;
+                        return changed ? next : prev;
                     });
                 }
             } catch {
@@ -755,6 +769,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                                     <Carousel
                                         images={(selectedVersion.images || []).map((image) => image?.url).filter(Boolean)}
                                         theme={theme}
+                                        isDarkMode={isDarkMode}
                                     />
                                 </div>
                             )}
@@ -911,9 +926,10 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
 interface CarouselProps {
     images: string[];
     theme: AppTheme;
+    isDarkMode: boolean;
 }
 
-const Carousel: React.FC<CarouselProps> = ({ images = [], theme }) => {
+const Carousel: React.FC<CarouselProps> = ({ images = [], theme, isDarkMode }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
 
     const handlePrev = () => {
@@ -924,73 +940,86 @@ const Carousel: React.FC<CarouselProps> = ({ images = [], theme }) => {
         setCurrentIndex((prevIndex) => (prevIndex < images.length - 1 ? prevIndex + 1 : 0));
     };
 
+    useEffect(() => {
+        setCurrentIndex(0);
+    }, [images]);
+
     return (
         <div
             style={{
                 position: 'relative',
-                width: '75px', // Reduced from 300px to 75px (25%)
-                height: '75px', // Reduced from 300px to 75px (25%)
+                width: '75px',
+                height: '75px',
                 margin: '0 auto',
             }}
         >
             {images.length > 0 ? (
-                <img
+                <SmartImage
                     src={images[currentIndex]}
                     alt={`Image ${currentIndex + 1}`}
-                    style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'contain',
-                    }}
+                    isDarkMode={isDarkMode}
+                    width={75}
+                    height={75}
+                    maxHeight="75px"
+                    borderRadius={6}
+                    loading="lazy"
+                    showRetryButton={false}
                 />
             ) : (
-                <p style={{ fontSize: '8px', textAlign: 'center' }}>No images available</p> // Smaller text
+                <p style={{ fontSize: '8px', textAlign: 'center' }}>No images available</p>
             )}
 
-            <button
-                onClick={handlePrev}
-                style={{
-                    position: 'absolute',
-                    top: '50%',
-                    left: '0%',
-                    transform: 'translateY(-50%)',
-                    background: 'rgba(0,0,0,0.5)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '50%',
-                    width: '16px', // Reduced from 32px to 16px (50%)
-                    height: '16px', // Reduced from 32px to 16px (50%)
-                    cursor: 'pointer',
-                    padding: '0',
-                    fontSize: '8px', // Reduced font size
-                    lineHeight: '16px', // Center the arrow vertically
-                    textAlign: 'center',
-                }}
-            >
-                <FaAngleLeft />
-            </button>
-            <button
-                onClick={handleNext}
-                style={{
-                    position: 'absolute',
-                    top: '50%',
-                    right: '0',
-                    transform: 'translateY(-50%)',
-                    background: 'rgba(0,0,0,0.5)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '50%',
-                    width: '16px', // Reduced from 32px to 16px (50%)
-                    height: '16px', // Reduced from 32px to 16px (50%)
-                    cursor: 'pointer',
-                    padding: '0',
-                    fontSize: '8px', // Reduced font size
-                    lineHeight: '16px', // Center the arrow vertically
-                    textAlign: 'center',
-                }}
-            >
-                <FaAngleRight />
-            </button>
+            {images.length > 1 && (
+                <>
+                    <button
+                        onClick={handlePrev}
+                        style={{
+                            position: 'absolute',
+                            top: '50%',
+                            left: '0%',
+                            transform: 'translateY(-50%)',
+                            background: 'rgba(0,0,0,0.5)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '50%',
+                            width: '16px',
+                            height: '16px',
+                            cursor: 'pointer',
+                            padding: '0',
+                            fontSize: '8px',
+                            lineHeight: '16px',
+                            textAlign: 'center',
+                            zIndex: 3,
+                        }}
+                    >
+                        <FaAngleLeft />
+                    </button>
+
+                    <button
+                        onClick={handleNext}
+                        style={{
+                            position: 'absolute',
+                            top: '50%',
+                            right: '0',
+                            transform: 'translateY(-50%)',
+                            background: 'rgba(0,0,0,0.5)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '50%',
+                            width: '16px',
+                            height: '16px',
+                            cursor: 'pointer',
+                            padding: '0',
+                            fontSize: '8px',
+                            lineHeight: '16px',
+                            textAlign: 'center',
+                            zIndex: 3,
+                        }}
+                    >
+                        <FaAngleRight />
+                    </button>
+                </>
+            )}
         </div>
     );
 };

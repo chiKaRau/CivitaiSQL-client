@@ -1,8 +1,13 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import { AppTheme } from "../window_offline/OfflineWindow.theme";
+import SmartImage from "../window_offline/SmartImage";
 
-export const HoverImagePreview: React.FC<{ src: string, theme: AppTheme }> = ({ src, theme }) => {
+export const HoverImagePreview: React.FC<{ src: string; theme: AppTheme; isDarkMode: boolean }> = ({
+    src,
+    theme,
+    isDarkMode,
+}) => {
     const [isOpen, setIsOpen] = React.useState(false);
     const [position, setPosition] = React.useState({ left: 0, bottom: 0 });
     const thumbRef = React.useRef<HTMLSpanElement | null>(null);
@@ -65,50 +70,51 @@ export const HoverImagePreview: React.FC<{ src: string, theme: AppTheme }> = ({ 
                     cursor: "zoom-in",
                 }}
             >
-                <img
+                <SmartImage
                     src={src}
                     alt="thumb"
-                    style={{
-                        width: 52,
-                        height: 52,
-                        objectFit: "cover",
-                        borderRadius: 8,
-                        display: "inline-block",
-                    }}
+                    isDarkMode={isDarkMode}
+                    width={52}
+                    height={52}
+                    maxHeight="52px"
+                    borderRadius={8}
+                    loading="lazy"
+                    showRetryButton={false}
                 />
             </span>
 
-            {isOpen &&
-                createPortal(
-                    <div
-                        style={{
-                            position: "fixed",
-                            left: position.left,
-                            bottom: position.bottom,
-                            zIndex: 999999,
-                            pointerEvents: "none",
-                            padding: 6,
-                            backgroundColor: theme.panelBackground,
-                            color: theme.panelText,
-                            border: `1px solid ${theme.panelBorder}`,
-                            borderRadius: 8,
-                            boxShadow: theme.buttonShadow,
-                            maxWidth: PREVIEW_WIDTH + 20,
-                        }}
-                    >
-                        <img
-                            src={src}
-                            alt="preview"
-                            style={{
-                                display: "block",
-                                maxWidth: PREVIEW_WIDTH,
-                                maxHeight: PREVIEW_MAX_HEIGHT,
-                                borderRadius: 6,
-                            }}
-                        />
-                    </div>,
-                    document.body
-                )}
+            {createPortal(
+                <div
+                    style={{
+                        position: "fixed",
+                        left: position.left,
+                        bottom: position.bottom,
+                        zIndex: 999999,
+                        pointerEvents: "none",
+                        padding: 6,
+                        backgroundColor: theme.panelBackground,
+                        color: theme.panelText,
+                        border: `1px solid ${theme.panelBorder}`,
+                        borderRadius: 8,
+                        boxShadow: theme.buttonShadow,
+                        maxWidth: PREVIEW_WIDTH + 20,
+                        opacity: isOpen ? 1 : 0,
+                        visibility: isOpen ? "visible" : "hidden",
+                        transition: "opacity 0.12s ease",
+                    }}
+                >
+                    <SmartImage
+                        src={src}
+                        alt="preview"
+                        isDarkMode={isDarkMode}
+                        maxHeight={PREVIEW_MAX_HEIGHT}
+                        borderRadius={6}
+                        loading="lazy"
+                        showRetryButton={false}
+                    />
+                </div>,
+                document.body
+            )}
         </>
     );
 };

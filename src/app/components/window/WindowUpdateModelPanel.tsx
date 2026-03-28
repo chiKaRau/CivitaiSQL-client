@@ -23,6 +23,7 @@ import { FaFilter, FaChevronUp, FaChevronDown } from 'react-icons/fa';
 import { FaXmark, FaFolderTree, FaHardDrive } from 'react-icons/fa6';
 import { AppTheme, darkTheme, lightTheme } from '../window_offline/OfflineWindow.theme';
 import { buildPrefixToneMap, findBestPrefixMatch, PrefixItem, PrefixTone } from '../../utils/ColorUtils';
+import SmartImage from '../window_offline/SmartImage';
 
 interface Version {
     id: number;
@@ -2085,14 +2086,14 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                                                                         background: props.theme.panelBackground,
                                                                     }}
                                                                 >
-                                                                    <img
+                                                                    <SmartImage
                                                                         src={image.url || "https://placehold.co/200x250"}
                                                                         alt={model.name}
-                                                                        style={{
-                                                                            maxWidth: '100%',
-                                                                            maxHeight: '260px',
-                                                                            objectFit: 'contain',
-                                                                        }}
+                                                                        isDarkMode={props.isDarkMode}
+                                                                        maxHeight="260px"
+                                                                        borderRadius={0}
+                                                                        loading="lazy"
+                                                                        showRetryButton={false}
                                                                     />
                                                                 </div>
                                                             </Carousel.Item>

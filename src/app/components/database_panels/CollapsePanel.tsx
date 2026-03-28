@@ -6,6 +6,7 @@ import Col from "react-bootstrap/Col";
 
 // theme
 import { darkTheme, lightTheme } from "../window_offline/OfflineWindow.theme";
+import SmartImage from "../window_offline/SmartImage";
 
 // Interface
 interface CollapsePanelProps {
@@ -147,17 +148,25 @@ const CollapsePanel: React.FC<CollapsePanelProps> = ({
                                                 <Carousel fade interval={null}>
                                                     {model?.imageUrls?.map((image, index) => (
                                                         <Carousel.Item key={index}>
-                                                            <img
-                                                                src={image.url || "https://placehold.co/200x250"}
-                                                                alt={model.name}
+                                                            <div
                                                                 style={{
                                                                     width: "100%",
                                                                     maxHeight: "320px",
-                                                                    objectFit: "contain",
                                                                     borderRadius: "8px",
                                                                     backgroundColor: theme.headerBackgroundColor,
+                                                                    overflow: "hidden",
                                                                 }}
-                                                            />
+                                                            >
+                                                                <SmartImage
+                                                                    src={image.url || "https://placehold.co/200x250"}
+                                                                    alt={model.name}
+                                                                    isDarkMode={isDarkMode}
+                                                                    maxHeight="320px"
+                                                                    borderRadius={8}
+                                                                    loading="lazy"
+                                                                    showRetryButton={false}
+                                                                />
+                                                            </div>
                                                         </Carousel.Item>
                                                     ))}
                                                 </Carousel>

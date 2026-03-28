@@ -18,6 +18,7 @@ import {
 } from 'react-icons/fa6';
 import { AppState } from '../../store/configureStore';
 import { AppTheme, darkTheme, lightTheme } from '../window_offline/OfflineWindow.theme';
+import SmartImage from '../window_offline/SmartImage';
 
 interface Version {
     id: number;
@@ -497,6 +498,7 @@ const WindowFullInfoModelPanel: React.FC<PanelProps> = ({
                                 <Carousel
                                     images={selectedVersion.images.map(image => image.url)}
                                     theme={theme}
+                                    isDarkMode={isDarkMode}
                                 />
                             </div>
                         )}
@@ -574,10 +576,15 @@ const WindowFullInfoModelPanel: React.FC<PanelProps> = ({
 interface CarouselProps {
     images: string[];
     theme: AppTheme;
+    isDarkMode: boolean;
 }
 
-const Carousel: React.FC<CarouselProps> = ({ images, theme }) => {
+const Carousel: React.FC<CarouselProps> = ({ images, theme, isDarkMode }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
+
+    useEffect(() => {
+        setCurrentIndex(0);
+    }, [images]);
 
     const handlePrev = () => {
         setCurrentIndex((prevIndex) => (prevIndex > 0 ? prevIndex - 1 : images.length - 1));
@@ -611,16 +618,14 @@ const Carousel: React.FC<CarouselProps> = ({ images, theme }) => {
                 }}
             >
                 {images.length > 0 ? (
-                    <img
+                    <SmartImage
                         src={images[currentIndex]}
                         alt={`Image ${currentIndex + 1}`}
-                        style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'contain',
-                            display: 'block',
-                            background: theme.panelBackground,
-                        }}
+                        isDarkMode={isDarkMode}
+                        maxHeight="360px"
+                        borderRadius={14}
+                        loading="lazy"
+                        showRetryButton={false}
                     />
                 ) : (
                     <div style={{ color: theme.subText, fontWeight: 600 }}>
@@ -648,6 +653,7 @@ const Carousel: React.FC<CarouselProps> = ({ images, theme }) => {
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
+                                    zIndex: 3,
                                 }}
                             >
                                 <FaChevronLeft size={14} />
@@ -672,6 +678,7 @@ const Carousel: React.FC<CarouselProps> = ({ images, theme }) => {
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
+                                    zIndex: 3,
                                 }}
                             >
                                 <FaChevronRight size={14} />

@@ -1430,6 +1430,23 @@ const OfflineWindow: React.FC = () => {
         setSelectedSuggestedPathByVid({});
     }, [displayMode, uiMode, isLoading]);
 
+    const isPendingPathValue = (path: string) =>
+        PENDING_PATH_RE.test((path || "").trim());
+
+    const shouldLeaveCurrentPagedList = (path: string) => {
+        const pending = isPendingPathValue(path);
+
+        if (appliedQuery.showPending && !appliedQuery.showNonPending) {
+            return !pending;
+        }
+
+        if (!appliedQuery.showPending && appliedQuery.showNonPending) {
+            return pending;
+        }
+
+        return false;
+    };
+
     const handleDownloadPathSave = async (
         entry: OfflineDownloadEntry,
         nextPath: string
@@ -1437,7 +1454,6 @@ const OfflineWindow: React.FC = () => {
         const trimmed = nextPath.trim();
         const prevPath = entry.downloadFilePath ?? "";
 
-        // Nothing changed → just close
         if (!trimmed || trimmed === prevPath.trim()) {
             setEditingPathId(null);
             return;
@@ -1447,7 +1463,10 @@ const OfflineWindow: React.FC = () => {
             e.civitaiModelID === entry.civitaiModelID &&
             e.civitaiVersionID === entry.civitaiVersionID;
 
-        // Optimistic update
+        const prevWasPending = isPendingPathValue(prevPath);
+        const nextIsPending = isPendingPathValue(trimmed);
+
+        // optimistic text update
         updateEntryLocal(matcher, { downloadFilePath: trimmed });
 
         try {
@@ -1459,8 +1478,17 @@ const OfflineWindow: React.FC = () => {
                 trimmed,
                 dispatch
             );
+
+            // paged modes: if current server query would no longer include this item, refresh page
+            if (shouldLeaveCurrentPagedList(trimmed)) {
+                await refreshCurrentPage();
+            }
+
+            // AI mode/list is always pending-only
+            if (prevWasPending !== nextIsPending) {
+                setAiReloadToken((t) => t + 1);
+            }
         } catch (err: any) {
-            // Revert on failure
             updateEntryLocal(matcher, { downloadFilePath: prevPath });
             alert(`Failed to update download path: ${err?.message || "Unknown error"}`);
         } finally {
@@ -2351,10 +2379,11 @@ const OfflineWindow: React.FC = () => {
         setEaRefreshProgress({ running: true, completed: 0, total: targets.length, msg: "" });
 
         try {
+            const refreshedVidSet = new Set<string>();
+
             for (let i = 0; i < targets.length; i++) {
                 const entry = targets[i];
 
-                // ✅ 1s delay between calls (no delay before first)
                 if (i > 0) await sleep(1000);
 
                 await fetchRefreshOfflineDownloadRecord(
@@ -2365,8 +2394,8 @@ const OfflineWindow: React.FC = () => {
                     dispatch
                 );
 
-                // ✅ mark as refreshed so next run skips it
                 eaRefreshedVidSetRef.current.add(entry.civitaiVersionID);
+                refreshedVidSet.add(entry.civitaiVersionID);
 
                 setEaRefreshProgress((p) => ({
                     ...p,
@@ -2375,15 +2404,17 @@ const OfflineWindow: React.FC = () => {
                 }));
             }
 
-            // ✅ auto-deselect the ones we just refreshed
+            // remove refreshed ones from local Early Access state
+            setEarlyAccessEntries((prev) =>
+                prev.filter((e) => !refreshedVidSet.has(e.civitaiVersionID))
+            );
+
+            // deselect refreshed ones
             setSelectedIds((prev) => {
                 const next = new Set(prev);
-                targets.forEach((e) => next.delete(e.civitaiVersionID));
+                refreshedVidSet.forEach((vid) => next.delete(vid));
                 return next;
             });
-
-            // ❌ remove list refresh (so refreshed items don’t disappear)
-            // setSpecialReloadToken((t) => t + 1);
 
         } catch (err: any) {
             setEaRefreshProgress((p) => ({
@@ -2397,6 +2428,26 @@ const OfflineWindow: React.FC = () => {
         }
     };
 
+    const isAiBusy = aiSuggestRunStatus === "running" || batchCooldown !== null;
+
+    const isModeButtonDisabled = (mode: DisplayMode) => {
+        // lock all mode buttons while AI run/cooldown is active
+        if (isAiBusy) {
+            return true;
+        }
+
+        // lock everything during refresh / modify / remove
+        if (uiMode === "paging" || uiMode === "modifying" || uiMode === "removing") {
+            return true;
+        }
+
+        // during downloading, only allow paged modes
+        if (uiMode === "downloading" && !isPagedDisplayMode(mode)) {
+            return true;
+        }
+
+        return false;
+    };
     const handleSelectNextN_EarlyAccess = () => {
         if (!canChangeSelection) return;
         if (displayMode !== "earlyAccessCard") return;
@@ -2560,10 +2611,17 @@ const OfflineWindow: React.FC = () => {
     };
 
     const handleDisplayModeClick = (mode: DisplayMode) => {
-        if (
-            uiMode === "downloading" &&
-            (mode === "earlyAccessCard" || mode === "holdCard" || mode === "errorCard" || mode === "historyTable")
-        ) {
+        const isAiBusy = aiSuggestRunStatus === "running" || batchCooldown !== null;
+
+        if (isAiBusy) {
+            return;
+        }
+
+        if (uiMode === "paging" || uiMode === "modifying" || uiMode === "removing") {
+            return;
+        }
+
+        if (uiMode === "downloading" && !isPagedDisplayMode(mode)) {
             alert("Can't switch to this mode while downloading.");
             return;
         }
@@ -2781,6 +2839,7 @@ const OfflineWindow: React.FC = () => {
             list.map((e) => (matcher(e) ? { ...e, ...patch } : e));
 
         setOfflineDownloadList((prev) => applyPatch(prev));
+        setAiEntries((prev) => applyPatch(prev));
         setErrorEntries((prev) => applyPatch(prev));
         setRecentlyDownloaded((prev) => applyPatch(prev));
         setHoldEntries((prev) => applyPatch(prev));
@@ -2928,6 +2987,7 @@ const OfflineWindow: React.FC = () => {
                                 }}
                                 variant={displayMode === 'table' ? 'primary' : 'secondary'}
                                 onClick={() => handleDisplayModeClick('table')}
+                                disabled={isModeButtonDisabled("table")}
                             >
                                 Table Mode
                             </Button>
@@ -2937,6 +2997,7 @@ const OfflineWindow: React.FC = () => {
                                 }}
                                 variant={displayMode === 'bigCard' ? 'primary' : 'secondary'}
                                 onClick={() => handleDisplayModeClick('bigCard')}
+                                disabled={isModeButtonDisabled("bigCard")}
                             >
                                 Big Card Mode
                             </Button>
@@ -2946,6 +3007,7 @@ const OfflineWindow: React.FC = () => {
                                 }}
                                 variant={displayMode === 'smallCard' ? 'primary' : 'secondary'}
                                 onClick={() => handleDisplayModeClick('smallCard')}
+                                disabled={isModeButtonDisabled("smallCard")}
                             >
                                 Small Card Mode
                             </Button>
@@ -2955,6 +3017,7 @@ const OfflineWindow: React.FC = () => {
                                 variant={displayMode === 'recentCard' ? 'primary' : 'secondary'}
                                 onClick={() => handleDisplayModeClick('recentCard')}
                                 aria-label={`Recently Downloaded (${recentlyDownloaded.length})`}
+                                disabled={isModeButtonDisabled("recentCard")}
                             >
                                 Recently Downloaded
                                 {recentlyDownloaded.length > 0 && (
@@ -2972,7 +3035,7 @@ const OfflineWindow: React.FC = () => {
                             <Button
                                 style={{ ...styles.responsiveButtonStyle }}
                                 variant={displayMode === 'historyTable' ? 'primary' : 'secondary'}
-                                disabled={uiMode === "downloading"}
+                                disabled={isModeButtonDisabled("historyTable")}
                                 onClick={() => handleDisplayModeClick('historyTable')}
                             >
                                 History Table
@@ -2983,7 +3046,7 @@ const OfflineWindow: React.FC = () => {
                                 style={{ ...styles.responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
                                 variant={displayMode === 'holdCard' ? 'primary' : 'secondary'}
                                 onClick={() => handleDisplayModeClick('holdCard')}
-                                disabled={uiMode === "downloading"}
+                                disabled={isModeButtonDisabled("holdCard")}
                                 aria-label={`Hold entries (${holdEntries.length})`}
                             >
                                 Hold
@@ -3004,7 +3067,7 @@ const OfflineWindow: React.FC = () => {
                                 style={{ ...styles.responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
                                 variant={displayMode === 'earlyAccessCard' ? 'primary' : 'secondary'}
                                 onClick={() => handleDisplayModeClick('earlyAccessCard')}
-                                disabled={uiMode === "downloading"}   // ✅ only early access blocked
+                                disabled={isModeButtonDisabled("earlyAccessCard")}
                                 title={uiMode === "downloading" ? "Disabled while downloading" : undefined}
                             >
                                 Early Access
@@ -3023,6 +3086,7 @@ const OfflineWindow: React.FC = () => {
                             <Button
                                 variant={displayMode === 'failedCard' ? 'primary' : 'secondary'}
                                 onClick={() => handleDisplayModeClick('failedCard')}
+                                disabled={isModeButtonDisabled("failedCard")}
                                 style={{ ...styles.responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
                             >
                                 Failed Card Mode
@@ -3034,7 +3098,7 @@ const OfflineWindow: React.FC = () => {
                             <Button
                                 variant={displayMode === 'errorCard' ? 'primary' : 'secondary'}
                                 onClick={() => handleDisplayModeClick('errorCard')}
-                                disabled={uiMode === "downloading"}
+                                disabled={isModeButtonDisabled("errorCard")}
                                 style={{ ...styles.responsiveButtonStyle, position: 'relative', overflow: 'visible' }}
                                 aria-label={`Error entries (${errorEntries.length})`}
                             >
@@ -3055,7 +3119,7 @@ const OfflineWindow: React.FC = () => {
                                 style={{ ...styles.responsiveButtonStyle }}
                                 variant={displayMode === 'aiCard' ? 'primary' : 'secondary'}
                                 onClick={() => handleDisplayModeClick('aiCard')}
-                                disabled={uiMode === "downloading"}
+                                disabled={isModeButtonDisabled("aiCard")}
                             >
                                 AI Mode
                             </Button>

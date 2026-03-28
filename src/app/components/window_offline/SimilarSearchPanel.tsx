@@ -3,6 +3,7 @@ import { FaChevronCircleLeft, FaChevronCircleRight, FaStar } from 'react-icons/f
 import { MdDownload, MdOutlineSupervisorAccount } from 'react-icons/md';
 import { IoMdThumbsUp } from 'react-icons/io';
 import { OfflineDownloadEntry } from './OfflineWindow.types';
+import SmartImage from './SmartImage';
 
 type CivitaiStats = {
     downloadCount?: number;
@@ -570,24 +571,17 @@ const SimilarSearchPanel: React.FC<{
 
                                         <div style={carouselWrap(400)}>
                                             {curUrl ? (
-                                                <img
-                                                    className="d-block"
-                                                    src={withWidth(curUrl, 350)}
-                                                    srcSet={buildSrcSet(curUrl, [240, 350, 520, 720])}
-                                                    sizes="(max-width: 380px) 100vw, 350px"
-                                                    loading="lazy"
-                                                    decoding="async"
+                                                <SmartImage
+                                                    src={curUrl}
+                                                    fallbackSources={[PLACEHOLDER]}
                                                     alt="preview"
-                                                    style={{
-                                                        width: '100%',
-                                                        height: '100%',
-                                                        objectFit: 'cover',  // or 'contain' if you prefer no crop
-                                                        display: 'block'
-                                                    }}
-                                                    onError={(e) => {
-                                                        const t = e.currentTarget as HTMLImageElement;
-                                                        if (t.src !== PLACEHOLDER) t.src = PLACEHOLDER;
-                                                    }}
+                                                    isDarkMode={isDarkMode}
+                                                    width={350}
+                                                    height={400}
+                                                    maxHeight="400px"
+                                                    borderRadius={0}
+                                                    loading="lazy"
+                                                    showRetryButton={false}
                                                 />
                                             ) : (
                                                 <div style={{ ...imgStyle, display: 'grid', placeItems: 'center', fontSize: 12, opacity: .6 }}>No image</div>

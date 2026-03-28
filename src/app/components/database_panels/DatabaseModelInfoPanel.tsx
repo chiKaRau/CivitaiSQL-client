@@ -24,6 +24,7 @@ import { removeBookmarkByUrl, bookmarkThisModel } from "../../utils/chromeUtils"
 
 // theme
 import { darkTheme, lightTheme } from "../window_offline/OfflineWindow.theme";
+import SmartImage from "../window_offline/SmartImage";
 
 // Interface
 interface DatabaseModelInfoPanelProps {
@@ -433,17 +434,25 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = ({
                                                     <Carousel fade interval={null}>
                                                         {model?.imageUrls?.map((image, imageIndex) => (
                                                             <Carousel.Item key={`${model.id}-${imageIndex}`}>
-                                                                <img
-                                                                    src={image.url || "https://placehold.co/200x250"}
-                                                                    alt={model.name}
+                                                                <div
                                                                     style={{
                                                                         width: "100%",
                                                                         maxHeight: "320px",
-                                                                        objectFit: "contain",
                                                                         borderRadius: "8px",
                                                                         backgroundColor: theme.headerBackgroundColor,
+                                                                        overflow: "hidden",
                                                                     }}
-                                                                />
+                                                                >
+                                                                    <SmartImage
+                                                                        src={image.url || "https://placehold.co/200x250"}
+                                                                        alt={model.name}
+                                                                        isDarkMode={isDarkMode}
+                                                                        maxHeight="320px"
+                                                                        borderRadius={8}
+                                                                        loading="lazy"
+                                                                        showRetryButton={false}
+                                                                    />
+                                                                </div>
                                                             </Carousel.Item>
                                                         ))}
                                                     </Carousel>

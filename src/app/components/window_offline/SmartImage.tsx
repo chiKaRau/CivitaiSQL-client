@@ -16,6 +16,39 @@ interface SmartImageProps {
     showRetryButton?: boolean;
 }
 
+const CIVITAI_IMAGE_SEGMENT = 'anim=false,width=450,optimized=true';
+
+const rewriteCivitaiImageUrl = (value: string) => {
+    const url = (value || '').trim();
+    if (!url) return '';
+
+    if (!url.includes('image.civitai.com')) {
+        return url;
+    }
+
+    return url.replace(
+        /(https:\/\/image\.civitai\.com\/[^/]+\/[^/]+\/)([^/]+)(\/[^?#]+)(\?[^#]*)?(#.*)?$/i,
+        `$1${CIVITAI_IMAGE_SEGMENT}$3$4$5`
+    );
+};
+
+const rewriteCivitaiSrcSet = (value?: string) => {
+    if (!value) return value;
+
+    return value
+        .split(',')
+        .map(part => {
+            const trimmed = part.trim();
+            const match = trimmed.match(/^(\S+)(\s+.+)?$/);
+            if (!match) return trimmed;
+
+            const urlPart = match[1];
+            const descriptor = match[2] || '';
+            return `${rewriteCivitaiImageUrl(urlPart)}${descriptor}`;
+        })
+        .join(', ');
+};
+
 const SmartImage: React.FC<SmartImageProps> = ({
     src,
     fallbackSources = [],
@@ -36,11 +69,13 @@ const SmartImage: React.FC<SmartImageProps> = ({
 
     const fallbackKey = fallbackSources.join('|||');
 
+    const normalizedSrcSet = useMemo(() => rewriteCivitaiSrcSet(srcSet), [srcSet]);
+
     const candidates = useMemo(() => {
         const seen = new Set<string>();
 
         return [src, ...fallbackSources]
-            .map(x => (x || '').trim())
+            .map(x => rewriteCivitaiImageUrl((x || '').trim()))
             .filter(Boolean)
             .filter(url => {
                 if (seen.has(url)) return false;
@@ -155,7 +190,7 @@ const SmartImage: React.FC<SmartImageProps> = ({
                 <img
                     className="d-block w-100"
                     src={activeSrc}
-                    srcSet={currentIndex === 0 ? srcSet : undefined}
+                    srcSet={currentIndex === 0 ? normalizedSrcSet : undefined}
                     sizes={currentIndex === 0 ? sizes : undefined}
                     loading={loading}
                     decoding="async"

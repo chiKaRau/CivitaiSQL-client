@@ -114,6 +114,7 @@ import { HoldEditor } from './HoldEditor';
 import { darkTheme, getOfflineWindowStyles, lightTheme } from '../window_offline/OfflineWindow.theme';
 import { HoverImagePreview } from './HoverImagePreview';
 import { TrashButton } from './TrashButton';
+import SmartImage from '../window_offline/SmartImage';
 
 interface CreatorUrlItem {
     creatorUrl: string;
@@ -1194,10 +1195,14 @@ const WindowComponent: React.FC = () => {
                     maxWidth: 340,
                 }}
             >
-                <img
+                <SmartImage
                     src={src}
                     alt="preview"
-                    style={{ display: "block", maxWidth: 320, maxHeight: 420, borderRadius: 6 }}
+                    isDarkMode={isDarkMode}
+                    maxHeight={420}
+                    borderRadius={6}
+                    loading="lazy"
+                    showRetryButton={false}
                 />
             </div>
         );
@@ -1296,7 +1301,7 @@ const WindowComponent: React.FC = () => {
                     return <span style={{ opacity: 0.5, color: theme.subText }}>—</span>;
                 }
 
-                return <HoverImagePreview src={src} theme={theme} />;
+                return <HoverImagePreview src={src} theme={theme} isDarkMode={isDarkMode} />;
             },
         },
         {

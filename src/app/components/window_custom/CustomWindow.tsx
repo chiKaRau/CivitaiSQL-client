@@ -10,6 +10,7 @@ import CategoriesListSelector from '../CategoriesListSelector';
 import DownloadFilePathOptionPanel from '../DownloadFilePathOptionPanel';
 import FolderDropdown from '../FolderDropdown';
 import { darkTheme, lightTheme } from '../window_offline/OfflineWindow.theme';
+import SmartImage from '../window_offline/SmartImage';
 
 const CustomWindow: React.FC = () => {
     const dispatch = useDispatch();
@@ -458,14 +459,20 @@ const CustomWindow: React.FC = () => {
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        background: theme.headerBackgroundColor
+                                        background: theme.headerBackgroundColor,
+                                        overflow: 'hidden',
                                     }}
                                 >
-                                    <img
+                                    <SmartImage
                                         src={u}
                                         alt={`preview-${i}`}
-                                        style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
-                                        referrerPolicy="no-referrer"
+                                        isDarkMode={isDarkMode}
+                                        width={100}
+                                        height={50}
+                                        maxHeight="50px"
+                                        borderRadius={4}
+                                        loading="lazy"
+                                        showRetryButton={false}
                                     />
                                 </div>
                             ) : (
