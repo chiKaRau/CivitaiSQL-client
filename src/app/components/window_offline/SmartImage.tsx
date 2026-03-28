@@ -212,4 +212,4 @@ const SmartImage: React.FC<SmartImageProps> = ({
     );
 };
 
-export default SmartImage;
+export default React.memo(SmartImage);

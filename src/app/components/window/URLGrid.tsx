@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { AgGridReact } from "ag-grid-react";
-import { ColDef, RowStyle } from "ag-grid-community";
+import { CellStyle, ColDef, RowStyle } from "ag-grid-community";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-alpine.css";
 import { darkTheme, lightTheme } from "../window_offline/OfflineWindow.theme";
@@ -20,7 +20,6 @@ interface URLGridProps {
     urlBadgeMap?: Record<string, string>;
 }
 
-
 const URLGrid: React.FC<URLGridProps> = ({
     urlList,
     setUrlList,
@@ -32,7 +31,6 @@ const URLGrid: React.FC<URLGridProps> = ({
     modelPrimaryVersionIdMap = {},
     urlBadgeMap = {}
 }) => {
-
     const theme = isDarkMode ? darkTheme : lightTheme;
 
     const ImageTooltip: React.FC<any> = (props) => {
@@ -84,7 +82,6 @@ const URLGrid: React.FC<URLGridProps> = ({
             .flatMap((group) => {
                 const mainRows = group.filter((row) => row.isPrimary);
                 const otherRows = group.filter((row) => !row.isPrimary);
-
                 return [...mainRows, ...otherRows];
             });
     };
@@ -117,6 +114,7 @@ const URLGrid: React.FC<URLGridProps> = ({
             const imgSrc = urlImgSrcMap[url] || "";
 
             return {
+                id: url, // stable row id
                 url,
                 modelId,
                 versionId: effectiveVersionId,
@@ -166,7 +164,7 @@ const URLGrid: React.FC<URLGridProps> = ({
         );
     };
 
-    const columnDefs: ColDef[] = [
+    const columnDefs = useMemo<ColDef[]>(() => [
         {
             headerName: "#",
             width: 60,
@@ -182,12 +180,12 @@ const URLGrid: React.FC<URLGridProps> = ({
             cellStyle: {
                 textAlign: "center",
                 fontWeight: 600,
-            },
+            } as CellStyle,
         },
         {
             headerName: "Model & Version",
-            field: "modelVersionDisplay",   // <-- use your real field name
-            width: 170,                     // <-- shorter (tweak 150~220)
+            field: "modelVersionDisplay",
+            width: 170,
             minWidth: 140,
             wrapText: true,
             autoHeight: true,
@@ -196,7 +194,7 @@ const URLGrid: React.FC<URLGridProps> = ({
                 wordBreak: "break-word",
                 textAlign: "left",
                 padding: "5px"
-            },
+            } as CellStyle,
             cellRenderer: (params: any) => {
                 const isPrimary = !!params?.data?.isPrimary;
                 return <span style={{ fontWeight: isPrimary ? 800 : 600 }}>{params.value}</span>;
@@ -214,7 +212,7 @@ const URLGrid: React.FC<URLGridProps> = ({
                 textOverflow: "ellipsis",
                 padding: "5px",
                 color: theme.rowFontColor,
-            },
+            } as CellStyle,
             cellRenderer: (params: any) => (
                 <span
                     style={{
@@ -234,7 +232,10 @@ const URLGrid: React.FC<URLGridProps> = ({
             width: 110,
             sortable: false,
             resizable: false,
-            cellStyle: { padding: "5px", textAlign: "center" },
+            cellStyle: {
+                padding: "5px",
+                textAlign: "center",
+            } as CellStyle,
             cellRenderer: (params: any) => {
                 const src = params.value as string;
                 if (!src) {
@@ -250,7 +251,10 @@ const URLGrid: React.FC<URLGridProps> = ({
             width: 90,
             sortable: false,
             resizable: false,
-            cellStyle: { textAlign: "center", padding: "5px" },
+            cellStyle: {
+                textAlign: "center",
+                padding: "5px",
+            } as CellStyle,
             cellRenderer: (params: any) => (
                 <TrashButton
                     onClick={() => handleDelete(params.data.url)}
@@ -258,14 +262,19 @@ const URLGrid: React.FC<URLGridProps> = ({
                 />
             ),
         },
-    ];
+    ], [theme, isDarkMode]);
+
+    const defaultColDef = useMemo<ColDef>(() => ({
+        sortable: true,
+        resizable: true,
+    }), []);
 
     const components = useMemo(
         () => ({
             imageTooltip: ImageTooltip,
             textTooltip: TextTooltip,
         }),
-        [theme]
+        [theme, isDarkMode]
     );
 
     return (
@@ -291,9 +300,10 @@ const URLGrid: React.FC<URLGridProps> = ({
             <AgGridReact
                 rowData={rowData}
                 columnDefs={columnDefs}
+                defaultColDef={defaultColDef}
                 components={components}
                 rowHeight={64}
-                defaultColDef={{ sortable: true, resizable: true }}
+                getRowId={(params) => params.data.id}
                 tooltipShowDelay={250}
                 getRowStyle={(params): RowStyle =>
                     params.data.url === selectedUrl
@@ -308,4 +318,4 @@ const URLGrid: React.FC<URLGridProps> = ({
     );
 };
 
-export default URLGrid;
+export default React.memo(URLGrid);

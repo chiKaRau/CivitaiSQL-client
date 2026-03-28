@@ -55,9 +55,12 @@ type StagedItem = {
     id: string;
     url: string;
     modelId: string;
-    versionId: string; // modelVersionId or "Selecting"
+    versionId: string;
+    imgSrc?: string;
 
-    imgSrc?: string;   // ✅ add this
+    isPrimary?: boolean;
+    badge?: string;
+    modelVersionDisplay?: string;
 
     downloadFilePath: string;
     selectedCategory: string;
@@ -106,7 +109,7 @@ import WindowFullInfoModelPanel from './WindowFullInfoModelPanel';
 import SetOriginalTabButton from './SetOriginalTabButton';
 import WindowShortcutPanel from './WindowShortcutPanel';
 import { FaEdit, FaMoon, FaSun, FaTrashAlt } from 'react-icons/fa';
-import { ColDef } from 'ag-grid-community';
+import { CellStyle, ColDef } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { SelectEditor } from './SelectEditor';
 import { PathAutocompleteEditor } from './PathAutocompleteEditor';
@@ -364,22 +367,6 @@ const WindowComponent: React.FC = () => {
         //console.log('Updated checkedUrlList:', checkedUrlList.length);
     }, [checkedUrlList]);
 
-    useEffect(() => {
-        const keep = new Set(urlList);
-
-        setUrlImgSrcMap(prev => {
-            const next: Record<string, string> = {};
-            for (const k of Object.keys(prev)) if (keep.has(k)) next[k] = prev[k];
-            return next;
-        });
-
-        setUrlVersionIdMap(prev => {
-            const next: Record<string, string> = {};
-            for (const k of Object.keys(prev)) if (keep.has(k)) next[k] = prev[k];
-            return next;
-        });
-    }, [urlList]);
-
     //Message Listener
     useEffect(() => {
         const messageListener = (message: any, sender: any, sendResponse: any) => {
@@ -524,33 +511,22 @@ const WindowComponent: React.FC = () => {
     };
 
     const stagedRowData = useMemo(() => {
-        const rawRows = stagedItems.map((it) => {
-            const primaryVid = modelPrimaryVersionIdMap[it.modelId] || "";
-            const effectiveVersionId =
-                it.versionId && it.versionId !== "Selecting" ? it.versionId : "";
-
-            const isPrimary =
-                !!primaryVid && !!effectiveVersionId && effectiveVersionId === primaryVid;
-
-            const badge = urlBadgeMap[it.url] || "";
-
-            const modelVersionDisplay = effectiveVersionId
-                ? `${it.modelId}_${effectiveVersionId}${isPrimary ? " (main)" : ""}${badge}`
-                : `${it.modelId}${isPrimary ? " (main)" : ""}${badge}`;
-
-            return {
-                ...it,
-                isPrimary,
-                modelVersionDisplay,
-                imgSrc: it.imgSrc || "",
-            };
-        });
+        const rawRows = stagedItems.map((it) => ({
+            ...it,
+            isPrimary: !!it.isPrimary,
+            modelVersionDisplay:
+                it.modelVersionDisplay ||
+                (it.versionId && it.versionId !== "Selecting"
+                    ? `${it.modelId}_${it.versionId}`
+                    : `${it.modelId}`),
+            imgSrc: it.imgSrc || "",
+        }));
 
         return reverseByModelGroup(rawRows).map((row, index) => ({
             ...row,
             idx: index + 1,
         }));
-    }, [stagedItems, modelPrimaryVersionIdMap, urlBadgeMap]);
+    }, [stagedItems]);
 
     const pickByNullThenAge = (direction: 1 | -1): number | null => {
         const cur = currentCreatorUrlIndex ?? -1;
@@ -645,7 +621,7 @@ const WindowComponent: React.FC = () => {
         setStagedItems(prev => prev.map(it => (it.id === id ? { ...it, ...patch } : it)));
     };
 
-    const handleUnstageItem = (item: StagedItem) => {
+    const handleUnstageItem = React.useCallback((item: StagedItem) => {
         setUrlList(prev => {
             if (prev.includes(item.url)) return prev;
             return [...prev, item.url];
@@ -668,7 +644,7 @@ const WindowComponent: React.FC = () => {
         }
 
         setStagedItems(prev => prev.filter(x => x.id !== item.id));
-    };
+    }, []);
 
     // Read current tab, extract creator if URL matches /user/<creator>/models
     const refreshCurrentTabCreator = async () => {
@@ -1208,7 +1184,7 @@ const WindowComponent: React.FC = () => {
         );
     };
 
-    const actionButtonBaseStyle: React.CSSProperties = {
+    const actionButtonBaseStyle = useMemo<React.CSSProperties>(() => ({
         cursor: "pointer",
         border: "none",
         padding: 6,
@@ -1217,16 +1193,16 @@ const WindowComponent: React.FC = () => {
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-    };
+    }), []);
 
-    const unstageButtonStyle: React.CSSProperties = {
+    const unstageButtonStyle = useMemo<React.CSSProperties>(() => ({
         ...actionButtonBaseStyle,
         background: isDarkMode ? "rgba(120, 190, 255, 0.10)" : "rgba(25, 118, 210, 0.08)",
         color: isDarkMode ? "#9fd0ff" : "#1565c0",
         border: isDarkMode
             ? "1px solid rgba(159, 208, 255, 0.22)"
             : "1px solid rgba(21, 101, 192, 0.18)",
-    };
+    }), [actionButtonBaseStyle, isDarkMode]);
 
     const deleteButtonStyle: React.CSSProperties = {
         ...actionButtonBaseStyle,
@@ -1239,9 +1215,14 @@ const WindowComponent: React.FC = () => {
 
     const stagingComponents = useMemo(() => ({ imageTooltip: ImageTooltip }), [theme]);
 
-    const priorityOptions = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    const priorityOptions = useMemo(() => [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], []);
 
-    const stagingColumnDefs: ColDef[] = [
+    const stagingDefaultColDef = useMemo<ColDef>(() => ({
+        sortable: true,
+        resizable: true,
+    }), []);
+
+    const stagingColumnDefs = useMemo<ColDef[]>(() => [
         {
             headerName: "#",
             width: 50,
@@ -1257,13 +1238,12 @@ const WindowComponent: React.FC = () => {
             cellStyle: {
                 textAlign: "center",
                 fontWeight: 600,
-            },
+            } as CellStyle,
         },
         {
             headerName: "Pri",
             field: "downloadPriority",
             width: 55,
-
             editable: true,
             cellEditor: SelectEditor,
             cellEditorPopup: true,
@@ -1271,8 +1251,8 @@ const WindowComponent: React.FC = () => {
         },
         {
             headerName: "Model & Version",
-            field: "modelVersionDisplay",   // <-- use your real field name
-            width: 170,                     // <-- shorter (tweak 150~220)
+            field: "modelVersionDisplay",
+            width: 170,
             minWidth: 140,
             wrapText: true,
             autoHeight: true,
@@ -1281,7 +1261,7 @@ const WindowComponent: React.FC = () => {
                 wordBreak: "break-word",
                 textAlign: "left",
                 padding: "5px"
-            },
+            } as CellStyle,
             cellRenderer: (p: any) => (
                 <span style={{ fontWeight: p?.data?.isPrimary ? 800 : 600 }}>
                     {p.value}
@@ -1294,7 +1274,10 @@ const WindowComponent: React.FC = () => {
             width: 110,
             sortable: false,
             resizable: false,
-            cellStyle: { padding: "5px", textAlign: "center" },
+            cellStyle: {
+                padding: "5px",
+                textAlign: "center",
+            } as CellStyle,
             cellRenderer: (params: any) => {
                 const src = params.value as string;
                 if (!src) {
@@ -1317,17 +1300,18 @@ const WindowComponent: React.FC = () => {
                 paddingTop: "8px",
                 paddingBottom: "8px",
                 userSelect: "text",
-            },
+            } as CellStyle,
             tooltipField: "downloadFilePath",
-
             editable: true,
             cellEditor: PathAutocompleteEditor,
             cellEditorPopup: true,
             cellEditorParams: () => ({ options: sortedandFilteredfoldersList })
         },
-
-        { headerName: "Cat", field: "selectedCategory", width: 90 },
-
+        {
+            headerName: "Cat",
+            field: "selectedCategory",
+            width: 90
+        },
         {
             headerName: "Hold",
             field: "hold",
@@ -1354,7 +1338,7 @@ const WindowComponent: React.FC = () => {
             cellStyle: {
                 textAlign: "center",
                 padding: "2px",
-            },
+            } as CellStyle,
             cellRenderer: (p: any) => (
                 <button
                     type="button"
@@ -1398,7 +1382,7 @@ const WindowComponent: React.FC = () => {
             cellStyle: {
                 textAlign: "center",
                 padding: "2px",
-            },
+            } as CellStyle,
             cellRenderer: (p: any) => (
                 <TrashButton
                     onClick={(e) => {
@@ -1410,7 +1394,7 @@ const WindowComponent: React.FC = () => {
                 />
             ),
         },
-    ];
+    ], [theme, isDarkMode, sortedandFilteredfoldersList, priorityOptions, unstageButtonStyle, handleUnstageItem]);
 
     // which rating checkboxes are currently ON?
     const selectedRatings = useMemo(
@@ -2073,14 +2057,32 @@ const WindowComponent: React.FC = () => {
 
         const versionFromUrl = uri.searchParams.get("modelVersionId") || "";
         const versionFromMap = urlVersionIdMap[url] || "";
-
-        // ✅ snapshot the best known version at staging time
         const versionId = versionFromUrl || versionFromMap || "Selecting";
 
-        // ✅ snapshot image at staging time (so staging grid can always show it later)
         const imgSrc = urlImgSrcMap[url] || "";
 
-        return { modelId, versionId, imgSrc };
+        const primaryVid = modelPrimaryVersionIdMap[modelId] || "";
+        const isPrimary =
+            !!primaryVid &&
+            !!versionId &&
+            versionId !== "Selecting" &&
+            versionId === primaryVid;
+
+        const badge = urlBadgeMap[url] || "";
+
+        const modelVersionDisplay =
+            versionId && versionId !== "Selecting"
+                ? `${modelId}_${versionId}${isPrimary ? " (main)" : ""}${badge}`
+                : `${modelId}${isPrimary ? " (main)" : ""}${badge}`;
+
+        return {
+            modelId,
+            versionId,
+            imgSrc,
+            isPrimary,
+            badge,
+            modelVersionDisplay,
+        };
     };
 
     const makeStageId = () => `${Date.now()}_${Math.random().toString(16).slice(2)}`;
@@ -2109,7 +2111,7 @@ const WindowComponent: React.FC = () => {
             for (const url of urlList) {
                 if (existingUrls.has(url)) continue;
 
-                const { modelId, versionId, imgSrc } = parseModelAndVersion(url);
+                const { modelId, versionId, imgSrc, isPrimary, badge, modelVersionDisplay } = parseModelAndVersion(url);
 
                 additions.push({
                     id: makeStageId(),
@@ -2117,6 +2119,9 @@ const WindowComponent: React.FC = () => {
                     modelId,
                     versionId,
                     imgSrc,
+                    isPrimary,
+                    badge,
+                    modelVersionDisplay,
                     downloadFilePath,
                     selectedCategory,
                     downloadMethod,
@@ -2155,10 +2160,10 @@ const WindowComponent: React.FC = () => {
         setDownloadPriority(5);
         dispatch(updateDownloadPriority(5));
 
-        setIsHandleRefresh(false);
-        setTimeout(() => {
-            setIsHandleRefresh(true);
-        }, 50);
+        // setIsHandleRefresh(false);
+        // setTimeout(() => {
+        //     setIsHandleRefresh(true);
+        // }, 50);
     };
 
     const sendStagedToTab = (tabId: number, list: StagedItem[]) => {
@@ -2184,7 +2189,6 @@ const WindowComponent: React.FC = () => {
             sendStagedToTab(tabId, list);
         });
     };
-
 
     return (
         <div
@@ -3424,7 +3428,7 @@ const WindowComponent: React.FC = () => {
                                         components={stagingComponents}
                                         rowHeight={64}
                                         suppressRowTransform={true}
-                                        defaultColDef={{ sortable: true, resizable: true }}
+                                        defaultColDef={stagingDefaultColDef}
                                         stopEditingWhenCellsLoseFocus={true}
                                         singleClickEdit={false}
                                         context={{ patchStagedById }}
