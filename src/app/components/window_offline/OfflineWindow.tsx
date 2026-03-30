@@ -365,6 +365,17 @@ const OfflineWindow: React.FC = () => {
     const isPagedDisplayMode = (m: DisplayMode) =>
         m === "bigCard" || m === "smallCard" || m === "table";
 
+    const DOWNLOAD_SWITCH_ALLOWED_MODES = new Set<DisplayMode>([
+        "table",
+        "bigCard",
+        "smallCard",
+        "failedCard",
+        "recentCard",
+    ]);
+
+    const canSwitchModeWhileDownloading = (mode: DisplayMode) =>
+        DOWNLOAD_SWITCH_ALLOWED_MODES.has(mode);
+
     const prevDisplayModeRef = useRef<DisplayMode>(displayMode);
 
     const canUseDownloadNow = !isModifyMode && DOWNLOAD_NOW_ALLOWED_MODES.has(displayMode);
@@ -2442,7 +2453,7 @@ const OfflineWindow: React.FC = () => {
         }
 
         // during downloading, only allow paged modes
-        if (uiMode === "downloading" && !isPagedDisplayMode(mode)) {
+        if (uiMode === "downloading" && !canSwitchModeWhileDownloading(mode)) {
             return true;
         }
 
@@ -2621,7 +2632,7 @@ const OfflineWindow: React.FC = () => {
             return;
         }
 
-        if (uiMode === "downloading" && !isPagedDisplayMode(mode)) {
+        if (uiMode === "downloading" && !canSwitchModeWhileDownloading(mode)) {
             alert("Can't switch to this mode while downloading.");
             return;
         }

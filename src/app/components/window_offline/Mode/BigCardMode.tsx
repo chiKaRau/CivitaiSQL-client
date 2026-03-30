@@ -163,6 +163,19 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                         entry.downloadFilePath.trim() !== '' &&
                         entry.downloadFilePath !== 'N/A';
 
+                    const isEditingThisPath = editingPathId === entry.civitaiVersionID;
+
+                    const titleSuffixSuggestions = Array.from(
+                        new Set(
+                            [
+                                entry.aiSuggestedArtworkTitle,
+                                entry.jikanNormalizedArtworkTitle,
+                            ]
+                                .map((v) => (v ?? "").trim())
+                                .filter(Boolean)
+                        )
+                    );
+
                     return (
                         <Card
                             key={`${entry.civitaiModelID}-${entry.civitaiVersionID}`}
@@ -513,6 +526,7 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                                 <DownloadPathEditor
                                                     initialValue={entry.downloadFilePath ?? ''}
                                                     isDarkMode={isDarkMode}
+                                                    suffixSuggestions={titleSuffixSuggestions}
                                                     onSave={(nextPath: any) => handleDownloadPathSave(entry, nextPath)}
                                                     onCancel={() => setEditingPathId(null)}
                                                 />
@@ -688,7 +702,7 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                 )}
 
                                 {showAiSuggestionsPanel && (
-                                    <div style={{ marginTop: 8 }}>
+                                    <div style={{ marginTop: isEditingThisPath ? 45 : 8 }}>
                                         <strong>AI suggestion</strong>
 
                                         <p>
@@ -748,7 +762,7 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                             }
 
                                             return (
-                                                <div style={{ marginTop: 6 }}>
+                                                <div style={{ marginTop: 6, marginBottom: showAiSuggestionsPanel ? 30 : 0 }}>
                                                     <div
                                                         style={{
                                                             display: 'flex',

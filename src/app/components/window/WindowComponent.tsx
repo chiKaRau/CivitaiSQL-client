@@ -238,7 +238,7 @@ const WindowComponent: React.FC = () => {
         return m;
     }, [ratingConfigList]);
 
-    const [isPendingLockEnabled, setIsPendingLockEnabled] = useState<boolean>(false);
+    const [isPendingLockEnabled, setIsPendingLockEnabled] = useState<boolean>(true);
 
     const handleClearUrlGrid = () => {
         if (urlList.length === 0) return;
@@ -2160,10 +2160,10 @@ const WindowComponent: React.FC = () => {
         setDownloadPriority(5);
         dispatch(updateDownloadPriority(5));
 
-        // setIsHandleRefresh(false);
-        // setTimeout(() => {
-        //     setIsHandleRefresh(true);
-        // }, 50);
+        setIsHandleRefresh(false);
+        setTimeout(() => {
+            setIsHandleRefresh(true);
+        }, 50);
     };
 
     const sendStagedToTab = (tabId: number, list: StagedItem[]) => {
@@ -3311,10 +3311,10 @@ const WindowComponent: React.FC = () => {
                             <Button
                                 variant={"success"}
                                 onClick={handleStageAllFromInbox}
-                                disabled={isLoading || urlList.length === 0 || !checkboxMode || isStageBlockedByPendingLock}
+                                disabled={urlList.length === 0 || !checkboxMode || isStageBlockedByPendingLock}
                                 className="btn btn-success btn-lg w-100"
                             >
-                                {`Stage Items (${offlineMode ? "offline" : "online"})`}
+                                Stage Items
                             </Button>
                         </OverlayTrigger>
 

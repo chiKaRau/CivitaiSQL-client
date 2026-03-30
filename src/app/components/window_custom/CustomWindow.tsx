@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppState } from '../../store/configureStore';
 import { Container, Row, Col, Form, Button, Toast, OverlayTrigger, Tooltip } from 'react-bootstrap';
-import { fetchAddRecordToDatabaseInCustom, fetchDownloadFilesByServer_v2ForCustom } from '../../api/civitaiSQL_api';
+import { fetchAddRecordToDatabaseInCustom, fetchDownloadFilesByServer_v2ForCustom, fetchOpenModelDownloadDirectory } from '../../api/civitaiSQL_api';
 import { CiWarning } from 'react-icons/ci';
 import { AiOutlineCheckCircle, AiOutlineCloseCircle } from 'react-icons/ai';
 
@@ -49,6 +49,8 @@ const CustomWindow: React.FC = () => {
     const [prevData, setPrevData] = useState<any>(null);
     const [isHandleRefresh, setIsHandleRefresh] = useState(false);
 
+    const [completedDownloadPath, setCompletedDownloadPath] = useState('');
+
     const toArray = (s: string) =>
         s.split(',').map(x => x.trim()).filter(Boolean);
 
@@ -58,6 +60,25 @@ const CustomWindow: React.FC = () => {
     };
     const handleImageChange = (i: number, v: string) =>
         setImageUrls(prev => prev.map((val, idx) => idx === i ? v : val));
+
+    const handleOpenDownloadPath = async (downloadPath: string) => {
+        const trimmed = (downloadPath || '').trim();
+
+        if (!trimmed) {
+            setToastMsg('Download path is empty');
+            setToastVariant('danger');
+            setShowToast(true);
+            return;
+        }
+
+        try {
+            await fetchOpenModelDownloadDirectory(trimmed, dispatch);
+        } catch (err: any) {
+            setToastMsg(err?.message || 'Failed to open download directory');
+            setToastVariant('danger');
+            setShowToast(true);
+        }
+    };
 
     const handleClear = () => {
         setPrevData({
@@ -105,6 +126,7 @@ const CustomWindow: React.FC = () => {
         setFlag(false);
         setUrlAccessable(false);
         setDownloadUrlInput('');
+        setCompletedDownloadPath('');
     };
 
     const handleUndo = () => {
@@ -707,9 +729,17 @@ const CustomWindow: React.FC = () => {
                                                     downloadUrl: downloadUrlInput,
                                                     imageUrls
                                                 });
+
+                                                if (ok) {
+                                                    setCompletedDownloadPath(downloadFilePath || '');
+                                                } else {
+                                                    setCompletedDownloadPath('');
+                                                }
+
                                                 setToastMsg(ok ? 'Download Successful' : 'Download failed');
                                                 setToastVariant(ok ? 'success' : 'danger');
                                             } catch (err: any) {
+                                                setCompletedDownloadPath('');
                                                 setToastMsg(err.message || 'Download failed');
                                                 setToastVariant('danger');
                                             } finally {
@@ -760,6 +790,42 @@ const CustomWindow: React.FC = () => {
                         })()}
                     </Col>
                 </Row>
+
+                {completedDownloadPath && (
+                    <div
+                        className="mt-3"
+                        style={{
+                            backgroundColor: theme.headerBackgroundColor,
+                            color: theme.headerFontColor,
+                            border: `1px solid ${theme.evenRowBackgroundColor}`,
+                            borderRadius: '8px',
+                            padding: '12px',
+                        }}
+                    >
+                        <div style={{ fontWeight: 600, marginBottom: 6 }}>
+                            Download completed:
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={() => handleOpenDownloadPath(completedDownloadPath)}
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: 0,
+                                margin: 0,
+                                color: theme.headerFontColor,
+                                textDecoration: 'underline',
+                                cursor: 'pointer',
+                                textAlign: 'left',
+                                wordBreak: 'break-all',
+                            }}
+                            title="Open download directory"
+                        >
+                            {completedDownloadPath}
+                        </button>
+                    </div>
+                )}
 
                 <div className="d-flex justify-content-between mt-4">
                     <div>

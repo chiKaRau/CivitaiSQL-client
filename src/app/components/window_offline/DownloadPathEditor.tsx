@@ -11,6 +11,7 @@ interface DownloadPathEditorProps {
     isDarkMode: boolean;
     onSave: (nextPath: string) => void;
     onCancel: () => void;
+    suffixSuggestions?: string[];
 }
 
 const ROOT_PREFIX = "/@scan@/";
@@ -20,12 +21,14 @@ const DownloadPathEditor: React.FC<DownloadPathEditorProps> = ({
     isDarkMode,
     onSave,
     onCancel,
+    suffixSuggestions = [],
 }) => {
     const [value, setValue] = useState(initialValue ?? "");
     const [suffixValue, setSuffixValue] = useState("");
 
     const [suggestions, setSuggestions] = useState<string[]>([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
+    const [showSuffixSuggestions, setShowSuffixSuggestions] = useState(false);
     const [prefixsList, setPrefixsList] = useState<{
         id: number;
         prefixName: string;
@@ -76,6 +79,18 @@ const DownloadPathEditor: React.FC<DownloadPathEditorProps> = ({
             return s.toLowerCase().includes(q);
         })
         .slice(0, 8);
+
+    const filteredSuffixSuggestions = Array.from(
+        new Set(
+            (suffixSuggestions ?? [])
+                .map((s) => (s ?? "").trim())
+                .filter(Boolean)
+        )
+    ).filter((s) => {
+        const q = suffixValue.trim().toLowerCase();
+        if (!q) return true; // show all when user just clicks/focuses
+        return s.toLowerCase().includes(q);
+    }).slice(0, 8);
 
     useEffect(() => {
         const load = async () => {
@@ -214,22 +229,83 @@ const DownloadPathEditor: React.FC<DownloadPathEditorProps> = ({
                         ))}
                     </Form.Select>
 
-                    <FormControl
-                        value={suffixValue}
-                        placeholder="Enter suffix…"
-                        autoComplete="off"
-                        onChange={(e) => {
-                            setSuffixValue(e.target.value);
-                            if (builderError) setBuilderError(null);
-                        }}
-                        onKeyDown={handleKeyDownBuilder}
-                        isInvalid={!!builderError}
-                        style={{
-                            backgroundColor: isDarkMode ? "#555" : "#fff",
-                            color: isDarkMode ? "#fff" : "#000",
-                            borderColor: isDarkMode ? "#777" : "#ccc",
-                        }}
-                    />
+                    <div style={{ position: "relative", flex: 1 }}>
+                        <FormControl
+                            value={suffixValue}
+                            placeholder="Enter suffix…"
+                            autoComplete="off"
+                            onFocus={() => setShowSuffixSuggestions(true)}
+                            onBlur={() => {
+                                window.setTimeout(() => {
+                                    setShowSuffixSuggestions(false);
+                                }, 150);
+                            }}
+                            onChange={(e) => {
+                                setSuffixValue(e.target.value);
+                                setShowSuffixSuggestions(true);
+                                if (builderError) setBuilderError(null);
+                            }}
+                            onKeyDown={handleKeyDownBuilder}
+                            isInvalid={!!builderError}
+                            style={{
+                                backgroundColor: isDarkMode ? "#555" : "#fff",
+                                color: isDarkMode ? "#fff" : "#000",
+                                borderColor: isDarkMode ? "#777" : "#ccc",
+                            }}
+                        />
+
+                        {showSuffixSuggestions && filteredSuffixSuggestions.length > 0 && (
+                            <div
+                                data-no-select="true"
+                                onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                }}
+                                style={{
+                                    position: "absolute",
+                                    left: 0,
+                                    right: 0,
+                                    top: "calc(100% + 4px)",
+                                    zIndex: 10000,
+                                    maxHeight: 220,
+                                    overflowY: "auto",
+                                    borderRadius: 8,
+                                    border: `1px solid ${isDarkMode ? "#666" : "#ccc"}`,
+                                    backgroundColor: isDarkMode ? "#2b2b2b" : "#fff",
+                                    boxShadow: "0 6px 18px rgba(0,0,0,0.18)",
+                                }}
+                            >
+                                {filteredSuffixSuggestions.map((s) => (
+                                    <button
+                                        key={s}
+                                        type="button"
+                                        data-no-select="true"
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setSuffixValue(s);
+                                            setShowSuffixSuggestions(false);
+                                            if (builderError) setBuilderError(null);
+                                        }}
+                                        style={{
+                                            display: "block",
+                                            width: "100%",
+                                            textAlign: "left",
+                                            padding: "8px 10px",
+                                            border: "none",
+                                            background: "transparent",
+                                            color: isDarkMode ? "#fff" : "#000",
+                                            cursor: "pointer",
+                                            whiteSpace: "normal",
+                                            wordBreak: "break-word",
+                                        }}
+                                        title={s}
+                                    >
+                                        {s}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
 
                     <Button variant="primary" onClick={handleApplyBuilderToValue}>
                         Apply
