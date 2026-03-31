@@ -118,6 +118,7 @@ import { darkTheme, getOfflineWindowStyles, lightTheme } from '../window_offline
 import { HoverImagePreview } from './HoverImagePreview';
 import { TrashButton } from './TrashButton';
 import SmartImage from '../window_offline/SmartImage';
+import EarlyAccessAutoWatchButton from '../window_offline/EarlyAccessAutoWatchButton';
 
 interface CreatorUrlItem {
     creatorUrl: string;
@@ -2358,6 +2359,8 @@ const WindowComponent: React.FC = () => {
                                             handleFunctionCall={() => handleOpenEditWindow()}
                                             isDarkMode={isDarkMode}
                                         />
+
+                                        <EarlyAccessAutoWatchButton />
 
                                         <Button
                                             onClick={toggleTheme}
