@@ -371,6 +371,7 @@ const OfflineWindow: React.FC = () => {
         "smallCard",
         "failedCard",
         "recentCard",
+        "historyTable",
     ]);
 
     const canSwitchModeWhileDownloading = (mode: DisplayMode) =>
@@ -487,15 +488,25 @@ const OfflineWindow: React.FC = () => {
         });
     };
 
+    const uiModeRef = useRef(uiMode);
+
+    useEffect(() => {
+        uiModeRef.current = uiMode;
+    }, [uiMode]);
+
     useEffect(() => {
         let cancelled = false;
 
         const loadHistoryList = async () => {
             if (displayMode !== "historyTable") return;
 
+            const shouldControlBusyAtStart = uiModeRef.current !== "downloading";
+
             try {
-                setUiMode("paging");
-                setIsLoading(true);
+                if (shouldControlBusyAtStart) {
+                    setUiMode("paging");
+                    setIsLoading(true);
+                }
 
                 const payload = await fetchModelOfflineDownloadHistoryList(
                     dispatch,
@@ -524,13 +535,14 @@ const OfflineWindow: React.FC = () => {
                 }
             } catch (err: any) {
                 console.error("History list fetch failed:", err?.message || err);
+
                 if (!cancelled) {
                     setModelOfflineDownloadHistoryList([]);
                     setHistoryTotalItems(0);
                     setHistoryTotalPages(1);
                 }
             } finally {
-                if (!cancelled) {
+                if (!cancelled && shouldControlBusyAtStart && uiModeRef.current !== "downloading") {
                     setIsLoading(false);
                     setUiMode("idle");
                 }
@@ -2440,6 +2452,7 @@ const OfflineWindow: React.FC = () => {
     };
 
     const isAiBusy = aiSuggestRunStatus === "running" || batchCooldown !== null;
+    const isDownloadBusyOrCooldown = uiMode === "downloading" || batchCooldown !== null;
 
     const isModeButtonDisabled = (mode: DisplayMode) => {
         // lock all mode buttons while AI run/cooldown is active
@@ -2453,7 +2466,7 @@ const OfflineWindow: React.FC = () => {
         }
 
         // during downloading, only allow paged modes
-        if (uiMode === "downloading" && !canSwitchModeWhileDownloading(mode)) {
+        if (isDownloadBusyOrCooldown && !canSwitchModeWhileDownloading(mode)) {
             return true;
         }
 
@@ -2623,6 +2636,7 @@ const OfflineWindow: React.FC = () => {
 
     const handleDisplayModeClick = (mode: DisplayMode) => {
         const isAiBusy = aiSuggestRunStatus === "running" || batchCooldown !== null;
+        const isDownloadBusyOrCooldown = uiMode === "downloading" || batchCooldown !== null;
 
         if (isAiBusy) {
             return;
@@ -2632,8 +2646,8 @@ const OfflineWindow: React.FC = () => {
             return;
         }
 
-        if (uiMode === "downloading" && !canSwitchModeWhileDownloading(mode)) {
-            alert("Can't switch to this mode while downloading.");
+        if (isDownloadBusyOrCooldown && !canSwitchModeWhileDownloading(mode)) {
+            alert("Can't switch to this mode while downloading or during download cooldown.");
             return;
         }
 
