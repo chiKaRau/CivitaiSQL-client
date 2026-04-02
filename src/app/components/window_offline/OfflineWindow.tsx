@@ -2427,10 +2427,9 @@ const OfflineWindow: React.FC = () => {
                 }));
             }
 
-            // remove refreshed ones from local Early Access state
-            setEarlyAccessEntries((prev) =>
-                prev.filter((e) => !refreshedVidSet.has(e.civitaiVersionID))
-            );
+            // reload actual Early Access list from server
+            const payload = await fetchOfflineDownloadListEarlyAccessActive(dispatch);
+            setEarlyAccessEntries(Array.isArray(payload) ? payload as OfflineDownloadEntry[] : []);
 
             // deselect refreshed ones
             setSelectedIds((prev) => {

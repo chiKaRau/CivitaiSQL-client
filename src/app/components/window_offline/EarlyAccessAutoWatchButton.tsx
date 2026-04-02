@@ -9,9 +9,11 @@ import { setError } from '../../store/actions/errorsActions';
 import {
     fetchOfflineDownloadListEarlyAccessActive,
     fetchDownloadFilesByServer_v2,
+    fetchAddRecordToDatabase,
 } from '../../api/civitaiSQL_api';
 
 import type { OfflineDownloadEntry } from './OfflineWindow.types';
+import { bookmarkThisUrl } from '../../utils/chromeUtils';
 
 const PENDING_PATH_RE = /[/\\]@scan@[/\\]acg[/\\]pending([/\\]|$)/i;
 const STORAGE_KEY = 'ea-auto-watch-enabled';
@@ -206,9 +208,22 @@ const EarlyAccessAutoWatchButton: React.FC = () => {
                         dispatch
                     );
 
+
                     if (ok) {
                         downloadedIdsRef.current.add(civitaiVersionID);
                         setDownloadedCount((prev) => prev + 1);
+
+                        await fetchAddRecordToDatabase(
+                            entry.selectedCategory,
+                            entry.civitaiUrl,
+                            downloadFilePath,
+                            dispatch
+                        );
+                        bookmarkThisUrl(
+                            entry?.modelVersionObject?.model?.type ?? "N/A",
+                            entry?.selectedCategory,
+                            `${entry?.modelVersionObject?.model?.name ?? "N/A"} - ${entry?.civitaiModelID} | Stable Diffusion LoRA | Civitai`
+                        );
                     }
                 } catch (err: any) {
                     console.error('Early Access auto-download failed:', err?.message || err);
