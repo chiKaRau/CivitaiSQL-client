@@ -8,6 +8,7 @@ export interface ModelOfflineDownloadHistoryEntry {
     civitaiModelID: number;
     civitaiVersionID: number;
     imageUrlList: string[];
+    localPath: string;
     createdAt: string;
     updatedAt: string;
 }
@@ -72,12 +73,6 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
         fontWeight: 600,
     }), [cellStyle]);
 
-    const defaultColDef = useMemo<ColDef>(() => ({
-        flex: 1,
-        minWidth: 150,
-        resizable: true,
-    }), []);
-
     const getRowStyle = useCallback((params: any) => {
         const isEven = params.node.rowIndex % 2 === 0;
         return {
@@ -92,10 +87,17 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
         currentTheme.rowFontColor,
     ]);
 
+    const defaultColDef = useMemo<ColDef>(() => ({
+        minWidth: 150,
+        resizable: true,
+    }), []);
+
     const columnDefs = useMemo<ColDef[]>(() => [
         {
             headerName: "#",
-            width: 80,
+            width: 50,
+            minWidth: 50,
+            maxWidth: 50,
             sortable: false,
             filter: false,
             valueGetter: (params: any) => {
@@ -106,7 +108,8 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
         {
             headerName: "Image",
             field: "previewImageUrl",
-            width: 130,
+            width: 80,
+            maxWidth: 80,
             sortable: false,
             filter: false,
             cellRenderer: (params: any) => {
@@ -121,9 +124,7 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
                     <div
                         onMouseEnter={() =>
                             setHoveredImage((prev) =>
-                                prev?.src === url
-                                    ? prev
-                                    : { src: url, fallbackSources }
+                                prev?.src === url ? prev : { src: url, fallbackSources }
                             )
                         }
                         onMouseLeave={() =>
@@ -153,31 +154,51 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
             cellStyle: centeredImageCellStyle,
         },
         {
-            headerName: "Image Count",
-            field: "imageCount",
+            headerName: "Model & Version",
+            field: "modelVersionDisplay",
             width: 110,
-            sortable: true,
+            maxWidth: 120,
+            minWidth: 110,
+            wrapText: true,
+            autoHeight: true,
+            sortable: false,
             filter: false,
-            cellStyle: countCellStyle,
+            cellStyle: {
+                ...cellStyle,
+                whiteSpace: "normal",
+                wordBreak: "break-word",
+                textAlign: "left",
+                padding: "5px"
+            } as CellStyle,
+            cellRenderer: (p: any) => (
+                <span style={{ fontWeight: 600 }}>
+                    {p.value}
+                </span>
+            ),
         },
         {
-            headerName: "Model ID",
-            field: "civitaiModelID",
+            headerName: "Local Path",
+            field: "localPath",
+            flex: 1, // this column grows when window gets bigger
+            minWidth: 230,
+            wrapText: true,
+            autoHeight: true,
             sortable: true,
-            filter: false,
-            cellStyle,
-        },
-        {
-            headerName: "Version ID",
-            field: "civitaiVersionID",
-            sortable: true,
-            filter: false,
-            cellStyle,
+            cellStyle: {
+                whiteSpace: "normal",
+                lineHeight: "1.25",
+                paddingTop: "8px",
+                paddingBottom: "8px",
+                userSelect: "text",
+            } as CellStyle,
+            tooltipField: "localPath",
         },
         {
             headerName: "Created At",
             field: "createdAt",
-            flex: 1,
+            width: 150,
+            minWidth: 150,
+            maxWidth: 200,
             sortable: true,
             filter: false,
             tooltipField: "createdAt",
@@ -186,7 +207,9 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
         {
             headerName: "Civitai URL",
             field: "civitaiUrl",
-            minWidth: 140,
+            width: 120,
+            minWidth: 120,
+            maxWidth: 130,
             sortable: false,
             filter: false,
             cellRenderer: (params: any) => {
@@ -214,7 +237,8 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
         {
             headerName: "Civitai Archive URL",
             field: "civitaiArchiveUrl",
-            minWidth: 160,
+            width: 120,
+            minWidth: 120,
             sortable: false,
             filter: false,
             cellRenderer: (params: any) => {
@@ -239,7 +263,7 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
             },
             cellStyle,
         }
-    ], [cellStyle, numberCellStyle, countCellStyle, centeredImageCellStyle, isDarkMode]);
+    ], [cellStyle, numberCellStyle, centeredImageCellStyle, isDarkMode]);
 
     const rowData = useMemo(() => {
         return entries.map((entry) => {
@@ -250,6 +274,11 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
             return {
                 civitaiModelID: entry.civitaiModelID ?? "N/A",
                 civitaiVersionID: entry.civitaiVersionID ?? "N/A",
+                modelVersionDisplay:
+                    entry.civitaiModelID && entry.civitaiVersionID
+                        ? `${entry.civitaiModelID}_${entry.civitaiVersionID}`
+                        : "N/A",
+                localPath: entry.localPath ?? "",
                 previewImageUrl,
                 fallbackImageUrls,
                 imageCount: imageUrlList.length,
@@ -277,9 +306,6 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
                     getRowStyle={getRowStyle}
                     headerHeight={40}
                     rowHeight={95}
-                    onGridReady={(params) => {
-                        params.api.sizeColumnsToFit();
-                    }}
                 />
             </div>
 

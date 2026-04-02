@@ -525,6 +525,7 @@ const OfflineWindow: React.FC = () => {
                         imageUrlList: Array.isArray(row?.imageUrlList)
                             ? row.imageUrlList.filter((x: any) => typeof x === "string" && x.trim() !== "")
                             : [],
+                        localPath: typeof row?.localPath === "string" ? row.localPath : "",
                         createdAt: row?.createdAt ?? "",
                         updatedAt: row?.updatedAt ?? "",
                     }));
@@ -2685,7 +2686,7 @@ const OfflineWindow: React.FC = () => {
         setUiMode('removing');
         try {
             // Use what the user is currently seeing (respects filters & server paging)
-            const selectedEntries = filteredDownloadList.filter(entry =>
+            const selectedEntries = visibleEntries.filter(entry =>
                 selectedIds.has(entry.civitaiVersionID)
             );
 
@@ -2732,18 +2733,27 @@ const OfflineWindow: React.FC = () => {
         );
         if (!ok) return;
 
+        const match = (e: OfflineDownloadEntry) =>
+            e.civitaiModelID === entry.civitaiModelID &&
+            e.civitaiVersionID === entry.civitaiVersionID;
+
+        const snapshot = {
+            offlineDownloadList,
+            aiEntries,
+            errorEntries,
+            recentlyDownloaded,
+            holdEntries,
+            earlyAccessEntries,
+            failedEntries,
+        };
+
         setUiMode("removing");
         setIsLoading(true);
 
-        // optimistic remove
-        const key = `${entry.civitaiModelID}|${entry.civitaiVersionID}`;
-        const prevList = offlineDownloadList;
+        // optimistic remove from every mode list
+        removeEntryLocal(match);
 
-        setOfflineDownloadList(prev =>
-            prev.filter(e => `${e.civitaiModelID}|${e.civitaiVersionID}` !== key)
-        );
-
-        setSelectedIds(prev => {
+        setSelectedIds((prev) => {
             const next = new Set(prev);
             next.delete(entry.civitaiVersionID);
             return next;
@@ -2751,17 +2761,51 @@ const OfflineWindow: React.FC = () => {
 
         try {
             await fetchRemoveOfflineDownloadFileIntoOfflineDownloadList(
-                { civitaiModelID: entry.civitaiModelID, civitaiVersionID: entry.civitaiVersionID },
+                {
+                    civitaiModelID: entry.civitaiModelID,
+                    civitaiVersionID: entry.civitaiVersionID,
+                },
                 dispatch
             );
 
-            // ✅ refresh using appliedQuery
-            const p = await fetchPageWithApplied(currentPage);
-            applyPagedResultToState(p);
+            // keep server-backed modes in sync
+            if (
+                displayMode === "holdCard" ||
+                displayMode === "earlyAccessCard" ||
+                displayMode === "errorCard"
+            ) {
+                setSpecialReloadToken((t) => t + 1);
+            } else if (displayMode === "aiCard") {
+                setAiReloadToken((t) => t + 1);
+            } else if (
+                displayMode === "table" ||
+                displayMode === "bigCard" ||
+                displayMode === "smallCard"
+            ) {
+                const p = await fetchPageWithApplied(currentPage);
+                const newTotalPages = Math.max(1, p?.totalPages || 1);
+
+                if (
+                    (p?.content?.length ?? 0) === 0 &&
+                    (p?.totalElements ?? 0) > 0 &&
+                    currentPage > newTotalPages
+                ) {
+                    setCurrentPage(newTotalPages);
+                } else {
+                    applyPagedResultToState(p);
+                }
+            }
 
         } catch (err: any) {
+            setOfflineDownloadList(snapshot.offlineDownloadList);
+            setAiEntries(snapshot.aiEntries);
+            setErrorEntries(snapshot.errorEntries);
+            setRecentlyDownloaded(snapshot.recentlyDownloaded);
+            setHoldEntries(snapshot.holdEntries);
+            setEarlyAccessEntries(snapshot.earlyAccessEntries);
+            setFailedEntries(snapshot.failedEntries);
+
             alert(`Failed to remove: ${err?.message || "Unknown error"}`);
-            setOfflineDownloadList(prevList); // revert list
         } finally {
             setIsLoading(false);
             setUiMode("idle");
@@ -2855,6 +2899,21 @@ const OfflineWindow: React.FC = () => {
         }
     };
 
+    const removeEntryLocal = (
+        matcher: (e: OfflineDownloadEntry) => boolean
+    ) => {
+        const applyRemove = (list: OfflineDownloadEntry[]) =>
+            list.filter((e) => !matcher(e));
+
+        setOfflineDownloadList((prev) => applyRemove(prev));
+        setAiEntries((prev) => applyRemove(prev));
+        setErrorEntries((prev) => applyRemove(prev));
+        setRecentlyDownloaded((prev) => applyRemove(prev));
+        setHoldEntries((prev) => applyRemove(prev));
+        setEarlyAccessEntries((prev) => applyRemove(prev));
+        setFailedEntries((prev) => applyRemove(prev));
+    };
+
     const updateEntryLocal = (
         matcher: (e: OfflineDownloadEntry) => boolean,
         patch: Partial<OfflineDownloadEntry>
@@ -2873,21 +2932,33 @@ const OfflineWindow: React.FC = () => {
 
     const handleHoldChange = async (entry: OfflineDownloadEntry, nextHold: boolean) => {
         const match = (e: OfflineDownloadEntry) =>
-            e.civitaiVersionID === entry.civitaiVersionID && e.civitaiModelID === entry.civitaiModelID;
+            e.civitaiVersionID === entry.civitaiVersionID &&
+            e.civitaiModelID === entry.civitaiModelID;
+
         const prevHold = entry.hold ?? false;
 
-        // optimistic
         updateEntryLocal(match, { hold: nextHold });
+
+        // remove immediately from hold mode if it no longer belongs there
+        if (displayMode === "holdCard" && !nextHold) {
+            setHoldEntries((prev) => prev.filter((e) => !match(e)));
+        }
+
         try {
             await fetchUpdateHoldFromOfflineDownloadList(
-                { civitaiModelID: entry.civitaiModelID, civitaiVersionID: entry.civitaiVersionID },
+                {
+                    civitaiModelID: entry.civitaiModelID,
+                    civitaiVersionID: entry.civitaiVersionID,
+                },
                 nextHold,
                 dispatch
             );
         } catch (err: any) {
-            // revert on failure
             updateEntryLocal(match, { hold: prevHold });
-            alert(`Failed to update hold: ${err?.message || 'Unknown error'}`);
+            if (displayMode === "holdCard" && !nextHold) {
+                setSpecialReloadToken((t) => t + 1);
+            }
+            alert(`Failed to update hold: ${err?.message || "Unknown error"}`);
         }
     };
 
@@ -2900,8 +2971,11 @@ const OfflineWindow: React.FC = () => {
 
         const prevIsError = Boolean(entry.isError);
 
-        // optimistic update
         updateEntryLocal(match, { isError: nextIsError });
+
+        if (displayMode === "errorCard" && !nextIsError) {
+            setErrorEntries((prev) => prev.filter((e) => !match(e)));
+        }
 
         try {
             await fetchBulkPatchOfflineDownloadList(
@@ -2911,14 +2985,14 @@ const OfflineWindow: React.FC = () => {
                         civitaiVersionID: entry.civitaiVersionID,
                     },
                 ],
-                {
-                    isError: nextIsError,
-                } as any,
+                { isError: nextIsError } as any,
                 dispatch
             );
         } catch (err: any) {
-            // revert on failure
             updateEntryLocal(match, { isError: prevIsError });
+            if (displayMode === "errorCard" && !nextIsError) {
+                setSpecialReloadToken((t) => t + 1);
+            }
             alert(`Failed to update isError: ${err?.message || "Unknown error"}`);
         }
     };

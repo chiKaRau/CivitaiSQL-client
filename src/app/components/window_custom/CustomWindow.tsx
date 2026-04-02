@@ -125,7 +125,7 @@ const CustomWindow: React.FC = () => {
         setNsfw(false);
         setFlag(false);
         setUrlAccessable(false);
-        setDownloadUrlInput('');
+        // setDownloadUrlInput('');
         setCompletedDownloadPath('');
     };
 
