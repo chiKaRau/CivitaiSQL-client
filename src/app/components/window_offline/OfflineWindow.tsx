@@ -2451,8 +2451,8 @@ const OfflineWindow: React.FC = () => {
         }
     };
 
-    const isAiBusy = aiSuggestRunStatus === "running" || batchCooldown !== null;
-    const isDownloadBusyOrCooldown = uiMode === "downloading" || batchCooldown !== null;
+    const isAiBusy = aiSuggestRunStatus === "running";
+    const isDownloadBusyOrCooldown = uiMode === "downloading";
 
     const isModeButtonDisabled = (mode: DisplayMode) => {
         // lock all mode buttons while AI run/cooldown is active
@@ -2635,8 +2635,8 @@ const OfflineWindow: React.FC = () => {
     };
 
     const handleDisplayModeClick = (mode: DisplayMode) => {
-        const isAiBusy = aiSuggestRunStatus === "running" || batchCooldown !== null;
-        const isDownloadBusyOrCooldown = uiMode === "downloading" || batchCooldown !== null;
+        const isAiBusy = aiSuggestRunStatus === "running";
+        const isDownloadBusyOrCooldown = uiMode === "downloading";
 
         if (isAiBusy) {
             return;
