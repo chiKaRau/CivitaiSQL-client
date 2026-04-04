@@ -142,6 +142,25 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = ({
     }, [originalModelsList, baseModelList, isSorted]);
 
     useEffect(() => {
+        if (!modelsList?.length) {
+            setUpdateOption("Database_and_UpdateFolder");
+            return;
+        }
+
+        const hasAnyLocalUpdatePath = modelsList.some((model) => {
+            const localScanPath = normalizeLocalPathToScanPath(model?.localPath);
+            const localUpdatePath = buildUpdatePathFromScanPath(localScanPath);
+            return !!localUpdatePath;
+        });
+
+        setUpdateOption(
+            hasAnyLocalUpdatePath
+                ? "Database_and_LocalUpdateFolder"
+                : "Database_and_UpdateFolder"
+        );
+    }, [modelsList]);
+
+    useEffect(() => {
         if (hasUpdateCompleted) {
             if (offlineMode) {
                 handleAddOfflineDownloadFileintoOfflineDownloadList(effectiveDownloadFilePath);
