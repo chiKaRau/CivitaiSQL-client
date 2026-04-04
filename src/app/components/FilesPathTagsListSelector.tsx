@@ -175,6 +175,9 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
             delete cacheRef.current[selectedPrefix];
             setSelectedTag(prev => (prev === downloadFilePath ? null : prev));
 
+            // remove from the local recent list immediately
+            setRecentLocalTags(prev => prev.filter(item => item.path !== downloadFilePath));
+
             setLoading(true);
             await fetchAndSet();
         } catch (e: any) {
@@ -283,6 +286,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                         {recentLocalTags.map((item, index) => {
                             const value = item?.path ?? '';
                             const isSelected = selectedTag === value;
+                            const isDeletingThis = deletingPath === value;
 
                             return (
                                 <li
@@ -298,16 +302,49 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                                         borderRadius: 6,
                                         display: 'flex',
                                         alignItems: 'center',
+                                        justifyContent: 'space-between',
                                         gap: 8,
                                         border: isSelected
                                             ? `1px solid ${theme.buttonBorder}`
                                             : `1px solid ${theme.panelBorder}`,
                                     }}
                                 >
-                                    <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', minWidth: 0, flex: 1 }}>
-                                        <span style={{ whiteSpace: 'nowrap', opacity: 0.8 }}>{index + 1}#</span>
+                                    <div
+                                        style={{
+                                            display: 'flex',
+                                            gap: 8,
+                                            alignItems: 'baseline',
+                                            minWidth: 0,
+                                            flex: 1
+                                        }}
+                                    >
+                                        <span style={{ whiteSpace: 'nowrap', opacity: 0.8 }}>
+                                            {index + 1}#
+                                        </span>
                                         {renderColoredPath(value)}
                                     </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDelete(value);
+                                        }}
+                                        disabled={!!deletingPath || isDeletingThis}
+                                        title="Delete"
+                                        style={{
+                                            padding: '2px 8px',
+                                            borderRadius: 6,
+                                            border: `1px solid ${theme.buttonBorder}`,
+                                            background: theme.buttonBackground,
+                                            color: theme.buttonText,
+                                            cursor: !!deletingPath ? 'not-allowed' : 'pointer',
+                                            opacity: isDeletingThis ? 0.7 : 1,
+                                            boxShadow: theme.buttonShadow,
+                                        }}
+                                    >
+                                        {isDeletingThis ? 'Deleting…' : 'Delete'}
+                                    </button>
                                 </li>
                             );
                         })}

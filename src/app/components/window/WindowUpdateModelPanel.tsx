@@ -528,7 +528,7 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
     const chrome = useSelector((state: AppState) => state.chrome);
     const { isDarkMode } = chrome;
 
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useState(true);
 
     const [prefixsList, setPrefixsList] = useState<{
         id: number;
@@ -967,18 +967,30 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                 return;
             }
 
-            // clear cache so we don’t show stale backend results
+            // clear cache so backend lists won't stay stale
             delete cacheRef.current[selectedPrefix];
 
-            // if user deleted the currently selected one, clear highlight
+            // clear selected highlight if needed
             setSelectedTag(prev => (prev === path ? null : prev));
 
-            // re-fetch backend list and local list
-            await reload(true);
+            // remove from local recent list immediately
+            setRecentLocalTags(prev => prev.filter(item => item.path !== path));
+
+            // refresh backend-driven lists only
+            if (selectedPrefix) {
+                setLoading(true);
+                const result = await fetchGetTagsList(dispatch, selectedPrefix);
+                applyResult(result);
+            } else {
+                setTopTags([]);
+                setRecentAddedTags([]);
+                setRecentUpdatedTags([]);
+            }
         } catch (e: any) {
             setError(e?.message || 'Delete failed.');
         } finally {
             setDeletingPath(null);
+            setLoading(false);
         }
     };
 
@@ -986,37 +998,83 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
         <>
             <h6>Recently Added 25 Tags (Local)</h6>
 
-            <div style={{
-                maxHeight: '260px', overflowY: 'auto', border: `1px solid ${theme.panelBorder}`,
-                background: theme.rowBackgroundColor,
-                color: theme.panelText, padding: '3px', marginBottom: '10px'
-            }}>
+            <div
+                style={{
+                    maxHeight: '260px',
+                    overflowY: 'auto',
+                    border: `1px solid ${theme.panelBorder}`,
+                    background: theme.rowBackgroundColor,
+                    color: theme.panelText,
+                    padding: '6px',
+                    marginBottom: '12px',
+                    borderRadius: '12px',
+                }}
+            >
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                     {recentLocalTags.map((item, index) => {
                         const value = item?.path ?? '';
                         const isSelected = selectedTag === value;
+                        const isDeletingThis = deletingPath === value;
 
                         return (
                             <li
                                 key={`${value}-${index}`}
                                 onClick={() => handleTagClick(value)}
                                 style={{
-                                    margin: '5px 0',
+                                    margin: '6px 0',
                                     cursor: 'pointer',
-                                    backgroundColor: isSelected ? theme.evenRowBackgroundColor : 'transparent',
+                                    backgroundColor: isSelected ? theme.evenRowBackgroundColor : theme.panelBackground,
+                                    border: isSelected
+                                        ? `1px solid ${theme.buttonBorder}`
+                                        : `1px solid ${theme.panelBorder}`,
                                     color: theme.panelText,
-                                    fontWeight: isSelected ? 'bold' : 'normal',
-                                    padding: '4px 6px',
-                                    borderRadius: 6,
+                                    fontWeight: isSelected ? 700 : 500,
+                                    padding: '8px 10px',
+                                    borderRadius: 10,
                                     display: 'flex',
                                     alignItems: 'center',
+                                    justifyContent: 'space-between',
                                     gap: 8
                                 }}
                             >
-                                <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', minWidth: 0, flex: 1 }}>
-                                    <span style={{ whiteSpace: 'nowrap', opacity: 0.8 }}>{index + 1}#</span>
+                                <div
+                                    style={{
+                                        display: 'flex',
+                                        gap: 8,
+                                        alignItems: 'baseline',
+                                        minWidth: 0,
+                                        flex: 1
+                                    }}
+                                >
+                                    <span style={{ whiteSpace: 'nowrap', opacity: 0.8 }}>
+                                        {index + 1}#
+                                    </span>
                                     {renderColoredPath(value)}
                                 </div>
+
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDelete(value);
+                                    }}
+                                    disabled={!!deletingPath || isDeletingThis}
+                                    title="Delete"
+                                    style={{
+                                        padding: '5px 10px',
+                                        borderRadius: 8,
+                                        border: `1px solid ${theme.buttonBorder}`,
+                                        background: theme.buttonBackground,
+                                        color: theme.buttonText,
+                                        cursor: !!deletingPath ? 'not-allowed' : 'pointer',
+                                        opacity: isDeletingThis ? 0.7 : 1,
+                                        fontWeight: 600,
+                                        fontSize: '12px',
+                                        flexShrink: 0,
+                                    }}
+                                >
+                                    {isDeletingThis ? 'Deleting…' : 'Delete'}
+                                </button>
                             </li>
                         );
                     })}
@@ -1480,6 +1538,24 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
         setModelsList(filtered);
     }, [baseModelList, originalModelsList]);
 
+    useEffect(() => {
+        if (!modelsList?.length) {
+            setUpdateOption("Database_and_UpdateFolder");
+            return;
+        }
+
+        const hasAnyLocalUpdatePath = modelsList.some((model) => {
+            const localScanPath = normalizeLocalPathToScanPath(model?.localPath);
+            const localUpdatePath = buildUpdatePathFromScanPath(localScanPath);
+            return !!localUpdatePath;
+        });
+
+        setUpdateOption(
+            hasAnyLocalUpdatePath
+                ? "Database_and_LocalUpdateFolder"
+                : "Database_and_UpdateFolder"
+        );
+    }, [modelsList]);
 
     const handleUpdateModelsList = async () => {
         setIsLoading(true)
