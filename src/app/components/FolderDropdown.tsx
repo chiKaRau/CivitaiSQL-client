@@ -108,6 +108,7 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText, isDarkMode 
 
     const dropdownToggleStyle: React.CSSProperties = {
         width: '100%',
+        maxWidth: '100%',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap'

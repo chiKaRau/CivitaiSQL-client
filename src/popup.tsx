@@ -144,6 +144,11 @@ const Popup = () => {
       style={{
         backgroundColor: theme.pageBackground,
         color: theme.panelText,
+        width: '460px',
+        minWidth: '460px',
+        maxWidth: '460px',
+        overflowX: 'hidden',
+        boxSizing: 'border-box',
       }}
     >
       {

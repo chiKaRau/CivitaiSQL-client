@@ -95,9 +95,9 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
     const columnDefs = useMemo<ColDef[]>(() => [
         {
             headerName: "#",
-            width: 50,
+            width: 65,
             minWidth: 50,
-            maxWidth: 50,
+            maxWidth: 65,
             sortable: false,
             filter: false,
             valueGetter: (params: any) => {
@@ -156,9 +156,9 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
         {
             headerName: "Model & Version",
             field: "modelVersionDisplay",
-            width: 110,
-            maxWidth: 120,
-            minWidth: 110,
+            width: 125,
+            maxWidth: 130,
+            minWidth: 120,
             wrapText: true,
             autoHeight: true,
             sortable: false,

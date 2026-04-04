@@ -4847,6 +4847,7 @@ const OfflineWindow: React.FC = () => {
                                         buildSrcSet={buildSrcSet}
                                         mergeSuggestedPathsForEntry={mergeSuggestedPathsForEntry}
                                         normalizePathKey={normalizePathKey}
+                                        displayMode="failedCard"
                                     />
                                 )}
 

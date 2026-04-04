@@ -58,6 +58,10 @@ const CivitaiModelScreen: React.FC = () => {
                 color: theme.panelText,
                 minHeight: '100vh',
                 padding: '12px',
+                width: '100%',
+                maxWidth: '100%',
+                overflowX: 'hidden',
+                boxSizing: 'border-box',
             }}
         >
             {/** Header Buttons */}
