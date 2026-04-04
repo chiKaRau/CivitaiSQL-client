@@ -1184,9 +1184,12 @@ const WindowComponent: React.FC = () => {
         const civitaiModelFileList = retrieveCivitaiFilesList(data, civitaiVersionID);
         const civitaiTags = data?.tags;
 
-        if (!civitaiFileName || !civitaiModelFileList?.length || !civitaiTags) {
+        if (!civitaiVersionID || !civitaiFileName || !civitaiModelFileList?.length || !civitaiTags) {
             throw new Error("Missing required fields for offline");
         }
+
+        const normalizedCivitaiUrl =
+            `https://civitai.com/models/${item.modelId}?modelVersionId=${civitaiVersionID}`;
 
         const modelObject = {
             downloadFilePath: item.downloadFilePath,
@@ -1194,7 +1197,7 @@ const WindowComponent: React.FC = () => {
             civitaiModelID: item.modelId,
             civitaiVersionID,
             civitaiModelFileList,
-            civitaiUrl: item.url,
+            civitaiUrl: normalizedCivitaiUrl,
             selectedCategory: item.selectedCategory,
             civitaiTags,
             hold: item.hold,

@@ -196,11 +196,13 @@ const BundleButton: React.FC<BundleButtonProps> = ({
         dispatch(clearError());
 
         let civitaiFileName = retrieveCivitaiFileName(civitaiData, civitaiVersionID);
-        let civitaiModelFileList = retrieveCivitaiFilesList(civitaiData, civitaiVersionID)
+        let civitaiModelFileList = retrieveCivitaiFilesList(civitaiData, civitaiVersionID);
         let civitaiTags = civitaiData?.tags;
 
+        const normalizedCivitaiUrl =
+            `https://civitai.com/models/${civitaiModelID}?modelVersionId=${civitaiVersionID}`;
+
         if (
-            civitaiUrl === null || civitaiUrl === "" ||
             civitaiFileName === null || civitaiFileName === "" ||
             civitaiModelID === null || civitaiModelID === "" ||
             civitaiVersionID === null || civitaiVersionID === "" ||
@@ -210,14 +212,20 @@ const BundleButton: React.FC<BundleButtonProps> = ({
             civitaiTags === null
         ) {
             dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
-            setIsLoading(false)
+            setIsLoading(false);
             return;
         }
 
         let modelObject = {
-            downloadFilePath, civitaiFileName, civitaiModelID,
-            civitaiVersionID, civitaiModelFileList, civitaiUrl, selectedCategory, civitaiTags
-        }
+            downloadFilePath,
+            civitaiFileName,
+            civitaiModelID,
+            civitaiVersionID,
+            civitaiModelFileList,
+            civitaiUrl: normalizedCivitaiUrl,
+            selectedCategory,
+            civitaiTags
+        };
 
         try {
             await fetchAddOfflineDownloadFileIntoOfflineDownloadList(modelObject, false, dispatch);
