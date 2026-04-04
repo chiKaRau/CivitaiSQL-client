@@ -3,11 +3,19 @@ import React, { useEffect, useState } from 'react';
 // Store
 import { useSelector, useDispatch } from 'react-redux';
 import { AppState } from '../store/configureStore';
-import { Button } from 'react-bootstrap';
+import { Button, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import {
-    fetchFullRecordFromAllTableModelIDandVersionID,
-    fetchGetOfflineRecordByModelAndVersion
+    fetchFullRecordFromAllTableModelIDandVersionID
 } from '../api/civitaiSQL_api';
+
+// icons
+import {
+    AiFillCheckCircle,
+    AiFillCloseCircle,
+    AiFillDatabase,
+    AiFillFile,
+    AiOutlineQuestionCircle
+} from 'react-icons/ai';
 
 // theme
 import { darkTheme, lightTheme } from './window_offline/OfflineWindow.theme';
@@ -15,11 +23,19 @@ import { darkTheme, lightTheme } from './window_offline/OfflineWindow.theme';
 // Interface
 interface ModelInfoPanelProps {
     isDarkMode?: boolean;
+    offlineRecord?: any | null;
+    isOfflineRecordExisting?: boolean;
+    isModelVersionFileExisting?: boolean;
+    isCheckingStatus?: boolean;
 }
 
 // Model Page
 const ModelInfoPanel: React.FC<ModelInfoPanelProps> = ({
-    isDarkMode = true
+    isDarkMode = true,
+    offlineRecord = null,
+    isOfflineRecordExisting = false,
+    isModelVersionFileExisting = false,
+    isCheckingStatus = false
 }) => {
     const theme = isDarkMode ? darkTheme : lightTheme;
 
@@ -27,6 +43,7 @@ const ModelInfoPanel: React.FC<ModelInfoPanelProps> = ({
     const { civitaiUrl, civitaiModelID, civitaiVersionID } = civitaiModel;
     const civitaiData: Record<string, any> | undefined = civitaiModel.civitaiModelObject;
     const modelName = civitaiData?.name;
+
     const [isLoading, setIsLoading] = useState(false);
     const dispatch = useDispatch();
 
@@ -37,7 +54,6 @@ const ModelInfoPanel: React.FC<ModelInfoPanelProps> = ({
 
     const [showDatabaseSection, setShowDatabaseSection] = useState(false);
     const [fullRecord, setFullRecord] = useState<any | null>(null);
-    const [offlineRecord, setOfflineRecord] = useState<any | null>(null);
 
     const fmt = (iso?: string) => (iso ? new Date(iso).toLocaleString() : '—');
 
@@ -56,33 +72,11 @@ const ModelInfoPanel: React.FC<ModelInfoPanelProps> = ({
         }
     };
 
-    const handleRetrieveOfflineRecord = async () => {
-        if (!civitaiModelID || !civitaiVersionID) {
-            setOfflineRecord(null);
-            return;
-        }
-
-        try {
-            const data = await fetchGetOfflineRecordByModelAndVersion(
-                civitaiModelID,
-                civitaiVersionID,
-                dispatch
-            );
-
-            setOfflineRecord(data ?? null);
-        } catch (error) {
-            console.error('Failed to load offline record:', error);
-            setOfflineRecord(null);
-        }
-    };
-
     useEffect(() => {
         if (civitaiModelID && civitaiVersionID) {
             handleRetrieveFullInfoData();
-            handleRetrieveOfflineRecord();
         } else {
             setFullRecord(null);
-            setOfflineRecord(null);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [civitaiModelID, civitaiVersionID]);
@@ -156,25 +150,79 @@ const ModelInfoPanel: React.FC<ModelInfoPanelProps> = ({
                         </div>
                     </div>
 
-                    {isInDatabase && (
-                        <Button
-                            onClick={toggleDatabaseSection}
-                            disabled={isLoading}
+                    <div
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            marginLeft: 'auto',
+                            flexWrap: 'wrap',
+                        }}
+                    >
+                        <div
                             style={{
-                                backgroundColor: theme.headerBackgroundColor,
-                                color: theme.headerFontColor,
-                                border: `1px solid ${theme.evenRowBackgroundColor}`,
-                                borderRadius: '8px',
-                                minHeight: '40px',
-                                minWidth: '46px',
-                                boxShadow: isDarkMode
-                                    ? '0 4px 12px rgba(0,0,0,0.25)'
-                                    : '0 4px 12px rgba(0,0,0,0.08)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                color: theme.subText,
+                                fontWeight: 600,
                             }}
                         >
-                            {databaseModelsList?.length ?? 0}
-                        </Button>
-                    )}
+                            {isOfflineRecordExisting && (
+                                <OverlayTrigger
+                                    placement="top"
+                                    overlay={<Tooltip id="tooltip-offline-record">Exists in Offline List</Tooltip>}
+                                >
+                                    <span
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        <AiFillDatabase size={20} color="#22c55e" />
+                                    </span>
+                                </OverlayTrigger>
+                            )}
+
+                            {isModelVersionFileExisting && (
+                                <OverlayTrigger
+                                    placement="top"
+                                    overlay={<Tooltip id="tooltip-local-file">Downloaded file exists</Tooltip>}
+                                >
+                                    <span
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        <AiFillFile size={20} color="#22c55e" />
+                                    </span>
+                                </OverlayTrigger>
+                            )}
+                        </div>
+
+                        {isInDatabase && (
+                            <Button
+                                onClick={toggleDatabaseSection}
+                                disabled={isLoading}
+                                style={{
+                                    backgroundColor: theme.headerBackgroundColor,
+                                    color: theme.headerFontColor,
+                                    border: `1px solid ${theme.evenRowBackgroundColor}`,
+                                    borderRadius: '8px',
+                                    minHeight: '40px',
+                                    minWidth: '46px',
+                                    boxShadow: isDarkMode
+                                        ? '0 4px 12px rgba(0,0,0,0.25)'
+                                        : '0 4px 12px rgba(0,0,0,0.08)',
+                                }}
+                            >
+                                {databaseModelsList?.length ?? 0}
+                            </Button>
+                        )}
+                    </div>
                 </div>
 
                 {fullRecord && (

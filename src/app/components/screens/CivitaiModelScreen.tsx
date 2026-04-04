@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 // Store
 import { useSelector, useDispatch } from 'react-redux';
@@ -10,6 +10,12 @@ import '../../../css/styles.css';
 
 // theme
 import { darkTheme, lightTheme } from '../window_offline/OfflineWindow.theme';
+
+// api
+import {
+    fetchGetOfflineRecordByModelAndVersion,
+    fetchCheckModelVersionFileExists
+} from '../../api/civitaiSQL_api';
 
 // components
 import ButtonsGroup from "../buttons/ButtonsGroup";
@@ -27,29 +33,59 @@ import FolderDropdown from "../FolderDropdown";
 // Model Page
 const CivitaiModelScreen: React.FC = () => {
     const civitaiModel = useSelector((state: AppState) => state.civitaiModel);
-    const { civitaiUrl, civitaiModelID, civitaiVersionID } = civitaiModel;
-    const civitaiData: Record<string, any> | undefined = civitaiModel.civitaiModelObject;
-    const modelName = civitaiData?.name;
-
-    const databaseModel = useSelector((state: AppState) => state.databaseModel);
-    const { isInDatabase } = databaseModel;
-    const databaseData: Record<string, any> | undefined = databaseModel.databaseModelObject;
-    const databaseModelsList = databaseData;
+    const { civitaiModelID, civitaiVersionID } = civitaiModel;
 
     const chrome = useSelector((state: AppState) => state.chrome);
-    const { bookmarkID, isBookmarked, isDarkMode } = chrome;
+    const { isDarkMode } = chrome;
 
     const panels = useSelector((state: AppState) => state.panel.panels);
     const dispatch = useDispatch();
 
-    const [showDatabaseSection, setShowDatabaseSection] = useState(false);
     const [isHandleRefresh, setIsHandleRefresh] = useState(false);
 
-    const toggleDatabaseSection = () => {
-        setShowDatabaseSection(!showDatabaseSection);
-    };
+    const [offlineRecord, setOfflineRecord] = useState<any | null>(null);
+    const [isModelVersionFileExisting, setIsModelVersionFileExisting] = useState(false);
+    const [isCheckingModelStatus, setIsCheckingModelStatus] = useState(false);
 
     const theme = isDarkMode ? darkTheme : lightTheme;
+
+    const refreshModelStatus = useCallback(async () => {
+        if (!civitaiModelID || !civitaiVersionID) {
+            setOfflineRecord(null);
+            setIsModelVersionFileExisting(false);
+            return;
+        }
+
+        setIsCheckingModelStatus(true);
+
+        try {
+            const [offlineData, fileExistsPayload] = await Promise.all([
+                fetchGetOfflineRecordByModelAndVersion(
+                    civitaiModelID,
+                    civitaiVersionID,
+                    dispatch
+                ),
+                fetchCheckModelVersionFileExists(
+                    dispatch,
+                    civitaiModelID,
+                    civitaiVersionID
+                )
+            ]);
+
+            setOfflineRecord(offlineData ?? null);
+            setIsModelVersionFileExisting(!!fileExistsPayload?.exists);
+        } catch (error) {
+            console.error("Failed to refresh model status:", error);
+            setOfflineRecord(null);
+            setIsModelVersionFileExisting(false);
+        } finally {
+            setIsCheckingModelStatus(false);
+        }
+    }, [civitaiModelID, civitaiVersionID, dispatch]);
+
+    useEffect(() => {
+        refreshModelStatus();
+    }, [refreshModelStatus]);
 
     return (
         <div
@@ -64,22 +100,23 @@ const CivitaiModelScreen: React.FC = () => {
                 boxSizing: 'border-box',
             }}
         >
-            {/** Header Buttons */}
             <div style={{ marginBottom: '12px' }}>
                 <ButtonsGroup isDarkMode={isDarkMode} />
             </div>
 
-            {/** Bundle Button */}
             <div style={{ marginBottom: '15px' }}>
-                <BundleButton isDarkMode={isDarkMode} />
+                <BundleButton
+                    isDarkMode={isDarkMode}
+                    isOfflineRecordExisting={!!offlineRecord}
+                    isCheckingOfflineRecord={isCheckingModelStatus}
+                    refreshModelStatus={refreshModelStatus}
+                />
             </div>
 
-            {/** Categories List Selector */}
             <div style={{ marginTop: '15px', marginBottom: '15px' }}>
                 <CategoriesListSelector />
             </div>
 
-            {/** Folder Lists Option */}
             <div style={{ marginBottom: '15px' }}>
                 <DownloadFilePathOptionPanel
                     setIsHandleRefresh={setIsHandleRefresh}
@@ -92,12 +129,16 @@ const CivitaiModelScreen: React.FC = () => {
                 <FolderDropdown isDarkMode={isDarkMode} />
             </div>
 
-            {/** Model Info Panel */}
             <div style={{ marginBottom: '15px' }}>
-                <ModelInfoPanel isDarkMode={isDarkMode} />
+                <ModelInfoPanel
+                    isDarkMode={isDarkMode}
+                    offlineRecord={offlineRecord}
+                    isOfflineRecordExisting={!!offlineRecord}
+                    isModelVersionFileExisting={isModelVersionFileExisting}
+                    isCheckingStatus={isCheckingModelStatus}
+                />
             </div>
 
-            {/** Database Panels */}
             <div>
                 {panels["DatabaseModelInfoPanel"] && (
                     <DatabaseModelInfoPanel

@@ -1597,3 +1597,63 @@ export const fetchBulkUpdateDownloadFilePath = async (
         throw error;
     }
 };
+
+export const fetchCheckModelVersionFileExists = async (
+    dispatch: any,
+    modelID: string,
+    versionID: string
+) => {
+    try {
+        dispatch(clearError());
+
+        const response = await axios.post(
+            `${config.domain}/api/check-model-version-file-exists`,
+            {
+                modelID,
+                versionID,
+            }
+        );
+
+        if (response.status >= 200 && response.status < 300) {
+            return response.data?.payload;
+        } else {
+            throw new Error("Unexpected response status: " + response.status);
+        }
+    } catch (error: any) {
+        console.error(
+            "Error during model/version file existence check:",
+            error.message
+        );
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+};
+
+export const fetchMoveModelVersionFilesToDelete = async (
+    dispatch: any,
+    modelID: string,
+    versionID: string
+) => {
+    try {
+        dispatch(clearError());
+
+        const response = await axios.post(
+            `${config.domain}/api/move-model-version-files-to-delete`,
+            {
+                modelID,
+                versionID,
+            }
+        );
+
+        if (response.status >= 200 && response.status < 300) {
+            return response.data?.payload;
+        } else {
+            throw new Error("Unexpected response status: " + response.status);
+        }
+    } catch (error: any) {
+        console.error(
+            "Error during move model/version files to delete:",
+            error.message
+        );
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+};

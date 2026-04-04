@@ -1,4 +1,4 @@
-import React, { useState, useRef, CSSProperties, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 
 //Store
 import { useSelector, useDispatch } from 'react-redux';
@@ -7,7 +7,7 @@ import { setError, clearError } from '../../store/actions/errorsActions';
 import { updateDownloadFilePath } from "../../store/actions/chromeActions"
 
 //Components
-import { Button, OverlayTrigger, Tooltip, Dropdown, ButtonGroup } from 'react-bootstrap';
+import { Button, OverlayTrigger, Tooltip } from 'react-bootstrap';
 
 //api
 import {
@@ -18,23 +18,35 @@ import {
     fetchAddRecordToDatabase,
     fetchCivitaiModelInfoFromCivitaiByVersionID,
     fetchAddOfflineDownloadFileIntoOfflineDownloadList,
-    fetchGetOfflineRecordByModelAndVersion,
     fetchRemoveOfflineDownloadFileIntoOfflineDownloadList
 } from "../../api/civitaiSQL_api"
 
 //utils
 import {
-    updateDownloadMethodIntoChromeStorage, callChromeBrowserDownload,
-    callChromeBrowserDownload_v2, bookmarkThisModel,
+    updateDownloadMethodIntoChromeStorage,
+    callChromeBrowserDownload,
+    callChromeBrowserDownload_v2,
+    bookmarkThisModel,
 } from "../../utils/chromeUtils"
-import { retrieveCivitaiFileName, retrieveCivitaiFilesList } from "../../utils/objectUtils"
+import {
+    retrieveCivitaiFileName,
+    retrieveCivitaiFilesList
+} from "../../utils/objectUtils"
 
 //Interface
 interface BundleButtonProps {
     isDarkMode: boolean;
+    isOfflineRecordExisting: boolean;
+    isCheckingOfflineRecord: boolean;
+    refreshModelStatus: () => Promise<void>;
 }
 
-const BundleButton: React.FC<BundleButtonProps> = (props: any) => {
+const BundleButton: React.FC<BundleButtonProps> = ({
+    isDarkMode,
+    isOfflineRecordExisting,
+    isCheckingOfflineRecord,
+    refreshModelStatus
+}) => {
     const isInitialMount = useRef(true);
 
     const civitaiModel = useSelector((state: AppState) => state.civitaiModel);
@@ -44,52 +56,16 @@ const BundleButton: React.FC<BundleButtonProps> = (props: any) => {
     const chrome = useSelector((state: AppState) => state.chrome);
     const { downloadMethod, downloadFilePath, selectedCategory, offlineMode } = chrome;
 
-    const [isOfflineRecordExisting, setIsOfflineRecordExisting] = useState(false);
-    const [isCheckingOfflineRecord, setIsCheckingOfflineRecord] = useState(false);
-
     const dispatch = useDispatch();
     const [isLoading, setIsLoading] = useState(false)
 
     useEffect(() => {
-        //Preventing First time update
         if (isInitialMount.current) {
             isInitialMount.current = false;
         } else {
             updateDownloadMethodIntoChromeStorage(downloadMethod);
         }
     }, [downloadMethod])
-
-    useEffect(() => {
-        const checkOfflineRecord = async () => {
-            if (!offlineMode) {
-                setIsOfflineRecordExisting(false);
-                return;
-            }
-
-            if (!civitaiModelID || !civitaiVersionID) {
-                setIsOfflineRecordExisting(false);
-                return;
-            }
-
-            setIsCheckingOfflineRecord(true);
-            try {
-                const record = await fetchGetOfflineRecordByModelAndVersion(
-                    civitaiModelID,
-                    civitaiVersionID,
-                    dispatch
-                );
-
-                setIsOfflineRecordExisting(!!record);
-            } catch (error) {
-                console.error("Failed to check offline record:", error);
-                setIsOfflineRecordExisting(false);
-            } finally {
-                setIsCheckingOfflineRecord(false);
-            }
-        };
-
-        checkOfflineRecord();
-    }, [offlineMode, civitaiModelID, civitaiVersionID, dispatch]);
 
     const handleBundleAll = async () => {
         handleDownloadFile()
@@ -103,15 +79,15 @@ const BundleButton: React.FC<BundleButtonProps> = (props: any) => {
         bookmarkThisModel(civitaiData?.type, dispatch)
     }
 
-
     const handleAddModeltoDatabase = () => {
         setIsLoading(true)
         dispatch(clearError());
 
-        //Check for null or empty
-        if (civitaiUrl === "" || selectedCategory === "" ||
+        if (
+            civitaiUrl === "" || selectedCategory === "" ||
             civitaiUrl === undefined || selectedCategory === undefined ||
-            civitaiUrl === null || selectedCategory === null) {
+            civitaiUrl === null || selectedCategory === null
+        ) {
             dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
             setIsLoading(false)
             return;
@@ -121,7 +97,6 @@ const BundleButton: React.FC<BundleButtonProps> = (props: any) => {
         setIsLoading(false)
     }
 
-    // Function to handle the API call and update the button state
     const handleDownloadFile = async () => {
         setIsLoading(true);
         dispatch(clearError());
@@ -129,7 +104,6 @@ const BundleButton: React.FC<BundleButtonProps> = (props: any) => {
         let civitaiFileName = retrieveCivitaiFileName(civitaiData, civitaiVersionID);
         let filesList = retrieveCivitaiFilesList(civitaiData, civitaiVersionID)
 
-        //Check for null or empty
         if (
             civitaiUrl === null || civitaiUrl === "" ||
             civitaiFileName === null || civitaiFileName === "" ||
@@ -144,30 +118,35 @@ const BundleButton: React.FC<BundleButtonProps> = (props: any) => {
         }
 
         if (downloadMethod === "server") {
-            //If download Method is server, the server will download the file into server's folder
-            await fetchDownloadFilesByServer(civitaiUrl, civitaiFileName, civitaiModelID,
-                civitaiVersionID, downloadFilePath, filesList, dispatch);
+            await fetchDownloadFilesByServer(
+                civitaiUrl,
+                civitaiFileName,
+                civitaiModelID,
+                civitaiVersionID,
+                downloadFilePath,
+                filesList,
+                dispatch
+            );
         } else {
-            //if download Method is browser, the chrome browser will download the file into server's folder
             await fetchDownloadFilesByBrowser(civitaiUrl, downloadFilePath, dispatch);
             callChromeBrowserDownload({
-                name: retrieveCivitaiFileName(civitaiData, civitaiVersionID), modelID: civitaiModelID,
-                versionID: civitaiVersionID, downloadFilePath: downloadFilePath, filesList: filesList
+                name: retrieveCivitaiFileName(civitaiData, civitaiVersionID),
+                modelID: civitaiModelID,
+                versionID: civitaiVersionID,
+                downloadFilePath: downloadFilePath,
+                filesList: filesList
             })
         }
         setIsLoading(false);
     };
 
-    // Function to handle the API call and update the button state
     const handleDownloadFile_v2 = async () => {
         setIsLoading(true);
         dispatch(clearError());
 
         let civitaiFileName = retrieveCivitaiFileName(civitaiData, civitaiVersionID);
-        //the fileList would contains the urls of all files such as safetensor, training data, ...
         let civitaiModelFileList = retrieveCivitaiFilesList(civitaiData, civitaiVersionID)
 
-        //Check for null or empty
         if (
             civitaiUrl === null || civitaiUrl === "" ||
             civitaiFileName === null || civitaiFileName === "" ||
@@ -187,10 +166,8 @@ const BundleButton: React.FC<BundleButtonProps> = (props: any) => {
         }
 
         if (downloadMethod === "server") {
-            //If download Method is server, the server will download the file into server's folder
             await fetchDownloadFilesByServer_v2(modelObject, dispatch);
         } else {
-            //if download Method is browser, the chrome browser will download the file into server's folder
             await fetchDownloadFilesByBrowser_v2(civitaiUrl, downloadFilePath, dispatch);
 
             try {
@@ -204,14 +181,12 @@ const BundleButton: React.FC<BundleButtonProps> = (props: any) => {
                 console.error('Error fetching data for civitaiVersionID:', civitaiVersionID, error);
                 dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
             }
-
         }
+
         setIsLoading(false);
     };
 
-    // Function to handle the API call and update the button state
     const handleAddOfflineDownloadFileintoOfflineDownloadList = async () => {
-
         if (["/@scan@/ErrorPath/"].includes(downloadFilePath)) {
             alert("Invalid DownloadFilePath");
             return;
@@ -221,12 +196,9 @@ const BundleButton: React.FC<BundleButtonProps> = (props: any) => {
         dispatch(clearError());
 
         let civitaiFileName = retrieveCivitaiFileName(civitaiData, civitaiVersionID);
-        //the fileList would contains the urls of all files such as safetensor, training data, ...
         let civitaiModelFileList = retrieveCivitaiFilesList(civitaiData, civitaiVersionID)
-
         let civitaiTags = civitaiData?.tags;
 
-        //Check for null or empty
         if (
             civitaiUrl === null || civitaiUrl === "" ||
             civitaiFileName === null || civitaiFileName === "" ||
@@ -247,11 +219,13 @@ const BundleButton: React.FC<BundleButtonProps> = (props: any) => {
             civitaiVersionID, civitaiModelFileList, civitaiUrl, selectedCategory, civitaiTags
         }
 
-        //If download Method is server, the server will download the file into server's folder
-        await fetchAddOfflineDownloadFileIntoOfflineDownloadList(modelObject, false, dispatch);
-        setIsOfflineRecordExisting(true);
-        dispatch(updateDownloadFilePath("/@scan@/ACG/Pending/"));
-        setIsLoading(false);
+        try {
+            await fetchAddOfflineDownloadFileIntoOfflineDownloadList(modelObject, false, dispatch);
+            dispatch(updateDownloadFilePath("/@scan@/ACG/Pending/"));
+            await refreshModelStatus();
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleRemoveOfflineDownloadFileFromOfflineDownloadList = async () => {
@@ -277,7 +251,7 @@ const BundleButton: React.FC<BundleButtonProps> = (props: any) => {
                 dispatch
             );
 
-            setIsOfflineRecordExisting(false);
+            await refreshModelStatus();
         } catch (error) {
             console.error("Failed to remove offline record:", error);
         } finally {
@@ -287,21 +261,6 @@ const BundleButton: React.FC<BundleButtonProps> = (props: any) => {
 
     return (
         <>
-            {/*
-            <OverlayTrigger placement={"bottom"}
-                overlay={<Tooltip id="tooltip">Download | Bookmark | Add Record</Tooltip>}>
-                <Button
-                    variant={"primary"}
-                    onClick={handleBundleAll}
-                    disabled={isLoading}
-                    className="btn btn-primary btn-lg w-100"
-                >
-                    Bundle Action
-                    {isLoading && <span className="button-state-complete">✓</span>}
-                </Button>
-            </OverlayTrigger>
-            */}
-
             {offlineMode ?
                 <OverlayTrigger
                     placement={"bottom"}
@@ -332,8 +291,10 @@ const BundleButton: React.FC<BundleButtonProps> = (props: any) => {
                     </Button>
                 </OverlayTrigger>
                 :
-                <OverlayTrigger placement={"bottom"}
-                    overlay={<Tooltip id="tooltip">Download | Bookmark | Add Record</Tooltip>}>
+                <OverlayTrigger
+                    placement={"bottom"}
+                    overlay={<Tooltip id="tooltip">Download | Bookmark | Add Record</Tooltip>}
+                >
                     <Button
                         variant={"primary"}
                         onClick={handleBundleAll_v2}
@@ -350,4 +311,3 @@ const BundleButton: React.FC<BundleButtonProps> = (props: any) => {
 };
 
 export default BundleButton;
-
