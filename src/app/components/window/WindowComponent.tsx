@@ -98,7 +98,9 @@ import {
     fetchGetCreatorUrlList,
     fetchGetFoldersList,
     fetchRemoveFromCreatorUrlList,
-    fetchGetRatingList
+    fetchGetRatingList,
+    fetchRemoveOfflineDownloadFileIntoOfflineDownloadList,
+    fetchFindVersionNumbersForOfflineDownloadList
 } from "../../api/civitaiSQL_api"
 
 //utils
@@ -148,6 +150,8 @@ const WindowComponent: React.FC = () => {
     const [urlBadgeMap, setUrlBadgeMap] = useState<Record<string, string>>({});
 
     const [checkedUrlList, setCheckedUrlList] = useState<string[]>([]);
+
+    const [offlineUrlMap, setOfflineUrlMap] = useState<Record<string, boolean>>({});
 
     //const [originalTabId, setOriginalTabId] = useState(0);
     const [workingModelID, setWorkingModelID] = useState("");
@@ -860,11 +864,143 @@ const WindowComponent: React.FC = () => {
         }));
 
         if (results) {
+
+            setOfflineUrlMap(prev => {
+                const next = { ...prev };
+                for (const item of results) {
+                    next[item.url] = Number(item.quantity) > 0;
+                }
+                return next;
+            });
+
             chrome.storage.local.get('originalTabId', (result) => {
                 if (result.originalTabId) {
                     chrome.tabs.sendMessage(result.originalTabId, { action: "display-offline", offlineList: results })
                 }
             });
+        }
+    };
+
+    const resolveModelAndVersionFromUrl = async (url: string) => {
+        let modelId = "";
+        let versionId = "";
+
+        try {
+            const uri = new URL(url);
+            modelId = uri.pathname.match(/\/models\/(\d+)/)?.[1] || "";
+            versionId = uri.searchParams.get("modelVersionId") || urlVersionIdMap[url] || "";
+
+            if (!versionId && modelId) {
+                const data = await fetchCivitaiModelInfoFromCivitaiByModelID(modelId, dispatch);
+                const firstVersionId = data?.modelVersions?.[0]?.id
+                    ? String(data.modelVersions[0].id)
+                    : "";
+
+                if (firstVersionId) {
+                    versionId = firstVersionId;
+
+                    setUrlVersionIdMap(prev => {
+                        if (prev[url] === firstVersionId) return prev;
+                        return { ...prev, [url]: firstVersionId };
+                    });
+
+                    setModelPrimaryVersionIdMap(prev => {
+                        if (prev[modelId] === firstVersionId) return prev;
+                        return { ...prev, [modelId]: firstVersionId };
+                    });
+                }
+            }
+        } catch {
+            // ignore bad URL
+        }
+
+        return { url, modelId, versionId };
+    };
+
+    const handleRemoveOfflineFromAllUrlGridRows = async () => {
+        if (urlList.length === 0) return;
+
+        const uniqueModelIds = Array.from(
+            new Set(
+                urlList
+                    .map((url) => {
+                        try {
+                            const uri = new URL(url);
+                            return uri.pathname.match(/\/models\/(\d+)/)?.[1] || "";
+                        } catch {
+                            return "";
+                        }
+                    })
+                    .filter(Boolean)
+            )
+        );
+
+        if (uniqueModelIds.length === 0) {
+            alert("No valid model IDs found in URLGrid.");
+            return;
+        }
+
+        setIsLoading(true);
+
+        try {
+            const removeTargets: Array<{ civitaiModelID: string; civitaiVersionID: string }> = [];
+
+            for (const modelId of uniqueModelIds) {
+                const data = await fetchCivitaiModelInfoFromCivitaiByModelID(modelId, dispatch);
+                if (!data?.modelVersions?.length) continue;
+
+                const versionIds = data.modelVersions.map((v: any) => String(v.id));
+
+                const offlineSet = await fetchFindVersionNumbersForOfflineDownloadList(
+                    modelId,
+                    versionIds,
+                    dispatch
+                );
+
+                const offlineIdsInThisModel = Array.from(offlineSet || []).map(String);
+
+                for (const civitaiVersionID of offlineIdsInThisModel) {
+                    removeTargets.push({
+                        civitaiModelID: modelId,
+                        civitaiVersionID,
+                    });
+                }
+            }
+
+            if (removeTargets.length === 0) {
+                alert("No versions from the models in URLGrid are in the Offline List.");
+                return;
+            }
+
+            const userConfirmed = window.confirm(
+                `Remove ${removeTargets.length} offline item(s) across ${uniqueModelIds.length} model(s)?`
+            );
+            if (!userConfirmed) return;
+
+            for (const target of removeTargets) {
+                await fetchRemoveOfflineDownloadFileIntoOfflineDownloadList(target, dispatch);
+            }
+
+            // refresh visible row markers
+            await checkIfUrlExistInOfflineDownload(urlList);
+
+            // optional: strip ^ from visible rows immediately
+            setUrlBadgeMap((prev) => {
+                const next = { ...prev };
+
+                for (const url of urlList) {
+                    next[url] = (next[url] || "").replace(/\s*\^/g, "");
+                }
+
+                return next;
+            });
+
+            setSelectedUrl("");
+        } catch (error: any) {
+            console.error("Failed to remove offline entries for URLGrid models:", error?.message || error);
+            alert("Failed to remove some offline entries. Check console.");
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -3244,6 +3380,35 @@ const WindowComponent: React.FC = () => {
                                 marginBottom: "4px",
                             }}
                         >
+                            <OverlayTrigger
+                                placement="top"
+                                overlay={<Tooltip id="tooltip-remove-offline-all">Remove offline from all URLGrid rows</Tooltip>}
+                            >
+                                <Button
+                                    variant="outline-danger"
+                                    size="sm"
+                                    onClick={handleRemoveOfflineFromAllUrlGridRows}
+                                    disabled={
+                                        isLoading ||
+                                        urlList.length === 0 ||
+                                        !urlList.some(url => offlineUrlMap[url])
+                                    }
+                                    style={{
+                                        padding: "4px 8px",
+                                        lineHeight: 1,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        backgroundColor: theme.buttonBackground,
+                                        color: theme.buttonText,
+                                        border: `1px solid ${theme.buttonBorder}`,
+                                        boxShadow: theme.buttonShadow,
+                                    }}
+                                >
+                                    <TbDatabaseMinus />
+                                </Button>
+                            </OverlayTrigger>
+
                             <OverlayTrigger
                                 placement="top"
                                 overlay={
