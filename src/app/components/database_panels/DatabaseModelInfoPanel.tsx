@@ -54,7 +54,11 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = ({
         { name: string; url: string; id: number; baseModel: string; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]
     >([]);
     const [modelsList, setModelsList] = useState<
-        { name: string; url: string; id: number; baseModel: string; imageUrls: { url: string; height: number; width: number; nsfw: string }[] }[]
+        {
+            name: string; url: string; id: number;
+            modelNumber?: string; versionNumber?: string;
+            baseModel: string; imageUrls: { url: string; height: number; width: number; nsfw: string }[]
+        }[]
     >([]);
     const [visibleToasts, setVisibleToasts] = useState<boolean[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -418,7 +422,7 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = ({
                                                     {model?.baseModel}
                                                 </Badge>
                                                 <b>
-                                                    <span>#{model?.id}</span> : <span>{model?.name}</span>
+                                                    <span>#{model?.modelNumber}_{model?.versionNumber}</span> : <span>{model?.name}</span>
                                                 </b>
                                             </Col>
                                         </Toast.Header>

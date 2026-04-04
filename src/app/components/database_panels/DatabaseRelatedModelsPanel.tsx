@@ -34,6 +34,8 @@ type RelatedModel = {
     name: string;
     url: string;
     id: number;
+    modelNumber?: string;
+    versionNumber?: string;
     baseModel: string;
     imageUrls: { url: string; height: number; width: number; nsfw: string }[];
 };
@@ -467,7 +469,7 @@ const DatabaseRelatedModelsPanel: React.FC<DatabaseRelatedModelsPanelProps> = ({
                                                     {model?.baseModel}
                                                 </Badge>
                                                 <b>
-                                                    <span>#{model?.id}</span> : <span>{model?.name}</span>
+                                                    <span>#{model?.modelNumber}_{model?.versionNumber}</span> : <span>{model?.name}</span>
                                                 </b>
                                             </Col>
                                         </Toast.Header>

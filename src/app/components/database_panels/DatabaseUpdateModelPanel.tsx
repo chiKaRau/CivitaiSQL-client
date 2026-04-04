@@ -47,6 +47,8 @@ type ModelEntry = {
     url: string;
     id: number;
     baseModel: string;
+    modelNumber?: string;
+    versionNumber?: string;
     localPath?: string | null;
     imageUrls: { url: string; height: number; width: number; nsfw: string }[];
 };
@@ -632,7 +634,7 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = ({
                                                     {model?.baseModel}
                                                 </Badge>
                                                 <b>
-                                                    <span> #{model?.id}</span> : <span>{model?.name}</span>
+                                                    <span>#{model?.modelNumber}_{model?.versionNumber}</span> : <span>{model?.name}</span>
                                                 </b>
                                             </Col>
                                         </Toast.Header>

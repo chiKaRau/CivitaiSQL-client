@@ -32,6 +32,8 @@ const CollapsePanel: React.FC<CollapsePanelProps> = ({
             name: string;
             url: string;
             id: number;
+            modelNumber?: string;
+            versionNumber?: string;
             imageUrls: { url: string; height: number; width: number; nsfw: string }[];
         }[]
     >([]);
@@ -132,7 +134,7 @@ const CollapsePanel: React.FC<CollapsePanelProps> = ({
                                             }}
                                         >
                                             <b>
-                                                <span>#{model?.id}</span> : <span>{model?.name}</span>
+                                                <span>#{model?.modelNumber}_{model?.versionNumber}</span> : <span>{model?.name}</span>
                                             </b>
                                         </Col>
                                     </Toast.Header>
