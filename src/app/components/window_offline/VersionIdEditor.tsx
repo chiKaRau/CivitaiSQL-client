@@ -16,6 +16,23 @@ const VersionIdEditor = ({
     onSave,
     onCancel,
 }: Props) => {
+    const handleApply = async () => {
+        const nextValue = value.trim();
+
+        if (!nextValue) {
+            alert("Version ID cannot be empty.");
+            return;
+        }
+
+        const confirmed = window.confirm(
+            `Are you sure you want to change the Version ID to ${nextValue}?`
+        );
+
+        if (!confirmed) return;
+
+        await onSave();
+    };
+
     return (
         <span
             data-no-select="true"
@@ -38,7 +55,7 @@ const VersionIdEditor = ({
                     e.stopPropagation();
 
                     if (e.key === "Enter") {
-                        onSave();
+                        handleApply();
                     } else if (e.key === "Escape") {
                         onCancel();
                     }
@@ -60,7 +77,7 @@ const VersionIdEditor = ({
                 data-no-select="true"
                 onClick={(e) => {
                     e.stopPropagation();
-                    onSave();
+                    handleApply();
                 }}
             >
                 Apply
