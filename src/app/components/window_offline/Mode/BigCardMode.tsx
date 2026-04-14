@@ -3,6 +3,7 @@
 import React from 'react';
 import { Card, Carousel, Form, Button, Dropdown, ButtonGroup, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { BsPencilFill, BsCloudDownloadFill } from 'react-icons/bs';
+import { TiRefreshOutline } from "react-icons/ti";
 import { MdRefresh } from 'react-icons/md';
 import { TfiCheckBox } from 'react-icons/tfi';
 import { FaTrashAlt, FaTimes } from 'react-icons/fa';
@@ -15,6 +16,7 @@ import TagList from '../TagList';
 import DownloadPathEditor from '../DownloadPathEditor';
 import { OfflineDownloadEntry } from '../OfflineWindow.types';
 import SmartImage from '../SmartImage';
+import VersionIdEditor from '../VersionIdEditor';
 
 type DownloadMethod = 'server' | 'browser';
 
@@ -28,6 +30,7 @@ interface BigCardModeProps {
     showGalleries: boolean;
     onToggleOverlay: (entry: OfflineDownloadEntry) => void;
     onRefreshRecord?: (entry: OfflineDownloadEntry) => void;
+    onRefreshModelVersionObject?: (entry: OfflineDownloadEntry) => void;
     activePreviewId: string | null;
     canChangeSelection: boolean;
     displayMode?: string;
@@ -69,6 +72,10 @@ interface BigCardModeProps {
 
     mergeSuggestedPathsForEntry: (entry: OfflineDownloadEntry) => string[];
     normalizePathKey: (p: string) => string;
+
+    editingVersionId: string | null;
+    setEditingVersionId: (id: string | null) => void;
+    handleVersionIdSave: (entry: OfflineDownloadEntry, nextVersionId: string) => void | Promise<void>;
 }
 
 const BigCardMode: React.FC<BigCardModeProps> = ({
@@ -81,6 +88,7 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
     showGalleries,
     onToggleOverlay,
     onRefreshRecord,
+    onRefreshModelVersionObject,
     activePreviewId,
     displayMode,
     onErrorCardDownload,
@@ -108,9 +116,57 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
     buildSrcSet,
     mergeSuggestedPathsForEntry,
     normalizePathKey,
-    handleOpenDownloadPath
+    handleOpenDownloadPath,
+    editingVersionId,
+    setEditingVersionId,
+    handleVersionIdSave,
 }) => {
     const [errorDownloadMethod, setErrorDownloadMethod] = React.useState<'server' | 'browser'>('browser');
+    const [editingVersionValue, setEditingVersionValue] = React.useState("");
+
+    const REFRESH_HOLD_MS = 1500;
+    const refreshHoldTimerRef = React.useRef<number | null>(null);
+    const [refreshModelVersionObjectId, setRefreshModelVersionObjectId] = React.useState<string | null>(null);
+
+    const clearRefreshHoldTimer = React.useCallback(() => {
+        if (refreshHoldTimerRef.current !== null) {
+            window.clearTimeout(refreshHoldTimerRef.current);
+            refreshHoldTimerRef.current = null;
+        }
+    }, []);
+
+    React.useEffect(() => {
+        return () => {
+            if (refreshHoldTimerRef.current !== null) {
+                window.clearTimeout(refreshHoldTimerRef.current);
+            }
+        };
+    }, []);
+
+    const startRefreshHold = React.useCallback((versionId: string) => {
+        if (!onRefreshModelVersionObject || isLoading) return;
+
+        clearRefreshHoldTimer();
+        setRefreshModelVersionObjectId(null);
+
+        refreshHoldTimerRef.current = window.setTimeout(() => {
+            setRefreshModelVersionObjectId(versionId);
+            refreshHoldTimerRef.current = null;
+        }, REFRESH_HOLD_MS);
+    }, [clearRefreshHoldTimer, isLoading, onRefreshModelVersionObject]);
+
+    const stopRefreshHold = React.useCallback((versionId?: string) => {
+        clearRefreshHoldTimer();
+
+        if (!versionId) {
+            setRefreshModelVersionObjectId(null);
+            return;
+        }
+
+        setRefreshModelVersionObjectId((current) => (
+            current === versionId ? null : current
+        ));
+    }, [clearRefreshHoldTimer]);
 
     if (filteredDownloadList.length === 0) {
         return (
@@ -164,6 +220,9 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                         entry.downloadFilePath !== 'N/A';
 
                     const isEditingThisPath = editingPathId === entry.civitaiVersionID;
+
+                    const refreshKey = String(entry.civitaiVersionID ?? entry.modelVersionObject?.id ?? '');
+                    const isRefreshingModelVersionObject = refreshModelVersionObjectId === refreshKey;
 
                     const titleSuffixSuggestions = Array.from(
                         new Set(
@@ -234,56 +293,99 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                     pointerEvents: 'none',
                                 }}
                             >
-                                <div style={{ display: 'flex', alignItems: 'center', pointerEvents: 'auto' }}>
-                                    <div
+                                <div
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        pointerEvents: 'auto',
+                                    }}
+                                >
+                                    <span
+                                        style={{
+                                            pointerEvents: 'none',
+                                            fontSize: 12,
+                                            fontWeight: 700,
+                                            lineHeight: 1,
+                                            color: isDarkMode ? 'rgba(255,255,255,0.88)' : 'rgba(0,0,0,0.72)',
+                                            background: isDarkMode ? 'rgba(0,0,0,0.28)' : 'rgba(255,255,255,0.82)',
+                                            border: isDarkMode
+                                                ? '1px solid rgba(255,255,255,0.12)'
+                                                : '1px solid rgba(0,0,0,0.10)',
+                                            borderRadius: 999,
+                                            padding: '2px 6px',
+                                        }}
+                                    >
+                                        #{cardIndex + 1}
+                                    </span>
+
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            clearRefreshHoldTimer();
+
+                                            if (isRefreshingModelVersionObject) {
+                                                setRefreshModelVersionObjectId(null);
+                                                onRefreshModelVersionObject?.(entry);
+                                                return;
+                                            }
+
+                                            setRefreshModelVersionObjectId(null);
+                                            onRefreshRecord?.(entry);
+                                        }}
+                                        onMouseEnter={() => startRefreshHold(refreshKey)}
+                                        onMouseLeave={() => stopRefreshHold(refreshKey)}
+                                        disabled={isLoading}
+                                        title={
+                                            isRefreshingModelVersionObject
+                                                ? "Refresh/update ModelVersionObject from Version API"
+                                                : "Refresh/update this record (hover 1.5 seconds to switch to ModelVersionObject refresh)"
+                                        }
+                                        aria-label={
+                                            isRefreshingModelVersionObject
+                                                ? "Refresh/update ModelVersionObject from Version API"
+                                                : "Refresh/update this record"
+                                        }
                                         style={{
                                             display: 'inline-flex',
                                             alignItems: 'center',
-                                            gap: 6,
-                                            padding: '2px 8px',
-                                            borderRadius: 999,
-                                            background: isDarkMode ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.85)',
-                                            border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.15)'}`,
-                                            backdropFilter: 'blur(2px)',
-                                            fontSize: 12,
-                                            fontWeight: 800,
-                                            color: isDarkMode ? '#fff' : '#111',
+                                            justifyContent: 'center',
+                                            gap: isRefreshingModelVersionObject ? 4 : 0,
+                                            width: isRefreshingModelVersionObject ? 58 : 22,
+                                            height: 22,
+                                            borderRadius: 8,
+                                            border: isDarkMode
+                                                ? '1px solid rgba(255,255,255,0.18)'
+                                                : '1px solid rgba(0,0,0,0.18)',
+                                            background: isRefreshingModelVersionObject
+                                                ? (isDarkMode ? 'rgba(245,158,11,0.32)' : 'rgba(245,158,11,0.24)')
+                                                : 'transparent',
+                                            color: isRefreshingModelVersionObject
+                                                ? (isDarkMode ? '#fbbf24' : '#b45309')
+                                                : 'inherit',
+                                            cursor: isLoading ? 'not-allowed' : 'pointer',
+                                            padding: isRefreshingModelVersionObject ? '0 6px' : 0,
+                                            opacity: isLoading ? 0.6 : 1,
+                                            fontSize: 10,
+                                            fontWeight: 700,
                                             pointerEvents: 'auto',
+                                            transition: 'all 0.15s ease',
+                                            boxShadow: isRefreshingModelVersionObject
+                                                ? (isDarkMode
+                                                    ? '0 0 0 1px rgba(251,191,36,0.35)'
+                                                    : '0 0 0 1px rgba(180,83,9,0.22)')
+                                                : 'none',
                                         }}
                                     >
-                                        <span style={{ minWidth: 18, textAlign: 'center' }}>
-                                            {cardIndex + 1}
-                                        </span>
-
-                                        <button
-                                            type="button"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                onRefreshRecord?.(entry);
-                                            }}
-                                            disabled={isLoading}
-                                            title="Refresh/update this record"
-                                            aria-label="Refresh/update this record"
-                                            style={{
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                width: 22,
-                                                height: 22,
-                                                borderRadius: 8,
-                                                border: isDarkMode
-                                                    ? '1px solid rgba(255,255,255,0.18)'
-                                                    : '1px solid rgba(0,0,0,0.18)',
-                                                background: 'transparent',
-                                                color: 'inherit',
-                                                cursor: isLoading ? 'not-allowed' : 'pointer',
-                                                padding: 0,
-                                                opacity: isLoading ? 0.6 : 1,
-                                            }}
-                                        >
+                                        {isRefreshingModelVersionObject ? (
+                                            <>
+                                                <TiRefreshOutline size={16} />
+                                            </>
+                                        ) : (
                                             <MdRefresh size={16} />
-                                        </button>
-                                    </div>
+                                        )}
+                                    </button>
                                 </div>
 
                                 <div
@@ -614,7 +716,44 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                             <strong>Model ID:</strong> {entry.modelVersionObject?.modelId ?? 'N/A'}
                                         </p>
                                         <p style={{ margin: '4px 0' }}>
-                                            <strong>Version ID:</strong> {entry.modelVersionObject?.id ?? 'N/A'}
+                                            <strong>Version ID:</strong>{' '}
+                                            {(() => {
+                                                const versionKey = String(
+                                                    entry.civitaiVersionID ?? entry.modelVersionObject?.id ?? ''
+                                                );
+
+                                                const displayVersionId =
+                                                    entry.civitaiVersionID ?? entry.modelVersionObject?.id ?? 'N/A';
+
+                                                return editingVersionId === versionKey ? (
+                                                    <VersionIdEditor
+                                                        value={editingVersionValue}
+                                                        isDarkMode={isDarkMode}
+                                                        onChange={setEditingVersionValue}
+                                                        onSave={() => handleVersionIdSave(entry, editingVersionValue)}
+                                                        onCancel={() => {
+                                                            setEditingVersionId(null);
+                                                            setEditingVersionValue('');
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <span
+                                                        data-no-select="true"
+                                                        onDoubleClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setEditingVersionValue(versionKey);
+                                                            setEditingVersionId(versionKey);
+                                                        }}
+                                                        title="Double-click to edit Version ID"
+                                                        style={{
+                                                            cursor: 'pointer',
+                                                            textDecoration: 'underline dotted',
+                                                        }}
+                                                    >
+                                                        {displayVersionId}
+                                                    </span>
+                                                );
+                                            })()}
                                         </p>
                                         <p style={{ margin: '4px 0' }}>
                                             <strong>Civitai URL:</strong>{' '}

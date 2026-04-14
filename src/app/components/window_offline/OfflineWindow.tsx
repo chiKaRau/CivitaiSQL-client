@@ -52,7 +52,9 @@ import {
     fetchAddRecordToDatabaseInCustom,
     fetchDownloadFilesByServer_v2ForCustom,
     fetchModelOfflineDownloadHistoryList,
-    fetchModelOfflineDownloadHistoryAvailableDates
+    fetchModelOfflineDownloadHistoryAvailableDates,
+    fetchUpdateOfflineDownloadVersionId,
+    fetchRefreshModelVersionObjectFromOfflineTable
 } from "../../api/civitaiSQL_api"
 
 import { makeOfflineWindowStyles } from "./OfflineWindow.styles";
@@ -334,6 +336,8 @@ const OfflineWindow: React.FC = () => {
         toLocalYmd(new Date())
     );
 
+    const [editingVersionId, setEditingVersionId] = useState<string | null>(null);
+
     // optional: dates that have records, for calendar highlight
     const [historyAvailableDates, setHistoryAvailableDates] = useState<string[]>([]);
 
@@ -478,6 +482,52 @@ const OfflineWindow: React.FC = () => {
 
     const addPatchField = (key: any) => {
         setSelectedPatchFields((prev) => new Set([...prev, key]));
+    };
+
+    const handleVersionIdSave = async (
+        entry: OfflineDownloadEntry,
+        nextVersionIdRaw: string
+    ) => {
+        const nextVersionId = String(nextVersionIdRaw ?? "").trim();
+        const currentVersionId = String(entry.civitaiVersionID ?? "").trim();
+
+        if (!nextVersionId || nextVersionId === currentVersionId) {
+            setEditingVersionId(null);
+            return;
+        }
+
+        if (!/^\d+$/.test(nextVersionId)) {
+            alert("Version ID must be numeric.");
+            return;
+        }
+
+        try {
+            await fetchUpdateOfflineDownloadVersionId(
+                {
+                    civitaiModelID: entry.civitaiModelID,
+                    civitaiVersionID: entry.civitaiVersionID,
+                },
+                nextVersionId,
+                dispatch
+            );
+
+            // old selected version key may now be stale
+            setSelectedIds(new Set());
+
+            if (
+                displayMode === "holdCard" ||
+                displayMode === "earlyAccessCard" ||
+                displayMode === "errorCard"
+            ) {
+                setSpecialReloadToken((t) => t + 1);
+            } else {
+                await refreshCurrentPage();
+            }
+        } catch (err: any) {
+            alert(`Failed to update version ID: ${err?.message || "Unknown error"}`);
+        } finally {
+            setEditingVersionId(null);
+        }
     };
 
     const removePatchField = (key: any) => {
@@ -1366,20 +1416,28 @@ const OfflineWindow: React.FC = () => {
         const timer = setTimeout(async () => {
             if (cancelled) return;
 
-            // If neither is selected, clear and bail (NO server call)
             if (!appliedQuery.showPending && !appliedQuery.showNonPending) {
-                setUiMode('idle');
+                if (uiModeRef.current !== "downloading") {
+                    setUiMode("idle");
+                    setIsLoading(false);
+                }
                 setOfflineDownloadList([]);
                 setServerTotalItems(0);
                 setServerTotalPages(1);
-                setIsLoading(false);
                 return;
             }
 
-            const status: StatusFilter = deriveStatus(appliedQuery.showPending, appliedQuery.showNonPending);
+            const status: StatusFilter = deriveStatus(
+                appliedQuery.showPending,
+                appliedQuery.showNonPending
+            );
 
-            setUiMode('paging');
-            setIsLoading(true);
+            const shouldControlBusyAtStart = uiModeRef.current !== "downloading";
+
+            if (shouldControlBusyAtStart) {
+                setUiMode("paging");
+                setIsLoading(true);
+            }
 
             try {
                 const page0 = Math.max(0, currentPage - 1);
@@ -1411,21 +1469,32 @@ const OfflineWindow: React.FC = () => {
                 }
             } catch (e: any) {
                 if (!cancelled) {
-                    console.error('Paged fetch failed:', e?.message || e);
+                    console.error("Paged fetch failed:", e?.message || e);
                     setOfflineDownloadList([]);
                     setServerTotalItems(0);
                     setServerTotalPages(1);
                 }
             } finally {
-                if (!cancelled) {
+                if (!cancelled && shouldControlBusyAtStart && uiModeRef.current !== "downloading") {
                     setIsLoading(false);
-                    setUiMode('idle');
+                    setUiMode("idle");
                 }
             }
         }, 200);
 
-        return () => { cancelled = true; clearTimeout(timer); };
-    }, [dispatch, currentPage, itemsPerPage, appliedQuery, getActivePrefixes, getActiveExcludedPrefixes, filtersReady]);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [
+        dispatch,
+        currentPage,
+        itemsPerPage,
+        appliedQuery,
+        getActivePrefixes,
+        getActiveExcludedPrefixes,
+        filtersReady
+    ]);
 
     useEffect(() => {
         // Reset the selection when filterText or filterCondition changes
@@ -2108,7 +2177,7 @@ const OfflineWindow: React.FC = () => {
                                 const key = `${entry.civitaiModelID}|${entry.civitaiVersionID}`;
                                 const dedup = prev.filter(e => `${e.civitaiModelID}|${e.civitaiVersionID}` !== key);
                                 const snap = JSON.parse(JSON.stringify(entry));
-                                return [snap, ...dedup].slice(0, 200);
+                                return [snap, ...dedup];
                             });
 
                             if (!entry.downloadFilePath.includes("/@scan@/Update/")) {
@@ -2627,6 +2696,39 @@ const OfflineWindow: React.FC = () => {
             dispatch(setError({
                 hasError: true,
                 errorMessage: `Refresh record failed: ${err?.message || "Unknown error"}`
+            }));
+        } finally {
+            setIsLoading(false);
+            setUiMode("idle");
+        }
+    };
+
+    const handleRefreshModelVersionObjectOneRecord = async (entry: OfflineDownloadEntry) => {
+        if (isLoading) return;
+
+        const ok = window.confirm("Do you want to refresh/update ModelVersionObject from Version API?");
+        if (!ok) return;
+
+        setIsLoading(true);
+        setUiMode("modifying");
+
+        try {
+            await fetchRefreshModelVersionObjectFromOfflineTable(
+                Number(entry.civitaiModelID),
+                Number(entry.civitaiVersionID),
+                dispatch
+            );
+
+            if (displayMode === "holdCard" || displayMode === "earlyAccessCard" || displayMode === "errorCard") {
+                setSpecialReloadToken((t) => t + 1);
+            } else {
+                await refreshCurrentPage();
+            }
+        } catch (err: any) {
+            console.error("Refresh modelVersionObject failed:", err?.message || err);
+            dispatch(setError({
+                hasError: true,
+                errorMessage: `Refresh modelVersionObject failed: ${err?.message || "Unknown error"}`
             }));
         } finally {
             setIsLoading(false);
@@ -4640,6 +4742,7 @@ const OfflineWindow: React.FC = () => {
                                         onToggleOverlay={toggleLeftOverlay}
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
                                         onRefreshRecord={handleRefreshOneRecord}
+                                        onRefreshModelVersionObject={handleRefreshModelVersionObjectOneRecord}
                                         onToggleIsError={handleToggleIsError}
                                         canChangeSelection={canChangeSelection}
                                         isLoading={isLoading}
@@ -4664,6 +4767,9 @@ const OfflineWindow: React.FC = () => {
                                         buildSrcSet={buildSrcSet}
                                         mergeSuggestedPathsForEntry={mergeSuggestedPathsForEntry}
                                         normalizePathKey={normalizePathKey}
+                                        editingVersionId={editingVersionId}
+                                        setEditingVersionId={setEditingVersionId}
+                                        handleVersionIdSave={handleVersionIdSave}
                                     />
                                 )}
 
@@ -4726,6 +4832,9 @@ const OfflineWindow: React.FC = () => {
                                         buildSrcSet={buildSrcSet}
                                         mergeSuggestedPathsForEntry={mergeSuggestedPathsForEntry}
                                         normalizePathKey={normalizePathKey}
+                                        editingVersionId={editingVersionId}
+                                        setEditingVersionId={setEditingVersionId}
+                                        handleVersionIdSave={handleVersionIdSave}
                                     />
                                 )}
 
@@ -4742,6 +4851,7 @@ const OfflineWindow: React.FC = () => {
                                         onToggleOverlay={toggleLeftOverlay}
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
                                         onRefreshRecord={handleRefreshOneRecord}
+                                        onRefreshModelVersionObject={handleRefreshModelVersionObjectOneRecord}
                                         onToggleIsError={handleToggleIsError}
                                         canChangeSelection={canChangeSelection}
                                         isLoading={isLoading}
@@ -4766,6 +4876,9 @@ const OfflineWindow: React.FC = () => {
                                         buildSrcSet={buildSrcSet}
                                         mergeSuggestedPathsForEntry={mergeSuggestedPathsForEntry}
                                         normalizePathKey={normalizePathKey}
+                                        editingVersionId={editingVersionId}
+                                        setEditingVersionId={setEditingVersionId}
+                                        handleVersionIdSave={handleVersionIdSave}
                                     />
                                 )}
 
@@ -4782,6 +4895,7 @@ const OfflineWindow: React.FC = () => {
                                         onToggleOverlay={toggleLeftOverlay}
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
                                         onRefreshRecord={handleRefreshOneRecord}
+                                        onRefreshModelVersionObject={handleRefreshModelVersionObjectOneRecord}
                                         onToggleIsError={handleToggleIsError}
                                         canChangeSelection={canChangeSelection}
                                         isLoading={isLoading}
@@ -4807,6 +4921,9 @@ const OfflineWindow: React.FC = () => {
                                         mergeSuggestedPathsForEntry={mergeSuggestedPathsForEntry}
                                         normalizePathKey={normalizePathKey}
                                         displayMode="recentCard"
+                                        editingVersionId={editingVersionId}
+                                        setEditingVersionId={setEditingVersionId}
+                                        handleVersionIdSave={handleVersionIdSave}
                                     />
                                 )}
 
@@ -4823,6 +4940,7 @@ const OfflineWindow: React.FC = () => {
                                         onToggleOverlay={toggleLeftOverlay}
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
                                         onRefreshRecord={handleRefreshOneRecord}
+                                        onRefreshModelVersionObject={handleRefreshModelVersionObjectOneRecord}
                                         onToggleIsError={handleToggleIsError}
                                         canChangeSelection={canChangeSelection}
                                         isLoading={isLoading}
@@ -4848,6 +4966,9 @@ const OfflineWindow: React.FC = () => {
                                         mergeSuggestedPathsForEntry={mergeSuggestedPathsForEntry}
                                         normalizePathKey={normalizePathKey}
                                         displayMode="failedCard"
+                                        editingVersionId={editingVersionId}
+                                        setEditingVersionId={setEditingVersionId}
+                                        handleVersionIdSave={handleVersionIdSave}
                                     />
                                 )}
 
@@ -4889,6 +5010,9 @@ const OfflineWindow: React.FC = () => {
                                         buildSrcSet={buildSrcSet}
                                         mergeSuggestedPathsForEntry={mergeSuggestedPathsForEntry}
                                         normalizePathKey={normalizePathKey}
+                                        editingVersionId={editingVersionId}
+                                        setEditingVersionId={setEditingVersionId}
+                                        handleVersionIdSave={handleVersionIdSave}
                                     />
                                 )}
 
@@ -4905,6 +5029,7 @@ const OfflineWindow: React.FC = () => {
                                         onToggleOverlay={toggleLeftOverlay}
                                         activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
                                         onRefreshRecord={handleRefreshOneRecord}
+                                        onRefreshModelVersionObject={handleRefreshModelVersionObjectOneRecord}
                                         onToggleIsError={handleToggleIsError}
                                         canChangeSelection={canChangeSelection}
                                         isLoading={isLoading}
@@ -4930,6 +5055,9 @@ const OfflineWindow: React.FC = () => {
                                         mergeSuggestedPathsForEntry={mergeSuggestedPathsForEntry}
                                         normalizePathKey={normalizePathKey}
                                         displayMode="aiCard"
+                                        editingVersionId={editingVersionId}
+                                        setEditingVersionId={setEditingVersionId}
+                                        handleVersionIdSave={handleVersionIdSave}
                                     />
                                 )}
 

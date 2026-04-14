@@ -1657,3 +1657,101 @@ export const fetchMoveModelVersionFilesToDelete = async (
         dispatch(setError({ hasError: true, errorMessage: error.message }));
     }
 };
+
+export const fetchUpdateOfflineDownloadVersionId = async (
+    ids: { civitaiModelID: any; civitaiVersionID: any },
+    nextVersionId: string,
+    dispatch: any
+): Promise<void> => {
+    try {
+        dispatch(clearError());
+
+        const response = await axios.post(
+            `${config.domain}/api/update-version-id-from-offline-download-list`,
+            {
+                civitaiModelID: ids.civitaiModelID,
+                oldCivitaiVersionID: ids.civitaiVersionID,
+                newCivitaiVersionID: nextVersionId,
+            }
+        );
+
+        const responseData = response.data;
+
+        if (!(response.status >= 200 && response.status < 300)) {
+            throw new Error("Failed updating offline Version ID.");
+        }
+
+        if (!responseData?.success) {
+            throw new Error(responseData?.message || "Failed updating offline Version ID.");
+        }
+    } catch (error: any) {
+        console.error("Error updating offline Version ID:", error.message);
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+        throw error;
+    }
+};
+
+export const fetchDeleteModelOfflineDownloadHistoryRecord = async (
+    id: number,
+    dispatch: any
+): Promise<void> => {
+    try {
+        dispatch(clearError());
+
+        const response = await axios.delete(
+            `${config.domain}/api/delete-model-offline-download-history-record`,
+            {
+                params: { id }
+            }
+        );
+
+        const responseData = response.data;
+
+        if (!(response.status >= 200 && response.status < 300)) {
+            throw new Error("Failed deleting history record.");
+        }
+
+        if (!responseData.success) {
+            throw new Error(responseData.message || "Failed deleting history record.");
+        }
+
+    } catch (error: any) {
+        console.error("Error during history record deletion:", error.message);
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+    }
+};
+
+export const fetchRefreshModelVersionObjectFromOfflineTable = async (
+    civitaiModelID: number,
+    civitaiVersionID: number,
+    dispatch: any
+) => {
+    try {
+        dispatch(clearError());
+
+        const response = await axios.post(
+            `${config.domain}/api/refresh-model-version-object-from-offline-table`,
+            {
+                civitaiModelID: civitaiModelID,
+                civitaiVersionID: civitaiVersionID,
+            }
+        );
+
+        const responseData = response.data;
+
+        if (!(response.status >= 200 && response.status < 300)) {
+            throw new Error("Failed refreshing modelVersionObject from offline table.");
+        }
+
+        if (!responseData.success) {
+            throw new Error(
+                responseData.message || "Failed refreshing modelVersionObject from offline table."
+            );
+        }
+
+    } catch (error: any) {
+        console.error("Error refreshing modelVersionObject from offline table:", error.message);
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+        throw error;
+    }
+};

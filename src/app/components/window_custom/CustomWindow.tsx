@@ -50,16 +50,35 @@ const CustomWindow: React.FC = () => {
     const [isHandleRefresh, setIsHandleRefresh] = useState(false);
 
     const [completedDownloadPath, setCompletedDownloadPath] = useState('');
+    const [completedDownloadFileName, setCompletedDownloadFileName] = useState('');
 
     const toArray = (s: string) =>
         s.split(',').map(x => x.trim()).filter(Boolean);
 
     const handleAddImage = () => setImageUrls(prev => [...prev, '']);
-    const handleRemoveImage = () => {
-        if (imageUrls.length > 1) setImageUrls(prev => prev.slice(0, -1));
+
+    const handleRemoveImage = (index: number) => {
+        setImageUrls(prev => {
+            if (prev.length <= 1) return prev;
+            return prev.filter((_, idx) => idx !== index);
+        });
     };
+
     const handleImageChange = (i: number, v: string) =>
         setImageUrls(prev => prev.map((val, idx) => idx === i ? v : val));
+
+    const handleCopyToClipboard = async (text: string) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            setToastMsg('Copied to clipboard');
+            setToastVariant('success');
+        } catch (err: any) {
+            setToastMsg(err?.message || 'Failed to copy to clipboard');
+            setToastVariant('danger');
+        } finally {
+            setShowToast(true);
+        }
+    };
 
     const handleOpenDownloadPath = async (downloadPath: string) => {
         const trimmed = (downloadPath || '').trim();
@@ -127,6 +146,7 @@ const CustomWindow: React.FC = () => {
         setUrlAccessable(false);
         // setDownloadUrlInput('');
         setCompletedDownloadPath('');
+        setCompletedDownloadFileName('');
     };
 
     const handleUndo = () => {
@@ -511,6 +531,7 @@ const CustomWindow: React.FC = () => {
                                     style={inputStyle}
                                 />
                                 <Button
+                                    type="button"
                                     style={secondaryButtonStyle}
                                     onClick={handleAddImage}
                                     className="ms-2"
@@ -518,8 +539,9 @@ const CustomWindow: React.FC = () => {
                                     +
                                 </Button>
                                 <Button
+                                    type="button"
                                     style={secondaryButtonStyle}
-                                    onClick={handleRemoveImage}
+                                    onClick={() => handleRemoveImage(i)}
                                     className="ms-1"
                                     disabled={imageUrls.length === 1}
                                 >
@@ -719,6 +741,8 @@ const CustomWindow: React.FC = () => {
                                         style={primaryButtonStyle}
                                         onClick={async () => {
                                             try {
+                                                const generatedFileName = `${modelNumber}_${versionNumber}_${baseModel}_${name}`;
+
                                                 const ok = await fetchDownloadFilesByServer_v2ForCustom({
                                                     downloadFilePath,
                                                     civitaiFileName: name,
@@ -732,14 +756,17 @@ const CustomWindow: React.FC = () => {
 
                                                 if (ok) {
                                                     setCompletedDownloadPath(downloadFilePath || '');
+                                                    setCompletedDownloadFileName(generatedFileName);
                                                 } else {
                                                     setCompletedDownloadPath('');
+                                                    setCompletedDownloadFileName('');
                                                 }
 
                                                 setToastMsg(ok ? 'Download Successful' : 'Download failed');
                                                 setToastVariant(ok ? 'success' : 'danger');
                                             } catch (err: any) {
                                                 setCompletedDownloadPath('');
+                                                setCompletedDownloadFileName('');
                                                 setToastMsg(err.message || 'Download failed');
                                                 setToastVariant('danger');
                                             } finally {
@@ -824,6 +851,34 @@ const CustomWindow: React.FC = () => {
                         >
                             {completedDownloadPath}
                         </button>
+
+                        {completedDownloadFileName && (
+                            <div style={{ marginTop: 12 }}>
+                                <div style={{ fontWeight: 600, marginBottom: 6 }}>
+                                    File name:
+                                </div>
+
+                                <div className="d-flex align-items-start">
+                                    <div
+                                        style={{
+                                            flex: 1,
+                                            wordBreak: 'break-all',
+                                            marginRight: 8,
+                                        }}
+                                    >
+                                        {completedDownloadFileName}
+                                    </div>
+
+                                    <Button
+                                        type="button"
+                                        style={secondaryButtonStyle}
+                                        onClick={() => handleCopyToClipboard(completedDownloadFileName)}
+                                    >
+                                        Copy
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 

@@ -1235,52 +1235,48 @@ const WindowComponent: React.FC = () => {
     };
 
     const handleRunStagedQueue = async () => {
+        if (isLoading) return;
         if (!stagedItems.length) return;
 
         setIsLoading(true);
 
-        // snapshot to avoid issues while state updates remove items
         const items = [...stagedItems];
-
         const succeededBundleUrls: string[] = [];
         const succeededOfflineUrls: string[] = [];
 
-        for (const item of items) {
-            setWorkingModelID(item.modelId);
-
-            try {
-                setStagedItems(prev =>
-                    prev.map(x => x.id === item.id ? { ...x, status: "running", error: "" } : x)
-                );
-
-                if (item.action === "offline") {
-                    await runOneStagedOffline(item);
-                    succeededOfflineUrls.push(item.url);
-                    await addRecentDownloadFilePath(item.downloadFilePath);
-                } else {
-                    await runOneStagedBundle(item);
-                    succeededBundleUrls.push(item.url);
-                    await addRecentDownloadFilePath(item.downloadFilePath);
-                }
-
-                // remove success from staging
-                setStagedItems(prev => prev.filter(x => x.id !== item.id));
-            } catch (e: any) {
-                setStagedItems(prev =>
-                    prev.map(x => x.id === item.id
-                        ? { ...x, status: "failed", error: String(e?.message || e) }
-                        : x
-                    )
-                );
-                // keep failed items for later edits
-            }
-        }
-
-        setWorkingModelID("");
-        setIsLoading(false);
-
-        // ✅ refresh content-script UI indicators (this is the “page update” you missed)
         try {
+            for (const item of items) {
+                setWorkingModelID(item.modelId);
+
+                try {
+                    setStagedItems(prev =>
+                        prev.map(x => x.id === item.id ? { ...x, status: "running", error: "" } : x)
+                    );
+
+                    if (item.action === "offline") {
+                        await runOneStagedOffline(item);
+                        succeededOfflineUrls.push(item.url);
+                        await addRecentDownloadFilePath(item.downloadFilePath);
+                    } else {
+                        await runOneStagedBundle(item);
+                        succeededBundleUrls.push(item.url);
+                        await addRecentDownloadFilePath(item.downloadFilePath);
+                    }
+
+                    setStagedItems(prev => prev.filter(x => x.id !== item.id));
+                } catch (e: any) {
+                    setStagedItems(prev =>
+                        prev.map(x =>
+                            x.id === item.id
+                                ? { ...x, status: "failed", error: String(e?.message || e) }
+                                : x
+                        )
+                    );
+                }
+            }
+
+            setWorkingModelID("");
+
             if (succeededBundleUrls.length > 0) {
                 await checkIfUrlExistInDatabase(succeededBundleUrls);
             }
@@ -1288,10 +1284,12 @@ const WindowComponent: React.FC = () => {
                 await checkIfUrlExistInOfflineDownload(succeededOfflineUrls);
             }
 
-            // optional: if your page relies on the creator button/UI, you can re-send it
             addCreatorUrlButton();
         } catch (err) {
             console.error("Post-run refresh failed:", err);
+        } finally {
+            setWorkingModelID("");
+            setIsLoading(false);
         }
     };
 
