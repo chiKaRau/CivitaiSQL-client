@@ -19,13 +19,13 @@ import {
 
 // theme
 import { darkTheme, lightTheme } from './window_offline/OfflineWindow.theme';
+import ModelVersionFileExistsBadge from './ModelVersionFileExistsBadge';
 
 // Interface
 interface ModelInfoPanelProps {
     isDarkMode?: boolean;
     offlineRecord?: any | null;
     isOfflineRecordExisting?: boolean;
-    isModelVersionFileExisting?: boolean;
     isCheckingStatus?: boolean;
 }
 
@@ -34,7 +34,6 @@ const ModelInfoPanel: React.FC<ModelInfoPanelProps> = ({
     isDarkMode = true,
     offlineRecord = null,
     isOfflineRecordExisting = false,
-    isModelVersionFileExisting = false,
     isCheckingStatus = false
 }) => {
     const theme = isDarkMode ? darkTheme : lightTheme;
@@ -185,22 +184,10 @@ const ModelInfoPanel: React.FC<ModelInfoPanelProps> = ({
                                 </OverlayTrigger>
                             )}
 
-                            {isModelVersionFileExisting && (
-                                <OverlayTrigger
-                                    placement="top"
-                                    overlay={<Tooltip id="tooltip-local-file">Downloaded file exists</Tooltip>}
-                                >
-                                    <span
-                                        style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            cursor: 'pointer',
-                                        }}
-                                    >
-                                        <AiFillFile size={20} color="#22c55e" />
-                                    </span>
-                                </OverlayTrigger>
-                            )}
+                            <ModelVersionFileExistsBadge
+                                modelID={civitaiModelID}
+                                versionID={civitaiVersionID}
+                            />
                         </div>
 
                         {isInDatabase && (

@@ -44,7 +44,6 @@ const CivitaiModelScreen: React.FC = () => {
     const [isHandleRefresh, setIsHandleRefresh] = useState(false);
 
     const [offlineRecord, setOfflineRecord] = useState<any | null>(null);
-    const [isModelVersionFileExisting, setIsModelVersionFileExisting] = useState(false);
     const [isCheckingModelStatus, setIsCheckingModelStatus] = useState(false);
 
     const theme = isDarkMode ? darkTheme : lightTheme;
@@ -52,7 +51,6 @@ const CivitaiModelScreen: React.FC = () => {
     const refreshModelStatus = useCallback(async () => {
         if (!civitaiModelID || !civitaiVersionID) {
             setOfflineRecord(null);
-            setIsModelVersionFileExisting(false);
             return;
         }
 
@@ -73,11 +71,9 @@ const CivitaiModelScreen: React.FC = () => {
             ]);
 
             setOfflineRecord(offlineData ?? null);
-            setIsModelVersionFileExisting(!!fileExistsPayload?.exists);
         } catch (error) {
             console.error("Failed to refresh model status:", error);
             setOfflineRecord(null);
-            setIsModelVersionFileExisting(false);
         } finally {
             setIsCheckingModelStatus(false);
         }
@@ -134,7 +130,6 @@ const CivitaiModelScreen: React.FC = () => {
                     isDarkMode={isDarkMode}
                     offlineRecord={offlineRecord}
                     isOfflineRecordExisting={!!offlineRecord}
-                    isModelVersionFileExisting={isModelVersionFileExisting}
                     isCheckingStatus={isCheckingModelStatus}
                 />
             </div>
