@@ -429,7 +429,7 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = ({
         const parentModelUrl = `https://civitai.com/models/${civitaiModelID}?modelVersionId=${civitaiVersionID}`;
 
         // Sub model = the clicked row/version inside the update panel
-        const subModelID = String(clickedSubModel.modelNumber || parentModelID);
+        const subModelID = String(clickedSubModel.modelNumber || "");
         const subVersionID = String(clickedSubModel.versionNumber || "");
 
         console.log("parentModelID:", parentModelID);
@@ -601,7 +601,6 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = ({
             case "Database_and_LocalFileFolder":
                 await handleDatabaseAndLocalFileFolderUpdate(id);
                 return;
-
             case "Database_and_UpdateFolder":
                 selectedPath = UpdateDownloadFilePath;
                 break;

@@ -9,7 +9,7 @@ import FolderDropdown from "../FolderDropdown"
 
 //utils
 import { bookmarkThisModel, initializeDatafromChromeStorage, updateDownloadFilePathIntoChromeStorage, updateSelectedCategoryIntoChromeStorage, callChromeBrowserDownload_v2, RecentDownloadPathItem, getRecentDownloadFilePaths } from "../../utils/chromeUtils"
-import { fetchAddOfflineDownloadFileIntoOfflineDownloadList, fetchCheckCartList, fetchCivitaiModelInfoFromCivitaiByModelID, fetchCivitaiModelInfoFromCivitaiByVersionID, fetchDatabaseModelInfoByModelID, fetchDeleteDownloadPathCountRecord, fetchDownloadFilesByBrowser_v2, fetchDownloadFilesByServer_v2, fetchGetCategoriesList, fetchGetCategoryPrefixesList, fetchGetFilePathCategoriesList, fetchGetFoldersList, fetchGetTagsList, fetchUpdateRecordAtDatabase } from '../../api/civitaiSQL_api';
+import { fetchAddOfflineDownloadFileIntoOfflineDownloadList, fetchAddRecordToDatabase, fetchCheckCartList, fetchCivitaiModelInfoFromCivitaiByModelID, fetchCivitaiModelInfoFromCivitaiByVersionID, fetchDatabaseModelInfoByModelID, fetchDeleteDownloadPathCountRecord, fetchDownloadFilesByBrowser_v2, fetchDownloadFilesByServer_v2, fetchGetCategoriesList, fetchGetCategoryPrefixesList, fetchGetFilePathCategoriesList, fetchGetFoldersList, fetchGetTagsList, fetchMoveModelVersionFilesToDelete, fetchRemoveRecordFromDatabaseByID, fetchUpdateRecordAtDatabase } from '../../api/civitaiSQL_api';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppState } from '../../store/configureStore';
 import TextField from '@mui/material/TextField';
@@ -25,6 +25,7 @@ import { AppTheme, darkTheme, lightTheme } from '../window_offline/OfflineWindow
 import { buildPrefixToneMap, findBestPrefixMatch, PrefixItem, PrefixTone } from '../../utils/ColorUtils';
 import SmartImage from '../window_offline/SmartImage';
 import ModelVersionFileExistsBadge from '../ModelVersionFileExistsBadge';
+import LocalFileFolderOption from '../database_panels/LocalFileFolderOption';
 
 interface Version {
     id: number;
@@ -1491,6 +1492,7 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
 
     const chrome = useSelector((state: AppState) => state.chrome);
     const { downloadMethod, offlineMode } = chrome;
+    const theme = props.isDarkMode ? darkTheme : lightTheme;
 
     const [originalModelsList, setOriginalModelsList] = useState<{
         name: string;
@@ -1506,6 +1508,7 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
         name: string;
         url: string;
         id: number;
+        modelNumber?: string;
         versionNumber?: number | string | null;
         baseModel: string;
         localPath?: string | null;
@@ -1704,6 +1707,197 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
         setIsLoading(false)
     }
 
+    const resolveLocalFileFolderPath = (id: number) => {
+        const clickedModel = modelsList.find(m => m.id === id);
+        const localScanPath = normalizeLocalPathToScanPath(clickedModel?.localPath);
+        return localScanPath || downloadFilePath;
+    };
+
+    const handleDatabaseAndLocalFileFolderUpdate = async (subRowId: number) => {
+        const clickedSubModel = modelsList.find(m => m.id === subRowId);
+
+        if (!clickedSubModel) {
+            dispatch(setError({ hasError: true, errorMessage: "Clicked sub model not found" }));
+            return;
+        }
+
+        // Parent model = the overall model shown in the current tab/panel
+        const parentModelID = String(civitaiModelID);
+        const parentVersionId = String(civitaiVersionID);
+        const parentModelUrl = `https://civitai.com/models/${civitaiModelID}?modelVersionId=${civitaiVersionID}`;
+
+        // Sub model = the clicked row/version inside the update panel
+        const subModelID = String(clickedSubModel.modelNumber || "");
+        const subVersionID = String(clickedSubModel.versionNumber || "");
+
+        console.log("parentModelID:", parentModelID);
+        console.log("parentVersionId:", parentVersionId);
+        console.log("parentModelUrl:", parentModelUrl);
+
+        console.log("subModelID:", subModelID);
+        console.log("subVersionID:", subVersionID);
+
+        console.log("compare parent vs sub model id:", {
+            parentModelID,
+            subModelID,
+            sameModelID: parentModelID === subModelID,
+        });
+
+        console.log("compare parent vs sub version id:", {
+            parentVersionId,
+            subVersionID,
+            sameVersionID: parentVersionId === subVersionID,
+        });
+
+        // Resolve the local folder path for this clicked sub model row
+        const selectedPath = resolveLocalFileFolderPath(subRowId);
+        const finalDownloadFilePath = selectedPath || downloadFilePath;
+
+        // Keep Redux/local state path in sync, but do not use the shared hasUpdateCompleted flow
+        dispatch(updateDownloadFilePath(selectedPath));
+        setEffectiveDownloadFilePath(selectedPath);
+        setHasUpdateCompleted(false);
+
+        // Fetch the full parent model object from Civitai
+        const parentModelObject = await fetchCivitaiModelInfoFromCivitaiByModelID(
+            parentModelID,
+            dispatch
+        );
+
+        if (!parentModelObject) {
+            dispatch(setError({ hasError: true, errorMessage: "Unable to load parent model info" }));
+            return;
+        }
+
+        // Use the clicked sub version to resolve the exact file name/file list
+        const civitaiFileName = retrieveCivitaiFileName(parentModelObject, parentVersionId);
+        const civitaiModelFileList = retrieveCivitaiFilesList(parentModelObject, parentVersionId);
+
+        console.log("Validation check before download/offline action:", {
+            parentModelUrl,
+            parentModelID,
+            subVersionID,
+            civitaiFileName,
+            finalDownloadFilePath,
+            civitaiModelFileList,
+            civitaiModelFileListLength: civitaiModelFileList?.length,
+            isParentModelUrlMissing: !parentModelUrl,
+            isParentModelIDMissing: !parentModelID,
+            isSubVersionIDMissing: !subVersionID,
+            isCivitaiFileNameMissing: !civitaiFileName,
+            isFinalDownloadFilePathMissing: !finalDownloadFilePath,
+            isCivitaiModelFileListMissing: !civitaiModelFileList?.length,
+        });
+
+
+        if (
+            !parentModelUrl ||
+            !parentModelID ||
+            !subVersionID ||
+            !civitaiFileName ||
+            !finalDownloadFilePath ||
+            !civitaiModelFileList?.length
+        ) {
+            dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
+            return;
+        }
+
+        if (offlineMode) {
+            // OFFLINE MODE:
+            // Add the clicked sub version into offline download list using the selected local file folder
+            const civitaiTags = parentModelObject?.tags;
+
+            if (!selectedCategory || civitaiTags == null) {
+                dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
+                return;
+            }
+
+            const offlineModelObject = {
+                downloadFilePath: finalDownloadFilePath,
+                civitaiFileName,
+                civitaiModelID: parentModelID,
+                civitaiVersionID: parentVersionId,
+                civitaiModelFileList,
+                civitaiUrl: parentModelUrl,
+                selectedCategory,
+                civitaiTags
+            };
+
+            await fetchAddOfflineDownloadFileIntoOfflineDownloadList(
+                offlineModelObject,
+                false,
+                dispatch
+            );
+
+            // Remove sub
+            await fetchRemoveRecordFromDatabaseByID(subRowId, dispatch);
+
+            // Remove local
+            await fetchMoveModelVersionFilesToDelete(dispatch, subModelID, subVersionID);
+
+            setIsLoading(false)
+
+            return;
+        } else {
+            // NON-OFFLINE MODE:
+            // Download the clicked sub version immediately using server/browser flow
+            const downloadModelObject = {
+                downloadFilePath: finalDownloadFilePath,
+                civitaiFileName,
+                civitaiModelID: parentModelID,
+                civitaiVersionID: parentVersionId,
+                civitaiModelFileList,
+                civitaiUrl: parentModelUrl
+            };
+
+            if (downloadMethod === "server") {
+                // Server download flow
+                await fetchDownloadFilesByServer_v2(downloadModelObject, dispatch);
+            } else {
+                // Browser download flow
+                await fetchDownloadFilesByBrowser_v2(parentModelUrl, finalDownloadFilePath, dispatch);
+
+                try {
+                    // Fetch exact version object for the clicked sub version
+                    const versionObject = await fetchCivitaiModelInfoFromCivitaiByVersionID(
+                        parentVersionId,
+                        dispatch
+                    );
+
+                    if (versionObject) {
+                        callChromeBrowserDownload_v2({
+                            ...downloadModelObject,
+                            modelVersionObject: versionObject
+                        });
+                    } else {
+                        throw new Error();
+                    }
+                } catch (error) {
+                    console.error("Error fetching data for subVersionID:", subVersionID, error);
+                    dispatch(setError({ hasError: true, errorMessage: "Empty Inputs" }));
+                    return;
+                }
+            }
+
+            // Add Parent
+            await fetchAddRecordToDatabase(selectedCategory, civitaiUrl, finalDownloadFilePath, dispatch);
+
+            // Remove sub
+            await fetchRemoveRecordFromDatabaseByID(subRowId, dispatch);
+
+            // Remove Local
+            await fetchMoveModelVersionFilesToDelete(dispatch, subModelID, subVersionID);
+
+            // Keep existing bookmark behavior for non-offline mode
+            bookmarkThisModel(parentModelObject?.type, dispatch);
+
+            setIsLoading(false)
+
+            return;
+        }
+    };
+
+
     const handleUpdateModel = async (id: number) => {
         setIsLoading(true)
         dispatch(clearError());
@@ -1726,17 +1920,11 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                 selectedPath = localUpdatePath || UpdateDownloadFilePath;
                 break;
             }
-            case "Database_and_LocalFileFolder": {
-                const clickedModel = modelsList.find(m => m.id === id);
-                const localScanPath = normalizeLocalPathToScanPath(clickedModel?.localPath);
-                selectedPath = localScanPath || downloadFilePath;
-                break;
-            }
+            case "Database_and_LocalFileFolder":
+                await handleDatabaseAndLocalFileFolderUpdate(id);
+                return;
             case "Database_and_UpdateFolder":
                 selectedPath = UpdateDownloadFilePath;
-                break;
-            case "Database_and_FileFolder":
-                selectedPath = downloadFilePath;
                 break;
             case "Database_Only":
                 selectedPath = downloadFilePath;
@@ -2280,6 +2468,16 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                                                 </div>
 
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+
+                                                    <LocalFileFolderOption
+                                                        modelID={String(model?.modelNumber ?? "")}
+                                                        versionID={String(model?.versionNumber ?? "")}
+                                                        localScanPath={localScanPath}
+                                                        updateOption={updateOption}
+                                                        setUpdateOption={setUpdateOption}
+                                                        theme={theme}
+                                                    />
+
                                                     {localUpdatePath && (
                                                         <label style={radioCardStyle(updateOption === 'Database_and_LocalUpdateFolder')}>
                                                             <input
@@ -2288,22 +2486,9 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                                                                 checked={updateOption === 'Database_and_LocalUpdateFolder'}
                                                                 onChange={() => setUpdateOption('Database_and_LocalUpdateFolder')}
                                                             />
-                                                            <span>
-                                                                Database & Update to {localUpdatePath}
-                                                            </span>
-                                                        </label>
-                                                    )}
-
-                                                    {localScanPath && (
-                                                        <label style={radioCardStyle(updateOption === 'Database_and_LocalFileFolder')}>
-                                                            <input
-                                                                type="radio"
-                                                                value="Database_and_LocalFileFolder"
-                                                                checked={updateOption === 'Database_and_LocalFileFolder'}
-                                                                onChange={() => setUpdateOption('Database_and_LocalFileFolder')}
-                                                            />
-                                                            <span>
-                                                                Database & {localScanPath}
+                                                            <span style={{ wordBreak: "break-word" }}>
+                                                                Add the Parent to this PC's {localUpdatePath},
+                                                                and Remove the Sub Record from Database
                                                             </span>
                                                         </label>
                                                     )}
@@ -2315,20 +2500,9 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                                                             checked={updateOption === 'Database_and_UpdateFolder'}
                                                             onChange={() => setUpdateOption('Database_and_UpdateFolder')}
                                                         />
-                                                        <span>
-                                                            Database & Update to {UpdateDownloadFilePath}
-                                                        </span>
-                                                    </label>
-
-                                                    <label style={radioCardStyle(updateOption === 'Database_and_FileFolder')}>
-                                                        <input
-                                                            type="radio"
-                                                            value="Database_and_FileFolder"
-                                                            checked={updateOption === 'Database_and_FileFolder'}
-                                                            onChange={() => setUpdateOption('Database_and_FileFolder')}
-                                                        />
-                                                        <span>
-                                                            Database & {downloadFilePath}
+                                                        <span style={{ wordBreak: "break-word" }}>
+                                                            Add the Parent to this PC's {UpdateDownloadFilePath}
+                                                            and Remove the Sub Record from Database
                                                         </span>
                                                     </label>
 
@@ -2339,7 +2513,7 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                                                             checked={updateOption === 'Database_Only'}
                                                             onChange={() => setUpdateOption('Database_Only')}
                                                         />
-                                                        <span>Database Only</span>
+                                                        <span>Replace the Parent to the Sub in Database Only</span>
                                                     </label>
                                                 </div>
                                             </div>
