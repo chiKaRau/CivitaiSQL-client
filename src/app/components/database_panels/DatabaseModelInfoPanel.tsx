@@ -25,6 +25,7 @@ import { removeBookmarkByUrl, bookmarkThisModel } from "../../utils/chromeUtils"
 // theme
 import { darkTheme, lightTheme } from "../window_offline/OfflineWindow.theme";
 import SmartImage from "../window_offline/SmartImage";
+import ModelVersionFileExistsBadge from "../ModelVersionFileExistsBadge";
 
 // Interface
 interface DatabaseModelInfoPanelProps {
@@ -421,8 +422,24 @@ const DatabaseModelInfoPanel: React.FC<DatabaseModelInfoPanelProps> = ({
                                                 >
                                                     {model?.baseModel}
                                                 </Badge>
-                                                <b>
-                                                    <span>#{model?.modelNumber}_{model?.versionNumber}</span> : <span>{model?.name}</span>
+                                                <b
+                                                    style={{
+                                                        display: "inline-flex",
+                                                        alignItems: "center",
+                                                        gap: 6,
+                                                        flexWrap: "wrap",
+                                                    }}
+                                                >
+                                                    <span>
+                                                        #{model?.modelNumber}_{model?.versionNumber}
+                                                    </span>
+                                                    <span>:</span>
+                                                    <span>{model?.name}</span>
+
+                                                    <ModelVersionFileExistsBadge
+                                                        modelID={String(model?.modelNumber ?? "")}
+                                                        versionID={String(model?.versionNumber ?? "")}
+                                                    />
                                                 </b>
                                             </Col>
                                         </Toast.Header>
