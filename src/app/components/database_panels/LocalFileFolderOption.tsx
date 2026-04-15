@@ -47,7 +47,9 @@ const LocalFileFolderOption = ({
                 onChange={() => setUpdateOption("Database_and_LocalFileFolder")}
             />
             <span style={{ wordBreak: "break-word" }}>
-                Database & {localScanPath}
+                This Model is existed in this PC's {localScanPath},
+                Replace the Parent with this Sub. (Sub move to Delete dir)
+                Remove the Sub Record from Database.
             </span>
         </label>
     );

@@ -114,8 +114,7 @@ const Popup = () => {
       return;
     }
 
-    //SETUP Url and modelID
-    dispatch(updateCivitaiUrl(activeURL));
+    //SETUP modelID
     dispatch(updateCivitaiModelID(modelID));
 
     //Fetch Civitai ModelInfo
@@ -133,6 +132,8 @@ const Popup = () => {
       }
       //Setup VersionID
       dispatch(updateCivitaiVersionID(versionNumber.toString()));
+
+      dispatch(updateCivitaiUrl(`https://civitai.com/models/${modelID}?modelVersionId=${versionNumber.toString()}`));
 
       //Setup Bookmark
       setupBookmark(data?.type, activeURL, dispatch)
