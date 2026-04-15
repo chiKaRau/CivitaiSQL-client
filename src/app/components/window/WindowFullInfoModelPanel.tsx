@@ -19,6 +19,7 @@ import {
 import { AppState } from '../../store/configureStore';
 import { AppTheme, darkTheme, lightTheme } from '../window_offline/OfflineWindow.theme';
 import SmartImage from '../window_offline/SmartImage';
+import ModelVersionFileExistsBadge from '../ModelVersionFileExistsBadge';
 
 interface Version {
     id: number;
@@ -376,35 +377,54 @@ const WindowFullInfoModelPanel: React.FC<PanelProps> = ({
                                 Select Version
                             </div>
 
-                            <select
-                                id="versionDropdown"
-                                onChange={(e) => handleVersionChange(Number(e.target.value))}
-                                value={selectedVersion?.id || ''}
+                            <div
                                 style={{
-                                    width: '100%',
-                                    padding: '12px 14px',
-                                    borderRadius: '10px',
-                                    border: `1px solid ${theme.panelBorder}`,
-                                    background: theme.panelBackground,
-                                    color: theme.panelText,
-                                    fontSize: '14px',
-                                    outline: 'none',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    flexWrap: 'nowrap',
+                                    whiteSpace: 'nowrap',
+                                    minWidth: 0,
                                 }}
                             >
-                                {modelData.modelVersions.map(version => (
-                                    <option
-                                        key={version.id}
-                                        value={version.id}
-                                        style={{
-                                            background: theme.panelBackground,
-                                            color: theme.panelText,
-                                        }}
-                                    >
-                                        {version.name} (Base Model: {version.baseModel || 'No Base Model'})
-                                        {existingVersions.includes(version.id.toString()) ? '  *' : ''}
-                                    </option>
-                                ))}
-                            </select>
+                                <select
+                                    id="versionDropdown"
+                                    onChange={(e) => handleVersionChange(Number(e.target.value))}
+                                    value={selectedVersion?.id || ''}
+                                    style={{
+                                        width: '100%',
+                                        minWidth: 0,
+                                        padding: '12px 14px',
+                                        borderRadius: '10px',
+                                        border: `1px solid ${theme.panelBorder}`,
+                                        background: theme.panelBackground,
+                                        color: theme.panelText,
+                                        fontSize: '14px',
+                                        outline: 'none',
+                                    }}
+                                >
+                                    {modelData.modelVersions.map(version => (
+                                        <option
+                                            key={version.id}
+                                            value={version.id}
+                                            style={{
+                                                background: theme.panelBackground,
+                                                color: theme.panelText,
+                                            }}
+                                        >
+                                            {version.name} (Base Model: {version.baseModel || 'No Base Model'})
+                                            {existingVersions.includes(version.id.toString()) ? '  *' : ''}
+                                        </option>
+                                    ))}
+                                </select>
+
+                                {!!selectedVersion?.id && (
+                                    <ModelVersionFileExistsBadge
+                                        modelID={String(modelId)}
+                                        versionID={String(selectedVersion.id)}
+                                    />
+                                )}
+                            </div>
 
                             {selectedVersion && (
                                 <div
@@ -413,6 +433,7 @@ const WindowFullInfoModelPanel: React.FC<PanelProps> = ({
                                         display: 'flex',
                                         flexWrap: 'wrap',
                                         gap: '8px',
+                                        alignItems: 'center',
                                     }}
                                 >
                                     <span

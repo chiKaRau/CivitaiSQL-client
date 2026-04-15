@@ -24,6 +24,7 @@ import { FaXmark, FaFolderTree, FaHardDrive } from 'react-icons/fa6';
 import { AppTheme, darkTheme, lightTheme } from '../window_offline/OfflineWindow.theme';
 import { buildPrefixToneMap, findBestPrefixMatch, PrefixItem, PrefixTone } from '../../utils/ColorUtils';
 import SmartImage from '../window_offline/SmartImage';
+import ModelVersionFileExistsBadge from '../ModelVersionFileExistsBadge';
 
 interface Version {
     id: number;
@@ -133,10 +134,30 @@ const updateModelPanel: React.FC<PanelProps> = ({ selectedVersion, modelId, mode
                                 marginTop: '4px',
                                 fontSize: '13px',
                                 color: theme.subText,
-                                wordBreak: 'break-word',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                flexWrap: 'nowrap',
+                                minWidth: 0,
                             }}
                         >
-                            Model {modelId}_{selectedVersion?.id} : {selectedVersion?.name}
+                            <span
+                                style={{
+                                    minWidth: 0,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                }}
+                            >
+                                Model {modelId}_{selectedVersion?.id} : {selectedVersion?.name}
+                            </span>
+
+                            {!!modelId && !!selectedVersion?.id && (
+                                <ModelVersionFileExistsBadge
+                                    modelID={String(modelId)}
+                                    versionID={String(selectedVersion.id)}
+                                />
+                            )}
                         </div>
                     </div>
 
@@ -2108,10 +2129,30 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                                                         fontWeight: 700,
                                                         color: props.theme.panelText,
                                                         lineHeight: 1.35,
-                                                        wordBreak: 'break-word',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: 6,
+                                                        flexWrap: 'nowrap',
+                                                        minWidth: 0,
                                                     }}
                                                 >
-                                                    {props.modelID}_{model?.versionNumber ?? 'Unknown'} : {model?.name}
+                                                    <span
+                                                        style={{
+                                                            minWidth: 0,
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis',
+                                                            whiteSpace: 'nowrap',
+                                                        }}
+                                                    >
+                                                        {props.modelID}_{model?.versionNumber ?? 'Unknown'} : {model?.name}
+                                                    </span>
+
+                                                    {!!props.modelID && !!model?.versionNumber && (
+                                                        <ModelVersionFileExistsBadge
+                                                            modelID={String(props.modelID)}
+                                                            versionID={String(model.versionNumber)}
+                                                        />
+                                                    )}
                                                 </div>
                                             </div>
 
