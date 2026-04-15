@@ -18,6 +18,9 @@ import { OfflineDownloadEntry } from '../OfflineWindow.types';
 import SmartImage from '../SmartImage';
 import VersionIdEditor from '../VersionIdEditor';
 import ModelVersionFileExistsBadge from '../../ModelVersionFileExistsBadge';
+import CivitaiUrlLinks from '../../CivitaiUrlLinks';
+import CreatorLinks from '../../CreatorLinks';
+import CivitaiApiLinks from '../../CivitaiApiLinks';
 
 type DownloadMethod = 'server' | 'browser';
 
@@ -769,33 +772,33 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                                 );
                                             })()}
                                         </p>
-                                        <p style={{ margin: '4px 0' }}>
-                                            <strong>Civitai URL:</strong>{' '}
-                                            {entry.civitaiUrl ? (
-                                                <a
-                                                    href={entry.civitaiUrl}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    style={{ color: isDarkMode ? '#1e90ff' : '#007bff' }}
-                                                >
-                                                    Visit Model
-                                                </a>
-                                            ) : 'N/A'}
+                                        <p style={{ margin: "4px 0" }}>
+                                            <strong>Civitai URL:</strong>{" "}
+                                            <CivitaiUrlLinks
+                                                civitaiModelID={entry.civitaiModelID}
+                                                civitaiVersionID={entry.civitaiVersionID}
+                                                isDarkMode={isDarkMode}
+                                            />
                                         </p>
-                                        <p style={{ margin: '4px 0' }}>
-                                            <strong>Creator:</strong>{' '}
+                                        <p style={{ margin: "4px 0" }}>
+                                            <strong>Creator:</strong>{" "}
                                             {entry.modelVersionObject?.creator?.username ? (
-                                                <a
-                                                    href={`https://civitai.com/user/${encodeURIComponent(entry.modelVersionObject.creator.username)}/models`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    style={{ color: isDarkMode ? '#1e90ff' : '#007bff' }}
-                                                    onClick={(e) => e.stopPropagation()}
-                                                >
-                                                    {entry.modelVersionObject.creator.username}
-                                                </a>
-                                            ) : 'N/A'}
+                                                <>
+                                                    <span>{entry.modelVersionObject.creator.username}</span>{" "}
+                                                    <CreatorLinks creator={entry.modelVersionObject.creator.username} />
+                                                </>
+                                            ) : (
+                                                "N/A"
+                                            )}
                                         </p>
+
+                                        <p>
+                                            <CivitaiApiLinks
+                                                modelId={entry.modelVersionObject?.modelId}
+                                                versionId={entry.modelVersionObject?.id}
+                                            />
+                                        </p>
+
                                         <p style={{ margin: '4px 0' }}>
                                             <strong>File Size:</strong>{' '}
                                             {(() => {

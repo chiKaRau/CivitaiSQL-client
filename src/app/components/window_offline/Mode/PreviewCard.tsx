@@ -8,6 +8,9 @@ import FileNameToggle from '../FileNameToggle';
 import TagList from '../TagList';
 import SmartImage from '../SmartImage';
 import ModelVersionFileExistsBadge from '../../ModelVersionFileExistsBadge';
+import CivitaiUrlLinks from '../../CivitaiUrlLinks';
+import CreatorLinks from '../../CreatorLinks';
+import CivitaiApiLinks from '../../CivitaiApiLinks';
 
 interface PreviewCardProps {
     entry: OfflineDownloadEntry;
@@ -260,19 +263,36 @@ const PreviewCard: React.FC<PreviewCardProps> = ({
                 <div><strong>Model ID:</strong> {entry.modelVersionObject?.modelId ?? 'N/A'}</div>
                 <div><strong>Version ID:</strong> {entry.modelVersionObject?.id ?? 'N/A'}</div>
                 <div>
-                    <strong>URL:</strong>{' '}
-                    {entry.civitaiUrl ? (
-                        <a
-                            href={entry.civitaiUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ color: isDarkMode ? '#60A5FA' : '#0d6efd' }}
-                        >
-                            Visit Model
-                        </a>
-                    ) : 'N/A'}
+                    <p style={{ margin: "4px 0" }}>
+                        <strong>Civitai URL:</strong>{" "}
+                        <CivitaiUrlLinks
+                            civitaiModelID={entry.civitaiModelID}
+                            civitaiVersionID={entry.civitaiVersionID}
+                            isDarkMode={isDarkMode}
+                        />
+                    </p>
                 </div>
-                <div><strong>Creator:</strong> {entry.modelVersionObject?.creator?.username ?? 'N/A'}</div>
+                <div>
+                    <p style={{ margin: "4px 0" }}>
+                        <strong>Creator:</strong>{" "}
+                        {entry.modelVersionObject?.creator?.username ? (
+                            <>
+                                <span>{entry.modelVersionObject.creator.username}</span>{" "}
+                                <CreatorLinks creator={entry.modelVersionObject.creator.username} />
+                            </>
+                        ) : (
+                            "N/A"
+                        )}
+                    </p>
+                </div>
+                <div>
+                    <p>
+                        <CivitaiApiLinks
+                            modelId={entry.modelVersionObject?.modelId}
+                            versionId={entry.modelVersionObject?.id}
+                        />
+                    </p>
+                </div>
                 <div>
                     <strong>File Size:</strong>{' '}
                     {(() => {

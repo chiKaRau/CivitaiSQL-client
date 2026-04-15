@@ -3,6 +3,7 @@ import { AgGridReact } from 'ag-grid-react';
 import { CellStyle, ColDef } from 'ag-grid-community';
 import SmartImage from '../SmartImage';
 import ModelVersionFileExistsBadge from '../../ModelVersionFileExistsBadge';
+import CivitaiUrlLinks from '../../CivitaiUrlLinks';
 
 export interface ModelOfflineDownloadHistoryEntry {
     id?: number;
@@ -238,24 +239,15 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
             maxWidth: 130,
             sortable: false,
             filter: false,
-            cellRenderer: (params: any) => {
-                const url = params.value;
-                if (!url) return <span>N/A</span>;
-
+            cellRenderer: (p: any) => {
+                const modelId = p?.data?.civitaiModelID;
+                const versionId = p?.data?.civitaiVersionID;
                 return (
-                    <a
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                            color: isDarkMode ? "#1e90ff" : "#007bff",
-                            textDecoration: "underline",
-                            fontWeight: 600,
-                        }}
-                    >
-                        Visit Model
-                    </a>
+                    <CivitaiUrlLinks
+                        civitaiModelID={modelId}
+                        civitaiVersionID={versionId}
+                        isDarkMode={isDarkMode}
+                    />
                 );
             },
             cellStyle,
