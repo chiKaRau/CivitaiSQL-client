@@ -37,6 +37,7 @@ import { retrieveCivitaiFileName, retrieveCivitaiFilesList } from "../../utils/o
 import { darkTheme, lightTheme } from "../window_offline/OfflineWindow.theme";
 import SmartImage from "../window_offline/SmartImage";
 import ModelVersionFileExistsBadge from "../ModelVersionFileExistsBadge";
+import LocalFileFolderOption from "./LocalFileFolderOption";
 
 interface DatabaseUpdateModelPanelProps {
     toggleDatabaseUpdateModelPanelOpen: () => void;
@@ -755,27 +756,14 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = ({
                                                     </label>
                                                 )}
 
-                                                {localScanPath && (
-                                                    <label
-                                                        style={{
-                                                            display: "flex",
-                                                            alignItems: "flex-start",
-                                                            gap: "8px",
-                                                            color: theme.panelText,
-                                                            cursor: "pointer",
-                                                        }}
-                                                    >
-                                                        <input
-                                                            type="radio"
-                                                            value="Database_and_LocalFileFolder"
-                                                            checked={updateOption === "Database_and_LocalFileFolder"}
-                                                            onChange={() => setUpdateOption("Database_and_LocalFileFolder")}
-                                                        />
-                                                        <span style={{ wordBreak: "break-word" }}>
-                                                            Database & {localScanPath}
-                                                        </span>
-                                                    </label>
-                                                )}
+                                                <LocalFileFolderOption
+                                                    modelID={String(model?.modelNumber ?? "")}
+                                                    versionID={String(model?.versionNumber ?? "")}
+                                                    localScanPath={localScanPath}
+                                                    updateOption={updateOption}
+                                                    setUpdateOption={setUpdateOption}
+                                                    theme={theme}
+                                                />
 
                                                 <label
                                                     style={{
