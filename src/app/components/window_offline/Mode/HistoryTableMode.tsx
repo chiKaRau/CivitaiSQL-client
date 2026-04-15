@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { CellStyle, ColDef } from 'ag-grid-community';
 import SmartImage from '../SmartImage';
+import ModelVersionFileExistsBadge from '../../ModelVersionFileExistsBadge';
 
 export interface ModelOfflineDownloadHistoryEntry {
     id?: number;
@@ -156,25 +157,50 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
         {
             headerName: "Model & Version",
             field: "modelVersionDisplay",
-            width: 125,
-            maxWidth: 130,
-            minWidth: 120,
-            wrapText: true,
-            autoHeight: true,
+            width: 220,
+            maxWidth: 260,
+            minWidth: 180,
+            wrapText: false,
+            autoHeight: false,
             sortable: false,
             filter: false,
             cellStyle: {
                 ...cellStyle,
                 whiteSpace: "normal",
-                wordBreak: "break-word",
-                textAlign: "left",
-                padding: "5px"
+                lineHeight: "1.25",
+                paddingTop: "8px",
+                paddingBottom: "8px",
+                userSelect: "text",
             } as CellStyle,
-            cellRenderer: (p: any) => (
-                <span style={{ fontWeight: 600 }}>
-                    {p.value}
-                </span>
-            ),
+            cellRenderer: (p: any) => {
+                const modelId = p?.data?.civitaiModelID;
+                const versionId = p?.data?.civitaiVersionID;
+
+                return (
+                    <span
+                        style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            flexWrap: "nowrap",
+                            whiteSpace: "nowrap",
+                            fontWeight: 600,
+                        }}
+                    >
+                        <span>{p.value}</span>
+
+                        {!!modelId &&
+                            !!versionId &&
+                            modelId !== "N/A" &&
+                            versionId !== "N/A" && (
+                                <ModelVersionFileExistsBadge
+                                    modelID={String(modelId)}
+                                    versionID={String(versionId)}
+                                />
+                            )}
+                    </span>
+                );
+            },
         },
         {
             headerName: "Local Path",
@@ -298,7 +324,14 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
 
     return (
         <>
-            <div className="ag-theme-alpine" style={agGridStyle}>
+            <div
+                className={isDarkMode ? "ag-theme-alpine-dark" : "ag-theme-alpine"}
+                style={{
+                    ...agGridStyle,
+                    backgroundColor: isDarkMode ? "#111827" : "#ffffff",
+                    color: isDarkMode ? "#f9fafb" : "#111827",
+                }}
+            >
                 <AgGridReact
                     rowData={rowData}
                     columnDefs={columnDefs}

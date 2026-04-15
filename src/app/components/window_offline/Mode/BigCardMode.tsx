@@ -17,6 +17,7 @@ import DownloadPathEditor from '../DownloadPathEditor';
 import { OfflineDownloadEntry } from '../OfflineWindow.types';
 import SmartImage from '../SmartImage';
 import VersionIdEditor from '../VersionIdEditor';
+import ModelVersionFileExistsBadge from '../../ModelVersionFileExistsBadge';
 
 type DownloadMethod = 'server' | 'browser';
 
@@ -235,6 +236,14 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                         )
                     );
 
+                    const badgeModelId = String(
+                        entry.civitaiModelID ?? entry.modelVersionObject?.modelId ?? ""
+                    );
+
+                    const badgeVersionId = String(
+                        entry.civitaiVersionID ?? entry.modelVersionObject?.id ?? ""
+                    );
+
                     return (
                         <Card
                             key={`${entry.civitaiModelID}-${entry.civitaiVersionID}`}
@@ -318,6 +327,11 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                     >
                                         #{cardIndex + 1}
                                     </span>
+
+                                    <ModelVersionFileExistsBadge
+                                        modelID={badgeModelId}
+                                        versionID={badgeVersionId}
+                                    />
 
                                     <button
                                         type="button"

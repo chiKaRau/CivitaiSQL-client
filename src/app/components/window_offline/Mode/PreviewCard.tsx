@@ -7,6 +7,7 @@ import TitleNameToggle from '../TitleNameToggle';
 import FileNameToggle from '../FileNameToggle';
 import TagList from '../TagList';
 import SmartImage from '../SmartImage';
+import ModelVersionFileExistsBadge from '../../ModelVersionFileExistsBadge';
 
 interface PreviewCardProps {
     entry: OfflineDownloadEntry;
@@ -103,11 +104,30 @@ const PreviewCard: React.FC<PreviewCardProps> = ({
                     </span>
                 )}
 
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <TitleNameToggle
-                        titleName={entry?.modelVersionObject?.model?.name ?? 'N/A'}
-                        truncateAfter={40}
-                    />
+                <div
+                    style={{
+                        flex: 1,
+                        minWidth: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        flexWrap: 'nowrap',
+                    }}
+                >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <TitleNameToggle
+                            titleName={entry?.modelVersionObject?.model?.name ?? 'N/A'}
+                            truncateAfter={40}
+                        />
+                    </div>
+
+                    {!!entry?.modelVersionObject?.modelId &&
+                        !!entry?.modelVersionObject?.id && (
+                            <ModelVersionFileExistsBadge
+                                modelID={String(entry.modelVersionObject.modelId)}
+                                versionID={String(entry.modelVersionObject.id)}
+                            />
+                        )}
                 </div>
             </div>
 
