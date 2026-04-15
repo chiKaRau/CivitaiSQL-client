@@ -7,6 +7,7 @@ import { darkTheme, lightTheme } from "../window_offline/OfflineWindow.theme";
 import { HoverImagePreview } from "./HoverImagePreview";
 import { TrashButton } from "./TrashButton";
 import SmartImage from "../window_offline/SmartImage";
+import ModelVersionFileExistsBadge from "../ModelVersionFileExistsBadge";
 
 interface URLGridProps {
     urlList: string[];
@@ -185,19 +186,43 @@ const URLGrid: React.FC<URLGridProps> = ({
         {
             headerName: "Model & Version",
             field: "modelVersionDisplay",
-            width: 170,
-            minWidth: 140,
-            wrapText: true,
-            autoHeight: true,
+            width: 260,
+            minWidth: 220,
+            wrapText: false,
+            autoHeight: false,
             cellStyle: {
-                whiteSpace: "normal",
-                wordBreak: "break-word",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
                 textAlign: "left",
-                padding: "5px"
+                padding: "5px",
             } as CellStyle,
             cellRenderer: (params: any) => {
                 const isPrimary = !!params?.data?.isPrimary;
-                return <span style={{ fontWeight: isPrimary ? 800 : 600 }}>{params.value}</span>;
+                const modelId = params?.data?.modelId || "";
+                const versionId = params?.data?.versionId || "";
+
+                return (
+                    <span
+                        style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            flexWrap: "nowrap",
+                            whiteSpace: "nowrap",
+                            fontWeight: isPrimary ? 800 : 600,
+                        }}
+                    >
+                        <span>{params.value}</span>
+
+                        {!!versionId && (
+                            <ModelVersionFileExistsBadge
+                                modelID={String(modelId)}
+                                versionID={String(versionId)}
+                            />
+                        )}
+                    </span>
+                );
             },
         },
         {

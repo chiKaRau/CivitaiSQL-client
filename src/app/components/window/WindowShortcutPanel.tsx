@@ -20,6 +20,7 @@ import { LuPanelLeft } from "react-icons/lu";
 import { AppState } from '../../store/configureStore';
 import { AppTheme, darkTheme, getOfflineWindowStyles, getShortcutPanelStyles, lightTheme } from '../window_offline/OfflineWindow.theme';
 import SmartImage from '../window_offline/SmartImage';
+import ModelVersionFileExistsBadge from '../ModelVersionFileExistsBadge';
 
 interface Version {
     id: number;
@@ -730,49 +731,74 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                         </div>
 
                         <div
-                            style={ui.dropdownWrap}
+                            style={{
+                                ...ui.dropdownWrap,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                                flexWrap: "nowrap",
+                                whiteSpace: "nowrap",
+                                minWidth: 0,
+                            }}
                             onMouseEnter={() => setShowCarousel(true)}
                             onMouseLeave={() => setShowCarousel(false)}
                         >
-                            <span style={ui.label}>{modelId}_</span>
+                            <span style={{ ...ui.label, whiteSpace: "nowrap" }}>{modelId}_</span>
 
                             <select
                                 id="versionDropdown"
                                 onChange={(e) => handleVersionChange(Number(e.target.value))}
-                                value={selectedVersion?.id || ''}
-                                style={{ ...ui.select, width: '100%', maxWidth: 'unset' }}
+                                value={selectedVersion?.id || ""}
+                                style={{
+                                    ...ui.select,
+                                    width: "100%",
+                                    maxWidth: "unset",
+                                    minWidth: 0,
+                                }}
                             >
                                 <option value="">Select Version</option>
                                 {modelData.modelVersions.map((version) => (
                                     <option key={version.id} value={version.id}>
                                         {version.id}_{version.name}
-                                        {existingVersions.includes(version.id.toString()) ? ' *' : ''}
-                                        {existingOfflineVersions.includes(version.id.toString()) ? ' ^' : ''}
+                                        {existingVersions.includes(version.id.toString()) ? " *" : ""}
+                                        {existingOfflineVersions.includes(version.id.toString()) ? " ^" : ""}
                                     </option>
                                 ))}
                             </select>
 
-                            {showCarousel && selectedVersion && Array.isArray(selectedVersion.images) && selectedVersion.images.length > 0 && (
-                                <div
-                                    style={{
-                                        position: 'absolute',
-                                        top: '110%',
-                                        left: 0,
-                                        padding: '6px',
-                                        borderRadius: '10px',
-                                        border: '1px solid rgba(255,255,255,0.15)',
-                                        background: 'rgba(15,15,15,0.92)',
-                                        boxShadow: '0 10px 24px rgba(0,0,0,0.35)',
-                                        zIndex: 9999,
-                                    }}
-                                >
-                                    <Carousel
-                                        images={(selectedVersion.images || []).map((image) => image?.url).filter(Boolean)}
-                                        theme={theme}
-                                        isDarkMode={isDarkMode}
-                                    />
-                                </div>
+                            {!!selectedVersion?.id && (
+                                <ModelVersionFileExistsBadge
+                                    modelID={String(modelId)}
+                                    versionID={String(selectedVersion.id)}
+                                />
                             )}
+
+                            {showCarousel &&
+                                selectedVersion &&
+                                Array.isArray(selectedVersion.images) &&
+                                selectedVersion.images.length > 0 && (
+                                    <div
+                                        style={{
+                                            position: "absolute",
+                                            top: "110%",
+                                            left: 0,
+                                            padding: "6px",
+                                            borderRadius: "10px",
+                                            border: "1px solid rgba(255,255,255,0.15)",
+                                            background: "rgba(15,15,15,0.92)",
+                                            boxShadow: "0 10px 24px rgba(0,0,0,0.35)",
+                                            zIndex: 9999,
+                                        }}
+                                    >
+                                        <Carousel
+                                            images={(selectedVersion.images || [])
+                                                .map((image) => image?.url)
+                                                .filter(Boolean)}
+                                            theme={theme}
+                                            isDarkMode={isDarkMode}
+                                        />
+                                    </div>
+                                )}
                         </div>
 
                         <div style={ui.rowRight}>

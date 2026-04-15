@@ -121,6 +121,7 @@ import { HoverImagePreview } from './HoverImagePreview';
 import { TrashButton } from './TrashButton';
 import SmartImage from '../window_offline/SmartImage';
 import EarlyAccessAutoWatchButton from '../window_offline/EarlyAccessAutoWatchButton';
+import ModelVersionFileExistsBadge from '../ModelVersionFileExistsBadge';
 
 interface CreatorUrlItem {
     creatorUrl: string;
@@ -1390,21 +1391,44 @@ const WindowComponent: React.FC = () => {
         {
             headerName: "Model & Version",
             field: "modelVersionDisplay",
-            width: 170,
-            minWidth: 140,
-            wrapText: true,
-            autoHeight: true,
+            width: 260,
+            minWidth: 220,
+            wrapText: false,
+            autoHeight: false,
             cellStyle: {
-                whiteSpace: "normal",
-                wordBreak: "break-word",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
                 textAlign: "left",
-                padding: "5px"
+                padding: "5px",
             } as CellStyle,
-            cellRenderer: (p: any) => (
-                <span style={{ fontWeight: p?.data?.isPrimary ? 800 : 600 }}>
-                    {p.value}
-                </span>
-            ),
+            cellRenderer: (p: any) => {
+                const isPrimary = !!p?.data?.isPrimary;
+                const modelId = p?.data?.modelId || "";
+                const versionId = p?.data?.versionId || "";
+
+                return (
+                    <span
+                        style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            flexWrap: "nowrap",
+                            whiteSpace: "nowrap",
+                            fontWeight: isPrimary ? 800 : 600,
+                        }}
+                    >
+                        <span>{p.value}</span>
+
+                        {!!versionId && versionId !== "Selecting" && (
+                            <ModelVersionFileExistsBadge
+                                modelID={String(modelId)}
+                                versionID={String(versionId)}
+                            />
+                        )}
+                    </span>
+                );
+            },
         },
         {
             headerName: "Image",
