@@ -164,7 +164,7 @@ const EditWindow: React.FC = () => {
 
 
     const fetchVersionIdForModel = async (modelId: string): Promise<string | null> => {
-        const resp = await fetch(`https://civitai.com/api/v1/models/${modelId}`, { method: 'GET' });
+        const resp = await fetch(`https://civitai.red/api/v1/models/${modelId}`, { method: 'GET' });
         if (!resp.ok) throw new Error(`Civitai API ${resp.status}`);
         const data = await resp.json();
         const arr = Array.isArray(data?.modelVersions) ? data.modelVersions : [];
@@ -173,7 +173,7 @@ const EditWindow: React.FC = () => {
     };
 
     const fetchCivitaiModel = async (modelId: string) => {
-        const resp = await fetch(`https://civitai.com/api/v1/models/${modelId}`, { method: 'GET' });
+        const resp = await fetch(`https://civitai.red/api/v1/models/${modelId}`, { method: 'GET' });
         if (!resp.ok) throw new Error(`Civitai API ${resp.status}`);
         return resp.json();
     };
@@ -245,7 +245,7 @@ const EditWindow: React.FC = () => {
             if (creatorUser) setCreatorName(creatorUser);
 
             // Optional: set page URL if we want to store a canonical one
-            // setModelUrl(`https://civitai.com/models/${modelNumber}?modelVersionId=${ver.id}`);
+            // setModelUrl(`https://civitai.red/models/${modelNumber}?modelVersionId=${ver.id}`);
 
             popToast('Synced fields from Civitai API', 'success');
         } catch (err: any) {

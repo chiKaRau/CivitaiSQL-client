@@ -844,7 +844,7 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                                 <strong>Civitai Archive URL:</strong>{' '}
                                                 {entry.civitaiModelID && entry.civitaiVersionID ? (
                                                     <a
-                                                        href={`https://civitaiarchive.com/models/${entry.civitaiModelID}?modelVersionId=${entry.civitaiVersionID}`}
+                                                        href={`https://civitaiarchive.red/models/${entry.civitaiModelID}?modelVersionId=${entry.civitaiVersionID}`}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
                                                         style={{ color: isDarkMode ? '#1e90ff' : '#007bff' }}

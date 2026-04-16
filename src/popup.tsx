@@ -133,7 +133,7 @@ const Popup = () => {
       //Setup VersionID
       dispatch(updateCivitaiVersionID(versionNumber.toString()));
 
-      dispatch(updateCivitaiUrl(`https://civitai.com/models/${modelID}?modelVersionId=${versionNumber.toString()}`));
+      dispatch(updateCivitaiUrl(`https://civitai.red/models/${modelID}?modelVersionId=${versionNumber.toString()}`));
 
       //Setup Bookmark
       setupBookmark(data?.type, activeURL, dispatch)

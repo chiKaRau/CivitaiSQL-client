@@ -157,7 +157,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
         setIsLoading(true);
         try {
             console.log("test-fetchModelInfo");
-            const response = await axios.post(`https://civitai.com/api/v1/models/${modelId}`);
+            const response = await axios.post(`https://civitai.red/api/v1/models/${modelId}`);
             const data = response.data;
 
             // --- Backfill URLGrid display + thumbnails using THIS ONE API CALL ---
@@ -194,7 +194,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                         let changed = false;
                         let next = prev;
 
-                        const makeUrl = (vid: string) => `https://civitai.com/models/${modelId}?modelVersionId=${vid}`;
+                        const makeUrl = (vid: string) => `https://civitai.red/models/${modelId}?modelVersionId=${vid}`;
 
                         for (const v of data.modelVersions || []) {
                             const vid = String(v.id);
@@ -281,7 +281,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
         ? String(modelData.modelVersions[0].id)
         : "";
 
-    const buildVersionUrl = (vid: string) => `https://civitai.com/models/${modelId}?modelVersionId=${vid}`;
+    const buildVersionUrl = (vid: string) => `https://civitai.red/models/${modelId}?modelVersionId=${vid}`;
 
     // Given a version object, compute the EXACT URL format your app uses
     const computeUrlForVersion = (vid: string) => {
@@ -378,7 +378,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
             const formattedUrl =
                 (version.id === modelData?.modelVersions[0].id && !(new URL(url).searchParams.has('modelVersionId')))
                     ? url
-                    : `https://civitai.com/models/${modelId}?modelVersionId=${version.id}`;
+                    : `https://civitai.red/models/${modelId}?modelVersionId=${version.id}`;
 
             console.log(formattedUrl)
             console.log(urlList)
@@ -400,7 +400,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
         const formattedUrl =
             (vid === String(modelData.modelVersions[0]?.id) && !hasUrlParam)
                 ? url
-                : `https://civitai.com/models/${modelId}?modelVersionId=${vid}`;
+                : `https://civitai.red/models/${modelId}?modelVersionId=${vid}`;
 
         setUrlList(prevUrlList => {
             if (prevUrlList.includes(formattedUrl)) {
@@ -436,7 +436,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
             const formattedUrl =
                 (vid === String(modelData.modelVersions[0]?.id) && !hasUrlParam)
                     ? url
-                    : `https://civitai.com/models/${modelId}?modelVersionId=${vid}`;
+                    : `https://civitai.red/models/${modelId}?modelVersionId=${vid}`;
 
             // Keep your existing "only add if not already in list"
             if (!urlList.includes(formattedUrl)) {
@@ -564,7 +564,7 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
             }
 
             // 3) build new object for target version
-            const civitaiUrl = `https://civitai.com/models/${modelId}?modelVersionId=${targetVersionId}`;
+            const civitaiUrl = `https://civitai.red/models/${modelId}?modelVersionId=${targetVersionId}`;
             const civitaiVersionID = targetVersionId;     // replacing version
             const civitaiModelID = modelId;               // model stays same
 

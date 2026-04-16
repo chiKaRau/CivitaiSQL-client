@@ -138,7 +138,7 @@ const WindowFullInfoModelPanel: React.FC<PanelProps> = ({
     const fetchModelInfo = async () => {
         setIsLoading(true);
         try {
-            const response = await axios.post(`https://civitai.com/api/v1/models/${modelId}`);
+            const response = await axios.post(`https://civitai.red/api/v1/models/${modelId}`);
             const data = response.data;
 
             setModelData(data);
@@ -178,7 +178,7 @@ const WindowFullInfoModelPanel: React.FC<PanelProps> = ({
             const formattedUrl =
                 (version.id === modelData?.modelVersions[0].id && !(new URL(url).searchParams.has('modelVersionId')))
                     ? url
-                    : `https://civitai.com/models/${modelId}?modelVersionId=${version.id}`;
+                    : `https://civitai.red/models/${modelId}?modelVersionId=${version.id}`;
 
             if (urlList.includes(formattedUrl)) {
                 setMessage({ text: 'This URL is already in the list.', type: 'error' });
@@ -194,7 +194,7 @@ const WindowFullInfoModelPanel: React.FC<PanelProps> = ({
         const formattedUrl =
             (selectedVersion.id === modelData?.modelVersions[0].id && !(new URL(url).searchParams.has('modelVersionId')))
                 ? url
-                : `https://civitai.com/models/${modelId}?modelVersionId=${selectedVersion.id}`;
+                : `https://civitai.red/models/${modelId}?modelVersionId=${selectedVersion.id}`;
 
         setUrlList(prevUrlList => {
             if (prevUrlList.includes(formattedUrl)) {
@@ -551,7 +551,7 @@ const WindowFullInfoModelPanel: React.FC<PanelProps> = ({
                             <WindowUpdateModelPanel
                                 selectedVersion={selectedVersion}
                                 modelId={modelId}
-                                modelURL={`https://civitai.com/models/${modelId}?modelVersionId=${selectedVersion.id}`}
+                                modelURL={`https://civitai.red/models/${modelId}?modelVersionId=${selectedVersion.id}`}
                                 modelData={modelData}
                                 setHasUpdated={setHasUpdated}
                                 onClose={toggleUpdateModelPanel}

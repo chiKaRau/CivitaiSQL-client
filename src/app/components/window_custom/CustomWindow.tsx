@@ -399,7 +399,7 @@ const CustomWindow: React.FC = () => {
                             <Form.Control
                                 type="url"
                                 value={url}
-                                placeholder="https://civitaiarchive.com/models/1722778?modelVersionId=1949611"
+                                placeholder="https://civitaiarchive.red/models/1722778?modelVersionId=1949611"
                                 onChange={e => setUrl(e.target.value)}
                                 required
                                 style={inputStyle}

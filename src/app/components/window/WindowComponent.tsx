@@ -658,11 +658,11 @@ const WindowComponent: React.FC = () => {
         const url = tab?.url || "";
         setCurrentTabUrl(url);
 
-        const m = url.match(/civitai\.com\/user\/([^/]+)\/models/i);
+        const m = url.match(/civitai\.red\/user\/([^/]+)\/models/i);
         const creator = m ? decodeURIComponent(m[1]) : "";
         setCurrentTabCreator(creator);
 
-        const currentCreatorUrl = creator ? `https://civitai.com/user/${creator}/models` : "";
+        const currentCreatorUrl = creator ? `https://civitai.red/user/${creator}/models` : "";
         const inList = !!creator && creatorUrlList.some(i => normalizeUrl(i.creatorUrl) === normalizeUrl(currentCreatorUrl));
         setIsCurrentCreatorInList(inList);
     };
@@ -674,7 +674,7 @@ const WindowComponent: React.FC = () => {
             alert("Current tab is not a creator page.");
             return;
         }
-        const creatorUrl = `https://civitai.com/user/${currentTabCreator}/models`;
+        const creatorUrl = `https://civitai.red/user/${currentTabCreator}/models`;
 
         // You asked to call your existing function — we can call the API directly instead of the message form:
         await fetchUpdateCreatorUrlList(creatorUrl, "new", false, "N/A", dispatch);
@@ -1190,7 +1190,7 @@ const WindowComponent: React.FC = () => {
         }
 
         const normalizedCivitaiUrl =
-            `https://civitai.com/models/${item.modelId}?modelVersionId=${civitaiVersionID}`;
+            `https://civitai.red/models/${item.modelId}?modelVersionId=${civitaiVersionID}`;
 
         const modelObject = {
             downloadFilePath: item.downloadFilePath,
@@ -1950,7 +1950,7 @@ const WindowComponent: React.FC = () => {
 
                 // Auto-select the current tab's creator in the dropdown
                 const urlStr = activeTab.url ?? "";
-                const m = urlStr.match(/civitai\.com\/user\/([^/]+)\/models/i);
+                const m = urlStr.match(/civitai\.red\/user\/([^/]+)\/models/i);
                 if (m) {
                     const creator = decodeURIComponent(m[1]);
                     setSelectedCreatorUrlText(creator); // shows creator in the toggle immediately
@@ -2333,11 +2333,14 @@ const WindowComponent: React.FC = () => {
             tabId,
             {
                 action: "display-staged",
-                stagedList: list.map(x => ({ url: x.url, action: x.action })), // keep it minimal
-                // if you want: status: x.status
+                stagedList: list.map(x => ({
+                    url: x.url,
+                    modelId: x.modelId,
+                    versionId: x.versionId && x.versionId !== "Selecting" ? x.versionId : "",
+                    action: x.action,
+                })),
             },
             () => {
-                // avoid noisy console errors when content script isn't on that tab
                 const err = chrome.runtime.lastError;
                 if (err) console.debug("[display-staged] sendMessage:", err.message);
             }

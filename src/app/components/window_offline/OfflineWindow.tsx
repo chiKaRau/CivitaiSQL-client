@@ -1936,7 +1936,7 @@ const OfflineWindow: React.FC = () => {
 
             console.log(`ErrorCard download clicked. modelID=${modelID}, versionID=${versionID}, method=${method}`);
 
-            const civitaiUrl = `https://civitai.com/models/${modelID}?modelVersionId=${versionID}`;
+            const civitaiUrl = `https://civitai.red/models/${modelID}?modelVersionId=${versionID}`;
 
             // Prefer modelVersionObject embedded on the entry if it exists,
             // otherwise fall back to calling the API.

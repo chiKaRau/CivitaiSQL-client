@@ -426,7 +426,7 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = ({
         // Parent model = the overall model shown in the current tab/panel
         const parentModelID = String(civitaiModelID);
         const parentVersionId = String(civitaiVersionID);
-        const parentModelUrl = `https://civitai.com/models/${civitaiModelID}?modelVersionId=${civitaiVersionID}`;
+        const parentModelUrl = `https://civitai.red/models/${civitaiModelID}?modelVersionId=${civitaiVersionID}`;
 
         // Sub model = the clicked row/version inside the update panel
         const subModelID = String(clickedSubModel.modelNumber || "");

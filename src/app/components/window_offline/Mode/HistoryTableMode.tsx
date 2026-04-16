@@ -302,11 +302,11 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
                 imageCount: imageUrlList.length,
                 civitaiUrl:
                     entry.civitaiModelID && entry.civitaiVersionID
-                        ? `https://civitai.com/models/${entry.civitaiModelID}?modelVersionId=${entry.civitaiVersionID}`
+                        ? `https://civitai.red/models/${entry.civitaiModelID}?modelVersionId=${entry.civitaiVersionID}`
                         : "",
                 civitaiArchiveUrl:
                     entry.civitaiModelID && entry.civitaiVersionID
-                        ? `https://civitaiarchive.com/models/${entry.civitaiModelID}?modelVersionId=${entry.civitaiVersionID}`
+                        ? `https://civitaiarchive.red/models/${entry.civitaiModelID}?modelVersionId=${entry.civitaiVersionID}`
                         : "",
                 createdAt: formatHistoryDateTime(entry.createdAt),
                 updatedAt: formatHistoryDateTime(entry.updatedAt),

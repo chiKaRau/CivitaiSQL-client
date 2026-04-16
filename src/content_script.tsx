@@ -8,7 +8,16 @@ const CIVITAI_GRID_SELECTOR = '[class^="MasonryGrid_grid__6QtWa"]';
 const CIVITAIARCHIVE_GRID_SELECTOR =
   'div.grid.grid-cols-2.md\\:grid-cols-4.lg\\:grid-cols-6.gap-4';
 
-const stagedInfoMap: Map<string, { action: string }> = new Map();
+type StagedInfo = {
+  action: string;
+  url?: string;
+  modelId?: string;
+  versionId?: string;
+};
+
+const stagedInfoByUrl: Map<string, StagedInfo> = new Map();
+const stagedInfoByModel: Map<string, StagedInfo> = new Map();
+const stagedInfoByModelVersion: Map<string, StagedInfo> = new Map();
 
 let lockedUrl: string = "";
 let lockedNeighborManagedUrls: Set<string> = new Set();
@@ -53,6 +62,179 @@ function applyOpenInNewTab(card: HTMLElement) {
 
   link.target = "_blank";
   link.rel = "noopener noreferrer";
+}
+
+function normalizeStagedUrl(url: string): string {
+  const raw = (url || "").replace("-commission", "").trim();
+  if (!raw) return "";
+
+  try {
+    const u = new URL(raw);
+
+    const host = u.hostname
+      .toLowerCase()
+      .replace(/^www\./, "")
+      .replace(/^civitai\.red$/, "civitai.shared")
+      .replace(/^civitai\.com$/, "civitai.shared")
+      .replace(/^civitai\.green$/, "civitai.shared");
+
+    const path = u.pathname.replace(/\/+$/, "").toLowerCase();
+    const search = u.search.toLowerCase();
+
+    return `${host}${path}${search}`;
+  } catch {
+    return raw.replace(/\/+$/, "").toLowerCase();
+  }
+}
+
+function extractModelAndVersionFromUrl(url: string): { modelId: string; versionId: string } {
+  try {
+    const u = new URL(url);
+    const modelId = u.pathname.match(/\/models\/(\d+)/)?.[1] || "";
+    const versionId = u.searchParams.get("modelVersionId") || "";
+    return { modelId, versionId };
+  } catch {
+    return { modelId: "", versionId: "" };
+  }
+}
+
+function hydrateStagedBadgesFromStorage(): void {
+  chrome.storage.local.get("stagedItems", (result) => {
+    const list = Array.isArray(result?.stagedItems) ? result.stagedItems : [];
+
+    clearStagedInfo();
+
+    list.forEach((item: any) => {
+      addStagedInfo({
+        url: item.url,
+        modelId: item.modelId,
+        versionId: item.versionId && item.versionId !== "Selecting" ? item.versionId : "",
+        action: item.action || "",
+      });
+    });
+
+    displayStagedBadges();
+  });
+}
+
+function bootStagedBadgeHydration(attempt = 0): void {
+  const container = getModelContainer();
+
+  if (!container) {
+    if (attempt < 20) {
+      window.setTimeout(() => bootStagedBadgeHydration(attempt + 1), 500);
+    }
+    return;
+  }
+
+  hydrateStagedBadgesFromStorage();
+}
+
+function clearStagedInfo(): void {
+  stagedInfoByUrl.clear();
+  stagedInfoByModel.clear();
+  stagedInfoByModelVersion.clear();
+}
+
+function addStagedInfo(item: {
+  url?: string;
+  modelId?: string;
+  versionId?: string;
+  action: string;
+}): void {
+  const info: StagedInfo = {
+    action: item.action || "",
+    url: item.url || "",
+    modelId: item.modelId || "",
+    versionId: item.versionId || "",
+  };
+
+  const directUrl = info.url ? normalizeStagedUrl(info.url) : "";
+  if (directUrl) {
+    stagedInfoByUrl.set(directUrl, info);
+  }
+
+  const parsed = info.url
+    ? extractModelAndVersionFromUrl(info.url)
+    : { modelId: "", versionId: "" };
+
+  const modelId = info.modelId || parsed.modelId;
+  const versionId = info.versionId || parsed.versionId;
+
+  if (modelId && versionId) {
+    stagedInfoByModelVersion.set(`${modelId}_${versionId}`, {
+      ...info,
+      modelId,
+      versionId,
+    });
+  }
+
+  if (modelId) {
+    const existing = stagedInfoByModel.get(modelId);
+
+    if (!existing) {
+      stagedInfoByModel.set(modelId, {
+        ...info,
+        modelId,
+        versionId,
+      });
+    } else {
+      const existingHasVersion = !!existing.versionId;
+      const incomingHasVersion = !!versionId;
+
+      if (!existingHasVersion && incomingHasVersion) {
+        stagedInfoByModel.set(modelId, {
+          ...info,
+          modelId,
+          versionId,
+        });
+      }
+    }
+  }
+}
+
+function removeStagedInfo(item: {
+  url?: string;
+  modelId?: string;
+  versionId?: string;
+}): void {
+  const directUrl = item.url ? normalizeStagedUrl(item.url) : "";
+  if (directUrl) {
+    stagedInfoByUrl.delete(directUrl);
+  }
+
+  const parsed = item.url
+    ? extractModelAndVersionFromUrl(item.url)
+    : { modelId: "", versionId: "" };
+
+  const modelId = item.modelId || parsed.modelId;
+  const versionId = item.versionId || parsed.versionId;
+
+  if (modelId && versionId) {
+    stagedInfoByModelVersion.delete(`${modelId}_${versionId}`);
+  }
+
+  if (modelId) {
+    stagedInfoByModel.delete(modelId);
+  }
+}
+
+function findStagedInfoForUrl(url: string): StagedInfo | undefined {
+  const direct = stagedInfoByUrl.get(normalizeStagedUrl(url));
+  if (direct) return direct;
+
+  const { modelId, versionId } = extractModelAndVersionFromUrl(url);
+
+  if (modelId && versionId) {
+    const exactVersion = stagedInfoByModelVersion.get(`${modelId}_${versionId}`);
+    if (exactVersion) return exactVersion;
+  }
+
+  if (modelId) {
+    return stagedInfoByModel.get(modelId);
+  }
+
+  return undefined;
 }
 
 function upsertStagedBadge(card: HTMLElement, action: string) {
@@ -103,8 +285,7 @@ function applyStagedForCard(card: HTMLElement) {
   const a = getCardLink(card);
   if (!a?.href) return;
 
-  const url = normalizeUrl(a.href);
-  const info = stagedInfoMap.get(url);
+  const info = findStagedInfoForUrl(a.href);
 
   if (info) upsertStagedBadge(card, info.action);
   else removeStagedBadge(card);
@@ -344,8 +525,15 @@ chrome.runtime.onMessage.addListener(
   async (
     message: {
       action: string;
-      stagedList?: Array<{ url: string; action: string }>;
+      stagedList?: Array<{
+        url: string;
+        modelId?: string;
+        versionId?: string;
+        action: string;
+      }>;
       url?: string;
+      modelId?: string;
+      versionId?: string;
       stageAction?: string;
     },
     sender,
@@ -354,9 +542,9 @@ chrome.runtime.onMessage.addListener(
     if (message.action === "display-staged") {
       if (!message.stagedList) return true;
 
-      stagedInfoMap.clear();
+      clearStagedInfo();
       message.stagedList.forEach((x) => {
-        stagedInfoMap.set(normalizeUrl(x.url), { action: x.action });
+        addStagedInfo(x);
       });
 
       displayStagedBadges();
@@ -364,19 +552,28 @@ chrome.runtime.onMessage.addListener(
     }
 
     if (message.action === "remove-staged") {
-      stagedInfoMap.clear();
+      clearStagedInfo();
       removeAllStagedBadges();
       return true;
     }
 
     if (message.action === "stage-url" && message.url) {
-      stagedInfoMap.set(normalizeUrl(message.url), { action: message.stageAction || "" });
+      addStagedInfo({
+        url: message.url,
+        modelId: message.modelId,
+        versionId: message.versionId,
+        action: message.stageAction || "",
+      });
       displayStagedBadges();
       return true;
     }
 
     if (message.action === "unstage-url" && message.url) {
-      stagedInfoMap.delete(normalizeUrl(message.url));
+      removeStagedInfo({
+        url: message.url,
+        modelId: message.modelId,
+        versionId: message.versionId,
+      });
       displayStagedBadges();
       return true;
     }
@@ -821,6 +1018,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 initializeHrefMap();
+bootStagedBadgeHydration();
 
 function initializeHrefMap(): void {
   const container = getModelContainer();
@@ -845,6 +1043,13 @@ function initializeHrefMap(): void {
 
   console.log(`Initialized hrefMap with ${hrefMap.size} entries.`);
 }
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "local") return;
+  if (!changes.stagedItems) return;
+
+  bootStagedBadgeHydration();
+});
 
 chrome.runtime.onMessage.addListener(
   async (

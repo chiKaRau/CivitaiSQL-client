@@ -59,7 +59,7 @@ export const removeBookmarkByUrl = (url: string, dispatch: any, listmode: boolea
     if (windowMode) {
         const modelId = url.match(/\/models\/(\d+)/)?.[1] || '';
 
-        const baseUrl = `https://civitai.com/models/${modelId}`; // Construct base URL for the model
+        const baseUrl = `https://civitai.red/models/${modelId}`; // Construct base URL for the model
 
         // Search for all bookmarks and filter by matching URLs
         chrome.bookmarks.search({}, function (bookmarks) {

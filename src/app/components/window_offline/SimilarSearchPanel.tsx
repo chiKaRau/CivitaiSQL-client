@@ -453,7 +453,7 @@ const SimilarSearchPanel: React.FC<{
         const modelId = String(m?.modelNumber ?? '').trim();
         const versionId = String(m?.versionNumber ?? '').trim();
         if (!modelId || !versionId || modelId === 'N/A' || versionId === 'N/A') return '';
-        return `https://civitai.com/models/${encodeURIComponent(modelId)}?modelVersionId=${encodeURIComponent(versionId)}`;
+        return `https://civitai.red/models/${encodeURIComponent(modelId)}?modelVersionId=${encodeURIComponent(versionId)}`;
     }
 
     // near your other callbacks

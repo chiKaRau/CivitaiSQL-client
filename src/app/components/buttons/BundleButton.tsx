@@ -200,7 +200,7 @@ const BundleButton: React.FC<BundleButtonProps> = ({
         let civitaiTags = civitaiData?.tags;
 
         const normalizedCivitaiUrl =
-            `https://civitai.com/models/${civitaiModelID}?modelVersionId=${civitaiVersionID}`;
+            `https://civitai.red/models/${civitaiModelID}?modelVersionId=${civitaiVersionID}`;
 
         if (
             civitaiFileName === null || civitaiFileName === "" ||
