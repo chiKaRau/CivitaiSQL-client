@@ -358,7 +358,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
-  const creatorUrl = `https://civitai.red/user/${creator}/models`;
+  const creatorUrl = `https://civitai.com/user/${creator}/models`;
 
   (async () => {
     try {

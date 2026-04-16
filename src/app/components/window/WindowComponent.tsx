@@ -674,7 +674,7 @@ const WindowComponent: React.FC = () => {
             alert("Current tab is not a creator page.");
             return;
         }
-        const creatorUrl = `https://civitai.red/user/${currentTabCreator}/models`;
+        const creatorUrl = `https://civitai.com/user/${currentTabCreator}/models`;
 
         // You asked to call your existing function — we can call the API directly instead of the message form:
         await fetchUpdateCreatorUrlList(creatorUrl, "new", false, "N/A", dispatch);
