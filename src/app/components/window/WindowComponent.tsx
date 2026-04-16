@@ -658,33 +658,39 @@ const WindowComponent: React.FC = () => {
         const url = tab?.url || "";
         setCurrentTabUrl(url);
 
-        const m = url.match(/civitai\.red\/user\/([^/]+)\/models/i);
-        const creator = m ? decodeURIComponent(m[1]) : "";
+        const creator = extractCreatorFromUserModelsUrl(url);
         setCurrentTabCreator(creator);
 
-        const currentCreatorUrl = creator ? `https://civitai.red/user/${creator}/models` : "";
-        const inList = !!creator && creatorUrlList.some(i => normalizeUrl(i.creatorUrl) === normalizeUrl(currentCreatorUrl));
+        const inList =
+            !!creator &&
+            creatorUrlList.some(
+                (item) => getCreatorKey(item.creatorUrl) === creator.toLowerCase()
+            );
+
         setIsCurrentCreatorInList(inList);
     };
 
     // Add the current tab's creator to list, then auto-select it in the dropdown
     const handleAddCurrentTabCreator = async () => {
         await refreshCurrentTabCreator();
+
         if (!currentTabCreator) {
             alert("Current tab is not a creator page.");
             return;
         }
-        const creatorUrl = `https://civitai.com/user/${currentTabCreator}/models`;
 
-        // You asked to call your existing function — we can call the API directly instead of the message form:
+        const creatorUrl = buildCanonicalCreatorUrl(currentTabCreator);
+
         await fetchUpdateCreatorUrlList(creatorUrl, "new", false, "N/A", dispatch);
 
-        // Refresh the list and auto-select this creator
-        const newList = await fetchCreatorUrlList(); // see small change below to return the list
-        const idx = newList.findIndex(it => it.creatorUrl.split("/")[4] === currentTabCreator);
+        const newList = await fetchCreatorUrlList();
+        const idx = newList.findIndex(
+            (it) => getCreatorKey(it.creatorUrl) === currentTabCreator.toLowerCase()
+        );
+
         if (idx !== -1) {
             setCurrentCreatorUrlIndex(idx);
-            setSelectedCreatorUrlText(currentTabCreator); // this also drives the rating via your useEffect
+            setSelectedCreatorUrlText(currentTabCreator);
         }
 
         await refreshCurrentTabCreator();
@@ -807,6 +813,26 @@ const WindowComponent: React.FC = () => {
                     });
             }
         });
+    };
+
+    const extractCreatorFromUserModelsUrl = (url: string) => {
+        try {
+            const u = new URL(url);
+            const match = u.pathname.match(/^\/user\/([^/]+)\/models\/?$/i);
+            return match ? decodeURIComponent(match[1]) : "";
+        } catch {
+            return "";
+        }
+    };
+
+    const buildCanonicalCreatorUrl = (creator: string) => {
+        return creator
+            ? `https://civitai.com/user/${encodeURIComponent(creator)}/models`
+            : "";
+    };
+
+    const getCreatorKey = (url: string) => {
+        return extractCreatorFromUserModelsUrl(url).toLowerCase();
     };
 
     const handleSorting = () => {
@@ -1950,13 +1976,15 @@ const WindowComponent: React.FC = () => {
 
                 // Auto-select the current tab's creator in the dropdown
                 const urlStr = activeTab.url ?? "";
-                const m = urlStr.match(/civitai\.red\/user\/([^/]+)\/models/i);
-                if (m) {
-                    const creator = decodeURIComponent(m[1]);
-                    setSelectedCreatorUrlText(creator); // shows creator in the toggle immediately
+                const creator = extractCreatorFromUserModelsUrl(urlStr);
 
-                    // if it's already in the list, select it so rating syncs via your useEffect
-                    const idx = creatorUrlList.findIndex(it => it.creatorUrl.split('/')[4] === creator);
+                if (creator) {
+                    setSelectedCreatorUrlText(creator);
+
+                    const idx = creatorUrlList.findIndex(
+                        (it) => getCreatorKey(it.creatorUrl) === creator.toLowerCase()
+                    );
+
                     if (idx !== -1) {
                         setCurrentCreatorUrlIndex(idx);
                     }
