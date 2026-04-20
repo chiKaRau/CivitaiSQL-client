@@ -54,7 +54,8 @@ import {
     fetchModelOfflineDownloadHistoryList,
     fetchModelOfflineDownloadHistoryAvailableDates,
     fetchUpdateOfflineDownloadVersionId,
-    fetchRefreshModelVersionObjectFromOfflineTable
+    fetchRefreshModelVersionObjectFromOfflineTable,
+    fetchUpdateCategoryPrefixActive
 } from "../../api/civitaiSQL_api"
 
 import { makeOfflineWindowStyles } from "./OfflineWindow.styles";
@@ -144,6 +145,17 @@ const ALL_PATCH_FIELDS = [
     { key: "isError", label: "Is Error" },
     { key: "refreshRecord", label: "Refresh Record" },
 ];
+
+type CategoryPrefixRow = {
+    id: number;
+    prefixName: string;
+    downloadFilePath: string;
+    downloadPriority: number;
+    active?: boolean;
+    createdAt?: string;
+    updatedAt?: string;
+    isVirtual?: boolean;
+};
 
 const AI_BATCH_SIZE = 10;
 const AI_COOLDOWN_SECONDS = 90;
@@ -268,14 +280,8 @@ const OfflineWindow: React.FC = () => {
     const [sortBy, setSortBy] = useState<'priority' | 'id'>('priority');
     const [idSortDir, setIdSortDir] = useState<'asc' | 'desc'>('desc');
 
-    const [categoriesPrefixsList, setCategoriesPrefixsList] = useState<{
-        id: number;
-        prefixName: string;
-        downloadFilePath: string;
-        downloadPriority: number;
-        createdAt?: string;
-        updatedAt?: string;
-    }[]>([]);
+    const [categoriesPrefixsList, setCategoriesPrefixsList] = useState<CategoryPrefixRow[]>([]);
+
     const [selectedPrefixes, setSelectedPrefixes] = useState<Set<string>>(new Set());
 
     const [allowTryEarlyAccess, setAllowTryEarlyAccess] = useState(false);
@@ -392,7 +398,14 @@ const OfflineWindow: React.FC = () => {
 
     const [dummyCreateStatusByVid, setDummyCreateStatusByVid] = useState({} as Record<
         string,
-        { phase: "idle" | "downloading" | "inserting" | "success" | "fail"; text: string; msg?: string; running?: boolean }
+        {
+            phase: "idle" | "downloading" | "inserting" | "success" | "fail";
+            text: string;
+            msg?: string;
+            running?: boolean;
+            completedDownloadPath?: string;
+            completedDownloadFileName?: string;
+        }
     >);
 
     const handleBulkPatchSelected = async () => {
@@ -1123,77 +1136,57 @@ const OfflineWindow: React.FC = () => {
         return [];
     }, [appliedQuery]);
 
-    useEffect(() => {
-        const loadPrefixes = async () => {
-            const list = await fetchGetCategoryPrefixesList(dispatch);
+    const loadCategoryPrefixes = useCallback(async (syncAppliedQuery = false) => {
+        const list = await fetchGetCategoryPrefixesList(dispatch);
 
-            if (Array.isArray(list)) {
-                // remove any empty-path entries (if any exist)
-                const filtered: {
-                    id: number;
-                    prefixName: string;
-                    downloadFilePath: string;
-                    downloadPriority: number;
-                    createdAt?: string;
-                    updatedAt?: string;
-                }[] = list.filter(
-                    (p: {
-                        id: number;
-                        prefixName: string;
-                        downloadFilePath: string;
-                        downloadPriority: number;
-                        createdAt?: string;
-                        updatedAt?: string;
-                    }) => (p.downloadFilePath ?? "").trim() !== ""
-                );
+        if (!Array.isArray(list)) return;
 
-                // Add a virtual “Updates” option that matches ANY path containing /@scan@/Update/
-                const enhanced: {
-                    id: number;
-                    prefixName: string;
-                    downloadFilePath: string;
-                    downloadPriority: number;
-                    createdAt?: string;
-                    updatedAt?: string;
-                }[] = [
-                        ...filtered,
-                        {
-                            id: -1,
-                            prefixName: "Updates (any folder)",
-                            downloadFilePath: "/@scan@/Update/",
-                            downloadPriority: 10,
-                        },
-                    ];
+        const filtered: CategoryPrefixRow[] = list
+            .filter((p: CategoryPrefixRow) => (p.downloadFilePath ?? "").trim() !== "")
+            .map((p: CategoryPrefixRow) => ({
+                ...p,
+                active: p.active !== false,
+            }));
 
-                setCategoriesPrefixsList(enhanced);
+        const enhanced: CategoryPrefixRow[] = [
+            ...filtered,
+            {
+                id: -1,
+                prefixName: "Updates (any folder)",
+                downloadFilePath: "/@scan@/Update/",
+                downloadPriority: 10,
+                active: false,
+                isVirtual: true,
+            },
+        ];
 
-                // Start with everything selected EXCEPT '/@scan@/' and the virtual Updates option
-                const DEFAULT_UNCHECKED = new Set<string>(["/@scan@/Update/"]);
-                const initialChecked = enhanced
-                    .filter((p) => !DEFAULT_UNCHECKED.has(p.downloadFilePath))
-                    .map((p) => p.downloadFilePath);
+        setCategoriesPrefixsList(enhanced);
 
-                defaultPrefixesRef.current = initialChecked;
+        const initialChecked = enhanced
+            .filter((p) => p.active)
+            .map((p) => p.downloadFilePath);
 
-                setSelectedPrefixes(new Set(initialChecked));
+        defaultPrefixesRef.current = initialChecked;
+        setSelectedPrefixes(new Set(initialChecked));
 
-                // ✅ set initial applied query to match defaults
-                const initialExcluded = enhanced
-                    .map((p) => p.downloadFilePath)
-                    .filter((p) => !initialChecked.includes(p));
+        if (syncAppliedQuery) {
+            const initialExcluded = enhanced
+                .map((p) => p.downloadFilePath)
+                .filter((p) => !initialChecked.includes(p));
 
-                setAppliedQuery((q) => ({
-                    ...q,
-                    selectedPrefixes: initialChecked,
-                    excludedPrefixes: initialExcluded,
-                }));
+            setAppliedQuery((q) => ({
+                ...q,
+                selectedPrefixes: initialChecked,
+                excludedPrefixes: initialExcluded,
+            }));
+        }
 
-                setFiltersReady(true);
-            }
-        };
-
-        loadPrefixes();
+        setFiltersReady(true);
     }, [dispatch]);
+
+    useEffect(() => {
+        void loadCategoryPrefixes(true);
+    }, [loadCategoryPrefixes]);
 
     // At the top of your component:
     const selectAllRef = useRef<HTMLInputElement>(null);
@@ -1207,7 +1200,64 @@ const OfflineWindow: React.FC = () => {
         }
     }, [selectedPrefixes, categoriesPrefixsList]);
 
+    const handlePrefixCheckboxChange = useCallback(
+        async (prefix: CategoryPrefixRow, checked: boolean) => {
+            setSelectedPrefixes((prev) => {
+                const next = new Set(prev);
+                if (checked) next.add(prefix.downloadFilePath);
+                else next.delete(prefix.downloadFilePath);
+                return next;
+            });
 
+            // virtual row only affects local UI
+            if (prefix.isVirtual || prefix.id === -1) {
+                return;
+            }
+
+            const result = await fetchUpdateCategoryPrefixActive(dispatch, prefix.prefixName, checked);
+
+            // whether success or failure, reload from DB so UI matches latest backend state
+            if (result === undefined || result === null) {
+                await loadCategoryPrefixes(false);
+                return;
+            }
+
+            await loadCategoryPrefixes(false);
+        },
+        [dispatch, loadCategoryPrefixes]
+    );
+
+    const handleSelectAllPrefixesChange = useCallback(
+        async (checked: boolean) => {
+            const allPaths = categoriesPrefixsList.map((p) => p.downloadFilePath);
+            const dbPrefixes = categoriesPrefixsList.filter((p) => !p.isVirtual && p.id !== -1);
+
+            setSelectedPrefixes(new Set(checked ? allPaths : []));
+
+            if (!dbPrefixes.length) return;
+
+            await Promise.all(
+                dbPrefixes.map((p) =>
+                    fetchUpdateCategoryPrefixActive(dispatch, p.prefixName, checked)
+                )
+            );
+
+            await loadCategoryPrefixes(false);
+
+            // keep virtual Updates row checked locally when Select All is used
+            if (checked) {
+                const virtualPath = categoriesPrefixsList.find((p) => p.isVirtual)?.downloadFilePath;
+                if (virtualPath) {
+                    setSelectedPrefixes((prev) => {
+                        const next = new Set(prev);
+                        next.add(virtualPath);
+                        return next;
+                    });
+                }
+            }
+        },
+        [categoriesPrefixsList, dispatch, loadCategoryPrefixes]
+    );
 
     const handlePauseToggle = () => {
         setIsPaused((prev) => !prev);
@@ -2603,11 +2653,28 @@ const OfflineWindow: React.FC = () => {
         const setStatus = (patch: any) =>
             setDummyCreateStatusByVid((prev) => ({
                 ...prev,
-                [vid]: { ...(prev[vid] || { phase: "idle", text: "" }), ...patch },
+                [vid]: {
+                    ...(prev[vid] || { phase: "idle", text: "" }),
+                    ...patch,
+                },
             }));
 
+        const completedDownloadFileName = [
+            entry.civitaiModelID ?? "",
+            entry.civitaiVersionID ?? "",
+            entry.civitaiBaseModel || entry.modelVersionObject?.baseModel || "",
+            entry.civitaiFileName || "",
+        ].join("_");
+
         try {
-            setStatus({ phase: "downloading", text: "Downloading (custom)…", running: true, msg: "" });
+            setStatus({
+                phase: "downloading",
+                text: "Downloading (custom)…",
+                running: true,
+                msg: "",
+                completedDownloadPath: "",
+                completedDownloadFileName: "",
+            });
 
             const downloadOk = await fetchDownloadFilesByServer_v2ForCustom({
                 downloadFilePath: entry.downloadFilePath,
@@ -2616,16 +2683,28 @@ const OfflineWindow: React.FC = () => {
                 civitaiVersionID: entry.civitaiVersionID,
                 civitaiUrl: entry.civitaiUrl,
                 baseModel: entry.civitaiBaseModel || entry.modelVersionObject?.baseModel || "",
-                downloadUrl: DUMMY_DOWNLOAD_URL,          // ✅ fixed
-                imageUrls: toImgUrls(entry.imageUrlsArray) // string[]
+                downloadUrl: DUMMY_DOWNLOAD_URL,
+                imageUrls: toImgUrls(entry.imageUrlsArray),
             });
 
             if (!downloadOk) {
-                setStatus({ phase: "fail", text: "Download failed (custom).", running: false });
+                setStatus({
+                    phase: "fail",
+                    text: "Download failed (custom).",
+                    running: false,
+                    completedDownloadPath: "",
+                    completedDownloadFileName: "",
+                });
                 return;
             }
 
-            setStatus({ phase: "inserting", text: "Download OK !  Inserting DB...", running: true });
+            setStatus({
+                phase: "inserting",
+                text: "Download OK !  Inserting DB...",
+                running: true,
+                completedDownloadPath: "",
+                completedDownloadFileName: "",
+            });
 
             const dto: any = {
                 name: entry.civitaiFileName || "",
@@ -2640,9 +2719,13 @@ const OfflineWindow: React.FC = () => {
                 tags: Array.isArray(entry.civitaiTags) ? entry.civitaiTags : [],
                 localTags: [],
                 aliases: [],
-                triggerWords: Array.isArray(entry.modelVersionObject?.trainedWords) ? entry.modelVersionObject.trainedWords : [],
+                triggerWords: Array.isArray(entry.modelVersionObject?.trainedWords)
+                    ? entry.modelVersionObject.trainedWords
+                    : [],
                 description: entry.modelVersionObject?.description || null,
-                stats: entry.modelVersionObject?.stats ? JSON.stringify(entry.modelVersionObject.stats) : null,
+                stats: entry.modelVersionObject?.stats
+                    ? JSON.stringify(entry.modelVersionObject.stats)
+                    : null,
                 localPath: entry.downloadFilePath || "",
                 uploaded: null,
                 hash: null,
@@ -2655,14 +2738,27 @@ const OfflineWindow: React.FC = () => {
 
             await fetchAddRecordToDatabaseInCustom(dto);
 
-            setStatus({ phase: "success", text: "Done ! (download + insert)", running: false });
+            setStatus({
+                phase: "success",
+                text: "Done ! (download + insert)",
+                running: false,
+                msg: "",
+                completedDownloadPath: entry.downloadFilePath || "",
+                completedDownloadFileName,
+            });
 
-            // Optional: if your backend removes it from error list after success, refresh:
+            // Optional refresh if needed
             // setSpecialReloadToken((t) => t + 1);
-
         } catch (err: any) {
             const msg = err?.response?.data?.message || err?.message || "Unknown error";
-            setStatus({ phase: "fail", text: "Failed.", msg, running: false });
+            setStatus({
+                phase: "fail",
+                text: "Failed.",
+                msg,
+                running: false,
+                completedDownloadPath: "",
+                completedDownloadFileName: "",
+            });
         }
     };
 
@@ -4552,13 +4648,12 @@ const OfflineWindow: React.FC = () => {
                                     id="prefix-select-all"
                                     label="Select All in This Page"
                                     ref={selectAllRef}
-                                    checked={selectedPrefixes.size === categoriesPrefixsList.length}
+                                    checked={
+                                        categoriesPrefixsList.length > 0 &&
+                                        selectedPrefixes.size === categoriesPrefixsList.length
+                                    }
                                     onChange={e => {
-                                        if (e.target.checked) {
-                                            setSelectedPrefixes(new Set(categoriesPrefixsList.map(p => p.downloadFilePath)));
-                                        } else {
-                                            setSelectedPrefixes(new Set());
-                                        }
+                                        void handleSelectAllPrefixesChange(e.target.checked);
                                     }}
                                     disabled={isLoading || (showPending && !showNonPending) || !isPagedMode}
                                     style={{
@@ -4568,7 +4663,6 @@ const OfflineWindow: React.FC = () => {
                                     }}
                                 />
 
-                                {/* ── INDIVIDUAL PREFIXES ── */}
                                 {categoriesPrefixsList.map(prefix => (
                                     <Form.Check
                                         key={prefix.downloadFilePath}
@@ -4576,14 +4670,9 @@ const OfflineWindow: React.FC = () => {
                                         id={`prefix-${prefix.downloadFilePath}`}
                                         label={prefix.downloadFilePath}
                                         checked={selectedPrefixes.has(prefix.downloadFilePath)}
-                                        onChange={e =>
-                                            setSelectedPrefixes(prev => {
-                                                const next = new Set(prev);
-                                                if (e.target.checked) next.add(prefix.downloadFilePath);
-                                                else next.delete(prefix.downloadFilePath);
-                                                return next;
-                                            })
-                                        }
+                                        onChange={e => {
+                                            void handlePrefixCheckboxChange(prefix, e.target.checked);
+                                        }}
                                         disabled={isLoading || (showPending && !showNonPending) || !isPagedMode}
                                         style={{
                                             marginBottom: '4px',

@@ -3705,7 +3705,7 @@ const WindowComponent: React.FC = () => {
 
                             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                                 <Button
-                                    variant="primary"
+                                    variant={offlineMode ? "success" : "primary"}
                                     onClick={handleRunStagedQueue}
                                     disabled={isLoading || stagedItems.length === 0}
                                     className="w-100"

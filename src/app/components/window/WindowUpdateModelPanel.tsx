@@ -9,7 +9,7 @@ import FolderDropdown from "../FolderDropdown"
 
 //utils
 import { bookmarkThisModel, initializeDatafromChromeStorage, updateDownloadFilePathIntoChromeStorage, updateSelectedCategoryIntoChromeStorage, callChromeBrowserDownload_v2, RecentDownloadPathItem, getRecentDownloadFilePaths } from "../../utils/chromeUtils"
-import { fetchAddOfflineDownloadFileIntoOfflineDownloadList, fetchAddRecordToDatabase, fetchCheckCartList, fetchCivitaiModelInfoFromCivitaiByModelID, fetchCivitaiModelInfoFromCivitaiByVersionID, fetchDatabaseModelInfoByModelID, fetchDeleteDownloadPathCountRecord, fetchDownloadFilesByBrowser_v2, fetchDownloadFilesByServer_v2, fetchGetCategoriesList, fetchGetCategoryPrefixesList, fetchGetFilePathCategoriesList, fetchGetFoldersList, fetchGetTagsList, fetchMoveModelVersionFilesToDelete, fetchRemoveRecordFromDatabaseByID, fetchUpdateRecordAtDatabase } from '../../api/civitaiSQL_api';
+import { fetchAddOfflineDownloadFileIntoOfflineDownloadList, fetchAddRecordToDatabase, fetchCheckCartList, fetchCivitaiModelInfoFromCivitaiByModelID, fetchCivitaiModelInfoFromCivitaiByVersionID, fetchDatabaseModelInfoByModelID, fetchDeleteDownloadPathCountRecord, fetchDownloadFilesByBrowser_v2, fetchDownloadFilesByServer_v2, fetchGetCategoriesList, fetchGetCategoryPrefixesList, fetchGetFilePathCategoriesList, fetchGetFoldersList, fetchGetTagsList, fetchMoveModelVersionFilesToDelete, fetchRemoveRecordFromDatabaseByID, fetchUpdateCategoryPrefixActive, fetchUpdateRecordAtDatabase } from '../../api/civitaiSQL_api';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppState } from '../../store/configureStore';
 import TextField from '@mui/material/TextField';
@@ -527,72 +527,83 @@ interface FilesPathSettingPanelProps {
     theme: AppTheme;
 }
 
-const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadFilePath, setDownloadFilePath, theme }) => {
-    const isInitialMount = useRef(true);
+type PrefixRow = {
+    id: number;
+    prefixName: string;
+    downloadFilePath: string;
+    downloadPriority: number;
+    active?: boolean;
+    createdAt?: string;
+    updatedAt?: string;
+};
+
+type SelectedCategoryRow = {
+    category: PrefixRow;
+    display: boolean;
+};
+
+const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
+    downloadFilePath,
+    setDownloadFilePath,
+    theme
+}) => {
     const dispatch = useDispatch();
 
     const civitaiModel = useSelector((state: AppState) => state.civitaiModel);
     const data: Record<string, any> | undefined = civitaiModel.civitaiModelObject;
     const modelTags = data?.tags;
+
     const modelTagsList = modelTags?.map((element: any) => {
         return {
-            "name": element?.split(' ')
+            name: element?.split(' ')
                 .map((word: String) => word.toLowerCase().charAt(0).toUpperCase() + word.slice(1))
                 .join(' '),
-            "value": element?.split(' ')
+            value: element?.split(' ')
                 .map((word: String) => word.toLowerCase().charAt(0).toUpperCase() + word.slice(1))
                 .join(' ')
-        }
-    })
+        };
+    });
 
-    modelTagsList?.push({ "name": "Temp", "value": "Temp" });
+    modelTagsList?.push({ name: "Temp", value: "Temp" });
 
     const chrome = useSelector((state: AppState) => state.chrome);
     const { isDarkMode } = chrome;
 
     const [open, setOpen] = useState(true);
 
-    const [prefixsList, setPrefixsList] = useState<{
-        id: number;
-        prefixName: string;
-        downloadFilePath: string;
-        downloadPriority: number;
-        createdAt?: string;
-        updatedAt?: string;
-    }[]>([]);
+    const [prefixsList, setPrefixsList] = useState<PrefixRow[]>([]);
     const [suffixsList, setSuffixsList] = useState<{ name: string; value: string; }[]>(modelTagsList);
 
     const [selectedPrefix, setSelectedPrefix] = useState("");
     const [selectedSuffix, setSelectedSuffix] = useState("");
-    const [filePathCategoriesList, setFilePathCategoriesList] = useState<{
-        id: number;
-        prefixName: string;
-        downloadFilePath: string;
-        downloadPriority: number;
-        createdAt?: string;
-        updatedAt?: string;
-    }[]>([]);
 
-    // Initializing state with the entire object and display property
-    const [selectedFilteredCategoriesList, setSelectedFilteredCategoriesList] = useState<{
-        category: {
-            id: number;
-            prefixName: string;
-            downloadFilePath: string;
-            downloadPriority: number;
-            createdAt?: string;
-            updatedAt?: string;
-        }, display: boolean
-    }[]>(
-        filePathCategoriesList.map((category) => ({
-            category: category,
-            display: true
-        }))
-    );
+    const [selectedFilteredCategoriesList, setSelectedFilteredCategoriesList] = useState<SelectedCategoryRow[]>([]);
+    const [isUpdatingActive, setIsUpdatingActive] = useState(false);
 
     const prefixToneMap = useMemo(() => {
         return buildPrefixToneMap(prefixsList, theme, isDarkMode);
     }, [prefixsList, theme, isDarkMode]);
+
+    const syncSelectedCategoriesFromRows = (rows: PrefixRow[]) => {
+        setSelectedFilteredCategoriesList(
+            rows.map((category) => ({
+                category,
+                display: category.active !== false,
+            }))
+        );
+    };
+
+    const loadPrefixesFromDb = async () => {
+        try {
+            const data = await fetchGetCategoryPrefixesList(dispatch);
+            if (data) {
+                setPrefixsList(data);
+                syncSelectedCategoriesFromRows(data);
+            }
+        } catch (error) {
+            console.error("Error fetching categories prefix list:", error);
+        }
+    };
 
     const handleFullPathSelection = (fullPath: string) => {
         const matchedPrefix = findBestPrefixMatch(fullPath, prefixsList);
@@ -615,14 +626,7 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
         dispatch(updateDownloadFilePath(fullPath));
     };
 
-    const handlePrefixClick = (element: {
-        id: number;
-        prefixName: string;
-        downloadFilePath: string;
-        downloadPriority: number;
-        createdAt?: string;
-        updatedAt?: string;
-    }) => {
+    const handlePrefixClick = (element: PrefixRow) => {
         setSelectedPrefix(element.downloadFilePath);
         setSelectedSuffix("");
         setDownloadFilePath(element.downloadFilePath);
@@ -638,54 +642,110 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
     };
 
     useEffect(() => {
-        const fetchPrefixsList = async () => {
-            try {
-                const data = await fetchGetCategoryPrefixesList(dispatch);
-                if (data) {
-                    setPrefixsList(data);
-                }
-            } catch (error) {
-                console.error("Error fetching categories prefix list:", error);
+        void loadPrefixesFromDb();
+    }, [dispatch]);
+
+    const handleToggleBaseModelCheckbox = async (index: number) => {
+        if (isUpdatingActive) return;
+
+        const target = selectedFilteredCategoriesList[index];
+        if (!target) return;
+
+        const nextDisplay = !target.display;
+        const targetPrefixName = target.category.prefixName;
+
+        setIsUpdatingActive(true);
+
+        setSelectedFilteredCategoriesList((prevState) =>
+            prevState.map((item, i) =>
+                i === index
+                    ? {
+                        ...item,
+                        display: nextDisplay,
+                        category: {
+                            ...item.category,
+                            active: nextDisplay,
+                        },
+                    }
+                    : item
+            )
+        );
+
+        setPrefixsList((prevState) =>
+            prevState.map((item) =>
+                item.prefixName === targetPrefixName
+                    ? { ...item, active: nextDisplay }
+                    : item
+            )
+        );
+
+        try {
+            const result = await fetchUpdateCategoryPrefixActive(
+                dispatch,
+                targetPrefixName,
+                nextDisplay
+            );
+
+            if (!result) {
+                await loadPrefixesFromDb();
+                return;
             }
-        };
 
-        fetchPrefixsList();
-
-        const fetchFilePathList = async () => {
-            try {
-                const data = await fetchGetFilePathCategoriesList(dispatch);
-                if (data) {
-                    setFilePathCategoriesList(data);
-                }
-            } catch (error) {
-                console.error("Error fetching file path categories list:", error);
-            }
-        };
-
-        fetchFilePathList();
-
-    }, [dispatch]); // Include `dispatch` in the dependency array to avoid stale closures
-
-    useEffect(() => {
-        if (chrome.selectedFilteredCategoriesList) {
-            setSelectedFilteredCategoriesList(JSON.parse(chrome.selectedFilteredCategoriesList))
+            await loadPrefixesFromDb();
+        } catch (error) {
+            await loadPrefixesFromDb();
+        } finally {
+            setIsUpdatingActive(false);
         }
-
-    }, [chrome.selectedFilteredCategoriesList])
-
-    const handleToggleBaseModelCheckbox = (index: number) => {
-        setSelectedFilteredCategoriesList(prevState => {
-            const newState = [...prevState];
-            newState[index].display = !newState[index].display;
-            return newState;
-        });
     };
 
-    const handleSelectAllCheckbox = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleSelectAllCheckbox = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (isUpdatingActive) return;
+
         const isChecked = e.target.checked;
-        setSelectedFilteredCategoriesList(prevState =>
-            prevState.map(item => ({ ...item, display: isChecked }))
+        const changedRows = selectedFilteredCategoriesList.filter((item) => item.display !== isChecked);
+
+        if (!changedRows.length) return;
+
+        setIsUpdatingActive(true);
+
+        setSelectedFilteredCategoriesList((prevState) =>
+            prevState.map((item) => ({
+                ...item,
+                display: isChecked,
+                category: {
+                    ...item.category,
+                    active: isChecked,
+                },
+            }))
         );
+
+        setPrefixsList((prevState) =>
+            prevState.map((item) => ({
+                ...item,
+                active: isChecked,
+            }))
+        );
+
+        try {
+            for (const item of changedRows) {
+                const result = await fetchUpdateCategoryPrefixActive(
+                    dispatch,
+                    item.category.prefixName,
+                    isChecked
+                );
+
+                if (!result) {
+                    break;
+                }
+            }
+
+            await loadPrefixesFromDb();
+        } catch (error) {
+            await loadPrefixesFromDb();
+        } finally {
+            setIsUpdatingActive(false);
+        }
     };
 
     useEffect(() => {
@@ -707,8 +767,9 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
         }
     }, [downloadFilePath, prefixsList]);
 
-    // Determine if all checkboxes are selected
-    const areAllSelected = selectedFilteredCategoriesList.every(item => item.display);
+    const areAllSelected =
+        selectedFilteredCategoriesList.length > 0 &&
+        selectedFilteredCategoriesList.every(item => item.display);
 
     return (
         <div
@@ -771,6 +832,7 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
                                         color: tone?.text ?? theme.panelText,
                                         background: isSelected ? (tone?.bg ?? theme.rowBackgroundColor) : theme.panelBackground,
                                         border: `1px solid ${isSelected ? (tone?.border ?? theme.buttonBorder) : theme.panelBorder}`,
+                                        opacity: element.active === false ? 0.55 : 1,
                                     }}
                                     onClick={() => handlePrefixClick(element)}
                                 >
@@ -779,23 +841,32 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
                             </OverlayTrigger>
                         );
                     })}
+
                     <br />
 
-                    <center> Suffix Suggestions</center>
+                    <center>Suffix Suggestions</center>
                     <hr />
+
                     {suffixsList?.map((element, index) => (
-                        <OverlayTrigger key={index} placement="bottom" overlay={<Tooltip id="tooltip" style={{ zIndex: 20000 }}>{element.value}</Tooltip>}>
+                        <OverlayTrigger
+                            key={index}
+                            placement="bottom"
+                            overlay={
+                                <Tooltip id="tooltip" style={{ zIndex: 20000 }}>
+                                    {element.value}
+                                </Tooltip>
+                            }
+                        >
                             <label
                                 className={`panel-tag-button ${selectedSuffix === element.value ? 'panel-tag-default' : 'panel-tag-selected'}`}
-                                onClick={() => handleSuffixClick(element.value)}>
+                                onClick={() => handleSuffixClick(element.value)}
+                            >
                                 {element.name}
                             </label>
                         </OverlayTrigger>
                     ))}
 
-
                     <br />
-
                     <hr />
 
                     <FilesPathTagsListSelector
@@ -809,36 +880,47 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({ downloadF
 
                     <br />
 
-                    <center> Selected Categories</center>
+                    <center>Selected Categories</center>
                     <hr />
-                    <div style={{ display: 'inline-block' }}>
 
+                    <div style={{ display: 'inline-block' }}>
                         <label style={{ marginRight: '10px', color: theme.panelText }}>
                             <input
                                 type="checkbox"
                                 checked={areAllSelected}
-                                onChange={handleSelectAllCheckbox}
+                                disabled={isUpdatingActive || selectedFilteredCategoriesList.length === 0}
+                                onChange={(e) => {
+                                    void handleSelectAllCheckbox(e);
+                                }}
                             />
                             Select/Deselect All
                         </label>
 
                         {selectedFilteredCategoriesList.map((item, index) => (
-                            <label key={index} style={{ marginRight: '10px', color: theme.panelText }}>
+                            <label
+                                key={item.category.id ?? index}
+                                style={{
+                                    marginRight: '10px',
+                                    color: theme.panelText,
+                                    opacity: isUpdatingActive ? 0.7 : 1,
+                                }}
+                            >
                                 <input
                                     type="checkbox"
                                     checked={item.display}
-                                    onChange={() => handleToggleBaseModelCheckbox(index)}
+                                    disabled={isUpdatingActive}
+                                    onChange={() => {
+                                        void handleToggleBaseModelCheckbox(index);
+                                    }}
                                 />
                                 {item.category.prefixName}
                             </label>
                         ))}
-
                     </div>
-
                 </div>
-            </Collapse >
+            </Collapse>
         </div>
-    )
+    );
 };
 
 interface FilesPathTagsListSelectorProps {

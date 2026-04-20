@@ -52,7 +52,14 @@ interface BigCardModeProps {
     handleOpenDownloadPath: (downloadPath: string) => void | Promise<void>;
     dummyCreateStatusByVid: Record<
         string,
-        { phase: 'idle' | 'downloading' | 'inserting' | 'success' | 'fail'; text: string; msg?: string; running?: boolean }
+        {
+            phase: 'idle' | 'downloading' | 'inserting' | 'success' | 'fail';
+            text: string;
+            msg?: string;
+            running?: boolean;
+            completedDownloadPath?: string;
+            completedDownloadFileName?: string;
+        }
     >;
 
     showAiSuggestionsPanel: boolean;
@@ -127,6 +134,14 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
 }) => {
     const [errorDownloadMethod, setErrorDownloadMethod] = React.useState<'server' | 'browser'>('browser');
     const [editingVersionValue, setEditingVersionValue] = React.useState("");
+
+    const handleCopyToClipboard = async (text: string) => {
+        try {
+            await navigator.clipboard.writeText(text);
+        } catch (err) {
+            console.error("Failed to copy to clipboard:", err);
+        }
+    };
 
     const REFRESH_HOLD_MS = 1500;
     const refreshHoldTimerRef = React.useRef<number | null>(null);
@@ -1153,47 +1168,152 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                 const running = Boolean(st?.running);
 
                                 const color =
-                                    st?.phase === 'success' ? (isDarkMode ? '#86efac' : '#166534') :
-                                        st?.phase === 'fail' ? (isDarkMode ? '#fca5a5' : '#991b1b') :
-                                            (isDarkMode ? '#fde68a' : '#92400e');
+                                    st?.phase === 'success'
+                                        ? (isDarkMode ? '#86efac' : '#166534')
+                                        : st?.phase === 'fail'
+                                            ? (isDarkMode ? '#fca5a5' : '#991b1b')
+                                            : (isDarkMode ? '#fde68a' : '#92400e');
+
+                                const hasCompletedDownloadInfo =
+                                    !!st?.completedDownloadPath || !!st?.completedDownloadFileName;
 
                                 return (
                                     <div
                                         style={{
                                             marginTop: 8,
                                             display: 'flex',
-                                            alignItems: 'center',
-                                            gap: 10,
-                                            justifyContent: 'flex-end',
+                                            flexDirection: 'column',
+                                            alignItems: 'stretch',
+                                            gap: 8,
                                             paddingRight: 2,
                                         }}
                                     >
-                                        <Button
-                                            size="sm"
-                                            variant="warning"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleCreateAddDummyFromError(entry);
-                                            }}
-                                            disabled={isLoading || running}
-                                            title="Download with custom downloader + insert into custom DB"
-                                        >
-                                            Create/Add Dummy
-                                        </Button>
-
-                                        <span
+                                        <div
                                             style={{
-                                                fontSize: 12,
-                                                color,
-                                                whiteSpace: 'nowrap',
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                                maxWidth: 260,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 10,
+                                                justifyContent: 'flex-end',
                                             }}
-                                            title={st?.msg || st?.text || ''}
                                         >
-                                            {st?.text || ''}
-                                        </span>
+                                            <Button
+                                                size="sm"
+                                                variant="warning"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleCreateAddDummyFromError(entry);
+                                                }}
+                                                disabled={isLoading || running}
+                                                title="Download with custom downloader + insert into custom DB"
+                                            >
+                                                Create/Add Dummy
+                                            </Button>
+
+                                            <span
+                                                style={{
+                                                    fontSize: 12,
+                                                    color,
+                                                    whiteSpace: 'nowrap',
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis',
+                                                    maxWidth: 260,
+                                                }}
+                                                title={st?.msg || st?.text || ''}
+                                            >
+                                                {st?.text || ''}
+                                            </span>
+                                        </div>
+
+                                        {hasCompletedDownloadInfo && (
+                                            <div
+                                                data-no-select="true"
+                                                style={{
+                                                    border: `1px solid ${isDarkMode ? '#555' : '#d1d5db'}`,
+                                                    borderRadius: 8,
+                                                    padding: '8px 10px',
+                                                    background: isDarkMode ? 'rgba(255,255,255,0.03)' : '#f8fafc',
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    gap: 8,
+                                                }}
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                {!!st?.completedDownloadPath && (
+                                                    <div
+                                                        style={{
+                                                            display: 'flex',
+                                                            alignItems: 'flex-start',
+                                                            gap: 8,
+                                                        }}
+                                                    >
+                                                        <strong style={{ flexShrink: 0, fontSize: 12 }}>Path:</strong>
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleOpenDownloadPath(st.completedDownloadPath || "");
+                                                            }}
+                                                            title={st.completedDownloadPath}
+                                                            style={{
+                                                                flex: 1,
+                                                                whiteSpace: 'normal',
+                                                                wordBreak: 'break-word',
+                                                                lineHeight: 1.35,
+                                                                textAlign: 'left',
+                                                                border: 'none',
+                                                                background: 'transparent',
+                                                                padding: 0,
+                                                                margin: 0,
+                                                                color: isDarkMode ? '#66b2ff' : '#0d6efd',
+                                                                cursor: 'pointer',
+                                                                textDecoration: 'underline',
+                                                                fontSize: 12,
+                                                            }}
+                                                        >
+                                                            {st.completedDownloadPath}
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                                {!!st?.completedDownloadFileName && (
+                                                    <div
+                                                        style={{
+                                                            display: 'flex',
+                                                            alignItems: 'flex-start',
+                                                            gap: 8,
+                                                        }}
+                                                    >
+                                                        <strong style={{ flexShrink: 0, fontSize: 12 }}>File:</strong>
+
+                                                        <div
+                                                            style={{
+                                                                flex: 1,
+                                                                minWidth: 0,
+                                                                fontSize: 12,
+                                                                wordBreak: 'break-word',
+                                                                lineHeight: 1.35,
+                                                            }}
+                                                            title={st.completedDownloadFileName}
+                                                        >
+                                                            {st.completedDownloadFileName}
+                                                        </div>
+
+                                                        <Button
+                                                            size="sm"
+                                                            variant={isDarkMode ? "outline-light" : "outline-secondary"}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleCopyToClipboard(st.completedDownloadFileName || "");
+                                                            }}
+                                                            style={{ flexShrink: 0 }}
+                                                        >
+                                                            Copy
+                                                        </Button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })()}

@@ -550,6 +550,31 @@ export const fetchGetCategoryPrefixesList = async (dispatch: any) => {
     }
 };
 
+export const fetchUpdateCategoryPrefixActive = async (
+    dispatch: any,
+    prefixName: string,
+    active: boolean
+) => {
+    try {
+        dispatch(clearError());
+
+        const response = await axios.post(`${config.domain}/api/update_category_prefix_active`, {
+            prefixName,
+            active,
+        });
+
+        if (response.status >= 200 && response.status < 300) {
+            return true;
+        } else {
+            throw new Error("Updating category prefix active failed.");
+        }
+    } catch (error: any) {
+        console.error("Error during category prefix active update:", error.message);
+        dispatch(setError({ hasError: true, errorMessage: error.message }));
+        return false;
+    }
+};
+
 export const fetchGetFilePathCategoriesList = async (dispatch: any) => {
     try {
         // Clear any previous errors
