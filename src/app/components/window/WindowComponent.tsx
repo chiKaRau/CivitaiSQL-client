@@ -652,6 +652,20 @@ const WindowComponent: React.FC = () => {
         setStagedItems(prev => prev.filter(x => x.id !== item.id));
     }, []);
 
+    const toRedCreatorUrl = (url: string) => {
+        try {
+            const creator = extractCreatorFromUserModelsUrl(url);
+
+            if (creator) {
+                return `https://civitai.red/user/${encodeURIComponent(creator)}/models`;
+            }
+
+            return url;
+        } catch {
+            return url;
+        }
+    };
+
     // Read current tab, extract creator if URL matches /user/<creator>/models
     const refreshCurrentTabCreator = async () => {
         const tab = await getActiveOrOriginalTab();
@@ -1798,24 +1812,30 @@ const WindowComponent: React.FC = () => {
     // A helper to update the tab to the new URL
     const goToUrlInBrowserTab = async (url: string) => {
         try {
-            // If you are storing the "originalTabId" in local storage:
-            const { originalTabId } = await chrome.storage.local.get('originalTabId');
+            const finalUrl = toRedCreatorUrl(url);
+
+            const { originalTabId } = await chrome.storage.local.get("originalTabId");
             if (originalTabId) {
-                // Update that specific tab
-                await chrome.tabs.update(originalTabId, { url });
+                await chrome.tabs.update(originalTabId, { url: finalUrl });
             } else {
-                // Fallback: update the active tab in the normal window
                 const windows = await chrome.windows.getAll({ populate: false });
-                const normalWindow = windows.find(win => win.type === 'normal');
+                const normalWindow = windows.find(win => win.type === "normal");
                 if (!normalWindow) return;
-                const [activeTab] = await chrome.tabs.query({ active: true, windowId: normalWindow.id });
+
+                const [activeTab] = await chrome.tabs.query({
+                    active: true,
+                    windowId: normalWindow.id,
+                });
                 if (!activeTab || !activeTab.id) return;
-                await chrome.tabs.update(activeTab.id, { url });
+
+                await chrome.tabs.update(activeTab.id, { url: finalUrl });
             }
-            await fetchUpdateCreatorUrlList(url, "checked", true, "N/A", dispatch)
+
+            await fetchUpdateCreatorUrlList(url, "checked", true, "N/A", dispatch);
             handleRefreshList();
-            // handleSetOriginalTab()
-            setTimeout(() => { refreshCurrentTabCreator(); }, 200);
+            setTimeout(() => {
+                refreshCurrentTabCreator();
+            }, 200);
         } catch (error) {
             console.error("Error updating tab:", error);
         }

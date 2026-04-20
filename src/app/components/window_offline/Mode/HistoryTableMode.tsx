@@ -306,7 +306,7 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
                         : "",
                 civitaiArchiveUrl:
                     entry.civitaiModelID && entry.civitaiVersionID
-                        ? `https://civitaiarchive.red/models/${entry.civitaiModelID}?modelVersionId=${entry.civitaiVersionID}`
+                        ? `https://civitaiarchive.com/models/${entry.civitaiModelID}?modelVersionId=${entry.civitaiVersionID}`
                         : "",
                 createdAt: formatHistoryDateTime(entry.createdAt),
                 updatedAt: formatHistoryDateTime(entry.updatedAt),

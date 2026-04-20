@@ -18,6 +18,16 @@ import { bookmarkThisUrl } from '../../utils/chromeUtils';
 const PENDING_PATH_RE = /[/\\]@scan@[/\\]acg[/\\]pending([/\\]|$)/i;
 const STORAGE_KEY = 'ea-auto-watch-enabled';
 
+const EARLY_ACCESS_GRACE_MS = 30_000;      // wait 30 sec after EA time ends
+const MAX_DOWNLOAD_ATTEMPTS = 10;          // 10 attempts max
+const RETRY_DELAY_MS = 5_000;              // wait 5 sec between attempts
+const FAILED_COOLDOWN_MS = 30 * 60 * 1000; // after 10 failed attempts, wait 30 min before retry
+const BETWEEN_DOWNLOADS_MS = 2_000;        // small gap between different models to reduce burst
+
+function sleep(ms: number) {
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 function sameLocalDay(a: Date, b: Date) {
     return (
         a.getFullYear() === b.getFullYear() &&
@@ -103,6 +113,10 @@ const EarlyAccessAutoWatchButton: React.FC = () => {
 
     const downloadedIdsRef = useRef<Set<string>>(new Set());
     const inFlightIdsRef = useRef<Set<string>>(new Set());
+
+    // key = version id, value = timestamp after which retry is allowed again
+    const retryAfterRef = useRef<Map<string, number>>(new Map());
+
     const scheduledTimerRef = useRef<number | null>(null);
     const pollTimerRef = useRef<number | null>(null);
 
@@ -150,19 +164,28 @@ const EarlyAccessAutoWatchButton: React.FC = () => {
     const dueEntries = useCallback((entries: OfflineDownloadEntry[]) => {
         const now = Date.now();
 
-        return entries.filter((entry) => {
-            const ends = getEarlyAccessEndsAt(entry);
-            const vid = entry.civitaiVersionID;
-            const path = entry.downloadFilePath;
+        return entries
+            .filter((entry) => {
+                const ends = getEarlyAccessEndsAt(entry);
+                const vid = entry.civitaiVersionID;
+                const path = entry.downloadFilePath;
 
-            if (!ends) return false;
-            if (!vid) return false;
-            if (isPendingPath(path)) return false;
-            if (downloadedIdsRef.current.has(vid)) return false;
-            if (inFlightIdsRef.current.has(vid)) return false;
+                if (!ends) return false;
+                if (!vid) return false;
+                if (isPendingPath(path)) return false;
+                if (downloadedIdsRef.current.has(vid)) return false;
+                if (inFlightIdsRef.current.has(vid)) return false;
 
-            return ends.getTime() <= now;
-        });
+                const retryAfter = retryAfterRef.current.get(vid);
+                if (retryAfter && retryAfter > now) return false;
+
+                return ends.getTime() + EARLY_ACCESS_GRACE_MS <= now;
+            })
+            .sort((a, b) => {
+                const aEnds = getEarlyAccessEndsAt(a)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+                const bEnds = getEarlyAccessEndsAt(b)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+                return aEnds - bEnds; // oldest overdue first
+            });
     }, []);
 
     const runDownloads = useCallback(async (entries: OfflineDownloadEntry[]) => {
@@ -176,6 +199,9 @@ const EarlyAccessAutoWatchButton: React.FC = () => {
                 if (!civitaiVersionID) continue;
                 if (downloadedIdsRef.current.has(civitaiVersionID)) continue;
                 if (inFlightIdsRef.current.has(civitaiVersionID)) continue;
+
+                const retryAfter = retryAfterRef.current.get(civitaiVersionID);
+                if (retryAfter && retryAfter > Date.now()) continue;
 
                 const civitaiModelFileList = getModelFileList(entry);
                 const civitaiFileName = getSafeTensorFileName(entry);
@@ -196,21 +222,50 @@ const EarlyAccessAutoWatchButton: React.FC = () => {
                 inFlightIdsRef.current.add(civitaiVersionID);
 
                 try {
-                    const ok = await fetchDownloadFilesByServer_v2(
-                        {
-                            civitaiUrl: entry.civitaiUrl,
-                            civitaiFileName,
-                            civitaiModelID: entry.civitaiModelID,
-                            civitaiVersionID: entry.civitaiVersionID,
-                            downloadFilePath,
-                            civitaiModelFileList,
-                        },
-                        dispatch
-                    );
+                    let ok = false;
+                    let lastErrorMessage = '';
 
+                    for (let attempt = 1; attempt <= MAX_DOWNLOAD_ATTEMPTS; attempt++) {
+                        try {
+                            console.log(
+                                `[EA Auto] Attempt ${attempt}/${MAX_DOWNLOAD_ATTEMPTS} for version ${civitaiVersionID}`
+                            );
+
+                            const result = await fetchDownloadFilesByServer_v2(
+                                {
+                                    civitaiUrl: entry.civitaiUrl,
+                                    civitaiFileName,
+                                    civitaiModelID: entry.civitaiModelID,
+                                    civitaiVersionID: entry.civitaiVersionID,
+                                    downloadFilePath,
+                                    civitaiModelFileList,
+                                },
+                                dispatch
+                            );
+
+                            ok = result === true;
+
+                            if (ok) {
+                                break;
+                            }
+
+                            lastErrorMessage = `fetchDownloadFilesByServer_v2 returned falsy on attempt ${attempt}`;
+                        } catch (err: any) {
+                            lastErrorMessage = err?.message || 'Unknown error';
+                            console.error(
+                                `[EA Auto] Download failed on attempt ${attempt}/${MAX_DOWNLOAD_ATTEMPTS} for version ${civitaiVersionID}:`,
+                                lastErrorMessage
+                            );
+                        }
+
+                        if (attempt < MAX_DOWNLOAD_ATTEMPTS) {
+                            await sleep(RETRY_DELAY_MS);
+                        }
+                    }
 
                     if (ok) {
                         downloadedIdsRef.current.add(civitaiVersionID);
+                        retryAfterRef.current.delete(civitaiVersionID);
                         setDownloadedCount((prev) => prev + 1);
 
                         await fetchAddRecordToDatabase(
@@ -219,23 +274,38 @@ const EarlyAccessAutoWatchButton: React.FC = () => {
                             downloadFilePath,
                             dispatch
                         );
+
                         bookmarkThisUrl(
-                            entry?.modelVersionObject?.model?.type ?? "N/A",
+                            entry?.modelVersionObject?.model?.type ?? 'N/A',
                             entry?.selectedCategory,
-                            `${entry?.modelVersionObject?.model?.name ?? "N/A"} - ${entry?.civitaiModelID} | Stable Diffusion LoRA | Civitai`
+                            `${entry?.modelVersionObject?.model?.name ?? 'N/A'} - ${entry?.civitaiModelID} | Stable Diffusion LoRA | Civitai`
+                        );
+
+                        console.log(
+                            `[EA Auto] Download succeeded for version ${civitaiVersionID}`
+                        );
+                    } else {
+                        const nextRetryAt = Date.now() + FAILED_COOLDOWN_MS;
+                        retryAfterRef.current.set(civitaiVersionID, nextRetryAt);
+
+                        console.warn(
+                            `[EA Auto] Version ${civitaiVersionID} failed after ${MAX_DOWNLOAD_ATTEMPTS} attempts. Cooling down until ${new Date(nextRetryAt).toLocaleString()}`
+                        );
+
+                        dispatch(
+                            setError({
+                                hasError: true,
+                                errorMessage:
+                                    `Early Access auto-download failed after ${MAX_DOWNLOAD_ATTEMPTS} attempts for version ${civitaiVersionID}. ` +
+                                    `Will retry after cooldown. Last error: ${lastErrorMessage || 'Unknown error'}`,
+                            })
                         );
                     }
-                } catch (err: any) {
-                    console.error('Early Access auto-download failed:', err?.message || err);
-                    dispatch(
-                        setError({
-                            hasError: true,
-                            errorMessage: `Early Access auto-download failed: ${err?.message || 'Unknown error'}`,
-                        })
-                    );
                 } finally {
                     inFlightIdsRef.current.delete(civitaiVersionID);
                 }
+
+                await sleep(BETWEEN_DOWNLOADS_MS);
             }
         } finally {
             setIsDownloading(false);
@@ -264,19 +334,27 @@ const EarlyAccessAutoWatchButton: React.FC = () => {
                 ends: getEarlyAccessEndsAt(entry),
             }))
             .filter(
-                (x): x is { entry: OfflineDownloadEntry; ends: Date } =>
-                    !!x.ends &&
-                    !!x.entry.civitaiVersionID &&
-                    !isPendingPath(x.entry.downloadFilePath) &&
-                    !downloadedIdsRef.current.has(x.entry.civitaiVersionID) &&
-                    !inFlightIdsRef.current.has(x.entry.civitaiVersionID) &&
-                    x.ends.getTime() > Date.now()
+                (x): x is { entry: OfflineDownloadEntry; ends: Date } => {
+                    if (!x.ends) return false;
+                    if (!x.entry.civitaiVersionID) return false;
+                    if (isPendingPath(x.entry.downloadFilePath)) return false;
+                    if (downloadedIdsRef.current.has(x.entry.civitaiVersionID)) return false;
+                    if (inFlightIdsRef.current.has(x.entry.civitaiVersionID)) return false;
+
+                    const retryAfter = retryAfterRef.current.get(x.entry.civitaiVersionID);
+                    if (retryAfter && retryAfter > Date.now()) return false;
+
+                    return x.ends.getTime() + EARLY_ACCESS_GRACE_MS > Date.now();
+                }
             )
             .sort((a, b) => a.ends.getTime() - b.ends.getTime());
 
         if (!nextFuture.length) return;
 
-        const waitMs = Math.max(250, nextFuture[0].ends.getTime() - Date.now());
+        const waitMs = Math.max(
+            250,
+            nextFuture[0].ends.getTime() + EARLY_ACCESS_GRACE_MS - Date.now()
+        );
 
         scheduledTimerRef.current = window.setTimeout(() => {
             void runDownloads(dueEntries(watchEntries));
@@ -313,7 +391,13 @@ const EarlyAccessAutoWatchButton: React.FC = () => {
                 <Button
                     variant={buttonVariant}
                     onClick={() => setIsEnabled((prev) => !prev)}
-                    aria-label={isDownloading ? 'Early Access auto downloading' : isEnabled ? 'Early Access auto downloading on' : 'Early Access auto downloading off'}
+                    aria-label={
+                        isDownloading
+                            ? 'Early Access auto downloading'
+                            : isEnabled
+                                ? 'Early Access auto downloading on'
+                                : 'Early Access auto downloading off'
+                    }
                     style={{
                         display: 'inline-flex',
                         alignItems: 'center',
