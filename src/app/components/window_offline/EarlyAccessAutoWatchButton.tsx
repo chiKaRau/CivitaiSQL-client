@@ -20,9 +20,9 @@ const STORAGE_KEY = 'ea-auto-watch-enabled';
 
 const EARLY_ACCESS_GRACE_MS = 30_000;      // wait 30 sec after EA time ends
 const MAX_DOWNLOAD_ATTEMPTS = 10;          // 10 attempts max
-const RETRY_DELAY_MS = 5_000;              // wait 5 sec between attempts
-const FAILED_COOLDOWN_MS = 30 * 60 * 1000; // after 10 failed attempts, wait 30 min before retry
-const BETWEEN_DOWNLOADS_MS = 2_000;        // small gap between different models to reduce burst
+const RETRY_DELAY_MS = 10_000;              // wait 10 sec between attempts
+const FAILED_COOLDOWN_MS = 360 * 60 * 1000; // after 10 failed attempts, wait 6 hours before retry
+const BETWEEN_DOWNLOADS_MS = 3_000;        // small gap between different models to reduce burst
 
 function sleep(ms: number) {
     return new Promise((resolve) => window.setTimeout(resolve, ms));
