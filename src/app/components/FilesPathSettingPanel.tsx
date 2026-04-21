@@ -14,12 +14,21 @@ import {
     fetchUpdateCategoryPrefixActive
 } from '../api/civitaiSQL_api';
 import { QuickModeControls } from './QuickModeControls';
-import { darkTheme, lightTheme } from './window_offline/OfflineWindow.theme';
+import { AppTheme, darkTheme, lightTheme } from './window_offline/OfflineWindow.theme';
 import { buildPrefixToneMap, findBestPrefixMatch } from '../utils/ColorUtils';
 
 interface FilesPathSettingPanelProps {
-    isHandleRefresh: boolean;
-    setIsHandleRefresh: (b: boolean) => void;
+    isHandleRefresh?: boolean;
+    setIsHandleRefresh?: (b: boolean) => void;
+
+    downloadFilePath?: string;
+    setDownloadFilePath?: (path: string) => void;
+
+    theme?: AppTheme;
+    isDarkMode?: boolean;
+
+    defaultOpen?: boolean;
+    showQuickModeControls?: boolean;
 }
 
 type PrefixItem = {
@@ -33,16 +42,23 @@ type PrefixItem = {
 };
 
 const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
-    isHandleRefresh,
-    setIsHandleRefresh
+    isHandleRefresh = false,
+    setIsHandleRefresh = () => { },
+    downloadFilePath,
+    setDownloadFilePath,
+    theme: themeProp,
+    isDarkMode: isDarkModeProp,
+    defaultOpen = false,
+    showQuickModeControls = true
 }) => {
     const dispatch = useDispatch();
     const chrome = useSelector((s: AppState) => s.chrome);
-    const { isDarkMode } = chrome;
 
-    const theme = isDarkMode ? darkTheme : lightTheme;
+    const effectiveIsDarkMode = isDarkModeProp ?? chrome.isDarkMode;
+    const theme = themeProp ?? (effectiveIsDarkMode ? darkTheme : lightTheme);
+    const effectiveDownloadFilePath = downloadFilePath ?? chrome.downloadFilePath ?? '';
 
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useState(defaultOpen);
     const [prefixsList, setPrefixsList] = useState<PrefixItem[]>([]);
     const [selectedPrefix, setSelectedPrefix] = useState('');
     const [selectedSuffix, setSelectedSuffix] = useState('');
@@ -84,8 +100,13 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
         }
     };
 
+    const applyDownloadFilePath = (nextPath: string) => {
+        setDownloadFilePath?.(nextPath);
+        dispatch(updateDownloadFilePath(nextPath));
+    };
+
     const handleApply = () => {
-        dispatch(updateDownloadFilePath(`${currentPrefix}${suffixInput}`));
+        applyDownloadFilePath(`${currentPrefix}${suffixInput}`);
     };
 
     useEffect(() => {
@@ -113,11 +134,19 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
         };
     };
 
+    useEffect(() => {
+        if (!prefixsList.length) return;
+
+        const { prefix, suffix } = splitFullPath(effectiveDownloadFilePath || '');
+        setSelectedPrefix(prefix);
+        setSelectedSuffix(suffix);
+    }, [effectiveDownloadFilePath, prefixsList]);
+
     const handlePrefixClick = (el: PrefixItem) => {
         setSelectedPrefix(el.downloadFilePath);
         setSelectedSuffix('');
         dispatch(updateDownloadPriority(el.downloadPriority ?? 0));
-        dispatch(updateDownloadFilePath(el.downloadFilePath));
+        applyDownloadFilePath(el.downloadFilePath);
     };
 
     const handleFullPathSelection = (fullPath: string) => {
@@ -130,7 +159,7 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
             dispatch(updateDownloadPriority(matchedPrefix.downloadPriority ?? 0));
         }
 
-        dispatch(updateDownloadFilePath(fullPath));
+        applyDownloadFilePath(fullPath);
     };
 
     const handleToggleBaseModelCheckbox = async (prefixName: string) => {
@@ -212,8 +241,8 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
     };
 
     const prefixToneMap = useMemo(() => {
-        return buildPrefixToneMap(prefixsList, theme, isDarkMode);
-    }, [prefixsList, theme, isDarkMode]);
+        return buildPrefixToneMap(prefixsList, theme, effectiveIsDarkMode);
+    }, [prefixsList, theme, effectiveIsDarkMode]);
 
     const panelStyle: React.CSSProperties = {
         border: `1px solid ${theme.panelBorder}`,
@@ -251,24 +280,26 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
 
     return (
         <>
-            <QuickModeControls
-                quickMode={quickMode}
-                onToggleQuick={() => {
-                    setQuickMode(q => !q);
-                    if (quickMode) {
-                        setIsLocked(false);
-                        setLockedPrefix('');
-                        setSuffixInput('');
-                    }
-                }}
-                currentPrefix={currentPrefix}
-                isLocked={isLocked}
-                onToggleLock={handleToggleLock}
-                suffixInput={suffixInput}
-                onSuffixChange={setSuffixInput}
-                onApply={handleApply}
-                theme={theme}
-            />
+            {showQuickModeControls && (
+                <QuickModeControls
+                    quickMode={quickMode}
+                    onToggleQuick={() => {
+                        setQuickMode(q => !q);
+                        if (quickMode) {
+                            setIsLocked(false);
+                            setLockedPrefix('');
+                            setSuffixInput('');
+                        }
+                    }}
+                    currentPrefix={currentPrefix}
+                    isLocked={isLocked}
+                    onToggleLock={handleToggleLock}
+                    suffixInput={suffixInput}
+                    onSuffixChange={setSuffixInput}
+                    onApply={handleApply}
+                    theme={theme}
+                />
+            )}
 
             <div style={panelStyle}>
                 <div

@@ -12,51 +12,91 @@ import { fetchGetCategoriesList } from "../api/civitaiSQL_api";
 import { initializeDatafromChromeStorage } from "../utils/chromeUtils";
 
 // components
-import { Form } from 'react-bootstrap';
+import { Form, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { BiCategory } from "react-icons/bi";
 import { CiWarning } from "react-icons/ci";
-import { darkTheme, lightTheme } from './window_offline/OfflineWindow.theme';
+import { AppTheme, darkTheme, lightTheme } from './window_offline/OfflineWindow.theme';
 
-const CategoriesListSelector: React.FC = () => {
+interface CategoriesListSelectorProps {
+    downloadFilePath?: string;
+    selectedCategory?: string;
+    setSelectCategory?: (category: string) => void;
+    theme?: AppTheme;
+    isDarkMode?: boolean;
+}
+
+const CategoriesListSelector: React.FC<CategoriesListSelectorProps> = ({
+    downloadFilePath,
+    selectedCategory,
+    setSelectCategory,
+    theme: passedTheme,
+    isDarkMode: passedIsDarkMode,
+}) => {
     const chrome = useSelector((state: AppState) => state.chrome);
-    const { selectedCategory, categoriesList, downloadFilePath, isDarkMode } = chrome;
+    const {
+        selectedCategory: chromeSelectedCategory,
+        categoriesList,
+        downloadFilePath: chromeDownloadFilePath,
+        isDarkMode: chromeIsDarkMode
+    } = chrome;
 
-    const theme = isDarkMode ? darkTheme : lightTheme;
+    const effectiveIsDarkMode = passedIsDarkMode ?? chromeIsDarkMode;
+    const theme = passedTheme ?? (effectiveIsDarkMode ? darkTheme : lightTheme);
+
+    const effectiveSelectedCategory = selectedCategory ?? chromeSelectedCategory ?? "";
+    const effectiveDownloadFilePath = downloadFilePath ?? chromeDownloadFilePath ?? "";
+    const effectiveCategoriesList = categoriesList ?? [];
 
     const dispatch = useDispatch();
     const [isLoading, setIsLoading] = useState(false);
     const [notMatchSelector, setNotMatchSelector] = useState(false);
 
+    const applySelectedCategory = (nextCategory: string) => {
+        if (setSelectCategory) {
+            setSelectCategory(nextCategory);
+        }
+        dispatch(updateSelectedCategory(nextCategory));
+    };
+
     useEffect(() => {
-        initializeDatafromChromeStorage(dispatch);
-        setupCategoriesInfo();
+        if (downloadFilePath === undefined && selectedCategory === undefined) {
+            initializeDatafromChromeStorage(dispatch);
+        }
+
+        void setupCategoriesInfo();
         handleCheckNotMatchSelector();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
         updateSelectedCategoryByFilePath();
-    }, [downloadFilePath, categoriesList]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [effectiveDownloadFilePath, effectiveCategoriesList]);
 
     useEffect(() => {
         handleCheckNotMatchSelector();
-    }, [selectedCategory, downloadFilePath]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [effectiveSelectedCategory, effectiveDownloadFilePath]);
 
     const setupCategoriesInfo = async () => {
         setIsLoading(true);
-        const data = await fetchGetCategoriesList(dispatch);
-        dispatch(updateCategoriesList(data));
-        setIsLoading(false);
+        try {
+            const data = await fetchGetCategoriesList(dispatch);
+            dispatch(updateCategoriesList(data ?? []));
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleCheckNotMatchSelector = () => {
-        const safePath = downloadFilePath ?? "";
-        const safeCategory = selectedCategory ?? "";
+        const safePath = effectiveDownloadFilePath ?? "";
+        const safeCategory = effectiveSelectedCategory ?? "";
         setNotMatchSelector(!safePath.replace(/\(.*?\)/g, '').includes(safeCategory));
     };
 
     const updateSelectedCategoryByFilePath = () => {
-        const safePath = downloadFilePath ?? "";
-        const safeCategoriesList = categoriesList ?? [];
+        const safePath = effectiveDownloadFilePath ?? "";
+        const safeCategoriesList = effectiveCategoriesList ?? [];
 
         let pathArray: string[] = [];
 
@@ -119,10 +159,12 @@ const CategoriesListSelector: React.FC = () => {
         }
 
         if (firstMatch === null) {
-            firstMatch = selectedCategory ?? "";
+            firstMatch = effectiveSelectedCategory ?? "";
         }
 
-        dispatch(updateSelectedCategory(firstMatch));
+        if (firstMatch !== effectiveSelectedCategory) {
+            applySelectedCategory(firstMatch);
+        }
     };
 
     return (
@@ -130,44 +172,32 @@ const CategoriesListSelector: React.FC = () => {
             style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
-                color: theme.panelText,
+                gap: '10px',
+                flexWrap: 'wrap',
             }}
         >
-            <Form
-                style={{
-                    margin: 0,
-                    width: '100%',
-                }}
-            >
-                <Form.Group
-                    controlId="selectSheet"
-                    style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        marginBottom: 0,
-                    }}
-                >
+            <Form style={{ flex: 1, minWidth: 0, margin: 0 }}>
+                <Form.Group controlId="selectSheet" style={{ margin: 0 }}>
                     <Form.Label
                         style={{
                             fontSize: '13px',
                             fontWeight: 700,
                             color: theme.panelText,
-                            marginBottom: 0,
+                            marginBottom: '6px',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '6px',
                         }}
                     >
                         <BiCategory />
+                        Category
                     </Form.Label>
 
                     <Form.Select
-                        value={selectedCategory ?? ""}
+                        value={effectiveSelectedCategory}
                         disabled={isLoading}
                         onChange={(event) => {
-                            dispatch(updateSelectedCategory(event.target.value));
+                            applySelectedCategory(event.target.value);
                         }}
                         style={{
                             borderRadius: '10px',
@@ -189,7 +219,7 @@ const CategoriesListSelector: React.FC = () => {
                             Select an option
                         </option>
 
-                        {categoriesList?.map((element, index) => (
+                        {effectiveCategoriesList?.map((element, index) => (
                             <option
                                 key={index}
                                 value={element}
@@ -206,24 +236,33 @@ const CategoriesListSelector: React.FC = () => {
             </Form>
 
             {notMatchSelector && (
-                <div
-                    style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        width: "28px",
-                        height: "28px",
-                        borderRadius: "8px",
-                        background: isDarkMode ? "#4a3f16" : "#fff3cd",
-                        border: isDarkMode ? "1px solid #8a6d3b" : "1px solid #ffe08a",
-                        color: isDarkMode ? "#ffd966" : "#8a6d3b",
-                        lineHeight: 0,
-                        flexShrink: 0,
-                    }}
-                    title="Selected category does not match current folder path"
+                <OverlayTrigger
+                    placement="top"
+                    container={document.body}
+                    overlay={
+                        <Tooltip id="tooltip-category-warning" style={{ zIndex: 20000 }}>
+                            Current folder path does not seem to match the selected category.
+                        </Tooltip>
+                    }
                 >
-                    <CiWarning size={16} style={{ display: "block" }} />
-                </div>
+                    <div
+                        style={{
+                            width: '34px',
+                            height: '34px',
+                            borderRadius: '999px',
+                            background: effectiveIsDarkMode ? '#4a3f16' : '#fff3cd',
+                            border: effectiveIsDarkMode ? '1px solid #8a6d3b' : '1px solid #ffe08a',
+                            color: effectiveIsDarkMode ? '#ffd966' : '#8a6d3b',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                            marginTop: '24px',
+                        }}
+                    >
+                        <CiWarning size={18} />
+                    </div>
+                </OverlayTrigger>
             )}
         </div>
     );
