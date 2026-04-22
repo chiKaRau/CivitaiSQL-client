@@ -125,7 +125,8 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
     const [hiddenToastIds, setHiddenToastIds] = useState<number[]>([]);
     const [cartedById, setCartedById] = useState<Record<number, boolean>>({});
     const [isLoading, setIsLoading] = useState(false);
-    const [updateOption, setUpdateOption] = useState("Database_and_UpdateFolder");
+    const [updateOptionById, setUpdateOptionById] = useState<Record<number, string>>({});
+    const [localFileFolderAvailableById, setLocalFileFolderAvailableById] = useState<Record<number, boolean>>({});
     const [isSorted, setIsSorted] = useState(false);
     const [baseModelList, setBaseModelList] = useState<{ baseModel: string; display: boolean }[]>([]);
     const [isColapPanelOpen, setUsColapPanelOpen] = useState(false);
@@ -220,6 +221,107 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
         setModelsList(nextIsSorted ? [...filtered].reverse() : filtered);
     };
 
+    const isPendingPath = (path?: string | null) => {
+        if (!path) return false;
+        const normalized = path.replace(/\\/g, "/").replace(/\/+$/, "");
+        return /\/Pending$/i.test(normalized) || /\/Pending\//i.test(`${normalized}/`);
+    };
+
+    const normalizeLocalPathToScanPath = (localPath?: string | null) => {
+        if (!localPath) return "";
+
+        const normalized = localPath.replace(/\\/g, "/");
+
+        const scanMarker = "/@scan@/";
+        const scanMarkerIndex = normalized.indexOf(scanMarker);
+        if (scanMarkerIndex !== -1) {
+            let scanPath = normalized.substring(scanMarkerIndex);
+            if (!scanPath.endsWith("/")) {
+                scanPath += "/";
+            }
+            return scanPath;
+        }
+
+        const acgMarker = "/ACG/";
+        const acgMarkerIndex = normalized.indexOf(acgMarker);
+        if (acgMarkerIndex !== -1) {
+            let scanPath = `/@scan@${normalized.substring(acgMarkerIndex)}`;
+            if (!scanPath.endsWith("/")) {
+                scanPath += "/";
+            }
+            return scanPath;
+        }
+
+        return "";
+    };
+
+    const buildUpdatePathFromScanPath = (scanPath: string) => {
+        if (!scanPath) return "";
+
+        const updatePathRegex = /^\/@scan@\/[^\/]+\/?$/;
+
+        if (updatePathRegex.test(scanPath)) {
+            return `/@scan@/Update/${scanPath.replace("/@scan@/", "")}`;
+        }
+
+        return `/@scan@/Update/${scanPath.replace("/@scan@/ACG/", "")}`;
+    };
+
+    const setLocalFileFolderAvailableForModel = (modelId: number, isAvailable: boolean) => {
+        setLocalFileFolderAvailableById((prev) => {
+            if (prev[modelId] === isAvailable) {
+                return prev;
+            }
+
+            return {
+                ...prev,
+                [modelId]: isAvailable,
+            };
+        });
+    };
+
+    const getAvailableOptionsForModel = (model: ModelEntry) => {
+        const localScanPath = normalizeLocalPathToScanPath(model?.localPath);
+        const localUpdatePath = buildUpdatePathFromScanPath(localScanPath);
+
+        const options: string[] = [];
+
+        // Top priority first
+        if (
+            localScanPath &&
+            !isPendingPath(localScanPath) &&
+            localFileFolderAvailableById[model.id] === true
+        ) {
+            options.push("Database_and_LocalFileFolder");
+        }
+
+        if (localUpdatePath && !isPendingPath(localUpdatePath)) {
+            options.push("Database_and_LocalUpdateFolder");
+        }
+
+        if (!isPendingPath(UpdateDownloadFilePath)) {
+            options.push("Database_and_UpdateFolder");
+        }
+
+        if (!isPendingPath(resolvedDownloadFilePath)) {
+            options.push("Database_Only");
+        }
+
+        return options;
+    };
+
+    const getDefaultUpdateOptionForModel = (model: ModelEntry) => {
+        const options = getAvailableOptionsForModel(model);
+        return options[0] || "";
+    };
+
+    const setUpdateOptionForModel = (modelId: number, value: string) => {
+        setUpdateOptionById((prev) => ({
+            ...prev,
+            [modelId]: value,
+        }));
+    };
+
     useEffect(() => {
         void handleUpdateModelsList();
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -236,22 +338,28 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
 
     useEffect(() => {
         if (!modelsList?.length) {
-            setUpdateOption("Database_and_UpdateFolder");
+            setUpdateOptionById({});
             return;
         }
 
-        const hasAnyLocalUpdatePath = modelsList.some((model) => {
-            const localScanPath = normalizeLocalPathToScanPath(model?.localPath);
-            const localUpdatePath = buildUpdatePathFromScanPath(localScanPath);
-            return !!localUpdatePath;
-        });
+        setUpdateOptionById((prev) => {
+            const next = { ...prev };
 
-        setUpdateOption(
-            hasAnyLocalUpdatePath
-                ? "Database_and_LocalUpdateFolder"
-                : "Database_and_UpdateFolder"
-        );
-    }, [modelsList]);
+            modelsList.forEach((model) => {
+                const allowedOptions = getAvailableOptionsForModel(model);
+                const currentValue = next[model.id];
+
+                if (!allowedOptions.length) {
+                    next[model.id] = "";
+                } else if (!currentValue || !allowedOptions.includes(currentValue)) {
+                    next[model.id] = allowedOptions[0];
+                }
+            });
+
+            return next;
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [modelsList, resolvedDownloadFilePath, UpdateDownloadFilePath, localFileFolderAvailableById]);
 
     const handleUpdateModelsList = async () => {
         setIsLoading(true);
@@ -275,6 +383,8 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
             setOriginalModelsList(sortedData);
             setModelsList(sortedData);
             setHiddenToastIds([]);
+            setLocalFileFolderAvailableById({});
+            setUpdateOptionById({});
 
             const uniqueBaseModels = Array.from(
                 new Set(sortedData.map((obj: ModelEntry) => obj.baseModel))
@@ -331,46 +441,6 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
 
     const handleReverseModelList = () => {
         setIsSorted((prev) => !prev);
-    };
-
-    const normalizeLocalPathToScanPath = (localPath?: string | null) => {
-        if (!localPath) return "";
-
-        const normalized = localPath.replace(/\\/g, "/");
-
-        const scanMarker = "/@scan@/";
-        const scanMarkerIndex = normalized.indexOf(scanMarker);
-        if (scanMarkerIndex !== -1) {
-            let scanPath = normalized.substring(scanMarkerIndex);
-            if (!scanPath.endsWith("/")) {
-                scanPath += "/";
-            }
-            return scanPath;
-        }
-
-        const acgMarker = "/ACG/";
-        const acgMarkerIndex = normalized.indexOf(acgMarker);
-        if (acgMarkerIndex !== -1) {
-            let scanPath = `/@scan@${normalized.substring(acgMarkerIndex)}`;
-            if (!scanPath.endsWith("/")) {
-                scanPath += "/";
-            }
-            return scanPath;
-        }
-
-        return "";
-    };
-
-    const buildUpdatePathFromScanPath = (scanPath: string) => {
-        if (!scanPath) return "";
-
-        const updatePathRegex = /^\/@scan@\/[^\/]+\/?$/;
-
-        if (updatePathRegex.test(scanPath)) {
-            return `/@scan@/Update/${scanPath.replace("/@scan@/", "")}`;
-        }
-
-        return `/@scan@/Update/${scanPath.replace("/@scan@/ACG/", "")}`;
     };
 
     const handleAddOfflineDownloadFileintoOfflineDownloadList = async (targetDownloadFilePath?: string) => {
@@ -651,11 +721,25 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                 return;
             }
 
+            const clickedModel = modelsList.find((m) => m.id === id);
+
+            if (!clickedModel) {
+                dispatch(setError({ hasError: true, errorMessage: "Clicked model not found" }));
+                return;
+            }
+
+            const selectedUpdateOption =
+                updateOptionById[id] || getDefaultUpdateOptionForModel(clickedModel);
+
+            if (!selectedUpdateOption) {
+                dispatch(setError({ hasError: true, errorMessage: "No valid update option available" }));
+                return;
+            }
+
             let selectedPath = "";
 
-            switch (updateOption) {
+            switch (selectedUpdateOption) {
                 case "Database_and_LocalUpdateFolder": {
-                    const clickedModel = modelsList.find((m) => m.id === id);
                     const localScanPath = normalizeLocalPathToScanPath(clickedModel?.localPath);
                     const localUpdatePath = buildUpdatePathFromScanPath(localScanPath);
                     selectedPath = localUpdatePath || UpdateDownloadFilePath;
@@ -675,11 +759,19 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                     break;
             }
 
+            if (isPendingPath(selectedPath)) {
+                dispatch(setError({
+                    hasError: true,
+                    errorMessage: "Pending path is not allowed for this update option",
+                }));
+                return;
+            }
+
             syncDownloadFilePath(selectedPath);
 
             await fetchUpdateRecordAtDatabase(id, resolvedUrl, resolvedSelectedCategory, dispatch);
 
-            if (updateOption !== "Database_Only") {
+            if (selectedUpdateOption !== "Database_Only") {
                 if (offlineMode) {
                     await handleAddOfflineDownloadFileintoOfflineDownloadList(selectedPath);
                 } else {
@@ -851,6 +943,16 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                         const localUpdatePath = buildUpdatePathFromScanPath(localScanPath);
                         const isSameBaseModel =
                             (model?.baseModel || "").toLowerCase() === selectedBaseModel.toLowerCase();
+
+                        const availableOptions = getAvailableOptionsForModel(model);
+                        const selectedUpdateOption =
+                            updateOptionById[model.id] || getDefaultUpdateOptionForModel(model);
+
+                        const canUseLocalUpdateFolder = availableOptions.includes("Database_and_LocalUpdateFolder");
+                        const canUseUpdateFolder = availableOptions.includes("Database_and_UpdateFolder");
+                        const canUseDatabaseOnly = availableOptions.includes("Database_Only");
+                        const hasAnySelectableOption = availableOptions.length > 0;
+                        const radioName = `update-option-${model.id}`;
 
                         if (hiddenToastIds.includes(model.id)) return null;
 
@@ -1084,25 +1186,35 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                                                         modelID={String(model?.modelNumber ?? "")}
                                                         versionID={String(model?.versionNumber ?? "")}
                                                         localScanPath={localScanPath}
-                                                        updateOption={updateOption}
-                                                        setUpdateOption={setUpdateOption}
+                                                        updateOption={selectedUpdateOption}
+                                                        setUpdateOption={(value) =>
+                                                            setUpdateOptionForModel(model.id, value)
+                                                        }
+                                                        onAvailabilityChange={(isAvailable) =>
+                                                            setLocalFileFolderAvailableForModel(model.id, isAvailable)
+                                                        }
                                                         theme={theme}
+                                                        radioName={radioName}
                                                     />
 
-                                                    {localUpdatePath && (
+                                                    {canUseLocalUpdateFolder && (
                                                         <label
                                                             style={radioCardStyle(
-                                                                updateOption === "Database_and_LocalUpdateFolder"
+                                                                selectedUpdateOption === "Database_and_LocalUpdateFolder"
                                                             )}
                                                         >
                                                             <input
                                                                 type="radio"
+                                                                name={radioName}
                                                                 value="Database_and_LocalUpdateFolder"
                                                                 checked={
-                                                                    updateOption === "Database_and_LocalUpdateFolder"
+                                                                    selectedUpdateOption === "Database_and_LocalUpdateFolder"
                                                                 }
                                                                 onChange={() =>
-                                                                    setUpdateOption("Database_and_LocalUpdateFolder")
+                                                                    setUpdateOptionForModel(
+                                                                        model.id,
+                                                                        "Database_and_LocalUpdateFolder"
+                                                                    )
                                                                 }
                                                             />
                                                             <span style={{ wordBreak: "break-word" }}>
@@ -1112,44 +1224,72 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                                                         </label>
                                                     )}
 
-                                                    <label
-                                                        style={radioCardStyle(
-                                                            updateOption === "Database_and_UpdateFolder"
-                                                        )}
-                                                    >
-                                                        <input
-                                                            type="radio"
-                                                            value="Database_and_UpdateFolder"
-                                                            checked={updateOption === "Database_and_UpdateFolder"}
-                                                            onChange={() =>
-                                                                setUpdateOption("Database_and_UpdateFolder")
-                                                            }
-                                                        />
-                                                        <span style={{ wordBreak: "break-word" }}>
-                                                            Add the Parent to this PC&apos;s {UpdateDownloadFilePath}
-                                                            and Remove the Sub Record from Database
-                                                        </span>
-                                                    </label>
+                                                    {canUseUpdateFolder && (
+                                                        <label
+                                                            style={radioCardStyle(
+                                                                selectedUpdateOption === "Database_and_UpdateFolder"
+                                                            )}
+                                                        >
+                                                            <input
+                                                                type="radio"
+                                                                name={radioName}
+                                                                value="Database_and_UpdateFolder"
+                                                                checked={selectedUpdateOption === "Database_and_UpdateFolder"}
+                                                                onChange={() =>
+                                                                    setUpdateOptionForModel(
+                                                                        model.id,
+                                                                        "Database_and_UpdateFolder"
+                                                                    )
+                                                                }
+                                                            />
+                                                            <span style={{ wordBreak: "break-word" }}>
+                                                                Add the Parent to this PC&apos;s {UpdateDownloadFilePath}
+                                                                and Remove the Sub Record from Database
+                                                            </span>
+                                                        </label>
+                                                    )}
 
-                                                    <label
-                                                        style={radioCardStyle(updateOption === "Database_Only")}
-                                                    >
-                                                        <input
-                                                            type="radio"
-                                                            value="Database_Only"
-                                                            checked={updateOption === "Database_Only"}
-                                                            onChange={() => setUpdateOption("Database_Only")}
-                                                        />
-                                                        <span>
-                                                            Replace the Parent to the Sub in Database Only
-                                                        </span>
-                                                    </label>
+                                                    {canUseDatabaseOnly && (
+                                                        <label
+                                                            style={radioCardStyle(
+                                                                selectedUpdateOption === "Database_Only"
+                                                            )}
+                                                        >
+                                                            <input
+                                                                type="radio"
+                                                                name={radioName}
+                                                                value="Database_Only"
+                                                                checked={selectedUpdateOption === "Database_Only"}
+                                                                onChange={() =>
+                                                                    setUpdateOptionForModel(model.id, "Database_Only")
+                                                                }
+                                                            />
+                                                            <span>
+                                                                Replace the Parent to the Sub in Database Only
+                                                            </span>
+                                                        </label>
+                                                    )}
+
+                                                    {!hasAnySelectableOption && (
+                                                        <div
+                                                            style={{
+                                                                padding: "10px 12px",
+                                                                borderRadius: "8px",
+                                                                border: `1px solid ${theme.panelBorder}`,
+                                                                backgroundColor: theme.headerBackgroundColor,
+                                                                color: theme.headerFontColor,
+                                                                wordBreak: "break-word",
+                                                            }}
+                                                        >
+                                                            Update disabled because the downloadFilePath cannot be a Pending path.
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
 
                                             <button
                                                 type="button"
-                                                disabled={isLoading}
+                                                disabled={isLoading || !hasAnySelectableOption}
                                                 onClick={() => void handleUpdateModel(model?.id)}
                                                 style={{
                                                     width: "100%",
@@ -1163,7 +1303,8 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                                                     alignItems: "center",
                                                     justifyContent: "center",
                                                     gap: "8px",
-                                                    cursor: isLoading ? "not-allowed" : "pointer",
+                                                    cursor: isLoading || !hasAnySelectableOption ? "not-allowed" : "pointer",
+                                                    opacity: hasAnySelectableOption ? 1 : 0.65,
                                                     boxShadow: offlineMode
                                                         ? "0 4px 12px rgba(25, 135, 84, 0.25)"
                                                         : "0 4px 12px rgba(13, 110, 253, 0.25)",
