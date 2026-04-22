@@ -105,6 +105,17 @@ function getCardLink(card: HTMLElement): HTMLAnchorElement | null {
   );
 }
 
+function isDirectCardElement(node: HTMLElement, parentContainer: HTMLElement): boolean {
+  if (!parentContainer.contains(node)) return false;
+
+  const resolved = resolveCardElement(node);
+  if (!resolved) return false;
+
+  if (resolved === node) return true;
+
+  return resolved.parentElement === node.parentElement;
+}
+
 /******************************************/
 // Apply Card feature Section
 /******************************************/
@@ -189,9 +200,9 @@ function hydrateStagedBadgesFromStorage(): void {
 }
 
 function bootStagedBadgeHydration(attempt = 0): void {
-  const container = getModelContainer();
+  const cards = getModelCards();
 
-  if (!container) {
+  if (cards.length === 0) {
     if (attempt < 20) {
       window.setTimeout(() => bootStagedBadgeHydration(attempt + 1), 500);
     }
@@ -1088,9 +1099,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-initializeHrefMap();
-bootStagedBadgeHydration();
-
 function initializeHrefMap(): void {
   const container = getModelContainer();
   if (!container) {
@@ -1676,10 +1684,16 @@ function addCreatorButton(card: HTMLElement) {
 }
 
 function hydrateCard(cardEl: HTMLElement) {
-  observeCardItem(cardEl);
-  applyOpenInNewTab(cardEl);
-  addCreatorButton(cardEl);
-  addCardCheckbox(cardEl);
+  const wasHydrated = cardEl.dataset.myExtensionHydrated === '1';
+
+  if (!wasHydrated) {
+    cardEl.dataset.myExtensionHydrated = '1';
+    observeCardItem(cardEl);
+    applyOpenInNewTab(cardEl);
+    addCreatorButton(cardEl);
+    addCardCheckbox(cardEl);
+  }
+
   applyStagedForCard(cardEl);
   applyLockedForCard(cardEl);
 
@@ -1691,26 +1705,55 @@ function hydrateCard(cardEl: HTMLElement) {
 
 function initMutationObserver(parentContainer: HTMLElement) {
   const callback: MutationCallback = (mutationsList) => {
-    const seen = new Set<HTMLElement>();
-
-    const maybeHydrate = (cardEl: HTMLElement | null) => {
-      if (!cardEl || seen.has(cardEl)) return;
-      seen.add(cardEl);
-      hydrateCard(cardEl);
-    };
-
     for (const mutation of mutationsList) {
       if (mutation.type !== 'childList') continue;
 
-      mutation.addedNodes.forEach((node) => {
-        if (!(node instanceof HTMLElement)) return;
+      if (mutation.addedNodes.length > 0) {
+        mutation.addedNodes.forEach((node) => {
+          if (!(node instanceof HTMLElement)) return;
 
-        maybeHydrate(resolveCardElement(node));
+          const directCard = resolveCardElement(node);
 
-        node.querySelectorAll?.(MODEL_LINK_SELECTOR).forEach((linkNode) => {
-          maybeHydrate(resolveCardElement(linkNode as HTMLAnchorElement));
+          if (directCard && isDirectCardElement(directCard, parentContainer)) {
+            const anchor = getCardLink(directCard);
+
+            if (anchor) {
+              const suffixUrl = anchor.href;
+
+              chrome.runtime.sendMessage({
+                action: "checkUrlsInDatabase",
+                newUrlList: [suffixUrl],
+              });
+
+              chrome.runtime.sendMessage({
+                action: "checkifmodelAvaliable",
+                newUrlList: [suffixUrl],
+              });
+
+              const divId = directCard.id;
+              const processedUrl = anchor.href.replace("-commission", "");
+
+              if (divId) {
+                hrefMap.set(divId, processedUrl);
+                console.log(`Added href to hrefMap: [${divId}] ${processedUrl}`);
+              }
+
+              if (updateInfoMap.has(processedUrl) || updateInfoMap.has(anchor.href)) {
+                handleNewCard(directCard);
+              }
+
+              observeCardItem(directCard);
+              applyOpenInNewTab(directCard);
+              addCreatorButton(directCard);
+              addCardCheckbox(directCard);
+              applyStagedForCard(directCard);
+              applyLockedForCard(directCard);
+            }
+          }
+
+          observeCardItem(node);
         });
-      });
+      }
     }
   };
 
@@ -1787,11 +1830,40 @@ function observeCardItem(cardItem: HTMLElement) {
 }
 
 
-function processExistingCards(parentContainer?: HTMLElement | null) {
+function processExistingCards(parentContainer: HTMLElement) {
   const cardItems = getModelCards(parentContainer);
+
+  const initialUrls: string[] = [];
+
   cardItems.forEach((item) => {
-    hydrateCard(item);
+    observeCardItem(item);
+    applyOpenInNewTab(item);
+    addCreatorButton(item);
+    addCardCheckbox(item);
+    applyStagedForCard(item);
+    applyLockedForCard(item);
+
+    const anchor = getCardLink(item);
+    if (anchor?.href) {
+      initialUrls.push(anchor.href);
+
+      if (item.id) {
+        hrefMap.set(item.id, anchor.href.replace("-commission", ""));
+      }
+    }
   });
+
+  if (initialUrls.length > 0) {
+    chrome.runtime.sendMessage({
+      action: "checkUrlsInDatabase",
+      newUrlList: initialUrls,
+    });
+
+    chrome.runtime.sendMessage({
+      action: "checkifmodelAvaliable",
+      newUrlList: initialUrls,
+    });
+  }
 }
 
 function waitForModelCards(timeout = 15000): Promise<void> {
@@ -1823,8 +1895,11 @@ async function main() {
     await waitForModelCards(15000);
 
     const parentContainer = getModelContainer() || document.body;
+
     initMutationObserver(parentContainer);
     processExistingCards(parentContainer);
+    initializeHrefMap();
+    bootStagedBadgeHydration();
   } catch (error) {
     console.error(error);
   }

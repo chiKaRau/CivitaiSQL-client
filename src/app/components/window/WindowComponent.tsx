@@ -3163,7 +3163,7 @@ const WindowComponent: React.FC = () => {
                                                 <SetOriginalTabButton
                                                     handleSetOriginalTab={handleSetOriginalTab}
                                                     isDarkMode={isDarkMode}
-                                                    disabled={counting}
+                                                    disabled={false}
                                                     tabCreator={tabCreator}
                                                 />
                                             </div>
