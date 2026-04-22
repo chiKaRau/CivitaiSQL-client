@@ -35,23 +35,87 @@ function getModelLinks(root: ParentNode = document): HTMLAnchorElement[] {
 function resolveCardElement(node: HTMLElement | HTMLAnchorElement | null): HTMLElement | null {
   if (!node) return null;
 
-  if (node instanceof HTMLAnchorElement) {
-    return (
-      (node.closest(cardSelector) as HTMLElement | null) ||
-      (node.closest('div[id][style*="aspect-ratio"]') as HTMLElement | null) ||
-      (node.closest('div.relative.flex.overflow-hidden.rounded-md') as HTMLElement | null)
-    );
-  }
-
-  if (node.matches(cardSelector)) {
+  // If we were handed a card directly, keep it.
+  if (node instanceof HTMLElement && node.matches(cardSelector)) {
     return node;
   }
 
-  const link = node.matches(MODEL_LINK_SELECTOR)
-    ? (node as HTMLAnchorElement)
-    : (node.querySelector(MODEL_LINK_SELECTOR) as HTMLAnchorElement | null);
+  // Resolve the model link first.
+  const link =
+    node instanceof HTMLAnchorElement
+      ? node
+      : node.matches(MODEL_LINK_SELECTOR)
+        ? (node as HTMLAnchorElement)
+        : (node.querySelector(MODEL_LINK_SELECTOR) as HTMLAnchorElement | null);
 
-  return resolveCardElement(link);
+  if (!link) return null;
+
+  // 1) Existing exact-ish card matches first (preserve current behavior)
+  const exactCard =
+    (link.closest(cardSelector) as HTMLElement | null) ||
+    (link.closest('div[id][style*="aspect-ratio"]') as HTMLElement | null) ||
+    (link.closest('div.relative.flex.overflow-hidden.rounded-md') as HTMLElement | null);
+
+  if (exactCard) return exactCard;
+
+  // 2) Walk upward and find the nearest "card-like" ancestor.
+  // This helps if they add/remove wrapper divs but keep similar internal structure.
+  let current: HTMLElement | null = link.parentElement;
+  let best: HTMLElement | null = null;
+
+  while (current && current !== document.body) {
+    const hrefLinks = Array.from(current.querySelectorAll(MODEL_LINK_SELECTOR)).filter(
+      (el): el is HTMLAnchorElement => el instanceof HTMLAnchorElement
+    );
+
+    const containsThisLink = hrefLinks.includes(link);
+    const onlyOneModelLink = hrefLinks.length === 1;
+    const hasImage = !!current.querySelector('img');
+    const hasCreatorText = Array.from(current.querySelectorAll('span, p, div')).some((el) => {
+      const txt = (el.textContent || '').trim();
+      return /^by\s+/i.test(txt);
+    });
+    const hasFooterLike =
+      !!current.querySelector('[class*="footer__"]') ||
+      !!current.querySelector('.AspectRatioCard_footer__XmvNR') ||
+      !!current.querySelector('.AspectRatioImageCard_footer__FOU7a');
+
+    const rect = current.getBoundingClientRect();
+    const looksCardSized =
+      rect.width >= 120 &&
+      rect.height >= 160 &&
+      rect.width <= window.innerWidth * 0.95 &&
+      rect.height <= window.innerHeight * 1.5;
+
+    if (containsThisLink && onlyOneModelLink && hasImage && looksCardSized) {
+      best = current;
+
+      // Prefer a stronger match and stop early
+      if (hasCreatorText || hasFooterLike || current.id) {
+        return current;
+      }
+    }
+
+    current = current.parentElement;
+  }
+
+  if (best) return best;
+
+  // 3) Last-resort fallback:
+  // nearest ancestor that contains the link and an image but not many model links.
+  current = link.parentElement;
+  while (current && current !== document.body) {
+    const modelLinks = current.querySelectorAll(MODEL_LINK_SELECTOR).length;
+    const hasImage = !!current.querySelector('img');
+
+    if (hasImage && modelLinks <= 2) {
+      return current;
+    }
+
+    current = current.parentElement;
+  }
+
+  return null;
 }
 
 function getModelContainer(): HTMLElement | null {
@@ -65,13 +129,34 @@ function getModelContainer(): HTMLElement | null {
 
   const firstLink = getModelLinks(document)[0];
   const firstCard = resolveCardElement(firstLink);
-  const row = firstCard?.parentElement as HTMLElement | null;
+  if (!firstCard) return null;
 
-  if (row?.hasAttribute('data-index')) {
-    return (row.parentElement as HTMLElement | null) || row;
+  let current: HTMLElement | null = firstCard.parentElement;
+  let rowCandidate: HTMLElement | null = null;
+
+  while (current && current !== document.body) {
+    if (current.hasAttribute('data-index')) {
+      rowCandidate = current;
+    }
+
+    const style = current.getAttribute('style') || '';
+    const hasAbsoluteHeightLayout =
+      style.includes('position: relative') &&
+      style.includes('height:') &&
+      style.includes('width: 100%');
+
+    if (hasAbsoluteHeightLayout) {
+      return current;
+    }
+
+    current = current.parentElement;
   }
 
-  return row;
+  if (rowCandidate?.parentElement) {
+    return rowCandidate.parentElement as HTMLElement;
+  }
+
+  return firstCard.parentElement as HTMLElement | null;
 }
 
 function getModelCards(container?: HTMLElement | null): HTMLElement[] {
