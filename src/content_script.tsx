@@ -1,12 +1,113 @@
 import JSZip from 'jszip';
 console.log("Calling Content Script")
 
-const cardSelector =
-  '.relative.flex.overflow-hidden.rounded-md.border-gray-3.bg-gray-0.shadow-gray-4.dark\\:border-dark-4.dark\\:bg-dark-6.dark\\:shadow-dark-8.flex-col';
+/******************************************/
+// Capture Card Sections
+/******************************************/
 
-const CIVITAI_GRID_SELECTOR = '[class^="MasonryGrid_grid__6QtWa"]';
+const MODEL_LINK_SELECTOR = [
+  'a[href^="/models/"]',
+  'a[href*="://civitai.com/models/"]',
+  'a[href*="://civitai.red/models/"]',
+].join(', ');
+
+const cardSelector = [
+  'div.relative.flex.overflow-hidden.rounded-md.flex-col[id]',
+  'div[id][style*="aspect-ratio: 7 / 9"]',
+].join(', ');
+
+const CIVITAI_GRID_SELECTOR = '[class*="MasonryGrid_grid__"]';
 const CIVITAIARCHIVE_GRID_SELECTOR =
   'div.grid.grid-cols-2.md\\:grid-cols-4.lg\\:grid-cols-6.gap-4';
+
+function isModelUrl(url: string): boolean {
+  return /\/models\/\d+(?:[/?#]|$)/.test(url || '');
+}
+
+function getModelLinks(root: ParentNode = document): HTMLAnchorElement[] {
+  return Array.from(root.querySelectorAll(MODEL_LINK_SELECTOR)).filter(
+    (el): el is HTMLAnchorElement =>
+      el instanceof HTMLAnchorElement &&
+      (isModelUrl(el.getAttribute('href') || '') || isModelUrl(el.href))
+  );
+}
+
+function resolveCardElement(node: HTMLElement | HTMLAnchorElement | null): HTMLElement | null {
+  if (!node) return null;
+
+  if (node instanceof HTMLAnchorElement) {
+    return (
+      (node.closest(cardSelector) as HTMLElement | null) ||
+      (node.closest('div[id][style*="aspect-ratio"]') as HTMLElement | null) ||
+      (node.closest('div.relative.flex.overflow-hidden.rounded-md') as HTMLElement | null)
+    );
+  }
+
+  if (node.matches(cardSelector)) {
+    return node;
+  }
+
+  const link = node.matches(MODEL_LINK_SELECTOR)
+    ? (node as HTMLAnchorElement)
+    : (node.querySelector(MODEL_LINK_SELECTOR) as HTMLAnchorElement | null);
+
+  return resolveCardElement(link);
+}
+
+function getModelContainer(): HTMLElement | null {
+  const legacyGrid =
+    (document.querySelector(CIVITAI_GRID_SELECTOR) as HTMLElement | null) ||
+    (document.querySelector(CIVITAIARCHIVE_GRID_SELECTOR) as HTMLElement | null);
+
+  if (legacyGrid) {
+    return legacyGrid;
+  }
+
+  const firstLink = getModelLinks(document)[0];
+  const firstCard = resolveCardElement(firstLink);
+  const row = firstCard?.parentElement as HTMLElement | null;
+
+  if (row?.hasAttribute('data-index')) {
+    return (row.parentElement as HTMLElement | null) || row;
+  }
+
+  return row;
+}
+
+function getModelCards(container?: HTMLElement | null): HTMLElement[] {
+  const scope: ParentNode = container || document;
+  const seen = new Set<HTMLElement>();
+  const cards: HTMLElement[] = [];
+
+  getModelLinks(scope).forEach((link) => {
+    const card = resolveCardElement(link);
+    if (card && !seen.has(card)) {
+      seen.add(card);
+      cards.push(card);
+    }
+  });
+
+  return cards;
+}
+
+function getCardLink(card: HTMLElement): HTMLAnchorElement | null {
+  if (card instanceof HTMLAnchorElement && isModelUrl(card.href)) {
+    return card;
+  }
+
+  return (
+    (card.querySelector(MODEL_LINK_SELECTOR) as HTMLAnchorElement | null) ||
+    Array.from(card.querySelectorAll('a')).find(
+      (a): a is HTMLAnchorElement =>
+        a instanceof HTMLAnchorElement && isModelUrl(a.href)
+    ) ||
+    null
+  );
+}
+
+/******************************************/
+// Apply Card feature Section
+/******************************************/
 
 type StagedInfo = {
   action: string;
@@ -22,46 +123,16 @@ const stagedInfoByModelVersion: Map<string, StagedInfo> = new Map();
 let lockedUrl: string = "";
 let lockedNeighborManagedUrls: Set<string> = new Set();
 
-function normalizeUrl(url: string): string {
-  return (url || "").replace("-commission", "");
-}
-
-function getModelContainer(): HTMLElement | null {
-  return (
-    document.querySelector(CIVITAI_GRID_SELECTOR) as HTMLElement | null ||
-    document.querySelector(CIVITAIARCHIVE_GRID_SELECTOR) as HTMLElement | null
-  );
-}
-
-function getModelCards(container?: HTMLElement | null): HTMLElement[] {
-  const root = container || getModelContainer();
-  if (!root) return [];
-
-  return Array.from(root.children).filter((child): child is HTMLElement => {
-    return child instanceof HTMLElement;
-  });
-}
-
-function getCardLink(card: HTMLElement): HTMLAnchorElement | null {
-  if (card.tagName.toLowerCase() === 'a') {
-    return card as HTMLAnchorElement;
-  }
-  return card.querySelector('a') as HTMLAnchorElement | null;
-}
-
-function isDirectCardElement(node: HTMLElement, parentContainer: HTMLElement): boolean {
-  if (node.parentElement !== parentContainer) return false;
-
-  const tag = node.tagName.toLowerCase();
-  return tag === 'div' || tag === 'a';
-}
-
 function applyOpenInNewTab(card: HTMLElement) {
   const link = getCardLink(card);
   if (!link) return;
 
   link.target = "_blank";
   link.rel = "noopener noreferrer";
+}
+
+function normalizeUrl(url: string): string {
+  return (url || "").replace("-commission", "");
 }
 
 function normalizeStagedUrl(url: string): string {
@@ -1604,60 +1675,42 @@ function addCreatorButton(card: HTMLElement) {
   }
 }
 
+function hydrateCard(cardEl: HTMLElement) {
+  observeCardItem(cardEl);
+  applyOpenInNewTab(cardEl);
+  addCreatorButton(cardEl);
+  addCardCheckbox(cardEl);
+  applyStagedForCard(cardEl);
+  applyLockedForCard(cardEl);
+
+  const anchor = getCardLink(cardEl);
+  if (anchor?.href && cardEl.id) {
+    hrefMap.set(cardEl.id, anchor.href.replace("-commission", ""));
+  }
+}
+
 function initMutationObserver(parentContainer: HTMLElement) {
-  const callback: MutationCallback = (mutationsList, observer) => {
+  const callback: MutationCallback = (mutationsList) => {
+    const seen = new Set<HTMLElement>();
+
+    const maybeHydrate = (cardEl: HTMLElement | null) => {
+      if (!cardEl || seen.has(cardEl)) return;
+      seen.add(cardEl);
+      hydrateCard(cardEl);
+    };
+
     for (const mutation of mutationsList) {
-      if (mutation.type === 'childList') {
-        if (mutation.addedNodes.length > 0) {
-          mutation.addedNodes.forEach((node) => {
-            if (node instanceof HTMLElement) {
-              if (isDirectCardElement(node, parentContainer)) {
-                const anchor = getCardLink(node);
-                if (anchor) {
-                  const suffixUrl = anchor.href;
+      if (mutation.type !== 'childList') continue;
 
-                  chrome.runtime.sendMessage({
-                    action: "checkUrlsInDatabase",
-                    newUrlList: [suffixUrl],
-                  });
+      mutation.addedNodes.forEach((node) => {
+        if (!(node instanceof HTMLElement)) return;
 
-                  const cardEl = node;
-                  const divId = cardEl.id;
-                  const processedUrl = anchor.href.replace("-commission", "");
+        maybeHydrate(resolveCardElement(node));
 
-                  if (divId) {
-                    hrefMap.set(divId, processedUrl);
-                    console.log(`Added href to hrefMap: [${divId}] ${processedUrl}`);
-                  }
-
-                  if (updateInfoMap.has(processedUrl) || updateInfoMap.has(anchor.href)) {
-                    handleNewCard(cardEl);
-                  }
-
-                  applyOpenInNewTab(cardEl);
-                  addCreatorButton(cardEl);
-                  addCardCheckbox(cardEl);
-                  applyStagedForCard(cardEl);
-                  applyLockedForCard(cardEl);
-
-                }
-              }
-
-              observeCardItem(node);
-            }
-          });
-        }
-
-        if (mutation.removedNodes.length > 0) {
-          mutation.removedNodes.forEach((node) => {
-            if (node instanceof HTMLElement) {
-            }
-          });
-        }
-      }
-
-      if (mutation.type === 'attributes') {
-      }
+        node.querySelectorAll?.(MODEL_LINK_SELECTOR).forEach((linkNode) => {
+          maybeHydrate(resolveCardElement(linkNode as HTMLAnchorElement));
+        });
+      });
     }
   };
 
@@ -1733,27 +1786,43 @@ function observeCardItem(cardItem: HTMLElement) {
   });
 }
 
-function processExistingCards(parentContainer: HTMLElement) {
+
+function processExistingCards(parentContainer?: HTMLElement | null) {
   const cardItems = getModelCards(parentContainer);
-
   cardItems.forEach((item) => {
-    observeCardItem(item as HTMLElement);
-    applyOpenInNewTab(item as HTMLElement);
-    applyStagedForCard(item as HTMLElement);
-    applyLockedForCard(item as HTMLElement);
+    hydrateCard(item);
+  });
+}
 
+function waitForModelCards(timeout = 15000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+
+    const check = () => {
+      if (getModelCards().length > 0) {
+        resolve();
+        return;
+      }
+
+      if (Date.now() - start >= timeout) {
+        reject(new Error(`Model cards not found within ${timeout}ms.`));
+        return;
+      }
+
+      requestAnimationFrame(check);
+    };
+
+    check();
   });
 }
 
 async function main() {
   injectButtonStyles();
 
-  const parentContainerSelector =
-    `${CIVITAI_GRID_SELECTOR}, ${CIVITAIARCHIVE_GRID_SELECTOR}`;
-
   try {
-    const parentContainer = await waitForElement(parentContainerSelector, 15000);
+    await waitForModelCards(15000);
 
+    const parentContainer = getModelContainer() || document.body;
     initMutationObserver(parentContainer);
     processExistingCards(parentContainer);
   } catch (error) {
