@@ -9,11 +9,17 @@ const MODEL_LINK_SELECTOR = [
   'a[href^="/models/"]',
   'a[href*="://civitai.com/models/"]',
   'a[href*="://civitai.red/models/"]',
+  'a[href*="://civitaiarchive.com/models/"]',
 ].join(', ');
 
 const cardSelector = [
   'div.relative.flex.overflow-hidden.rounded-md.flex-col[id]',
   'div[id][style*="aspect-ratio: 7 / 9"]',
+].join(', ');
+
+const archiveCardSelector = [
+  'a.block.group.relative.rounded-lg.overflow-hidden.shadow-lg.border',
+  'a[href^="/models/"].block.group.relative.rounded-lg',
 ].join(', ');
 
 const CIVITAI_GRID_SELECTOR = '[class*="MasonryGrid_grid__"]';
@@ -35,8 +41,11 @@ function getModelLinks(root: ParentNode = document): HTMLAnchorElement[] {
 function resolveCardElement(node: HTMLElement | HTMLAnchorElement | null): HTMLElement | null {
   if (!node) return null;
 
-  // If we were handed a card directly, keep it.
-  if (node instanceof HTMLElement && node.matches(cardSelector)) {
+  // If we were handed a known card directly, keep it.
+  if (
+    node instanceof HTMLElement &&
+    (node.matches(cardSelector) || node.matches(archiveCardSelector))
+  ) {
     return node;
   }
 
@@ -50,7 +59,15 @@ function resolveCardElement(node: HTMLElement | HTMLAnchorElement | null): HTMLE
 
   if (!link) return null;
 
-  // 1) Existing exact-ish card matches first (preserve current behavior)
+  // Archive layout: the anchor itself is the card
+  if (link.matches(archiveCardSelector)) {
+    return link;
+  }
+
+  const archiveCard = link.closest(archiveCardSelector) as HTMLElement | null;
+  if (archiveCard) return archiveCard;
+
+  // Existing exact-ish card matches first (preserve current civitai behavior)
   const exactCard =
     (link.closest(cardSelector) as HTMLElement | null) ||
     (link.closest('div[id][style*="aspect-ratio"]') as HTMLElement | null) ||
@@ -58,8 +75,7 @@ function resolveCardElement(node: HTMLElement | HTMLAnchorElement | null): HTMLE
 
   if (exactCard) return exactCard;
 
-  // 2) Walk upward and find the nearest "card-like" ancestor.
-  // This helps if they add/remove wrapper divs but keep similar internal structure.
+  // Walk upward and find the nearest "card-like" ancestor.
   let current: HTMLElement | null = link.parentElement;
   let best: HTMLElement | null = null;
 
@@ -78,7 +94,8 @@ function resolveCardElement(node: HTMLElement | HTMLAnchorElement | null): HTMLE
     const hasFooterLike =
       !!current.querySelector('[class*="footer__"]') ||
       !!current.querySelector('.AspectRatioCard_footer__XmvNR') ||
-      !!current.querySelector('.AspectRatioImageCard_footer__FOU7a');
+      !!current.querySelector('.AspectRatioImageCard_footer__FOU7a') ||
+      !!current.querySelector('.bg-gradient-to-t');
 
     const rect = current.getBoundingClientRect();
     const looksCardSized =
@@ -90,7 +107,6 @@ function resolveCardElement(node: HTMLElement | HTMLAnchorElement | null): HTMLE
     if (containsThisLink && onlyOneModelLink && hasImage && looksCardSized) {
       best = current;
 
-      // Prefer a stronger match and stop early
       if (hasCreatorText || hasFooterLike || current.id) {
         return current;
       }
@@ -101,8 +117,7 @@ function resolveCardElement(node: HTMLElement | HTMLAnchorElement | null): HTMLE
 
   if (best) return best;
 
-  // 3) Last-resort fallback:
-  // nearest ancestor that contains the link and an image but not many model links.
+  // Last-resort fallback
   current = link.parentElement;
   while (current && current !== document.body) {
     const modelLinks = current.querySelectorAll(MODEL_LINK_SELECTOR).length;
@@ -243,7 +258,8 @@ function normalizeStagedUrl(url: string): string {
       .replace(/^www\./, "")
       .replace(/^civitai\.red$/, "civitai.shared")
       .replace(/^civitai\.com$/, "civitai.shared")
-      .replace(/^civitai\.green$/, "civitai.shared");
+      .replace(/^civitai\.green$/, "civitai.shared")
+      .replace(/^civitaiarchive\.com$/, "civitai.shared");
 
     const path = u.pathname.replace(/\/+$/, "").toLowerCase();
     const search = u.search.toLowerCase();
