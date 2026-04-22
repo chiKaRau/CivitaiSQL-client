@@ -11,6 +11,7 @@ export interface ModelOfflineDownloadHistoryEntry {
     civitaiVersionID: number;
     imageUrlList: string[];
     localPath: string;
+    hasExistingLocalFile?: boolean;
     createdAt: string;
     updatedAt: string;
 }
@@ -40,6 +41,37 @@ function formatHistoryDateTime(value?: string) {
     if (Number.isNaN(d.getTime())) return value;
 
     return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+}
+
+function getDirectoryPathForOpen(path?: string) {
+    const trimmed = (path || "").trim();
+    if (!trimmed) return "";
+
+    const normalized = trimmed.replace(/\//g, "\\").replace(/\\+$/, "");
+
+    const lastSlashIndex = normalized.lastIndexOf("\\");
+    if (lastSlashIndex < 0) {
+        return normalized;
+    }
+
+    const lastPart = normalized.slice(lastSlashIndex + 1);
+    const looksLikeFile = /\.[^\\]+$/.test(lastPart);
+
+    const directoryOnly = looksLikeFile
+        ? normalized.slice(0, lastSlashIndex)
+        : normalized;
+
+    const filesDownloadMatch = directoryOnly.match(/\\files\\download(\\.*)$/i);
+    if (filesDownloadMatch?.[1]) {
+        return filesDownloadMatch[1];
+    }
+
+    const scanMatch = directoryOnly.match(/(\\@scan\\.*)$/i);
+    if (scanMatch?.[1]) {
+        return scanMatch[1];
+    }
+
+    return directoryOnly;
 }
 
 const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
@@ -191,16 +223,6 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
                         }}
                     >
                         <span>{p.value}</span>
-
-                        {!!modelId &&
-                            !!versionId &&
-                            modelId !== "N/A" &&
-                            versionId !== "N/A" && (
-                                <ModelVersionFileExistsBadge
-                                    modelID={String(modelId)}
-                                    versionID={String(versionId)}
-                                />
-                            )}
                     </span>
                 );
             },
@@ -223,31 +245,57 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
                 userSelect: "text",
             } as CellStyle,
             cellRenderer: (p: any) => {
-                const path = typeof p.value === "string" ? p.value.trim() : "";
+                const rawPath = typeof p.value === "string" ? p.value.trim() : "";
+                const hasExistingLocalFile = !!p?.data?.hasExistingLocalFile;
+                const directoryPath = hasExistingLocalFile ? getDirectoryPathForOpen(rawPath) : "";
+                const displayPath = hasExistingLocalFile ? directoryPath : rawPath;
 
-                if (!path) {
+                if (!rawPath) {
                     return <span>N/A</span>;
+                }
+
+                if (!hasExistingLocalFile) {
+                    return (
+                        <span
+                            style={{
+                                display: "inline-block",
+                                width: "100%",
+                                wordBreak: "break-word",
+                                whiteSpace: "normal",
+                                lineHeight: "1.25",
+                                userSelect: "text",
+                            }}
+                            title={rawPath}
+                        >
+                            {rawPath}
+                        </span>
+                    );
                 }
 
                 return (
                     <span
-                        title={path}
+                        title={displayPath}
                         onClick={(e) => {
                             e.stopPropagation();
-                            void handleOpenDownloadPath(path);
+                            if (directoryPath) {
+                                void handleOpenDownloadPath(directoryPath);
+                            }
                         }}
                         style={{
                             display: "inline-block",
                             width: "100%",
-                            cursor: "pointer",
-                            color: isDarkMode ? "#93c5fd" : "#2563eb",
-                            textDecoration: "underline",
+                            cursor: directoryPath ? "pointer" : "default",
+                            color: directoryPath
+                                ? (isDarkMode ? "#93c5fd" : "#2563eb")
+                                : currentTheme.rowFontColor,
+                            textDecoration: directoryPath ? "underline" : "none",
                             wordBreak: "break-word",
                             whiteSpace: "normal",
                             lineHeight: "1.25",
+                            userSelect: "text",
                         }}
                     >
-                        {path}
+                        {displayPath}
                     </span>
                 );
             },
@@ -313,7 +361,14 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
             },
             cellStyle,
         }
-    ], [cellStyle, numberCellStyle, centeredImageCellStyle, isDarkMode, handleOpenDownloadPath]);
+    ], [
+        cellStyle,
+        numberCellStyle,
+        centeredImageCellStyle,
+        isDarkMode,
+        handleOpenDownloadPath,
+        currentTheme.rowFontColor
+    ]);
 
     const rowData = useMemo(() => {
         return entries.map((entry) => {
@@ -329,6 +384,7 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
                         ? `${entry.civitaiModelID}_${entry.civitaiVersionID}`
                         : "N/A",
                 localPath: entry.localPath ?? "",
+                hasExistingLocalFile: !!entry.hasExistingLocalFile,
                 previewImageUrl,
                 fallbackImageUrls,
                 imageCount: imageUrlList.length,

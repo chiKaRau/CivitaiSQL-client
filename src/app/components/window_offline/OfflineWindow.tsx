@@ -592,6 +592,7 @@ const OfflineWindow: React.FC = () => {
                                     : "";
 
                             let resolvedLocalPath = fallbackLocalPath;
+                            let hasExistingLocalFile = false;
 
                             if (modelID && versionID) {
                                 try {
@@ -608,6 +609,7 @@ const OfflineWindow: React.FC = () => {
 
                                     if (checkedFilePath) {
                                         resolvedLocalPath = checkedFilePath;
+                                        hasExistingLocalFile = true;
                                     }
                                 } catch (error) {
                                     // keep fallbackLocalPath
@@ -624,6 +626,7 @@ const OfflineWindow: React.FC = () => {
                                     )
                                     : [],
                                 localPath: resolvedLocalPath,
+                                hasExistingLocalFile,
                                 createdAt: row?.createdAt ?? "",
                                 updatedAt: row?.updatedAt ?? "",
                             };
