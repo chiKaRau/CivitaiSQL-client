@@ -28,13 +28,13 @@ const LocalFileFolderOption = ({
     theme,
     radioName,
 }: LocalFileFolderOptionProps) => {
-    const { exists, isLoading } = useModelVersionFileExists(modelID, versionID);
+    const { filePath, isLoading } = useModelVersionFileExists(modelID, versionID);
 
     const isAvailable =
         !!localScanPath &&
         !isPendingPath(localScanPath) &&
         !isLoading &&
-        !!exists;
+        !!filePath;
 
     useEffect(() => {
         onAvailabilityChange?.(isAvailable);

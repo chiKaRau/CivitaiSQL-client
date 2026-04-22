@@ -1431,8 +1431,8 @@ const WindowComponent: React.FC = () => {
         {
             headerName: "Model & Version",
             field: "modelVersionDisplay",
-            width: 260,
-            minWidth: 220,
+            width: 245,
+            minWidth: 215,
             wrapText: false,
             autoHeight: false,
             cellStyle: {

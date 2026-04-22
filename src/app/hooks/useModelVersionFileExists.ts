@@ -10,6 +10,7 @@ const useModelVersionFileExists = (
     const dispatch = useDispatch();
 
     const [exists, setExists] = useState(false);
+    const [filePath, setFilePath] = useState("");
     const [isLoading, setIsLoading] = useState(false);
 
     useEffect(() => {
@@ -19,6 +20,7 @@ const useModelVersionFileExists = (
             if (!modelID || !versionID) {
                 if (isMounted) {
                     setExists(false);
+                    setFilePath("");
                     setIsLoading(false);
                 }
                 return;
@@ -33,12 +35,16 @@ const useModelVersionFileExists = (
                     versionID
                 );
 
+                const returnedFilePath = payload?.filePath || "";
+
                 if (isMounted) {
-                    setExists(!!payload?.exists);
+                    setFilePath(returnedFilePath);
+                    setExists(!!returnedFilePath);
                 }
             } catch (error) {
                 if (isMounted) {
                     setExists(false);
+                    setFilePath("");
                 }
             } finally {
                 if (isMounted) {
@@ -56,6 +62,7 @@ const useModelVersionFileExists = (
 
     return {
         exists,
+        filePath,
         isLoading,
     };
 };

@@ -16,7 +16,7 @@ const ModelVersionFileExistsBadge = ({
     refreshKey,
     hideWhenMissing = true,
 }: Props) => {
-    const { exists, isLoading } = useModelVersionFileExists(
+    const { exists, filePath, isLoading } = useModelVersionFileExists(
         modelID,
         versionID,
         refreshKey
@@ -35,7 +35,18 @@ const ModelVersionFileExistsBadge = ({
             placement="top"
             overlay={
                 <Tooltip id="tooltip-local-file">
-                    {exists ? "Downloaded file exists" : "Downloaded file not found"}
+                    <div
+                        style={{
+                            maxWidth: "420px",
+                            whiteSpace: "normal",
+                            wordBreak: "break-all",
+                            textAlign: "left",
+                        }}
+                    >
+                        {exists
+                            ? filePath || "Downloaded file exists"
+                            : "Downloaded file not found"}
+                    </div>
                 </Tooltip>
             }
         >

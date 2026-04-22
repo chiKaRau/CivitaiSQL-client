@@ -54,7 +54,8 @@ import {
     fetchModelOfflineDownloadHistoryList,
     fetchModelOfflineDownloadHistoryAvailableDates,
     fetchUpdateOfflineDownloadVersionId,
-    fetchRefreshModelVersionObjectFromOfflineTable
+    fetchRefreshModelVersionObjectFromOfflineTable,
+    fetchCheckModelVersionFileExists
 } from "../../api/civitaiSQL_api"
 
 import { makeOfflineWindowStyles } from "./OfflineWindow.styles";
@@ -575,17 +576,59 @@ const OfflineWindow: React.FC = () => {
                 if (!cancelled) {
                     const rows = Array.isArray(payload?.content) ? payload.content : [];
 
-                    const normalizedRows: ModelOfflineDownloadHistoryEntry[] = rows.map((row: any) => ({
-                        id: row?.id,
-                        civitaiModelID: row?.civitaiModelID,
-                        civitaiVersionID: row?.civitaiVersionID,
-                        imageUrlList: Array.isArray(row?.imageUrlList)
-                            ? row.imageUrlList.filter((x: any) => typeof x === "string" && x.trim() !== "")
-                            : [],
-                        localPath: typeof row?.localPath === "string" ? row.localPath : "",
-                        createdAt: row?.createdAt ?? "",
-                        updatedAt: row?.updatedAt ?? "",
-                    }));
+                    const normalizedRows: ModelOfflineDownloadHistoryEntry[] = await Promise.all(
+                        rows.map(async (row: any) => {
+                            const fallbackLocalPath =
+                                typeof row?.localPath === "string" ? row.localPath : "";
+
+                            const modelID =
+                                row?.civitaiModelID !== undefined && row?.civitaiModelID !== null
+                                    ? String(row.civitaiModelID)
+                                    : "";
+
+                            const versionID =
+                                row?.civitaiVersionID !== undefined && row?.civitaiVersionID !== null
+                                    ? String(row.civitaiVersionID)
+                                    : "";
+
+                            let resolvedLocalPath = fallbackLocalPath;
+
+                            if (modelID && versionID) {
+                                try {
+                                    const filePayload = await fetchCheckModelVersionFileExists(
+                                        dispatch,
+                                        modelID,
+                                        versionID
+                                    );
+
+                                    const checkedFilePath =
+                                        typeof filePayload?.filePath === "string"
+                                            ? filePayload.filePath.trim()
+                                            : "";
+
+                                    if (checkedFilePath) {
+                                        resolvedLocalPath = checkedFilePath;
+                                    }
+                                } catch (error) {
+                                    // keep fallbackLocalPath
+                                }
+                            }
+
+                            return {
+                                id: row?.id,
+                                civitaiModelID: row?.civitaiModelID,
+                                civitaiVersionID: row?.civitaiVersionID,
+                                imageUrlList: Array.isArray(row?.imageUrlList)
+                                    ? row.imageUrlList.filter(
+                                        (x: any) => typeof x === "string" && x.trim() !== ""
+                                    )
+                                    : [],
+                                localPath: resolvedLocalPath,
+                                createdAt: row?.createdAt ?? "",
+                                updatedAt: row?.updatedAt ?? "",
+                            };
+                        })
+                    );
 
                     setModelOfflineDownloadHistoryList(normalizedRows);
                     setHistoryTotalItems(payload?.totalElements ?? 0);
@@ -4773,15 +4816,16 @@ const OfflineWindow: React.FC = () => {
                                         setSelectedIds={setSelectedIds}
                                     />
                                 )}
-
                                 {displayMode === 'historyTable' && (
                                     <HistoryTableMode
                                         entries={modelOfflineDownloadHistoryList}
                                         isDarkMode={isDarkMode}
                                         agGridStyle={styles.agGridStyle}
                                         currentTheme={currentTheme}
+                                        handleOpenDownloadPath={handleOpenDownloadPath}
                                     />
                                 )}
+
                                 {displayMode === 'bigCard' && (
                                     <BigCardMode
                                         filteredDownloadList={paginatedDownloadList}

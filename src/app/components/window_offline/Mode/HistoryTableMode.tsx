@@ -24,6 +24,7 @@ interface HistoryTableModeProps {
         oddRowBackgroundColor: string;
         rowFontColor: string;
     };
+    handleOpenDownloadPath: (downloadPath: string) => Promise<void>;
 }
 
 function pad2(n: number) {
@@ -46,6 +47,7 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
     isDarkMode,
     agGridStyle,
     currentTheme,
+    handleOpenDownloadPath,
 }) => {
     const [hoveredImage, setHoveredImage] = useState<{
         src: string;
@@ -206,19 +208,49 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
         {
             headerName: "Local Path",
             field: "localPath",
-            flex: 1, // this column grows when window gets bigger
+            flex: 1,
             minWidth: 230,
             wrapText: true,
             autoHeight: true,
             sortable: true,
+            tooltipField: "localPath",
             cellStyle: {
+                ...cellStyle,
                 whiteSpace: "normal",
                 lineHeight: "1.25",
                 paddingTop: "8px",
                 paddingBottom: "8px",
                 userSelect: "text",
             } as CellStyle,
-            tooltipField: "localPath",
+            cellRenderer: (p: any) => {
+                const path = typeof p.value === "string" ? p.value.trim() : "";
+
+                if (!path) {
+                    return <span>N/A</span>;
+                }
+
+                return (
+                    <span
+                        title={path}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            void handleOpenDownloadPath(path);
+                        }}
+                        style={{
+                            display: "inline-block",
+                            width: "100%",
+                            cursor: "pointer",
+                            color: isDarkMode ? "#93c5fd" : "#2563eb",
+                            textDecoration: "underline",
+                            wordBreak: "break-word",
+                            whiteSpace: "normal",
+                            lineHeight: "1.25",
+                        }}
+                    >
+                        {path}
+                    </span>
+                );
+            },
         },
         {
             headerName: "Created At",
@@ -281,7 +313,7 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
             },
             cellStyle,
         }
-    ], [cellStyle, numberCellStyle, centeredImageCellStyle, isDarkMode]);
+    ], [cellStyle, numberCellStyle, centeredImageCellStyle, isDarkMode, handleOpenDownloadPath]);
 
     const rowData = useMemo(() => {
         return entries.map((entry) => {
