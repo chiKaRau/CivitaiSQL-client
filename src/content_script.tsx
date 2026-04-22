@@ -459,18 +459,12 @@ function applyStagedForCard(card: HTMLElement) {
 }
 
 function displayStagedBadges(): void {
-  const container = getModelContainer();
-  if (!container) return;
-
-  const cards = getModelCards(container);
+  const cards = getModelCards();
   cards.forEach((card) => applyStagedForCard(card));
 }
 
 function removeAllStagedBadges(): void {
-  const container = getModelContainer();
-  if (!container) return;
-
-  const cards = getModelCards(container);
+  const cards = getModelCards();
   cards.forEach((card) => removeStagedBadge(card));
 }
 
@@ -536,18 +530,12 @@ function applyLockedForCard(card: HTMLElement) {
 }
 
 function displayLockedBadge(): void {
-  const container = getModelContainer();
-  if (!container) return;
-
-  const cards = getModelCards(container);
+  const cards = getModelCards();
   cards.forEach((card) => applyLockedForCard(card));
 }
 
 function clearLockedBadge(): void {
-  const container = getModelContainer();
-  if (!container) return;
-
-  const cards = getModelCards(container);
+  const cards = getModelCards();
   cards.forEach((card) => removeLockedBadge(card));
 }
 
@@ -650,6 +638,7 @@ chrome.runtime.onMessage.addListener(
           if (checkbox && checkbox.checked) {
             checkbox.checked = false;
             card.style.border = '';
+            checkedUrlSet.delete(normalized);
             chrome.runtime.sendMessage({ action: 'removeUrl', url: linkElement.href });
           }
         }
@@ -672,6 +661,7 @@ chrome.runtime.onMessage.addListener(
         if (checkbox && !checkbox.checked) {
           checkbox.checked = true;
           card.style.border = '2px solid yellow';
+          checkedUrlSet.add(normalized);
           chrome.runtime.sendMessage({ action: 'addUrl', url, imgSrc });
         }
 
@@ -942,44 +932,65 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   }
 });
 
+function applyCheckedStateForCard(item: HTMLElement) {
+  const linkElement = getCardLink(item);
+  if (!linkElement?.href) return;
+
+  const normalized = normalizeUrl(linkElement.href);
+  const checkbox = item.querySelector('input[type="checkbox"].model-card-checkbox') as HTMLInputElement | null;
+
+  if (!checkbox) return;
+
+  const shouldBeChecked = checkedUrlSet.has(normalized);
+  checkbox.checked = shouldBeChecked;
+  item.style.border = shouldBeChecked ? '2px solid yellow' : '';
+}
+
 function addCardCheckbox(item: HTMLElement, index?: number) {
-  if (item.querySelector('input[type="checkbox"].model-card-checkbox')) return;
+  let checkbox = item.querySelector('input[type="checkbox"].model-card-checkbox') as HTMLInputElement | null;
 
-  const checkbox: HTMLInputElement = document.createElement('input');
-  checkbox.type = 'checkbox';
-  checkbox.className = 'model-card-checkbox';
-  if (index != null) checkbox.id = `checkbox-${index}`;
+  if (!checkbox) {
+    checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'model-card-checkbox';
+    if (index != null) checkbox.id = `checkbox-${index}`;
 
-  checkbox.style.position = 'absolute';
-  checkbox.style.top = '10px';
-  checkbox.style.right = '10px';
-  checkbox.style.zIndex = '1000';
-  checkbox.style.transform = 'scale(2.5)';
+    checkbox.style.position = 'absolute';
+    checkbox.style.top = '10px';
+    checkbox.style.right = '10px';
+    checkbox.style.zIndex = '1000';
+    checkbox.style.transform = 'scale(2.5)';
 
-  if (!item.style.position) item.style.position = 'relative';
-  item.appendChild(checkbox);
+    if (!item.style.position) item.style.position = 'relative';
+    item.appendChild(checkbox);
 
-  checkbox.addEventListener('click', (event: MouseEvent) => {
-    event.stopPropagation();
-  });
+    checkbox.addEventListener('click', (event: MouseEvent) => {
+      event.stopPropagation();
+    });
 
-  checkbox.addEventListener('change', () => {
-    const linkElement = getCardLink(item);
-    if (linkElement?.href) {
+    checkbox.addEventListener('change', () => {
+      const linkElement = getCardLink(item);
+      if (!linkElement?.href) return;
+
       const url = linkElement.href;
+      const normalized = normalizeUrl(url);
 
       const imgEl = linkElement.querySelector('img') as HTMLImageElement | null;
       const imgSrc = imgEl?.currentSrc || imgEl?.src || "";
 
-      if (checkbox.checked) {
+      if (checkbox!.checked) {
+        checkedUrlSet.add(normalized);
         item.style.border = '2px solid yellow';
         chrome.runtime.sendMessage({ action: 'addUrl', url, imgSrc });
       } else {
+        checkedUrlSet.delete(normalized);
         item.style.border = '';
         chrome.runtime.sendMessage({ action: 'removeUrl', url });
       }
-    }
-  });
+    });
+  }
+
+  applyCheckedStateForCard(item);
 }
 
 chrome.runtime.onMessage.addListener(
@@ -997,14 +1008,12 @@ chrome.runtime.onMessage.addListener(
     sender: chrome.runtime.MessageSender,
     sendResponse: (response?: any) => void
   ) => {
-    const parentContainer: HTMLElement | null = getModelContainer();
+    const cardElements = getModelCards();
 
-    if (!parentContainer) {
-      console.warn("Model container not found.");
+    if (cardElements.length === 0) {
+      console.warn("Model cards not found.");
       return;
     }
-
-    const cardElements = getModelCards(parentContainer);
 
     if (message.action === "display-checkboxes") {
       cardElements.forEach((item: HTMLElement, index: number) => {
@@ -1022,6 +1031,8 @@ chrome.runtime.onMessage.addListener(
         const linkElement = getCardLink(item);
 
         if (linkElement && linkElement.href === urlToUncheck) {
+          checkedUrlSet.delete(normalizeUrl(urlToUncheck));
+
           const checkbox: HTMLInputElement | null = item.querySelector('input[type="checkbox"]');
           if (checkbox) {
             checkbox.checked = false;
@@ -1041,6 +1052,8 @@ chrome.runtime.onMessage.addListener(
         const linkElement = getCardLink(item);
 
         if (linkElement && linkElement.href === urlToCheck) {
+          checkedUrlSet.add(normalizeUrl(urlToCheck));
+
           const checkbox: HTMLInputElement | null = item.querySelector('input[type="checkbox"]');
           if (checkbox) {
             checkbox.checked = true;
@@ -1049,6 +1062,7 @@ chrome.runtime.onMessage.addListener(
         }
       });
     } else if (message.action === "remove-checkboxes") {
+      checkedUrlSet.clear();
       cardElements.forEach((item: HTMLElement) => {
         const checkbox: HTMLInputElement | null = item.querySelector('input[type="checkbox"]');
 
@@ -1072,10 +1086,9 @@ chrome.runtime.onMessage.addListener(
   ) => {
     if (message.action === "checkSavedMode") {
       const newUrlList: string[] = [];
-      const parentContainer: HTMLElement | null = getModelContainer();
+      const childCards = getModelCards();
 
-      if (parentContainer) {
-        const childCards = getModelCards(parentContainer);
+      if (childCards.length > 0) {
 
         childCards.forEach((item: HTMLElement) => {
           const linkElement = getCardLink(item);
@@ -1122,6 +1135,7 @@ chrome.runtime.onMessage.addListener((message: any, sender, sendResponse) => {
 
 const hrefMap: Map<string, string> = new Map();
 const updateInfoMap: Map<string, { quantity: number; isUpdateAvaliable: boolean; isEarlyAccess: boolean }> = new Map();
+const checkedUrlSet: Set<string> = new Set();
 let isSortedAscending: boolean = true;
 
 function sortDivs(container: HTMLElement): void {
@@ -1185,13 +1199,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 function initializeHrefMap(): void {
-  const container = getModelContainer();
-  if (!container) {
-    console.error('Model container not found.');
+  const cardDivs = getModelCards();
+  if (cardDivs.length === 0) {
+    console.error('Model cards not found.');
     return;
   }
-
-  const cardDivs = getModelCards(container);
 
   cardDivs.forEach(div => {
     const divId: string = div.id;
@@ -1222,14 +1234,12 @@ chrome.runtime.onMessage.addListener(
     sendResponse: (response?: any) => void
   ) => {
     if (message.action === "display-saved" || message.action === "remove-saved") {
-      const container: HTMLElement | null = getModelContainer();
+      const cardElements = getModelCards();
 
-      if (!container) {
-        console.warn("Model container not found.");
+      if (cardElements.length === 0) {
+        console.warn("Model cards not found.");
         return;
       }
-
-      const cardElements = getModelCards(container);
 
       console.log(`Number of first-level card elements: ${cardElements.length}`);
 
@@ -1304,14 +1314,12 @@ chrome.runtime.onMessage.addListener(
     sendResponse: (response?: any) => void
   ) => {
     if (message.action === "display-offline" || message.action === "remove-offline") {
-      const container: HTMLElement | null = getModelContainer();
+      const cardElements = getModelCards();
 
-      if (!container) {
-        console.warn("Model container not found.");
+      if (cardElements.length === 0) {
+        console.warn("Model cards not found.");
         return;
       }
-
-      const cardElements = getModelCards(container);
 
       console.log(`Number of first-level card elements: ${cardElements.length}`);
 
@@ -1391,14 +1399,12 @@ chrome.runtime.onMessage.addListener(
     sender: chrome.runtime.MessageSender,
     sendResponse: (response?: any) => void
   ) => {
-    const parentContainer: HTMLElement | null = getModelContainer();
+    const cardElements = getModelCards();
 
-    if (!parentContainer) {
-      console.warn("Model container not found.");
+    if (cardElements.length === 0) {
+      console.warn("Model cards not found.");
       return;
     }
-
-    const cardElements = getModelCards(parentContainer);
 
     if (message.action === "display-update-avaliable") {
       const savedList: Array<{ url: string; quantity: number; isUpdateAvaliable: boolean; isEarlyAccess: boolean }> | undefined = message.savedList;
@@ -1435,14 +1441,12 @@ chrome.runtime.onMessage.addListener(
     sender: chrome.runtime.MessageSender,
     sendResponse: (response?: any) => void
   ) => {
-    const parentContainer: HTMLElement | null = getModelContainer();
+    const cardElements = getModelCards();
 
-    if (!parentContainer) {
-      console.warn("Model container not found.");
+    if (cardElements.length === 0) {
+      console.warn("Model cards not found.");
       return;
     }
-
-    const cardElements = getModelCards(parentContainer);
 
     if (message.action === "display-creator-button") {
       cardElements.forEach((card: HTMLElement) => {
@@ -1457,14 +1461,12 @@ chrome.runtime.onMessage.addListener(
 );
 
 function displayUpdateLabels(): void {
-  const parentContainer: HTMLElement | null = getModelContainer();
+  const cardElements = getModelCards();
 
-  if (!parentContainer) {
-    console.warn("Model container not found.");
+  if (cardElements.length === 0) {
+    console.warn("Model cards not found.");
     return;
   }
-
-  const cardElements = getModelCards(parentContainer);
 
   cardElements.forEach((item: HTMLElement) => {
     const linkElement = getCardLink(item);
@@ -1528,14 +1530,12 @@ function displayUpdateLabels(): void {
 }
 
 function removeUpdateLabels(): void {
-  const parentContainer: HTMLElement | null = getModelContainer();
+  const cardElements = getModelCards();
 
-  if (!parentContainer) {
-    console.warn("Model container not found.");
+  if (cardElements.length === 0) {
+    console.warn("Model cards not found.");
     return;
   }
-
-  const cardElements = getModelCards(parentContainer);
 
   cardElements.forEach((item: HTMLElement) => {
     const label: HTMLElement | null = item.querySelector('.update-early-label');
@@ -1668,19 +1668,6 @@ function injectButtonStyles() {
   document.head.appendChild(style);
 }
 
-function sendActionToReact(message: any): Promise<any> {
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(message, (response) => {
-      console.log("sendMessage callback response:", response, "lastError:", chrome.runtime.lastError);
-      if (chrome.runtime.lastError) {
-        reject(chrome.runtime.lastError);
-      } else {
-        resolve(response);
-      }
-    });
-  });
-}
-
 function displayTemporaryMessage(
   button: HTMLButtonElement,
   message: string,
@@ -1768,26 +1755,6 @@ function addCreatorButton(card: HTMLElement) {
   }
 }
 
-function hydrateCard(cardEl: HTMLElement) {
-  const wasHydrated = cardEl.dataset.myExtensionHydrated === '1';
-
-  if (!wasHydrated) {
-    cardEl.dataset.myExtensionHydrated = '1';
-    observeCardItem(cardEl);
-    applyOpenInNewTab(cardEl);
-    addCreatorButton(cardEl);
-    addCardCheckbox(cardEl);
-  }
-
-  applyStagedForCard(cardEl);
-  applyLockedForCard(cardEl);
-
-  const anchor = getCardLink(cardEl);
-  if (anchor?.href && cardEl.id) {
-    hrefMap.set(cardEl.id, anchor.href.replace("-commission", ""));
-  }
-}
-
 function initMutationObserver(parentContainer: HTMLElement) {
   const callback: MutationCallback = (mutationsList) => {
     for (const mutation of mutationsList) {
@@ -1807,11 +1774,6 @@ function initMutationObserver(parentContainer: HTMLElement) {
 
               chrome.runtime.sendMessage({
                 action: "checkUrlsInDatabase",
-                newUrlList: [suffixUrl],
-              });
-
-              chrome.runtime.sendMessage({
-                action: "checkifmodelAvaliable",
                 newUrlList: [suffixUrl],
               });
 
@@ -1941,11 +1903,6 @@ function processExistingCards(parentContainer: HTMLElement) {
   if (initialUrls.length > 0) {
     chrome.runtime.sendMessage({
       action: "checkUrlsInDatabase",
-      newUrlList: initialUrls,
-    });
-
-    chrome.runtime.sendMessage({
-      action: "checkifmodelAvaliable",
       newUrlList: initialUrls,
     });
   }
