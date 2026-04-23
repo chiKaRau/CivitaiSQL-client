@@ -189,6 +189,56 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
             : "0 4px 12px rgba(0,0,0,0.08)",
     };
 
+    const optionTitleStyle: React.CSSProperties = {
+        fontWeight: 700,
+        fontSize: "13px",
+        color: theme.panelText,
+        marginBottom: "4px",
+    };
+
+    const optionHintStyle: React.CSSProperties = {
+        fontSize: "12px",
+        color: theme.subText,
+        marginBottom: "6px",
+    };
+
+    const optionPathStyle: React.CSSProperties = {
+        marginTop: "4px",
+        marginBottom: "8px",
+        padding: "6px 8px",
+        borderRadius: "8px",
+        border: `1px solid ${theme.panelBorder}`,
+        background: theme.headerBackgroundColor,
+        color: theme.headerFontColor,
+        fontSize: "12px",
+        fontWeight: 600,
+        wordBreak: "break-all",
+    };
+
+    const optionListStyle: React.CSSProperties = {
+        display: "flex",
+        flexDirection: "column",
+        gap: "4px",
+        fontSize: "12.5px",
+        lineHeight: 1.45,
+        color: theme.panelText,
+    };
+
+    const replaceTextStyle: React.CSSProperties = {
+        fontWeight: 700,
+        color: theme.buttonText,
+    };
+
+    const actionTextStyle: React.CSSProperties = {
+        fontWeight: 700,
+        color: theme.buttonText,
+    };
+
+    const removeTextStyle: React.CSSProperties = {
+        fontWeight: 700,
+        color: "#dc3545",
+    };
+
     const radioCardStyle = (isSelected: boolean): React.CSSProperties => ({
         display: "flex",
         alignItems: "flex-start",
@@ -795,6 +845,24 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
         }
     };
 
+    const localUpdateTitle = offlineMode
+        ? "Queue in this model's local update folder"
+        : "Download to this model's local update folder";
+
+    const sharedUpdateTitle = offlineMode
+        ? "Queue in the shared update folder"
+        : "Download to the shared update folder";
+
+    const destinationHint = offlineMode
+        ? "will be added to the offline download list for:"
+        : "will be downloaded to:";
+
+    const actionVerb = offlineMode ? "Queue" : "Download";
+    const actionTail = offlineMode ? "for later download" : "now";
+    const databaseOnlyNote = offlineMode
+        ? "No offline download entry or file action will be created"
+        : "No file download or file move will be performed";
+
     const renderContent = () => (
         <>
             <div
@@ -1195,6 +1263,7 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                                                         }
                                                         theme={theme}
                                                         radioName={radioName}
+                                                        offlineMode={offlineMode}
                                                     />
 
                                                     {canUseLocalUpdateFolder && (
@@ -1216,11 +1285,29 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                                                                         "Database_and_LocalUpdateFolder"
                                                                     )
                                                                 }
+                                                                style={{ marginTop: "3px", flexShrink: 0 }}
                                                             />
-                                                            <span style={{ wordBreak: "break-word" }}>
-                                                                Add the Parent to this PC&apos;s {localUpdatePath},
-                                                                and Remove the Sub Record from Database
-                                                            </span>
+
+                                                            <div style={{ minWidth: 0, flex: 1 }}>
+                                                                <div style={optionTitleStyle}>{localUpdateTitle}</div>
+
+                                                                <div style={optionHintStyle}>
+                                                                    The <strong>Selecting Model</strong> {destinationHint}
+                                                                </div>
+
+                                                                <div style={optionPathStyle}>{localUpdatePath}</div>
+
+                                                                <div style={optionListStyle}>
+                                                                    <div>
+                                                                        a. <span style={actionTextStyle}>{actionVerb}</span> the{" "}
+                                                                        <strong>Selecting Model</strong> {actionTail}
+                                                                    </div>
+                                                                    <div>
+                                                                        b. <span style={removeTextStyle}>Remove</span> the previous{" "}
+                                                                        <strong>Saved Model</strong> record from the database
+                                                                    </div>
+                                                                </div>
+                                                            </div>
                                                         </label>
                                                     )}
 
@@ -1241,11 +1328,29 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                                                                         "Database_and_UpdateFolder"
                                                                     )
                                                                 }
+                                                                style={{ marginTop: "3px", flexShrink: 0 }}
                                                             />
-                                                            <span style={{ wordBreak: "break-word" }}>
-                                                                Add the Parent to this PC&apos;s {UpdateDownloadFilePath}
-                                                                and Remove the Sub Record from Database
-                                                            </span>
+
+                                                            <div style={{ minWidth: 0, flex: 1 }}>
+                                                                <div style={optionTitleStyle}>{sharedUpdateTitle}</div>
+
+                                                                <div style={optionHintStyle}>
+                                                                    The <strong>Selecting Model</strong> {destinationHint}
+                                                                </div>
+
+                                                                <div style={optionPathStyle}>{UpdateDownloadFilePath}</div>
+
+                                                                <div style={optionListStyle}>
+                                                                    <div>
+                                                                        a. <span style={actionTextStyle}>{actionVerb}</span> the{" "}
+                                                                        <strong>Selecting Model</strong> {actionTail}
+                                                                    </div>
+                                                                    <div>
+                                                                        b. <span style={removeTextStyle}>Remove</span> the previous{" "}
+                                                                        <strong>Saved Model</strong> record from the database
+                                                                    </div>
+                                                                </div>
+                                                            </div>
                                                         </label>
                                                     )}
 
@@ -1263,10 +1368,23 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                                                                 onChange={() =>
                                                                     setUpdateOptionForModel(model.id, "Database_Only")
                                                                 }
+                                                                style={{ marginTop: "3px", flexShrink: 0 }}
                                                             />
-                                                            <span>
-                                                                Replace the Parent to the Sub in Database Only
-                                                            </span>
+
+                                                            <div style={{ minWidth: 0, flex: 1 }}>
+                                                                <div style={optionTitleStyle}>Update database only</div>
+
+                                                                <div style={optionListStyle}>
+                                                                    <div>
+                                                                        a. <span style={replaceTextStyle}>Replace</span> the current{" "}
+                                                                        <strong>Saved Model</strong> reference with the{" "}
+                                                                        <strong>Selecting Model</strong>
+                                                                    </div>
+                                                                    <div>
+                                                                        b. {databaseOnlyNote}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
                                                         </label>
                                                     )}
 
