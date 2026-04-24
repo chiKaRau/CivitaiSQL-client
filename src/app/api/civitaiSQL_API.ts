@@ -674,6 +674,11 @@ export const fetchDownloadFilesByServer = async (url: string, name: string,
     }
 }
 
+type DownloadResult = {
+    success: boolean;
+    message: string;
+};
+
 export const fetchDownloadFilesByServer_v2 = async (
     modelObject: {
         downloadFilePath: string,
@@ -684,7 +689,7 @@ export const fetchDownloadFilesByServer_v2 = async (
         civitaiUrl: string,
     },
     dispatch: any
-) => {
+): Promise<DownloadResult> => {
     try {
         dispatch(clearError());
 
@@ -694,24 +699,47 @@ export const fetchDownloadFilesByServer_v2 = async (
         );
 
         const responseData = response.data;
+        const message = responseData?.message || "Unknown response";
 
         if (!(response.status >= 200 && response.status < 300)) {
-            return false;
+            return { success: false, message };
         }
 
         if (!responseData?.success) {
             dispatch(setError({
                 hasError: true,
-                errorMessage: responseData?.message || "Failed download files by server."
+                errorMessage: message || "Failed download files by server."
             }));
-            return false;
+
+            return {
+                success: false,
+                message: message || "Failed download files by server."
+            };
         }
 
-        return true;
+        return {
+            success: true,
+            message: message || "Success download file"
+        };
     } catch (error: any) {
-        console.error("Error during server download:", error.message);
-        dispatch(setError({ hasError: true, errorMessage: error.message }));
-        return false;
+        const backendMessage =
+            error?.response?.data?.message ||
+            error?.message ||
+            "Unknown error";
+
+        const errorMessage = backendMessage.startsWith("Download failed:")
+            ? backendMessage
+            : `Download failed: ${backendMessage}`;
+
+        dispatch(setError({
+            hasError: true,
+            errorMessage
+        }));
+
+        return {
+            success: false,
+            message: errorMessage
+        };
     }
 };
 

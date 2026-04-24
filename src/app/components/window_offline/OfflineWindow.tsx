@@ -1921,12 +1921,35 @@ const OfflineWindow: React.FC = () => {
         setIsCancelled(false);
 
         // Called after each file completes
-        const handleEachDownloadComplete = async (success: boolean, entry: OfflineDownloadEntry) => {
-            if (!success) setFailedEntries(prev => [...prev, entry]);
+        const handleEachDownloadComplete = async (
+            success: boolean,
+            entry: OfflineDownloadEntry
+        ) => {
+            if (!success) {
+                setFailedEntries(prev => {
+                    const key = `${entry.civitaiModelID}|${entry.civitaiVersionID}`;
 
-            setDownloadProgress(prev => ({ completed: prev.completed + 1, total: prev.total }));
+                    const dedup = prev.filter(
+                        e => `${e.civitaiModelID}|${e.civitaiVersionID}` !== key
+                    );
 
-            // Re-fetch only the current page (not the whole list)
+                    return [
+                        {
+                            ...entry,
+                            isError: true,
+                            errorMessage: entry.errorMessage || "Download failed",
+                            errorAt: entry.errorAt || new Date().toISOString(),
+                        },
+                        ...dedup,
+                    ];
+                });
+            }
+
+            setDownloadProgress(prev => ({
+                completed: prev.completed + 1,
+                total: prev.total,
+            }));
+
             await refreshCurrentPage();
         };
 
@@ -2000,8 +2023,6 @@ const OfflineWindow: React.FC = () => {
 
             const civitaiUrl = `https://civitai.red/models/${modelID}?modelVersionId=${versionID}`;
 
-            // Prefer modelVersionObject embedded on the entry if it exists,
-            // otherwise fall back to calling the API.
             let modelVersionObject = (entry as any).modelVersionObject;
             if (!modelVersionObject) {
                 modelVersionObject = await fetchCivitaiModelInfoFromCivitaiByVersionID(
@@ -2028,8 +2049,6 @@ const OfflineWindow: React.FC = () => {
                     downloadUrl: file.downloadUrl,
                 })) || [];
 
-            // Use the per-entry path if it exists and is not 'N/A', otherwise
-            // fall back to the global modify_downloadFilePath from your toolbar.
             const offlinePath =
                 entry.downloadFilePath && entry.downloadFilePath !== "N/A"
                     ? entry.downloadFilePath
@@ -2037,7 +2056,6 @@ const OfflineWindow: React.FC = () => {
 
             const downloadFilePath = offlinePath || modify_downloadFilePath;
 
-            // Block the Pending path exactly like your old ErrorCardMode
             if (downloadFilePath === "/@scan@/ACG/Pending/") {
                 alert("Invalid download path: Pending entries cannot be downloaded");
                 return;
@@ -2049,9 +2067,7 @@ const OfflineWindow: React.FC = () => {
                 !downloadFilePath ||
                 !civitaiModelFileList.length
             ) {
-                alert(
-                    "Some required data is missing. Please check the model information and try again."
-                );
+                alert("Some required data is missing. Please check the model information and try again.");
                 return;
             }
 
@@ -2067,9 +2083,25 @@ const OfflineWindow: React.FC = () => {
                 civitaiUrl,
             };
 
+            const updateErrorEntryLocal = (errorMessage: string) => {
+                setErrorEntries(prev =>
+                    prev.map(e =>
+                        String(e.civitaiModelID) === String(civitaiModelID) &&
+                            String(e.civitaiVersionID) === String(civitaiVersionID)
+                            ? {
+                                ...e,
+                                isError: true,
+                                errorMessage,
+                                errorAt: new Date().toISOString(),
+                            }
+                            : e
+                    )
+                );
+            };
+
             try {
                 if (method === "server") {
-                    const isDownloadSuccessful = await fetchDownloadFilesByServer_v2(
+                    const downloadResult = await fetchDownloadFilesByServer_v2(
                         {
                             civitaiUrl,
                             civitaiFileName,
@@ -2081,7 +2113,7 @@ const OfflineWindow: React.FC = () => {
                         dispatch
                     );
 
-                    if (isDownloadSuccessful) {
+                    if (downloadResult.success) {
                         const isAddRecordSuccessful = await fetchAddRecordToDatabase(
                             modify_selectedCategory,
                             civitaiUrl,
@@ -2093,9 +2125,18 @@ const OfflineWindow: React.FC = () => {
                             await fetchRemoveOfflineDownloadFileIntoOfflineDownloadList(
                                 {
                                     civitaiModelID,
-                                    civitaiVersionID
+                                    civitaiVersionID,
                                 },
                                 dispatch
+                            );
+
+                            setErrorEntries(prev =>
+                                prev.filter(e =>
+                                    !(
+                                        String(e.civitaiModelID) === String(civitaiModelID) &&
+                                        String(e.civitaiVersionID) === String(civitaiVersionID)
+                                    )
+                                )
                             );
 
                             bookmarkThisUrl(
@@ -2104,16 +2145,35 @@ const OfflineWindow: React.FC = () => {
                                 `${modelVersionObject?.model?.name ?? "N/A"} - ${civitaiModelID} | Stable Diffusion LoRA | Civitai`
                             );
                         } else {
-                            console.error(
-                                `Download succeeded but add record failed for ${civitaiModelID}_${civitaiVersionID}`
+                            const errorMessage =
+                                `Add record failed for ${civitaiModelID}_${civitaiVersionID}`;
+
+                            await fetchBulkPatchOfflineDownloadList(
+                                [{ civitaiModelID, civitaiVersionID }],
+                                {
+                                    isError: true,
+                                    errorMessage,
+                                } as any,
+                                dispatch
                             );
 
-                            // optional: mark error here later
-                            // await fetchUpdateOfflineErrorStatus(...);
+                            updateErrorEntryLocal(errorMessage);
                         }
+                    } else {
+                        const errorMessage = downloadResult.message || "Download failed";
+
+                        await fetchBulkPatchOfflineDownloadList(
+                            [{ civitaiModelID, civitaiVersionID }],
+                            {
+                                isError: true,
+                                errorMessage,
+                            } as any,
+                            dispatch
+                        );
+
+                        updateErrorEntryLocal(errorMessage);
                     }
                 } else {
-                    // Browser mode
                     const data = modelVersionObject;
 
                     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -2123,23 +2183,73 @@ const OfflineWindow: React.FC = () => {
                         });
                     });
 
-                    await fetchAddRecordToDatabase(
+                    const isAddRecordSuccessful = await fetchAddRecordToDatabase(
                         modify_selectedCategory,
                         civitaiUrl,
                         downloadFilePath,
                         dispatch
                     );
-                    bookmarkThisUrl(
-                        modelVersionObject?.model?.type ?? "N/A",
-                        civitaiUrl,
-                        `${modelVersionObject?.model?.name ?? "N/A"} - ${civitaiModelID} | Stable Diffusion LoRA | Civitai`
-                    );
+
+                    if (isAddRecordSuccessful) {
+                        await fetchRemoveOfflineDownloadFileIntoOfflineDownloadList(
+                            {
+                                civitaiModelID,
+                                civitaiVersionID,
+                            },
+                            dispatch
+                        );
+
+                        setErrorEntries(prev =>
+                            prev.filter(e =>
+                                !(
+                                    String(e.civitaiModelID) === String(civitaiModelID) &&
+                                    String(e.civitaiVersionID) === String(civitaiVersionID)
+                                )
+                            )
+                        );
+
+                        bookmarkThisUrl(
+                            modelVersionObject?.model?.type ?? "N/A",
+                            civitaiUrl,
+                            `${modelVersionObject?.model?.name ?? "N/A"} - ${civitaiModelID} | Stable Diffusion LoRA | Civitai`
+                        );
+                    } else {
+                        const errorMessage =
+                            `Add record failed for ${civitaiModelID}_${civitaiVersionID}`;
+
+                        await fetchBulkPatchOfflineDownloadList(
+                            [{ civitaiModelID, civitaiVersionID }],
+                            {
+                                isError: true,
+                                errorMessage,
+                            } as any,
+                            dispatch
+                        );
+
+                        updateErrorEntryLocal(errorMessage);
+                    }
                 }
 
-                console.log("ErrorCard model download initiated.");
-            } catch (error) {
+                console.log("ErrorCard model download handled.");
+            } catch (error: any) {
+                const errorMessage =
+                    error?.response?.data?.message ||
+                    error?.message ||
+                    "Failed to initiate download.";
+
+                await fetchBulkPatchOfflineDownloadList(
+                    [{ civitaiModelID, civitaiVersionID }],
+                    {
+                        isError: true,
+                        errorMessage,
+                    } as any,
+                    dispatch
+                );
+
+                updateErrorEntryLocal(errorMessage);
+
                 console.error("Error during ErrorCard download:", error);
-                alert("Failed to initiate download. Please try again.");
+                alert(errorMessage);
             }
         },
         [dispatch, modify_downloadFilePath, modify_selectedCategory]
@@ -2186,48 +2296,52 @@ const OfflineWindow: React.FC = () => {
         const BATCH_SIZE = 10;
         const semaphore = new Semaphore(CONCURRENCY_LIMIT);
 
-        // Split the entries into chunks (batches) of BATCH_SIZE
         const batches = chunkArray(entriesToDownload, BATCH_SIZE);
 
         let batchIndex = 0;
+
         for (const batch of batches) {
             if (isCancelledRef.current) {
                 console.log("Download process cancelled before batch:", batchIndex);
                 break;
             }
 
-            // Range text for this batch (1-based)
             const start = batchIndex * BATCH_SIZE + 1;
             const end = Math.min((batchIndex + 1) * BATCH_SIZE, entriesToDownload.length);
-            setCurrentBatchRange(`Now processing ${start} ~ ${end}, please wait until processing next ${BATCH_SIZE}.`);
+
+            setCurrentBatchRange(
+                `Now processing ${start} ~ ${end}, please wait until processing next ${BATCH_SIZE}.`
+            );
 
             console.log(`Processing batch #${batchIndex + 1} (size: ${batch.length})`);
 
-            // Start downloads for this batch with concurrency limit
             const tasks: Promise<void>[] = [];
 
             for (const entry of batch) {
                 while (isPausedRef.current) {
                     console.log("Download paused. Waiting to resume...");
                     await sleep(500);
+
                     if (isCancelledRef.current) {
                         console.log("Download cancelled during pause.");
                         break;
                     }
                 }
+
                 if (isCancelledRef.current) break;
 
-                // Random 5–15s delay before starting this item
                 const delayMilliseconds = 5000 + Math.random() * 10000;
                 const delaySeconds = Math.ceil(delayMilliseconds / 1000);
+
                 setInitiationDelay(delaySeconds);
                 console.log(`Waiting ${delaySeconds}s before starting ${entry.civitaiFileName}...`);
                 await sleep(delayMilliseconds);
                 setInitiationDelay(null);
 
-                // Acquire a slot in the semaphore
                 const task = semaphore.acquire(async () => {
                     let success = true;
+                    let completedEntry: OfflineDownloadEntry = entry;
+
                     try {
                         const {
                             civitaiUrl,
@@ -2240,7 +2354,7 @@ const OfflineWindow: React.FC = () => {
                             modelVersionObject,
                         } = entry;
 
-                        const isDownloadSuccessful = await fetchDownloadFilesByServer_v2(
+                        const downloadResult = await fetchDownloadFilesByServer_v2(
                             {
                                 civitaiUrl,
                                 civitaiFileName,
@@ -2252,7 +2366,7 @@ const OfflineWindow: React.FC = () => {
                             dispatch
                         );
 
-                        if (isDownloadSuccessful) {
+                        if (downloadResult.success) {
                             let isAddRecordSuccessful = true;
 
                             if (!entry.downloadFilePath.includes("/@scan@/Update/")) {
@@ -2266,23 +2380,44 @@ const OfflineWindow: React.FC = () => {
 
                             if (!isAddRecordSuccessful) {
                                 success = false;
-                                console.error(
-                                    `Download succeeded but add record failed for ${civitaiModelID}_${civitaiVersionID}`
+
+                                const errorMessage =
+                                    `Add record failed for ${civitaiModelID}_${civitaiVersionID}`;
+
+                                completedEntry = {
+                                    ...entry,
+                                    isError: true,
+                                    errorMessage,
+                                    errorAt: new Date().toISOString(),
+                                };
+
+                                await fetchBulkPatchOfflineDownloadList(
+                                    [{ civitaiModelID, civitaiVersionID }],
+                                    {
+                                        isError: true,
+                                        errorMessage,
+                                    } as any,
+                                    dispatch
                                 );
+
+                                console.error(errorMessage);
                                 return;
                             }
 
                             await fetchRemoveOfflineDownloadFileIntoOfflineDownloadList(
                                 {
                                     civitaiModelID,
-                                    civitaiVersionID
+                                    civitaiVersionID,
                                 },
                                 dispatch
                             );
 
                             setRecentlyDownloaded(prev => {
                                 const key = `${entry.civitaiModelID}|${entry.civitaiVersionID}`;
-                                const dedup = prev.filter(e => `${e.civitaiModelID}|${e.civitaiVersionID}` !== key);
+                                const dedup = prev.filter(
+                                    e => `${e.civitaiModelID}|${e.civitaiVersionID}` !== key
+                                );
+
                                 const snap = JSON.parse(JSON.stringify(entry));
                                 return [snap, ...dedup];
                             });
@@ -2294,13 +2429,32 @@ const OfflineWindow: React.FC = () => {
                             );
                         } else {
                             success = false;
+
+                            completedEntry = {
+                                ...entry,
+                                isError: true,
+                                errorMessage: downloadResult.message || "Download failed",
+                                errorAt: new Date().toISOString(),
+                            };
                         }
-                    } catch (err) {
+                    } catch (err: any) {
                         console.error("Download failed for", entry.civitaiFileName, err);
+
                         success = false;
+
+                        const errorMessage =
+                            err?.response?.data?.message ||
+                            err?.message ||
+                            "Download failed";
+
+                        completedEntry = {
+                            ...entry,
+                            isError: true,
+                            errorMessage,
+                            errorAt: new Date().toISOString(),
+                        };
                     } finally {
-                        // Notify caller/UI that this item finished
-                        onDownloadComplete(success, entry);
+                        onDownloadComplete(success, completedEntry);
                     }
                 });
 
@@ -2312,7 +2466,6 @@ const OfflineWindow: React.FC = () => {
                 }
             }
 
-            // Wait for all items in this batch
             await Promise.allSettled(tasks);
 
             console.log(`Batch #${batchIndex + 1} completed.`);
@@ -2322,7 +2475,6 @@ const OfflineWindow: React.FC = () => {
                 break;
             }
 
-            // 60-second cooldown between batches
             console.log("Starting 60-second cooldown before next batch...");
             setBatchCooldown(60);
             await sleep(60000);
@@ -2331,16 +2483,14 @@ const OfflineWindow: React.FC = () => {
             batchIndex++;
         }
 
-        // Wait for any leftover concurrency to drain
         while ((semaphore as any).activeCount > 0) {
             await sleep(500);
         }
+
         console.log("All batches processed or cancelled.");
 
-        // Clear range message
         setCurrentBatchRange(null);
 
-        // FINAL REFRESH: re-fetch the current server page (not the whole list)
         const p = await fetchPageWithApplied(currentPage);
         applyPagedResultToState(p);
         setSelectedIds(new Set());

@@ -10,6 +10,7 @@ import {
     fetchOfflineDownloadListEarlyAccessActive,
     fetchDownloadFilesByServer_v2,
     fetchAddRecordToDatabase,
+    fetchRemoveOfflineDownloadFileIntoOfflineDownloadList,
 } from '../../api/civitaiSQL_api';
 
 import type { OfflineDownloadEntry } from './OfflineWindow.types';
@@ -243,15 +244,21 @@ const EarlyAccessAutoWatchButton: React.FC = () => {
                                 dispatch
                             );
 
-                            ok = result === true;
+                            ok = result.success;
 
                             if (ok) {
                                 break;
                             }
 
-                            lastErrorMessage = `fetchDownloadFilesByServer_v2 returned falsy on attempt ${attempt}`;
+                            lastErrorMessage =
+                                result.message ||
+                                `fetchDownloadFilesByServer_v2 failed on attempt ${attempt}`;
                         } catch (err: any) {
-                            lastErrorMessage = err?.message || 'Unknown error';
+                            lastErrorMessage =
+                                err?.response?.data?.message ||
+                                err?.message ||
+                                'Unknown error';
+
                             console.error(
                                 `[EA Auto] Download failed on attempt ${attempt}/${MAX_DOWNLOAD_ATTEMPTS} for version ${civitaiVersionID}:`,
                                 lastErrorMessage
@@ -264,20 +271,34 @@ const EarlyAccessAutoWatchButton: React.FC = () => {
                     }
 
                     if (ok) {
-                        downloadedIdsRef.current.add(civitaiVersionID);
-                        retryAfterRef.current.delete(civitaiVersionID);
-                        setDownloadedCount((prev) => prev + 1);
-
-                        await fetchAddRecordToDatabase(
+                        const isAddRecordSuccessful = await fetchAddRecordToDatabase(
                             entry.selectedCategory,
                             entry.civitaiUrl,
                             downloadFilePath,
                             dispatch
                         );
 
+                        if (!isAddRecordSuccessful) {
+                            throw new Error(
+                                `Add record failed for ${entry.civitaiModelID}_${entry.civitaiVersionID}`
+                            );
+                        }
+
+                        await fetchRemoveOfflineDownloadFileIntoOfflineDownloadList(
+                            {
+                                civitaiModelID: entry.civitaiModelID,
+                                civitaiVersionID: entry.civitaiVersionID,
+                            },
+                            dispatch
+                        );
+
+                        downloadedIdsRef.current.add(civitaiVersionID);
+                        retryAfterRef.current.delete(civitaiVersionID);
+                        setDownloadedCount((prev) => prev + 1);
+
                         bookmarkThisUrl(
                             entry?.modelVersionObject?.model?.type ?? 'N/A',
-                            entry?.selectedCategory,
+                            entry.civitaiUrl,
                             `${entry?.modelVersionObject?.model?.name ?? 'N/A'} - ${entry?.civitaiModelID} | Stable Diffusion LoRA | Civitai`
                         );
 
@@ -301,6 +322,28 @@ const EarlyAccessAutoWatchButton: React.FC = () => {
                             })
                         );
                     }
+                } catch (err: any) {
+                    const errorMessage =
+                        err?.response?.data?.message ||
+                        err?.message ||
+                        'Unknown error';
+
+                    const nextRetryAt = Date.now() + FAILED_COOLDOWN_MS;
+                    retryAfterRef.current.set(civitaiVersionID, nextRetryAt);
+
+                    dispatch(
+                        setError({
+                            hasError: true,
+                            errorMessage:
+                                `Early Access auto-download failed for version ${civitaiVersionID}. ` +
+                                `Will retry after cooldown. Last error: ${errorMessage}`,
+                        })
+                    );
+
+                    console.error(
+                        `[EA Auto] Final failure for version ${civitaiVersionID}:`,
+                        errorMessage
+                    );
                 } finally {
                     inFlightIdsRef.current.delete(civitaiVersionID);
                 }
