@@ -127,6 +127,8 @@ export interface OfflineDownloadEntry {
     civitaiTags: string[];
     hold?: boolean;
     isError?: boolean;
+    errorMessage?: string | null;
+    errorAt?: string | null;
     downloadPriority?: number;
     earlyAccessEndsAt?: string | null;
 

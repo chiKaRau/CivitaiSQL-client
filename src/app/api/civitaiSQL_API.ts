@@ -222,32 +222,45 @@ export const fetchDatabaseLatestAddedModelsPanel = async (dispatch: any) => {
 }
 
 
-export const fetchAddRecordToDatabase = async (selectedCategory: string, url: string, downloadFilePath: string, dispatch: any) => {
+export const fetchAddRecordToDatabase = async (
+    selectedCategory: string,
+    url: string,
+    downloadFilePath: string,
+    dispatch: any
+) => {
     try {
-        // Clear any previous errors
         dispatch(clearError());
-        const response = await axios.post(`${config.domain}/api/create-record-to-all-tables`,
-            { category: selectedCategory, url: url, downloadFilePath: downloadFilePath });
+
+        const response = await axios.post(
+            `${config.domain}/api/create-record-to-all-tables`,
+            {
+                category: selectedCategory,
+                url: url,
+                downloadFilePath: downloadFilePath
+            }
+        );
 
         const responseData = response.data;
 
         if (!(response.status >= 200 && response.status < 300)) {
-            // Handle the case when response is false
-            throw new Error("Failed adding record into Database.");
+            return false;
         }
 
-        if (!responseData.success) {
-            // Handle the case when success is false
-            throw new Error("Failed adding record into Database.");
+        if (!responseData?.success) {
+            dispatch(setError({
+                hasError: true,
+                errorMessage: responseData?.message || "Failed adding record into Database."
+            }));
+            return false;
         }
 
+        return true;
     } catch (error: any) {
-        // Handle other types of errors, e.g., network issues
-        console.error("Error during Civitai Info retrieval:", error.message);
-        // Optionally, you can throw an error or return a specific value
+        console.error("Error during add record to database:", error.message);
         dispatch(setError({ hasError: true, errorMessage: error.message }));
+        return false;
     }
-}
+};
 
 export const fetchAddRecordToDatabaseInCustom = async (modelsDTO: any): Promise<void> => {
     const response = await axios.post(
@@ -663,34 +676,44 @@ export const fetchDownloadFilesByServer = async (url: string, name: string,
 
 export const fetchDownloadFilesByServer_v2 = async (
     modelObject: {
-        downloadFilePath: string, civitaiFileName: string, civitaiModelID: string,
-        civitaiVersionID: string, civitaiModelFileList: { name: string; downloadUrl: string }[], civitaiUrl: string,
-    }
-    , dispatch: any) => {
-
-
+        downloadFilePath: string,
+        civitaiFileName: string,
+        civitaiModelID: string,
+        civitaiVersionID: string,
+        civitaiModelFileList: { name: string; downloadUrl: string }[],
+        civitaiUrl: string,
+    },
+    dispatch: any
+) => {
     try {
-        // Clear any previous errors
         dispatch(clearError());
-        const response = await axios.post(`${config.domain}/api/download-file-server-v2`, {
-            modelObject
-        });
+
+        const response = await axios.post(
+            `${config.domain}/api/download-file-server-v2`,
+            { modelObject }
+        );
+
+        const responseData = response.data;
 
         if (!(response.status >= 200 && response.status < 300)) {
-            // Handle the case when response is false
             return false;
-            throw new Error("Failed download files by server.");
-        } else {
-            return true;
         }
 
+        if (!responseData?.success) {
+            dispatch(setError({
+                hasError: true,
+                errorMessage: responseData?.message || "Failed download files by server."
+            }));
+            return false;
+        }
+
+        return true;
     } catch (error: any) {
-        // Handle other types of errors, e.g., network issues
-        console.error("Error during Civitai Info retrieval:", error.message);
-        // Optionally, you can throw an error or return a specific value
+        console.error("Error during server download:", error.message);
         dispatch(setError({ hasError: true, errorMessage: error.message }));
+        return false;
     }
-}
+};
 
 export const fetchDownloadFilesByServer_v2ForCustom = async (
     modelObject: {
@@ -954,6 +977,9 @@ export const fetchGetErrorModelList = async (dispatch: any) => {
         const url = `${config.domain}/api/get_error_model_list`;
         const response = await axios.get(url);
 
+        console.log("error response list")
+        console.log(response)
+
         if (response.status >= 200 && response.status < 300) {
             // payload is: List<Map<String, Object>>
             return response.data?.payload;
@@ -1193,6 +1219,7 @@ export const fetchBulkPatchOfflineDownloadList = async (
         downloadPriority?: number | null;
         downloadFilePath?: string | null;
         isError?: boolean | null;
+        errorMessage?: string | null;
     },
     dispatch: any
 ) => {
@@ -1204,7 +1231,8 @@ export const fetchBulkPatchOfflineDownloadList = async (
             (patch?.hold !== undefined && patch?.hold !== null) ||
             (patch?.downloadPriority !== undefined && patch?.downloadPriority !== null) ||
             (patch?.downloadFilePath !== undefined && patch?.downloadFilePath !== null) ||
-            (patch?.isError !== undefined && patch?.isError !== null);
+            (patch?.isError !== undefined && patch?.isError !== null) ||
+            (patch?.errorMessage !== undefined);
 
         console.log(hasAnyPatch)
 
@@ -1228,6 +1256,7 @@ export const fetchBulkPatchOfflineDownloadList = async (
                     downloadPriority: patch.downloadPriority ?? null,
                     downloadFilePath: patch.downloadFilePath ?? null,
                     isError: patch.isError ?? null,
+                    errorMessage: patch.errorMessage ?? null,
                 },
             }
         );

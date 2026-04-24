@@ -415,7 +415,9 @@ const OfflineWindow: React.FC = () => {
 
         if (!modelObjects.length) return;
 
-        const patch = {} as Parameters<typeof fetchBulkPatchOfflineDownloadList>[1];
+        const patch = {} as Parameters<typeof fetchBulkPatchOfflineDownloadList>[1] & {
+            errorMessage?: string | null;
+        };
         const shouldRefresh = selectedPatchFields.has("refreshRecord");
 
         if (selectedPatchFields.has("hold")) {
@@ -434,6 +436,13 @@ const OfflineWindow: React.FC = () => {
         }
         if (selectedPatchFields.has("isError")) {
             patch.isError = bulkIsError;
+
+            // when clearing error, also clear errorMessage/errorAt on backend
+            if (!bulkIsError) {
+                patch.errorMessage = null;
+            } else {
+                patch.errorMessage = "Manually marked as error";
+            }
         }
 
         setIsPatching(true);
@@ -2073,17 +2082,35 @@ const OfflineWindow: React.FC = () => {
                     );
 
                     if (isDownloadSuccessful) {
-                        await fetchAddRecordToDatabase(
+                        const isAddRecordSuccessful = await fetchAddRecordToDatabase(
                             modify_selectedCategory,
                             civitaiUrl,
                             downloadFilePath,
                             dispatch
                         );
-                        bookmarkThisUrl(
-                            modelVersionObject?.model?.type ?? "N/A",
-                            civitaiUrl,
-                            `${modelVersionObject?.model?.name ?? "N/A"} - ${civitaiModelID} | Stable Diffusion LoRA | Civitai`
-                        );
+
+                        if (isAddRecordSuccessful) {
+                            await fetchRemoveOfflineDownloadFileIntoOfflineDownloadList(
+                                {
+                                    civitaiModelID,
+                                    civitaiVersionID
+                                },
+                                dispatch
+                            );
+
+                            bookmarkThisUrl(
+                                modelVersionObject?.model?.type ?? "N/A",
+                                civitaiUrl,
+                                `${modelVersionObject?.model?.name ?? "N/A"} - ${civitaiModelID} | Stable Diffusion LoRA | Civitai`
+                            );
+                        } else {
+                            console.error(
+                                `Download succeeded but add record failed for ${civitaiModelID}_${civitaiVersionID}`
+                            );
+
+                            // optional: mark error here later
+                            // await fetchUpdateOfflineErrorStatus(...);
+                        }
                     }
                 } else {
                     // Browser mode
@@ -2226,6 +2253,33 @@ const OfflineWindow: React.FC = () => {
                         );
 
                         if (isDownloadSuccessful) {
+                            let isAddRecordSuccessful = true;
+
+                            if (!entry.downloadFilePath.includes("/@scan@/Update/")) {
+                                isAddRecordSuccessful = await fetchAddRecordToDatabase(
+                                    selectedCategory,
+                                    civitaiUrl,
+                                    downloadFilePath,
+                                    dispatch
+                                );
+                            }
+
+                            if (!isAddRecordSuccessful) {
+                                success = false;
+                                console.error(
+                                    `Download succeeded but add record failed for ${civitaiModelID}_${civitaiVersionID}`
+                                );
+                                return;
+                            }
+
+                            await fetchRemoveOfflineDownloadFileIntoOfflineDownloadList(
+                                {
+                                    civitaiModelID,
+                                    civitaiVersionID
+                                },
+                                dispatch
+                            );
+
                             setRecentlyDownloaded(prev => {
                                 const key = `${entry.civitaiModelID}|${entry.civitaiVersionID}`;
                                 const dedup = prev.filter(e => `${e.civitaiModelID}|${e.civitaiVersionID}` !== key);
@@ -2233,9 +2287,6 @@ const OfflineWindow: React.FC = () => {
                                 return [snap, ...dedup];
                             });
 
-                            if (!entry.downloadFilePath.includes("/@scan@/Update/")) {
-                                await fetchAddRecordToDatabase(selectedCategory, civitaiUrl, downloadFilePath, dispatch);
-                            }
                             bookmarkThisUrl(
                                 modelVersionObject?.model?.type ?? "N/A",
                                 civitaiUrl,
@@ -3166,17 +3217,16 @@ const OfflineWindow: React.FC = () => {
     const handleToggleIsError = async (entry: OfflineDownloadEntry) => {
         const nextIsError = !Boolean(entry.isError);
 
-        const match = (e: OfflineDownloadEntry) =>
-            e.civitaiVersionID === entry.civitaiVersionID &&
-            e.civitaiModelID === entry.civitaiModelID;
+        const matcher = (e: OfflineDownloadEntry) =>
+            e.civitaiModelID === entry.civitaiModelID &&
+            e.civitaiVersionID === entry.civitaiVersionID;
 
-        const prevIsError = Boolean(entry.isError);
-
-        updateEntryLocal(match, { isError: nextIsError });
-
-        if (displayMode === "errorCard" && !nextIsError) {
-            setErrorEntries((prev) => prev.filter((e) => !match(e)));
-        }
+        // optimistic update
+        updateEntryLocal(matcher, {
+            isError: nextIsError,
+            errorMessage: nextIsError ? "Manually marked as error" : null,
+            errorAt: nextIsError ? new Date().toISOString() : null,
+        } as any);
 
         try {
             await fetchBulkPatchOfflineDownloadList(
@@ -3186,15 +3236,35 @@ const OfflineWindow: React.FC = () => {
                         civitaiVersionID: entry.civitaiVersionID,
                     },
                 ],
-                { isError: nextIsError } as any,
+                {
+                    isError: nextIsError,
+                    errorMessage: nextIsError ? "Manually marked as error" : null,
+                } as any,
                 dispatch
             );
-        } catch (err: any) {
-            updateEntryLocal(match, { isError: prevIsError });
+
             if (displayMode === "errorCard" && !nextIsError) {
-                setSpecialReloadToken((t) => t + 1);
+                setErrorEntries(prev =>
+                    prev.filter(e =>
+                        !(
+                            e.civitaiModelID === entry.civitaiModelID &&
+                            e.civitaiVersionID === entry.civitaiVersionID
+                        )
+                    )
+                );
             }
-            alert(`Failed to update isError: ${err?.message || "Unknown error"}`);
+        } catch (err: any) {
+            // rollback
+            updateEntryLocal(matcher, {
+                isError: entry.isError,
+                errorMessage: entry.errorMessage,
+                errorAt: entry.errorAt,
+            } as any);
+
+            dispatch(setError({
+                hasError: true,
+                errorMessage: `Failed to update isError: ${err?.message || "Unknown error"}`
+            }));
         }
     };
 

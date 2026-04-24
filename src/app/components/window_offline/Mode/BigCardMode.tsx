@@ -854,6 +854,55 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                             </button>
                                         </p>
 
+                                        {entry.errorMessage && (
+                                            <details
+                                                data-no-select="true"
+                                                style={{
+                                                    marginTop: '8px',
+                                                    border: isDarkMode
+                                                        ? '1px solid rgba(248,113,113,0.35)'
+                                                        : '1px solid rgba(220,38,38,0.25)',
+                                                    borderRadius: '6px',
+                                                    backgroundColor: isDarkMode ? '#1f1111' : '#fff5f5',
+                                                    overflow: 'hidden',
+                                                }}
+                                            >
+                                                <summary
+                                                    style={{
+                                                        cursor: 'pointer',
+                                                        padding: '6px 8px',
+                                                        fontSize: '0.78rem',
+                                                        fontWeight: 700,
+                                                        color: isDarkMode ? '#fca5a5' : '#b91c1c',
+                                                        userSelect: 'none',
+                                                    }}
+                                                >
+                                                    Error Log
+                                                </summary>
+
+                                                <pre
+                                                    style={{
+                                                        margin: 0,
+                                                        padding: '8px',
+                                                        maxHeight: '140px',
+                                                        overflow: 'auto',
+                                                        whiteSpace: 'pre-wrap',
+                                                        wordBreak: 'break-word',
+                                                        fontSize: '0.72rem',
+                                                        lineHeight: 1.35,
+                                                        fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+                                                        backgroundColor: isDarkMode ? '#111827' : '#f8fafc',
+                                                        color: isDarkMode ? '#fecaca' : '#7f1d1d',
+                                                        borderTop: isDarkMode
+                                                            ? '1px solid rgba(248,113,113,0.25)'
+                                                            : '1px solid rgba(220,38,38,0.2)',
+                                                    }}
+                                                >
+                                                    {entry.errorMessage}
+                                                </pre>
+                                            </details>
+                                        )}
+
                                         {(displayMode === 'errorCard' || displayMode === 'failedCard') && (
                                             <p style={{ margin: '4px 0' }}>
                                                 <strong>Civitai Archive URL:</strong>{' '}
