@@ -582,70 +582,102 @@ const OfflineWindow: React.FC = () => {
                     historySelectedDate
                 );
 
-                if (!cancelled) {
-                    const rows = Array.isArray(payload?.content) ? payload.content : [];
+                if (cancelled) return;
 
-                    const normalizedRows: ModelOfflineDownloadHistoryEntry[] = await Promise.all(
-                        rows.map(async (row: any) => {
-                            const fallbackLocalPath =
-                                typeof row?.localPath === "string" ? row.localPath : "";
+                const rows = Array.isArray(payload?.content) ? payload.content : [];
 
-                            const modelID =
-                                row?.civitaiModelID !== undefined && row?.civitaiModelID !== null
-                                    ? String(row.civitaiModelID)
+                const baseRows: ModelOfflineDownloadHistoryEntry[] = rows.map((row: any) => {
+                    const fallbackLocalPath =
+                        typeof row?.localPath === "string" ? row.localPath : "";
+
+                    return {
+                        id: row?.id,
+                        civitaiModelID: row?.civitaiModelID,
+                        civitaiVersionID: row?.civitaiVersionID,
+                        imageUrlList: Array.isArray(row?.imageUrlList)
+                            ? row.imageUrlList.filter(
+                                (x: any) => typeof x === "string" && x.trim() !== ""
+                            )
+                            : [],
+                        localPath: fallbackLocalPath,
+                        hasExistingLocalFile: false,
+                        createdAt: row?.createdAt ?? "",
+                        updatedAt: row?.updatedAt ?? "",
+                    };
+                });
+
+                // Show rows immediately.
+                setModelOfflineDownloadHistoryList(baseRows);
+                setHistoryTotalItems(payload?.totalElements ?? 0);
+                setHistoryTotalPages(payload?.totalPages ?? 1);
+
+                // Then check local file existence in the background.
+                const workerCount = Math.min(6, baseRows.length);
+                let nextIndex = 0;
+
+                const runWorker = async () => {
+                    while (!cancelled) {
+                        const index = nextIndex;
+                        nextIndex += 1;
+
+                        if (index >= baseRows.length) return;
+
+                        const row = baseRows[index];
+
+                        const modelID =
+                            row?.civitaiModelID !== undefined && row?.civitaiModelID !== null
+                                ? String(row.civitaiModelID)
+                                : "";
+
+                        const versionID =
+                            row?.civitaiVersionID !== undefined && row?.civitaiVersionID !== null
+                                ? String(row.civitaiVersionID)
+                                : "";
+
+                        if (!modelID || !versionID) continue;
+
+                        try {
+                            const filePayload = await fetchCheckModelVersionFileExists(
+                                dispatch,
+                                modelID,
+                                versionID
+                            );
+
+                            const checkedFilePath =
+                                typeof filePayload?.filePath === "string"
+                                    ? filePayload.filePath.trim()
                                     : "";
 
-                            const versionID =
-                                row?.civitaiVersionID !== undefined && row?.civitaiVersionID !== null
-                                    ? String(row.civitaiVersionID)
-                                    : "";
+                            if (!checkedFilePath || cancelled) continue;
 
-                            let resolvedLocalPath = fallbackLocalPath;
-                            let hasExistingLocalFile = false;
+                            setModelOfflineDownloadHistoryList((prev) =>
+                                prev.map((item) => {
+                                    const sameRow =
+                                        item.id !== undefined && row.id !== undefined
+                                            ? item.id === row.id
+                                            : item.civitaiModelID === row.civitaiModelID &&
+                                            item.civitaiVersionID === row.civitaiVersionID &&
+                                            item.createdAt === row.createdAt;
 
-                            if (modelID && versionID) {
-                                try {
-                                    const filePayload = await fetchCheckModelVersionFileExists(
-                                        dispatch,
-                                        modelID,
-                                        versionID
-                                    );
+                                    if (!sameRow) return item;
 
-                                    const checkedFilePath =
-                                        typeof filePayload?.filePath === "string"
-                                            ? filePayload.filePath.trim()
-                                            : "";
+                                    return {
+                                        ...item,
+                                        localPath: checkedFilePath,
+                                        hasExistingLocalFile: true,
+                                    };
+                                })
+                            );
+                        } catch (error) {
+                            // Keep fallback localPath.
+                        }
+                    }
+                };
 
-                                    if (checkedFilePath) {
-                                        resolvedLocalPath = checkedFilePath;
-                                        hasExistingLocalFile = true;
-                                    }
-                                } catch (error) {
-                                    // keep fallbackLocalPath
-                                }
-                            }
-
-                            return {
-                                id: row?.id,
-                                civitaiModelID: row?.civitaiModelID,
-                                civitaiVersionID: row?.civitaiVersionID,
-                                imageUrlList: Array.isArray(row?.imageUrlList)
-                                    ? row.imageUrlList.filter(
-                                        (x: any) => typeof x === "string" && x.trim() !== ""
-                                    )
-                                    : [],
-                                localPath: resolvedLocalPath,
-                                hasExistingLocalFile,
-                                createdAt: row?.createdAt ?? "",
-                                updatedAt: row?.updatedAt ?? "",
-                            };
-                        })
-                    );
-
-                    setModelOfflineDownloadHistoryList(normalizedRows);
-                    setHistoryTotalItems(payload?.totalElements ?? 0);
-                    setHistoryTotalPages(payload?.totalPages ?? 1);
-                }
+                // Do not await this. Rows are already displayed.
+                void Promise.all(
+                    Array.from({ length: workerCount }, () => runWorker())
+                );
             } catch (err: any) {
                 console.error("History list fetch failed:", err?.message || err);
 
