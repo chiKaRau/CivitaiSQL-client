@@ -1,8 +1,7 @@
 // FolderDropdown.tsx
-import React, { useState, useEffect, useMemo } from 'react';
-import { Dropdown, Button, Spinner, OverlayTrigger, Tooltip, FormControl } from 'react-bootstrap';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Dropdown, FormControl, OverlayTrigger, Spinner, Tooltip } from 'react-bootstrap';
 import { useDispatch, useSelector } from 'react-redux';
-import { FaClipboard } from 'react-icons/fa';
 import Fuse from 'fuse.js';
 
 import { fetchGetFoldersList } from "../api/civitaiSQL_api";
@@ -24,7 +23,7 @@ type Category = {
     updatedAt?: string;
 };
 
-type SelectedItem = {
+type SelectedFilteredCategoryItem = {
     category: Category;
     display: boolean;
 };
@@ -59,9 +58,9 @@ const sortFolders = (a: string, b: string) => {
     });
 };
 
-const parseSelectedFilteredCategoriesList = (value: unknown): SelectedItem[] => {
+const parseSelectedFilteredCategoriesList = (value: unknown): SelectedFilteredCategoryItem[] => {
     if (Array.isArray(value)) {
-        return value as SelectedItem[];
+        return value as SelectedFilteredCategoryItem[];
     }
 
     if (typeof value !== 'string' || !value.trim()) {
@@ -77,18 +76,18 @@ const parseSelectedFilteredCategoriesList = (value: unknown): SelectedItem[] => 
     }
 };
 
-const buildCategoryPrefixFilters = (selected: SelectedItem[]) => {
+const buildCategoryPrefixFilters = (selected: SelectedFilteredCategoryItem[]) => {
     const allowPrefixes = selected
         .filter(item => {
             const path = normalizePrefix(item?.category?.downloadFilePath);
-            return item.display && path.startsWith('/@scan@/');
+            return item.display === true && path.startsWith('/@scan@/');
         })
         .map(item => normalizePrefix(item.category.downloadFilePath));
 
     const denyPrefixes = selected
         .filter(item => {
             const path = normalizePrefix(item?.category?.downloadFilePath);
-            return !item.display && path.startsWith('/@scan@/');
+            return item.display === false && path.startsWith('/@scan@/');
         })
         .map(item => normalizePrefix(item.category.downloadFilePath));
 
@@ -134,8 +133,10 @@ const putDefaultFolderFirst = (
         denyPrefixes
     );
 
+    const normalizedDefault = normalizePrefix(DEFAULT_FOLDER);
+
     const withoutDefault = folders.filter(
-        folder => normalizePrefix(folder) !== normalizePrefix(DEFAULT_FOLDER)
+        folder => normalizePrefix(folder) !== normalizedDefault
     );
 
     return defaultAllowed
@@ -143,10 +144,14 @@ const putDefaultFolderFirst = (
         : withoutDefault;
 };
 
-const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText, isDarkMode }) => {
+const FolderDropdown: React.FC<FolderDropdownProps> = ({
+    filterText,
+    isDarkMode,
+}) => {
     const dispatch = useDispatch();
 
     const chromeData = useSelector((state: AppState) => state.chrome);
+
     const {
         selectedFilteredCategoriesList,
         isDarkMode: storeIsDarkMode,
@@ -210,13 +215,24 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText, isDarkMode 
         }
     };
 
-    const handleReadClipboard = async () => {
+    const handleUseClipboardAsFilter = async () => {
         try {
+            if (!navigator.clipboard?.readText) {
+                console.warn("Clipboard API is not available.");
+                return;
+            }
+
             const text = await navigator.clipboard.readText();
 
             setClipboardText(text);
-            setSelectedFolder('');
-            setActiveFilterSource('clipboard');
+
+            if (text.trim().length > 0) {
+                setActiveFilterSource('clipboard');
+            } else if (filterText?.trim().length) {
+                setActiveFilterSource('prop');
+            } else {
+                setActiveFilterSource('clipboard');
+            }
         } catch (error) {
             console.error('Error reading clipboard:', error);
         }
@@ -239,11 +255,6 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText, isDarkMode 
             );
 
             setFilteredFolders(nextList);
-
-            setSelectedFolder(prev =>
-                prev && !nextList.includes(prev) ? '' : prev
-            );
-
             return;
         }
 
@@ -261,10 +272,6 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText, isDarkMode 
         );
 
         setFilteredFolders(nextList);
-
-        setSelectedFolder(prev =>
-            prev && !nextList.includes(prev) ? '' : prev
-        );
     }, [
         categoryFilteredFolders,
         effectiveFilterText,
@@ -272,6 +279,20 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText, isDarkMode 
         allowPrefixes,
         denyPrefixes,
     ]);
+
+    useEffect(() => {
+        setSelectedFolder(prev => {
+            if (!prev) {
+                return prev;
+            }
+
+            const selectedStillAllowed = categoryFilteredFolders.some(folder =>
+                normalizePrefix(folder) === normalizePrefix(prev)
+            );
+
+            return selectedStillAllowed ? prev : '';
+        });
+    }, [categoryFilteredFolders]);
 
     const handleSelectFolder = (folder: string) => {
         setSelectedFolder(folder);
@@ -323,19 +344,19 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText, isDarkMode 
         border: `1px solid ${theme.panelBorder}`,
     };
 
-    const themedButtonStyle: React.CSSProperties = {
-        flexShrink: 0,
-        backgroundColor: theme.buttonBackground,
-        color: theme.buttonText,
-        border: `1px solid ${theme.buttonBorder}`,
-        boxShadow: theme.buttonShadow,
-    };
-
     const dropdownLabel = selectedFolder
         ? selectedFolder
         : filteredFolders.length > 0
             ? 'Select Folder'
             : 'No matching folders';
+
+    const tooltipText = selectedFolder
+        ? selectedFolder
+        : clipboardText
+            ? `Clipboard filter: ${clipboardText}`
+            : filteredFolders.length > 0
+                ? 'Click to filter by clipboard'
+                : 'No matching folders';
 
     return (
         <div style={{ padding: '4px 0', width: '100%', minWidth: 0 }}>
@@ -363,11 +384,16 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText, isDarkMode 
                                         boxShadow: theme.buttonShadow,
                                     }}
                                 >
-                                    {dropdownLabel}
+                                    {tooltipText}
                                 </Tooltip>
                             }
                         >
-                            <Dropdown.Toggle style={themedDropdownToggleStyle}>
+                            <Dropdown.Toggle
+                                style={themedDropdownToggleStyle}
+                                onMouseDown={() => {
+                                    void handleUseClipboardAsFilter();
+                                }}
+                            >
                                 {dropdownLabel}
                             </Dropdown.Toggle>
                         </OverlayTrigger>
@@ -407,30 +433,6 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText, isDarkMode 
                     aria-label="Fuzzy threshold"
                     title="0 = exact match, 1 = very fuzzy"
                 />
-
-                <OverlayTrigger
-                    placement="top"
-                    overlay={
-                        <Tooltip
-                            id="clipboard-tooltip"
-                            style={{
-                                backgroundColor: theme.panelBackground,
-                                color: theme.panelText,
-                                border: `1px solid ${theme.panelBorder}`,
-                                boxShadow: theme.buttonShadow,
-                            }}
-                        >
-                            {clipboardText ? clipboardText : 'Clipboard is empty'}
-                        </Tooltip>
-                    }
-                >
-                    <Button
-                        onClick={handleReadClipboard}
-                        style={themedButtonStyle}
-                    >
-                        <FaClipboard />
-                    </Button>
-                </OverlayTrigger>
             </div>
 
             {isLoading && (
