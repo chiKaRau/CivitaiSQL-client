@@ -4,17 +4,7 @@ import { CellStyle, ColDef } from 'ag-grid-community';
 import SmartImage from '../SmartImage';
 import ModelVersionFileExistsBadge from '../../ModelVersionFileExistsBadge';
 import CivitaiUrlLinks from '../../CivitaiUrlLinks';
-
-export interface ModelOfflineDownloadHistoryEntry {
-    id?: number;
-    civitaiModelID: number;
-    civitaiVersionID: number;
-    imageUrlList: string[];
-    localPath: string;
-    hasExistingLocalFile?: boolean;
-    createdAt: string;
-    updatedAt: string;
-}
+import { ModelOfflineDownloadHistoryEntry } from '../OfflineWindow.types';
 
 interface HistoryTableModeProps {
     entries: ModelOfflineDownloadHistoryEntry[];
@@ -416,9 +406,16 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
                     rowData={rowData}
                     columnDefs={columnDefs}
                     defaultColDef={defaultColDef}
+                    getRowId={(params) => {
+                        const d = params.data;
+
+                        return String(
+                            d?.id ??
+                            `${d?.civitaiModelID}_${d?.civitaiVersionID}_${d?.createdAt}`
+                        );
+                    }}
                     getRowStyle={getRowStyle}
-                    headerHeight={40}
-                    rowHeight={95}
+                    suppressCellFocus={true}
                 />
             </div>
 

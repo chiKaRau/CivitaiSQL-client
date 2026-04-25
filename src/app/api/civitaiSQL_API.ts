@@ -1837,3 +1837,35 @@ export const fetchRefreshModelVersionObjectFromOfflineTable = async (
         throw error;
     }
 };
+
+export const fetchHistoryModelVersionDbDetails = async (
+    items: {
+        civitaiModelID: string | number;
+        civitaiVersionID: string | number;
+    }[],
+    dispatch: any
+) => {
+    try {
+        dispatch(clearError());
+
+        const { data, status } = await axios.post(
+            `${config.domain}/api/get-history-model-version-db-details`,
+            { items }
+        );
+
+        if (status >= 200 && status < 300) {
+            return data?.payload ?? {};
+        }
+
+        return {};
+    } catch (error: any) {
+        console.error("Error during history model/version DB details retrieval:", error.message);
+
+        dispatch(setError({
+            hasError: true,
+            errorMessage: error.message
+        }));
+
+        return {};
+    }
+};

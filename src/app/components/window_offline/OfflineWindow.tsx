@@ -564,6 +564,190 @@ const OfflineWindow: React.FC = () => {
     useEffect(() => {
         let cancelled = false;
 
+        type HistoryApiRow = {
+            id?: number | string | null;
+            _id?: number | string | null;
+
+            civitaiModelID?: number | string | null;
+            civitai_model_id?: number | string | null;
+
+            civitaiVersionID?: number | string | null;
+            civitai_version_id?: number | string | null;
+
+            imageUrlList?: unknown;
+            image_url_list?: unknown;
+
+            localPath?: string | null;
+            local_path?: string | null;
+
+            createdAt?: string | null;
+            created_at?: string | null;
+
+            updatedAt?: string | null;
+            updated_at?: string | null;
+        };
+
+        type HistoryPayload = {
+            content?: HistoryApiRow[];
+            totalElements?: number;
+            totalPages?: number;
+        };
+
+        const toOptionalNumber = (value: unknown): number | undefined => {
+            if (value === undefined || value === null || value === "") {
+                return undefined;
+            }
+
+            const num = Number(value);
+            return Number.isFinite(num) ? num : undefined;
+        };
+
+        const toNumber = (value: unknown): number => {
+            const num = Number(value);
+            return Number.isFinite(num) ? num : 0;
+        };
+
+        const toStringValue = (value: unknown): string => {
+            if (typeof value === "string") {
+                return value;
+            }
+
+            if (value === undefined || value === null) {
+                return "";
+            }
+
+            return String(value);
+        };
+
+        const toImageUrlList = (value: unknown): string[] => {
+            if (Array.isArray(value)) {
+                return value.filter(
+                    (x): x is string => typeof x === "string" && x.trim() !== ""
+                );
+            }
+
+            if (typeof value === "string" && value.trim() !== "") {
+                try {
+                    const parsed = JSON.parse(value);
+
+                    if (Array.isArray(parsed)) {
+                        return parsed.filter(
+                            (x): x is string => typeof x === "string" && x.trim() !== ""
+                        );
+                    }
+                } catch {
+                    return [];
+                }
+            }
+
+            return [];
+        };
+
+        const getHistoryKey = (row: ModelOfflineDownloadHistoryEntry) => {
+            return `${row.civitaiModelID}_${row.civitaiVersionID}`;
+        };
+
+        const normalizeHistoryRow = (row: HistoryApiRow): ModelOfflineDownloadHistoryEntry => {
+            return {
+                id: toOptionalNumber(row.id ?? row._id),
+
+                civitaiModelID: toNumber(row.civitaiModelID ?? row.civitai_model_id),
+                civitaiVersionID: toNumber(row.civitaiVersionID ?? row.civitai_version_id),
+
+                imageUrlList: toImageUrlList(row.imageUrlList ?? row.image_url_list),
+
+                localPath: toStringValue(row.localPath ?? row.local_path),
+                hasExistingLocalFile: false,
+
+                createdAt: toStringValue(row.createdAt ?? row.created_at),
+                updatedAt: toStringValue(row.updatedAt ?? row.updated_at),
+            };
+        };
+
+        const checkLocalFilesInBackground = async (
+            baseRows: ModelOfflineDownloadHistoryEntry[]
+        ) => {
+            const uniqueRows = Array.from(
+                new Map(
+                    baseRows
+                        .filter((row) => row.civitaiModelID && row.civitaiVersionID)
+                        .map((row) => [getHistoryKey(row), row])
+                ).values()
+            );
+
+            const checkedMap = new Map<
+                string,
+                {
+                    localPath: string;
+                    hasExistingLocalFile: boolean;
+                }
+            >();
+
+            const batchSize = 5;
+
+            for (let i = 0; i < uniqueRows.length; i += batchSize) {
+                if (cancelled) return;
+
+                const batch = uniqueRows.slice(i, i + batchSize);
+
+                const checkedBatch = await Promise.all(
+                    batch.map(async (row) => {
+                        const key = getHistoryKey(row);
+
+                        try {
+                            const filePayload = (await fetchCheckModelVersionFileExists(
+                                dispatch,
+                                String(row.civitaiModelID),
+                                String(row.civitaiVersionID)
+                            )) as { filePath?: unknown } | null | undefined;
+
+                            const checkedFilePath =
+                                typeof filePayload?.filePath === "string"
+                                    ? filePayload.filePath.trim()
+                                    : "";
+
+                            return {
+                                key,
+                                localPath: checkedFilePath || row.localPath,
+                                hasExistingLocalFile: checkedFilePath !== "",
+                            };
+                        } catch {
+                            return {
+                                key,
+                                localPath: row.localPath,
+                                hasExistingLocalFile: false,
+                            };
+                        }
+                    })
+                );
+
+                checkedBatch.forEach((item) => {
+                    checkedMap.set(item.key, {
+                        localPath: item.localPath,
+                        hasExistingLocalFile: item.hasExistingLocalFile,
+                    });
+                });
+            }
+
+            if (cancelled) return;
+
+            setModelOfflineDownloadHistoryList((prev: ModelOfflineDownloadHistoryEntry[]) =>
+                prev.map((row: ModelOfflineDownloadHistoryEntry) => {
+                    const checked = checkedMap.get(getHistoryKey(row));
+
+                    if (!checked) {
+                        return row;
+                    }
+
+                    return {
+                        ...row,
+                        localPath: checked.localPath,
+                        hasExistingLocalFile: checked.hasExistingLocalFile,
+                    };
+                })
+            );
+        };
+
         const loadHistoryList = async () => {
             if (displayMode !== "historyTable") return;
 
@@ -575,109 +759,31 @@ const OfflineWindow: React.FC = () => {
                     setIsLoading(true);
                 }
 
-                const payload = await fetchModelOfflineDownloadHistoryList(
+                const payload = (await fetchModelOfflineDownloadHistoryList(
                     dispatch,
                     historyPage - 1,
                     historyItemsPerPage,
                     historySelectedDate
-                );
+                )) as HistoryPayload | null | undefined;
 
                 if (cancelled) return;
 
-                const rows = Array.isArray(payload?.content) ? payload.content : [];
+                const content = payload?.content;
 
-                const baseRows: ModelOfflineDownloadHistoryEntry[] = rows.map((row: any) => {
-                    const fallbackLocalPath =
-                        typeof row?.localPath === "string" ? row.localPath : "";
+                const rows: HistoryApiRow[] = Array.isArray(content)
+                    ? content
+                    : [];
 
-                    return {
-                        id: row?.id,
-                        civitaiModelID: row?.civitaiModelID,
-                        civitaiVersionID: row?.civitaiVersionID,
-                        imageUrlList: Array.isArray(row?.imageUrlList)
-                            ? row.imageUrlList.filter(
-                                (x: any) => typeof x === "string" && x.trim() !== ""
-                            )
-                            : [],
-                        localPath: fallbackLocalPath,
-                        hasExistingLocalFile: false,
-                        createdAt: row?.createdAt ?? "",
-                        updatedAt: row?.updatedAt ?? "",
-                    };
-                });
+                const normalizedRows: ModelOfflineDownloadHistoryEntry[] =
+                    rows.map((row: HistoryApiRow) => normalizeHistoryRow(row));
 
-                // Show rows immediately.
-                setModelOfflineDownloadHistoryList(baseRows);
+                // Display rows immediately.
+                setModelOfflineDownloadHistoryList(normalizedRows);
                 setHistoryTotalItems(payload?.totalElements ?? 0);
                 setHistoryTotalPages(payload?.totalPages ?? 1);
 
-                // Then check local file existence in the background.
-                const workerCount = Math.min(6, baseRows.length);
-                let nextIndex = 0;
-
-                const runWorker = async () => {
-                    while (!cancelled) {
-                        const index = nextIndex;
-                        nextIndex += 1;
-
-                        if (index >= baseRows.length) return;
-
-                        const row = baseRows[index];
-
-                        const modelID =
-                            row?.civitaiModelID !== undefined && row?.civitaiModelID !== null
-                                ? String(row.civitaiModelID)
-                                : "";
-
-                        const versionID =
-                            row?.civitaiVersionID !== undefined && row?.civitaiVersionID !== null
-                                ? String(row.civitaiVersionID)
-                                : "";
-
-                        if (!modelID || !versionID) continue;
-
-                        try {
-                            const filePayload = await fetchCheckModelVersionFileExists(
-                                dispatch,
-                                modelID,
-                                versionID
-                            );
-
-                            const checkedFilePath =
-                                typeof filePayload?.filePath === "string"
-                                    ? filePayload.filePath.trim()
-                                    : "";
-
-                            if (!checkedFilePath || cancelled) continue;
-
-                            setModelOfflineDownloadHistoryList((prev) =>
-                                prev.map((item) => {
-                                    const sameRow =
-                                        item.id !== undefined && row.id !== undefined
-                                            ? item.id === row.id
-                                            : item.civitaiModelID === row.civitaiModelID &&
-                                            item.civitaiVersionID === row.civitaiVersionID &&
-                                            item.createdAt === row.createdAt;
-
-                                    if (!sameRow) return item;
-
-                                    return {
-                                        ...item,
-                                        localPath: checkedFilePath,
-                                        hasExistingLocalFile: true,
-                                    };
-                                })
-                            );
-                        } catch (error) {
-                            // Keep fallback localPath.
-                        }
-                    }
-                };
-
-                // Do not await this. Rows are already displayed.
-                void Promise.all(
-                    Array.from({ length: workerCount }, () => runWorker())
-                );
+                // Check local files after the table already displayed.
+                void checkLocalFilesInBackground(normalizedRows);
             } catch (err: any) {
                 console.error("History list fetch failed:", err?.message || err);
 
@@ -705,7 +811,7 @@ const OfflineWindow: React.FC = () => {
         historyItemsPerPage,
         historyReloadToken,
         historySelectedDate,
-        dispatch
+        dispatch,
     ]);
 
     useEffect(() => {
