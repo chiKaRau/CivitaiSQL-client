@@ -1,13 +1,13 @@
 // FolderDropdown.tsx
-import React, { useState, useEffect } from 'react';
-import { Dropdown, Button, Spinner, OverlayTrigger, Tooltip } from 'react-bootstrap';
-import { useDispatch } from 'react-redux';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Dropdown, Button, Spinner, OverlayTrigger, Tooltip, FormControl } from 'react-bootstrap';
+import { useDispatch, useSelector } from 'react-redux';
 import { FaClipboard } from 'react-icons/fa';
+import Fuse from 'fuse.js';
+
 import { fetchGetFoldersList } from "../api/civitaiSQL_api";
 import { updateDownloadFilePath, updateDownloadPriority } from '../store/actions/chromeActions';
-import { InputGroup, FormControl } from 'react-bootstrap';
-
-import Fuse from 'fuse.js';
+import { AppState } from '../store/configureStore';
 import { darkTheme, lightTheme } from './window_offline/OfflineWindow.theme';
 
 interface FolderDropdownProps {
@@ -15,8 +15,142 @@ interface FolderDropdownProps {
     isDarkMode?: boolean;
 }
 
-const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText, isDarkMode = true }) => {
+type Category = {
+    id?: number;
+    prefixName?: string;
+    downloadFilePath?: string;
+    downloadPriority?: number;
+    createdAt?: string;
+    updatedAt?: string;
+};
+
+type SelectedItem = {
+    category: Category;
+    display: boolean;
+};
+
+const DEFAULT_FOLDER = '/@scan@/ACG/Pending/';
+
+const normalizePath = (value?: string) => {
+    return String(value || '')
+        .replace(/\\/g, '/')
+        .trim()
+        .toLowerCase();
+};
+
+const normalizePrefix = (value?: string) => {
+    const cleaned = normalizePath(value).replace(/\/+$/, '');
+    return cleaned ? `${cleaned}/` : '';
+};
+
+const sortFolders = (a: string, b: string) => {
+    const firstCharA = a.charAt(0).toUpperCase();
+    const firstCharB = b.charAt(0).toUpperCase();
+
+    const isDigitA = /\d/.test(firstCharA);
+    const isDigitB = /\d/.test(firstCharB);
+
+    if (isDigitA && !isDigitB) return 1;
+    if (!isDigitA && isDigitB) return -1;
+
+    return a.localeCompare(b, "en", {
+        numeric: true,
+        sensitivity: "base",
+    });
+};
+
+const parseSelectedFilteredCategoriesList = (value: unknown): SelectedItem[] => {
+    if (Array.isArray(value)) {
+        return value as SelectedItem[];
+    }
+
+    if (typeof value !== 'string' || !value.trim()) {
+        return [];
+    }
+
+    try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+        console.error("Failed to parse selectedFilteredCategoriesList:", error);
+        return [];
+    }
+};
+
+const buildCategoryPrefixFilters = (selected: SelectedItem[]) => {
+    const allowPrefixes = selected
+        .filter(item => {
+            const path = normalizePrefix(item?.category?.downloadFilePath);
+            return item.display && path.startsWith('/@scan@/');
+        })
+        .map(item => normalizePrefix(item.category.downloadFilePath));
+
+    const denyPrefixes = selected
+        .filter(item => {
+            const path = normalizePrefix(item?.category?.downloadFilePath);
+            return !item.display && path.startsWith('/@scan@/');
+        })
+        .map(item => normalizePrefix(item.category.downloadFilePath));
+
+    return {
+        allowPrefixes,
+        denyPrefixes,
+    };
+};
+
+const isFolderAllowedByCategoryFilter = (
+    folder: string,
+    allowPrefixes: string[],
+    denyPrefixes: string[]
+) => {
+    const normalizedFolder = normalizePrefix(folder);
+
+    const isAllowed =
+        allowPrefixes.length === 0
+            ? true
+            : allowPrefixes.some(prefix => normalizedFolder.startsWith(prefix));
+
+    if (!isAllowed) {
+        return false;
+    }
+
+    const isDenied = denyPrefixes.some(prefix => normalizedFolder.startsWith(prefix));
+
+    if (isDenied) {
+        return false;
+    }
+
+    return true;
+};
+
+const putDefaultFolderFirst = (
+    folders: string[],
+    allowPrefixes: string[],
+    denyPrefixes: string[]
+) => {
+    const defaultAllowed = isFolderAllowedByCategoryFilter(
+        DEFAULT_FOLDER,
+        allowPrefixes,
+        denyPrefixes
+    );
+
+    const withoutDefault = folders.filter(
+        folder => normalizePrefix(folder) !== normalizePrefix(DEFAULT_FOLDER)
+    );
+
+    return defaultAllowed
+        ? [DEFAULT_FOLDER, ...withoutDefault]
+        : withoutDefault;
+};
+
+const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText, isDarkMode }) => {
     const dispatch = useDispatch();
+
+    const chromeData = useSelector((state: AppState) => state.chrome);
+    const {
+        selectedFilteredCategoriesList,
+        isDarkMode: storeIsDarkMode,
+    } = chromeData;
 
     const [foldersList, setFoldersList] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -28,10 +162,22 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText, isDarkMode 
     const [threshold, setThreshold] = useState<number>(0.35);
     const [activeFilterSource, setActiveFilterSource] = useState<'prop' | 'clipboard'>('prop');
 
-    // Always keep our default folder constant in one place
-    const DEFAULT_FOLDER = '/@scan@/ACG/Pending/';
+    const theme = (isDarkMode ?? storeIsDarkMode ?? true) ? darkTheme : lightTheme;
 
-    // Decide whether to use prop-based filter or clipboard-based
+    const selectedCategories = useMemo(() => {
+        return parseSelectedFilteredCategoriesList(selectedFilteredCategoriesList);
+    }, [selectedFilteredCategoriesList]);
+
+    const { allowPrefixes, denyPrefixes } = useMemo(() => {
+        return buildCategoryPrefixFilters(selectedCategories);
+    }, [selectedCategories]);
+
+    const categoryFilteredFolders = useMemo(() => {
+        return foldersList
+            .filter(folder => isFolderAllowedByCategoryFilter(folder, allowPrefixes, denyPrefixes))
+            .sort(sortFolders);
+    }, [foldersList, allowPrefixes, denyPrefixes]);
+
     const effectiveFilterText =
         activeFilterSource === 'clipboard'
             ? clipboardText
@@ -39,18 +185,22 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText, isDarkMode 
 
     useEffect(() => {
         handleGetFoldersList();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handleGetFoldersList = async () => {
         setIsLoading(true);
+
         try {
             const data = await fetchGetFoldersList(dispatch);
+
             if (Array.isArray(data)) {
-                const cleaned = data.filter(f =>
-                    typeof f === "string" &&
-                    f.trim().startsWith("/") &&
-                    !f.toLowerCase().includes("/update/")
+                const cleaned = data.filter(folder =>
+                    typeof folder === "string" &&
+                    folder.trim().startsWith("/") &&
+                    !folder.toLowerCase().includes("/update/")
                 );
+
                 setFoldersList(cleaned);
             }
         } catch (error) {
@@ -63,6 +213,7 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText, isDarkMode 
     const handleReadClipboard = async () => {
         try {
             const text = await navigator.clipboard.readText();
+
             setClipboardText(text);
             setSelectedFolder('');
             setActiveFilterSource('clipboard');
@@ -77,26 +228,50 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText, isDarkMode 
         }
     }, [filterText]);
 
-    // Whenever folders list or the filter text changes, we re-filter
     useEffect(() => {
         const term = effectiveFilterText.trim();
+
         if (!term) {
-            setFilteredFolders([]);
+            const nextList = putDefaultFolderFirst(
+                categoryFilteredFolders,
+                allowPrefixes,
+                denyPrefixes
+            );
+
+            setFilteredFolders(nextList);
+
+            setSelectedFolder(prev =>
+                prev && !nextList.includes(prev) ? '' : prev
+            );
+
             return;
         }
 
-        const fuse = new Fuse(foldersList, {
-            threshold,        // ← use the dynamic state here
+        const fuse = new Fuse(categoryFilteredFolders, {
+            threshold,
             ignoreLocation: true,
         });
 
-        const results = fuse.search(term).map(r => r.item);
-        const finalList = [DEFAULT_FOLDER, ...results.filter(f => f !== DEFAULT_FOLDER)];
-        setFilteredFolders(finalList);
-    }, [foldersList, effectiveFilterText, threshold]); // ← include threshold
+        const results = fuse.search(term).map(result => result.item);
 
+        const nextList = putDefaultFolderFirst(
+            results,
+            allowPrefixes,
+            denyPrefixes
+        );
 
+        setFilteredFolders(nextList);
 
+        setSelectedFolder(prev =>
+            prev && !nextList.includes(prev) ? '' : prev
+        );
+    }, [
+        categoryFilteredFolders,
+        effectiveFilterText,
+        threshold,
+        allowPrefixes,
+        denyPrefixes,
+    ]);
 
     const handleSelectFolder = (folder: string) => {
         setSelectedFolder(folder);
@@ -104,14 +279,12 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText, isDarkMode 
         dispatch(updateDownloadPriority(5));
     };
 
-    const theme = isDarkMode ? darkTheme : lightTheme;
-
     const dropdownToggleStyle: React.CSSProperties = {
         width: '100%',
         maxWidth: '100%',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap'
+        whiteSpace: 'nowrap',
     };
 
     const themedDropdownToggleStyle: React.CSSProperties = {
@@ -158,6 +331,12 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText, isDarkMode 
         boxShadow: theme.buttonShadow,
     };
 
+    const dropdownLabel = selectedFolder
+        ? selectedFolder
+        : filteredFolders.length > 0
+            ? 'Select Folder'
+            : 'No matching folders';
+
     return (
         <div style={{ padding: '4px 0', width: '100%', minWidth: 0 }}>
             <div
@@ -184,31 +363,26 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText, isDarkMode 
                                         boxShadow: theme.buttonShadow,
                                     }}
                                 >
-                                    {selectedFolder
-                                        ? selectedFolder
-                                        : filteredFolders.length > 0
-                                            ? 'Select Folder'
-                                            : 'No matching folders'}
+                                    {dropdownLabel}
                                 </Tooltip>
                             }
                         >
                             <Dropdown.Toggle style={themedDropdownToggleStyle}>
-                                {selectedFolder
-                                    ? selectedFolder
-                                    : filteredFolders.length > 0
-                                        ? 'Select Folder'
-                                        : 'No matching folders'}
+                                {dropdownLabel}
                             </Dropdown.Toggle>
                         </OverlayTrigger>
 
                         <Dropdown.Menu style={themedDropdownMenuStyle}>
-                            {filteredFolders.map((folder, index) => (
+                            {filteredFolders.map(folder => (
                                 <Dropdown.Item
-                                    key={index}
+                                    key={folder}
                                     as="div"
                                     style={{
                                         ...themedDropdownItemStyle,
-                                        backgroundColor: selectedFolder === folder ? theme.rowBackgroundColor : theme.panelBackground,
+                                        backgroundColor:
+                                            selectedFolder === folder
+                                                ? theme.rowBackgroundColor
+                                                : theme.panelBackground,
                                     }}
                                     onClick={() => handleSelectFolder(folder)}
                                 >
@@ -225,7 +399,10 @@ const FolderDropdown: React.FC<FolderDropdownProps> = ({ filterText, isDarkMode 
                     max={1}
                     step={0.01}
                     value={threshold}
-                    onChange={e => setThreshold(Number(e.target.value))}
+                    onChange={event => {
+                        const nextValue = Number(event.target.value);
+                        setThreshold(Number.isNaN(nextValue) ? 0.35 : nextValue);
+                    }}
                     style={themedInputStyle}
                     aria-label="Fuzzy threshold"
                     title="0 = exact match, 1 = very fuzzy"
