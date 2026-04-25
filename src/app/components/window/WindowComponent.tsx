@@ -76,6 +76,16 @@ type StagedItem = {
 
 type RatingCfg = { rating: string; expectedMax: number };
 
+type DownloadPathRoot = "ACG" | "R";
+
+const DOWNLOAD_PATH_ROOT_OPTIONS: DownloadPathRoot[] = ["ACG", "R"];
+
+const DOWNLOAD_PATH_ROOT_FOLDER = {
+    ACG: "ACG",
+    R: "Real",
+} as const;
+const WINDOW_RECENT_CREATOR_STORAGE_KEY = "windowRecentCreatorUrls";
+
 //Apis
 import {
     fetchCivitaiModelInfoFromCivitaiByModelID,
@@ -202,6 +212,12 @@ const WindowComponent: React.FC = () => {
     const [lockedUrl, setLockedUrl] = useState<string>("");
     const [neighborCount, setNeighborCount] = useState<number>(5);
 
+    const [downloadPathRoot, setDownloadPathRoot] = useState<DownloadPathRoot>("ACG");
+    const hasDetectedDownloadPathRootRef = useRef(false);
+
+    const [recentCreatorUrls, setRecentCreatorUrls] = useState<string[]>([]);
+    const recentCreatorUrlsLoadedRef = useRef(false);
+
     // Optional fallback so UI doesn't go blank if API fails.
     // If you truly want zero hardcode, set this to [] and handle empty UI states.
     const DEFAULT_RATING_CFG: RatingCfg[] = [
@@ -230,6 +246,48 @@ const WindowComponent: React.FC = () => {
         themedSubtlePanelStyle,
         agGridThemeStyle,
     } = getOfflineWindowStyles(theme, isDarkMode);
+
+    const creatorNavButtonSlotStyle: React.CSSProperties = {
+        width: "44px",
+        minWidth: "44px",
+        height: "38px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+    };
+
+    const creatorNavButtonStyle: React.CSSProperties = {
+        width: "44px",
+        minWidth: "44px",
+        height: "38px",
+        padding: "6px 0",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+    };
+
+    const invisibleCreatorNavButtonStyle: React.CSSProperties = {
+        ...creatorNavButtonStyle,
+        visibility: "hidden",
+        pointerEvents: "none",
+    };
+
+    const folderActionButtonStyle: React.CSSProperties = {
+        backgroundColor: theme.buttonBackground,
+        color: theme.buttonText,
+        border: `1px solid ${theme.buttonBorder}`,
+        boxShadow: theme.buttonShadow,
+        alignSelf: "flex-start",
+        flexShrink: 0,
+        marginTop: "0px",
+        height: "56px",
+        minWidth: "64px",
+        padding: "0 10px",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+    };
 
     const [ratingConfigList, setRatingConfigList] = useState<RatingCfg[]>(DEFAULT_RATING_CFG);
 
@@ -847,6 +905,70 @@ const WindowComponent: React.FC = () => {
 
     const getCreatorKey = (url: string) => {
         return extractCreatorFromUserModelsUrl(url).toLowerCase();
+    };
+
+    useEffect(() => {
+        chrome.storage.local.get(WINDOW_RECENT_CREATOR_STORAGE_KEY, (result) => {
+            const saved = result?.[WINDOW_RECENT_CREATOR_STORAGE_KEY];
+
+            if (Array.isArray(saved)) {
+                setRecentCreatorUrls(
+                    saved
+                        .filter((x) => typeof x === "string")
+                        .slice(0, 3)
+                );
+            }
+
+            recentCreatorUrlsLoadedRef.current = true;
+        });
+    }, []);
+
+    useEffect(() => {
+        if (!recentCreatorUrlsLoadedRef.current) return;
+
+        chrome.storage.local.set({
+            [WINDOW_RECENT_CREATOR_STORAGE_KEY]: recentCreatorUrls.slice(0, 3),
+        });
+    }, [recentCreatorUrls]);
+
+    const getCreatorDisplayNameFromUrl = (url: string) => {
+        return extractCreatorFromUserModelsUrl(url) || url.split("/")[4] || url;
+    };
+
+    const rememberRecentCreatorUrl = (url: string) => {
+        const creator = extractCreatorFromUserModelsUrl(url);
+        const storedUrl = creator ? buildCanonicalCreatorUrl(creator) : url;
+        const storedKey = getCreatorKey(storedUrl) || normalizeUrl(storedUrl);
+
+        setRecentCreatorUrls((prev) => {
+            const next = [
+                storedUrl,
+                ...prev.filter((x) => {
+                    const key = getCreatorKey(x) || normalizeUrl(x);
+                    return key !== storedKey;
+                }),
+            ];
+
+            return next.slice(0, 3);
+        });
+    };
+
+    const handleSelectRecentCreatorUrl = (url: string) => {
+        const recentKey = getCreatorKey(url) || normalizeUrl(url);
+
+        const foundIndex = creatorUrlList.findIndex((item) => {
+            const itemKey = getCreatorKey(item.creatorUrl) || normalizeUrl(item.creatorUrl);
+            return itemKey === recentKey;
+        });
+
+        if (foundIndex !== -1) {
+            setCurrentCreatorUrlIndex(foundIndex);
+            setSelectedCreatorUrlText(getCreatorDisplayNameFromUrl(creatorUrlList[foundIndex].creatorUrl));
+            return;
+        }
+
+        setCurrentCreatorUrlIndex(null);
+        setSelectedCreatorUrlText(getCreatorDisplayNameFromUrl(url));
     };
 
     const handleSorting = () => {
@@ -1831,6 +1953,8 @@ const WindowComponent: React.FC = () => {
                 await chrome.tabs.update(activeTab.id, { url: finalUrl });
             }
 
+            rememberRecentCreatorUrl(url);
+
             await fetchUpdateCreatorUrlList(url, "checked", true, "N/A", dispatch);
             handleRefreshList();
             setTimeout(() => {
@@ -2143,13 +2267,63 @@ const WindowComponent: React.FC = () => {
         handleRefreshList();
     };
 
+    const applyDownloadPathRoot = React.useCallback(
+        (path: string, root: DownloadPathRoot) => {
+            const rootFolderName = DOWNLOAD_PATH_ROOT_FOLDER[root];
+
+            return (path || "").replace(
+                /((?:^|[/\\])@scan@[/\\])(?:ACG|Real)(?=[/\\]|$)/i,
+                (_match: string, prefix: string) => `${prefix}${rootFolderName}`
+            );
+        },
+        []
+    );
+
+    const detectDownloadPathRoot = React.useCallback((path: string): DownloadPathRoot | null => {
+        const match = (path || "").match(/(?:^|[/\\])@scan@[/\\](ACG|Real)(?=[/\\]|$)/i);
+
+        if (!match) return null;
+
+        return match[1].toLowerCase() === "real" ? "R" : "ACG";
+    }, []);
+
+    useEffect(() => {
+        if (hasDetectedDownloadPathRootRef.current || !downloadFilePath) return;
+
+        const detectedRoot = detectDownloadPathRoot(downloadFilePath);
+
+        if (!detectedRoot) return;
+
+        setDownloadPathRoot(detectedRoot);
+        hasDetectedDownloadPathRootRef.current = true;
+    }, [downloadFilePath, detectDownloadPathRoot]);
+
+    const handleDownloadPathRootChange = (nextRoot: DownloadPathRoot) => {
+        setDownloadPathRoot(nextRoot);
+
+        dispatch(
+            updateDownloadFilePath(
+                applyDownloadPathRoot(downloadFilePath, nextRoot)
+            )
+        );
+    };
+
+    const downloadPathOptions = useMemo(() => {
+        const convertedList = sortedandFilteredfoldersList.map((path) =>
+            applyDownloadPathRoot(path, downloadPathRoot)
+        );
+
+        return Array.from(new Set(convertedList));
+    }, [sortedandFilteredfoldersList, applyDownloadPathRoot, downloadPathRoot]);
 
     const handleFoldersListOnChange = (event: any, newValue: string | null) => {
         const disallowedRegex = /[<>:"\\\|?*]/g;
-        dispatch(updateDownloadFilePath(newValue?.replace(disallowedRegex, '') || ""))
 
-    }
+        const cleanedValue = newValue?.replace(disallowedRegex, "") || "";
+        const rootedValue = applyDownloadPathRoot(cleanedValue, downloadPathRoot);
 
+        dispatch(updateDownloadFilePath(rootedValue));
+    };
     // Handler for blur event
     const handleAutocompleteBlur = () => {
         // If downloadFilePath is empty
@@ -2985,95 +3159,201 @@ const WindowComponent: React.FC = () => {
                                                     </Dropdown>
                                                 )}
 
-                                                <OverlayTrigger
-                                                    placement={"top"}
-                                                    overlay={<Tooltip id="tooltip">Go to {selectedCreatorUrlText}</Tooltip>}
-                                                >
-                                                    <Button variant="primary" onClick={handleGo} disabled={currentCreatorUrlIndex == null}>
-                                                        <IoNavigate />
-                                                    </Button>
-                                                </OverlayTrigger>
+                                                <div style={creatorNavButtonSlotStyle}>
+                                                    <OverlayTrigger
+                                                        placement="top"
+                                                        overlay={<Tooltip id="tooltip">Go to {selectedCreatorUrlText}</Tooltip>}
+                                                    >
+                                                        <Button
+                                                            variant="primary"
+                                                            onClick={handleGo}
+                                                            disabled={currentCreatorUrlIndex == null}
+                                                            style={creatorNavButtonStyle}
+                                                        >
+                                                            <IoNavigate />
+                                                        </Button>
+                                                    </OverlayTrigger>
+                                                </div>
 
                                                 {useAgeNav ? (
                                                     <>
-                                                        <OverlayTrigger
-                                                            placement="top"
-                                                            overlay={<Tooltip id="tooltip">Previous (by last-checked age)</Tooltip>}
-                                                        >
-                                                            <Button variant="primary" onClick={handlePreviousByAge} disabled={!hasFilteredNewItems}>
-                                                                <MdSkipPrevious />
-                                                            </Button>
-                                                        </OverlayTrigger>
+                                                        <div style={creatorNavButtonSlotStyle}>
+                                                            <OverlayTrigger
+                                                                placement="top"
+                                                                overlay={<Tooltip id="tooltip">Previous by last-checked age</Tooltip>}
+                                                            >
+                                                                <Button
+                                                                    variant="primary"
+                                                                    onClick={handlePreviousByAge}
+                                                                    disabled={!hasFilteredNewItems}
+                                                                    style={creatorNavButtonStyle}
+                                                                >
+                                                                    <MdSkipPrevious />
+                                                                </Button>
+                                                            </OverlayTrigger>
+                                                        </div>
 
-                                                        <OverlayTrigger
-                                                            placement="top"
-                                                            overlay={<Tooltip id="tooltip">Next (by last-checked age)</Tooltip>}
-                                                        >
-                                                            <Button variant="primary" onClick={handleNextByAge} disabled={!hasFilteredNewItems}>
-                                                                <MdSkipNext />
-                                                            </Button>
-                                                        </OverlayTrigger>
+                                                        <div style={creatorNavButtonSlotStyle}>
+                                                            <OverlayTrigger
+                                                                placement="top"
+                                                                overlay={<Tooltip id="tooltip">Next by last-checked age</Tooltip>}
+                                                            >
+                                                                <Button
+                                                                    variant="primary"
+                                                                    onClick={handleNextByAge}
+                                                                    disabled={!hasFilteredNewItems}
+                                                                    style={creatorNavButtonStyle}
+                                                                >
+                                                                    <MdSkipNext />
+                                                                </Button>
+                                                            </OverlayTrigger>
+                                                        </div>
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip">Previous Page</Tooltip>}>
-                                                            <Button variant="secondary" onClick={handlePrevious} disabled={!hasFilteredNewItems}>
-                                                                <MdSkipPrevious />
-                                                            </Button>
-                                                        </OverlayTrigger>
+                                                        <div style={creatorNavButtonSlotStyle}>
+                                                            <OverlayTrigger
+                                                                placement="top"
+                                                                overlay={<Tooltip id="tooltip">Previous Page</Tooltip>}
+                                                            >
+                                                                <Button
+                                                                    variant="secondary"
+                                                                    onClick={handlePrevious}
+                                                                    disabled={!hasFilteredNewItems}
+                                                                    style={creatorNavButtonStyle}
+                                                                >
+                                                                    <MdSkipPrevious />
+                                                                </Button>
+                                                            </OverlayTrigger>
+                                                        </div>
 
-                                                        <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip">Next Page</Tooltip>}>
-                                                            <Button variant="secondary" onClick={handleNext} disabled={!hasFilteredNewItems}>
-                                                                <MdSkipNext />
-                                                            </Button>
-                                                        </OverlayTrigger>
+                                                        <div style={creatorNavButtonSlotStyle}>
+                                                            <OverlayTrigger
+                                                                placement="top"
+                                                                overlay={<Tooltip id="tooltip">Next Page</Tooltip>}
+                                                            >
+                                                                <Button
+                                                                    variant="secondary"
+                                                                    onClick={handleNext}
+                                                                    disabled={!hasFilteredNewItems}
+                                                                    style={creatorNavButtonStyle}
+                                                                >
+                                                                    <MdSkipNext />
+                                                                </Button>
+                                                            </OverlayTrigger>
+                                                        </div>
                                                     </>
                                                 )}
 
-
-                                                <OverlayTrigger
-                                                    placement={"top"}
-                                                    overlay={<Tooltip id="tooltip">Refresh Page</Tooltip>}
-                                                >
-                                                    <Button variant="warning" onClick={handleRefreshPage}>
-                                                        <IoReloadOutline />
-                                                    </Button>
-                                                </OverlayTrigger>
-
-                                                {currentTabCreator && (
-                                                    isCurrentCreatorInList ? (
-                                                        <OverlayTrigger
-                                                            placement="top"
-                                                            overlay={<Tooltip id="tooltip">Remove Current Tab Creator Url ({currentTabCreator})</Tooltip>}
+                                                <div style={creatorNavButtonSlotStyle}>
+                                                    <OverlayTrigger
+                                                        placement="top"
+                                                        overlay={<Tooltip id="tooltip">Refresh Page</Tooltip>}
+                                                    >
+                                                        <Button
+                                                            variant="warning"
+                                                            onClick={handleRefreshPage}
+                                                            style={creatorNavButtonStyle}
                                                         >
-                                                            <Button
-                                                                variant="danger"
-                                                                onClick={async () => {
-                                                                    await handleRemoveCreatorUrl(`https://civitai.com/user/${currentTabCreator}/models`);
-                                                                    await refreshCurrentTabCreator();
-                                                                }}
+                                                            <IoReloadOutline />
+                                                        </Button>
+                                                    </OverlayTrigger>
+                                                </div>
+
+                                                <div style={creatorNavButtonSlotStyle}>
+                                                    {currentTabCreator ? (
+                                                        isCurrentCreatorInList ? (
+                                                            <OverlayTrigger
+                                                                placement="top"
+                                                                overlay={
+                                                                    <Tooltip id="tooltip">
+                                                                        Remove Current Tab Creator Url ({currentTabCreator})
+                                                                    </Tooltip>
+                                                                }
                                                             >
-                                                                <IoCloseOutline />
-                                                            </Button>
-                                                        </OverlayTrigger>
+                                                                <Button
+                                                                    variant="danger"
+                                                                    style={creatorNavButtonStyle}
+                                                                    onClick={async () => {
+                                                                        await handleRemoveCreatorUrl(
+                                                                            `https://civitai.com/user/${currentTabCreator}/models`
+                                                                        );
+                                                                        await refreshCurrentTabCreator();
+                                                                    }}
+                                                                >
+                                                                    <IoCloseOutline />
+                                                                </Button>
+                                                            </OverlayTrigger>
+                                                        ) : (
+                                                            <OverlayTrigger
+                                                                placement="top"
+                                                                overlay={
+                                                                    <Tooltip id="tooltip">
+                                                                        Add current Tab Creator ({currentTabCreator})
+                                                                    </Tooltip>
+                                                                }
+                                                            >
+                                                                <Button
+                                                                    variant="success"
+                                                                    onClick={handleAddCurrentTabCreator}
+                                                                    style={creatorNavButtonStyle}
+                                                                >
+                                                                    +
+                                                                </Button>
+                                                            </OverlayTrigger>
+                                                        )
                                                     ) : (
-                                                        <OverlayTrigger
-                                                            placement="top"
-                                                            overlay={<Tooltip id="tooltip">Add current Tab Creator ({currentTabCreator})</Tooltip>}
+                                                        <Button
+                                                            variant="danger"
+                                                            disabled
+                                                            tabIndex={-1}
+                                                            aria-hidden="true"
+                                                            style={invisibleCreatorNavButtonStyle}
                                                         >
-                                                            <Button variant="success" onClick={handleAddCurrentTabCreator}>
-                                                                +
-                                                            </Button>
-                                                        </OverlayTrigger>
-                                                    )
-                                                )}
-
+                                                            <IoCloseOutline />
+                                                        </Button>
+                                                    )}
+                                                </div>
 
                                             </div>
 
 
                                             <div style={{ display: 'flex', alignItems: 'end', gap: '3px', margin: '5px', justifyContent: 'flex-end' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                                                    <Dropdown>
+                                                        <Dropdown.Toggle
+                                                            size="sm"
+                                                            disabled={recentCreatorUrls.length === 0}
+                                                            style={{
+                                                                ...themedDropdownToggleStyle,
+                                                                width: "12ch",
+                                                                maxWidth: "12ch",
+                                                                overflow: "hidden",
+                                                                textOverflow: "ellipsis",
+                                                                whiteSpace: "nowrap",
+                                                            }}
+                                                        >
+                                                            Recent
+                                                        </Dropdown.Toggle>
+
+                                                        <Dropdown.Menu style={themedDropdownMenuStyle}>
+                                                            {recentCreatorUrls.map((url) => (
+                                                                <Dropdown.Item
+                                                                    key={url}
+                                                                    as="button"
+                                                                    onClick={() => handleSelectRecentCreatorUrl(url)}
+                                                                    style={{
+                                                                        backgroundColor: theme.panelBackground,
+                                                                        color: theme.panelText,
+                                                                    }}
+                                                                    title={getCreatorDisplayNameFromUrl(url)}
+                                                                >
+                                                                    {getCreatorDisplayNameFromUrl(url)}
+                                                                </Dropdown.Item>
+                                                            ))}
+                                                        </Dropdown.Menu>
+                                                    </Dropdown>
+
                                                     <span style={{ color: theme.panelText }}>
                                                         <FaRankingStar /> : {currentCreatorUrlIndex !== null
                                                             ? creatorUrlList[currentCreatorUrlIndex].rating
@@ -3333,7 +3613,7 @@ const WindowComponent: React.FC = () => {
                                         onInputChange={handleFoldersListOnChange}
                                         key="1"
                                         id="controllable-states-demo"
-                                        options={sortedandFilteredfoldersList}
+                                        options={downloadPathOptions}
                                         sx={{
                                             width: "100%",
                                             "& .MuiOutlinedInput-root": {
@@ -3397,6 +3677,35 @@ const WindowComponent: React.FC = () => {
                                     />
                                 </div>
 
+                                <Dropdown style={{ alignSelf: "flex-start", flexShrink: 0 }}>
+                                    <Dropdown.Toggle
+                                        disabled={isLoading}
+                                        style={folderActionButtonStyle}
+                                    >
+                                        {downloadPathRoot}
+                                    </Dropdown.Toggle>
+
+                                    <Dropdown.Menu style={themedDropdownMenuStyle}>
+                                        {DOWNLOAD_PATH_ROOT_OPTIONS.map((option) => (
+                                            <Dropdown.Item
+                                                key={option}
+                                                as="button"
+                                                active={downloadPathRoot === option}
+                                                onClick={() => handleDownloadPathRootChange(option)}
+                                                style={{
+                                                    backgroundColor:
+                                                        downloadPathRoot === option
+                                                            ? theme.rowBackgroundColor
+                                                            : theme.panelBackground,
+                                                    color: theme.panelText,
+                                                }}
+                                            >
+                                                {option}
+                                            </Dropdown.Item>
+                                        ))}
+                                    </Dropdown.Menu>
+                                </Dropdown>
+
                                 <OverlayTrigger
                                     placement="bottom"
                                     overlay={
@@ -3416,17 +3725,7 @@ const WindowComponent: React.FC = () => {
                                     <Button
                                         disabled={isLoading}
                                         className="tooltip-button"
-                                        style={{
-                                            backgroundColor: theme.buttonBackground,
-                                            color: theme.buttonText,
-                                            border: `1px solid ${theme.buttonBorder}`,
-                                            boxShadow: theme.buttonShadow,
-                                            alignSelf: "flex-start",
-                                            flexShrink: 0,
-                                            marginTop: "0px",
-                                            height: "56px",
-                                            minWidth: "44px",
-                                        }}
+                                        style={folderActionButtonStyle}
                                         onClick={() => {
                                             updateDownloadFilePathIntoChromeStorage(downloadFilePath);
                                             updateSelectedCategoryIntoChromeStorage(selectedCategory);

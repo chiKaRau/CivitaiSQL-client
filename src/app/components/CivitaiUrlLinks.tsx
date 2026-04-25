@@ -19,7 +19,6 @@ const CivitaiUrlLinks = ({
     const versionID = String(civitaiVersionID);
 
     const redUrl = `https://civitai.red/models/${modelID}?modelVersionId=${versionID}`;
-    const greenUrl = `https://civitai.green/models/${modelID}?modelVersionId=${versionID}`;
     const grayUrl = `https://civitai.com/models/${modelID}?modelVersionId=${versionID}`;
 
     const iconStyle = {
@@ -42,16 +41,6 @@ const CivitaiUrlLinks = ({
                 rel="noopener noreferrer"
                 title="Open in civitai.red"
                 style={{ color: "red", display: "inline-flex", alignItems: "center" }}
-            >
-                <FaExternalLinkAlt style={iconStyle} />
-            </a>
-
-            <a
-                href={greenUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                title="Open in civitai.green"
-                style={{ color: "green", display: "inline-flex", alignItems: "center" }}
             >
                 <FaExternalLinkAlt style={iconStyle} />
             </a>

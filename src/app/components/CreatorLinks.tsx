@@ -13,7 +13,6 @@ const CreatorLinks = ({ creator }: Props) => {
     const encodedCreator = encodeURIComponent(creator);
 
     const redUrl = `https://civitai.red/user/${encodedCreator}/models`;
-    const greenUrl = `https://civitai.green/user/${encodedCreator}/models`;
     const grayUrl = `https://civitai.com/user/${encodedCreator}/models`;
 
     const iconStyle = {
@@ -37,17 +36,6 @@ const CreatorLinks = ({ creator }: Props) => {
                 rel="noopener noreferrer"
                 title="Open creator in civitai.red"
                 style={{ color: "red", display: "inline-flex", alignItems: "center" }}
-                onClick={(e) => e.stopPropagation()}
-            >
-                <FaExternalLinkAlt style={iconStyle} />
-            </a>
-
-            <a
-                href={greenUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                title="Open creator in civitai.green"
-                style={{ color: "green", display: "inline-flex", alignItems: "center" }}
                 onClick={(e) => e.stopPropagation()}
             >
                 <FaExternalLinkAlt style={iconStyle} />
