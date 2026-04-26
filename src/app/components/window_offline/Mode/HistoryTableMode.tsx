@@ -67,6 +67,9 @@ function getDirectoryPathForOpen(path?: string) {
     return directoryOnly;
 }
 
+const HISTORY_IMAGE_SIZE = 80;
+const HISTORY_IMAGE_CELL_HEIGHT = 92; // 80 image + 6px top + 6px bottom
+
 const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
     entries,
     isDarkMode,
@@ -90,6 +93,8 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
         alignItems: "center",
         justifyContent: "center",
         padding: "6px",
+        overflow: "hidden",
+        boxSizing: "border-box",
     }), []);
 
     const numberCellStyle = useMemo<CellStyle>(() => ({
@@ -175,8 +180,9 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
         {
             headerName: "Image",
             field: "previewImageUrl",
-            width: 80,
-            maxWidth: 80,
+            width: 92,
+            minWidth: 92,
+            maxWidth: 92,
             sortable: false,
             filter: false,
             cellRenderer: (params: any) => {
@@ -202,8 +208,12 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
                         style={{
                             width: "80px",
                             height: "80px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
                             margin: "0 auto",
                             cursor: "zoom-in",
+                            overflow: "hidden",
                         }}
                     >
                         <SmartImage
@@ -584,6 +594,16 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
         });
     }, [entries, getStableImageData, deletingHistoryId]);
 
+    const getHistoryRowId = useCallback((params: any) => {
+        const d = params.data;
+
+        return String(
+            d?.rowId ??
+            d?.id ??
+            `${d?.civitaiModelID}_${d?.civitaiVersionID}_${d?.createdAt}`
+        );
+    }, []);
+
     return (
         <>
             <div
@@ -598,16 +618,9 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
                     rowData={rowData}
                     columnDefs={columnDefs}
                     defaultColDef={defaultColDef}
-                    getRowId={(params) => {
-                        const d = params.data;
-
-                        return String(
-                            d?.rowId ??
-                            d?.id ??
-                            `${d?.civitaiModelID}_${d?.civitaiVersionID}_${d?.createdAt}`
-                        );
-                    }}
+                    getRowId={getHistoryRowId}
                     getRowStyle={getRowStyle}
+                    rowHeight={92}
                     suppressCellFocus={true}
                 />
             </div>
@@ -650,4 +663,4 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
     );
 };
 
-export default HistoryTableMode;
+export default React.memo(HistoryTableMode);

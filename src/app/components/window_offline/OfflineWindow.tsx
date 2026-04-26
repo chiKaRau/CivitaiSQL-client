@@ -2256,7 +2256,7 @@ const OfflineWindow: React.FC = () => {
         modelOfflineDownloadHistoryList,
     ]);
 
-    const handleOpenDownloadPath = async (downloadPath: string) => {
+    const handleOpenDownloadPath = useCallback(async (downloadPath: string) => {
         const trimmed = (downloadPath || '').trim();
 
         if (!trimmed) {
@@ -2265,7 +2265,7 @@ const OfflineWindow: React.FC = () => {
         }
 
         await fetchOpenModelDownloadDirectory(trimmed, dispatch);
-    };
+    }, [dispatch]);
 
     // ESC to close
     useEffect(() => {
