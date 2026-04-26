@@ -155,6 +155,8 @@ const DEFAULT_AI_SUGGEST_COUNT = 20;
 
 type HistoryFetchStatus = "notStarted" | "loading" | "success" | "fail";
 
+type CartDownloadStatus = "queued" | "downloading" | "success" | "fail";
+
 type HistoryFetchStatusKey =
     | "historyList"
     | "dbDetails"
@@ -215,6 +217,9 @@ const OfflineWindow: React.FC = () => {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     const [cartEntryByVid, setCartEntryByVid] = useState<Record<string, OfflineDownloadEntry>>({});
+
+    const [cartDownloadStatusByVid, setCartDownloadStatusByVid] =
+        useState<Record<string, CartDownloadStatus>>({});
 
     // Modify Mode state
     const [isModifyMode, setIsModifyMode] = useState(false); // Modify mode is off by default
@@ -508,6 +513,7 @@ const OfflineWindow: React.FC = () => {
     const clearCartSelection = useCallback(() => {
         setSelectedIds(new Set());
         setCartEntryByVid({});
+        setCartDownloadStatusByVid({});
         setSelectedSuggestedPathByVid({});
     }, []);
 
@@ -526,6 +532,9 @@ const OfflineWindow: React.FC = () => {
 
         setSelectedIds(nextIds);
         setCartEntryByVid(nextCart);
+
+        // avoid showing old download status when user creates a new cart
+        setCartDownloadStatusByVid({});
     }, [cartEntryKey]);
 
     const handleBulkPatchSelected = async () => {
@@ -2363,6 +2372,12 @@ const OfflineWindow: React.FC = () => {
                     delete nextCart[cartEntryKey(versionId)];
                     return nextCart;
                 });
+
+                setCartDownloadStatusByVid((prevStatus) => {
+                    const nextStatus = { ...prevStatus };
+                    delete nextStatus[versionId];
+                    return nextStatus;
+                });
             } else {
                 next.add(versionId);
 
@@ -2372,6 +2387,12 @@ const OfflineWindow: React.FC = () => {
                         [cartEntryKey(versionId)]: entry,
                     }));
                 }
+
+                setCartDownloadStatusByVid((prevStatus) => {
+                    const nextStatus = { ...prevStatus };
+                    delete nextStatus[versionId];
+                    return nextStatus;
+                });
             }
 
             return next;
@@ -2494,17 +2515,49 @@ const OfflineWindow: React.FC = () => {
             return;
         }
 
+        setCartDownloadStatusByVid((prevStatus) => {
+            const nextStatus = { ...prevStatus };
+
+            entriesToDownload.forEach((entry) => {
+                const versionId = String(entry.civitaiVersionID ?? "").trim();
+                if (!versionId) return;
+
+                nextStatus[versionId] = "queued";
+            });
+
+            return nextStatus;
+        });
+
 
         setDownloadProgress({ completed: 0, total: entriesToDownload.length });
         setFailedEntries([]);
         // setCompletedCount(0);
         setIsCancelled(false);
 
+        const handleEachDownloadStart = (entry: OfflineDownloadEntry) => {
+            const versionId = String(entry.civitaiVersionID ?? "").trim();
+            if (!versionId) return;
+
+            setCartDownloadStatusByVid((prevStatus) => ({
+                ...prevStatus,
+                [versionId]: "downloading",
+            }));
+        };
+
         // Called after each file completes
         const handleEachDownloadComplete = async (
             success: boolean,
             entry: OfflineDownloadEntry
         ) => {
+            const versionId = String(entry.civitaiVersionID ?? "").trim();
+
+            if (versionId) {
+                setCartDownloadStatusByVid((prevStatus) => ({
+                    ...prevStatus,
+                    [versionId]: success ? "success" : "fail",
+                }));
+            }
+
             if (!success) {
                 setFailedEntries(prev => {
                     const key = `${entry.civitaiModelID}|${entry.civitaiVersionID}`;
@@ -2542,7 +2595,8 @@ const OfflineWindow: React.FC = () => {
                 dispatch,
                 handleEachDownloadComplete,
                 isPausedRef,
-                isCancelledRef
+                isCancelledRef,
+                handleEachDownloadStart
             );
         } catch (error: any) {
             console.error("Download failed:", error.message);
@@ -2870,7 +2924,8 @@ const OfflineWindow: React.FC = () => {
         dispatch: any,
         onDownloadComplete: (success: boolean, entry: OfflineDownloadEntry) => void,
         isPausedRef: React.MutableRefObject<boolean>,
-        isCancelledRef: React.MutableRefObject<boolean>
+        isCancelledRef: React.MutableRefObject<boolean>,
+        onDownloadStart?: (entry: OfflineDownloadEntry) => void
     ) => {
         const CONCURRENCY_LIMIT = 5;
         const BATCH_SIZE = 10;
@@ -2919,6 +2974,8 @@ const OfflineWindow: React.FC = () => {
                 setInitiationDelay(null);
 
                 const task = semaphore.acquire(async () => {
+                    onDownloadStart?.(entry);
+
                     let success = true;
                     let completedEntry: OfflineDownloadEntry = entry;
 
@@ -3055,10 +3112,14 @@ const OfflineWindow: React.FC = () => {
                 break;
             }
 
-            console.log("Starting 60-second cooldown before next batch...");
-            setBatchCooldown(60);
-            await sleep(60000);
-            setBatchCooldown(null);
+            const isLastBatch = batchIndex >= batches.length - 1;
+
+            if (!isLastBatch) {
+                console.log("Starting 60-second cooldown before next batch...");
+                setBatchCooldown(60);
+                await sleep(60000);
+                setBatchCooldown(null);
+            }
 
             batchIndex++;
         }
@@ -3070,10 +3131,17 @@ const OfflineWindow: React.FC = () => {
         console.log("All batches processed or cancelled.");
 
         setCurrentBatchRange(null);
+        setBatchCooldown(null);
+        setInitiationDelay(null);
 
-        const p = await fetchPageWithApplied(currentPage);
-        applyPagedResultToState(p);
-        clearCartSelection();
+        try {
+            const p = await fetchPageWithApplied(currentPage);
+            applyPagedResultToState(p);
+        } catch (error: any) {
+            console.error("Failed to refresh page after download:", error?.message || error);
+        } finally {
+            clearCartSelection();
+        }
     };
 
     const handleApplySelectedAiPathsToDownloadFilePath = async () => {
@@ -3886,6 +3954,16 @@ const OfflineWindow: React.FC = () => {
                 return nextCart;
             });
 
+            setCartDownloadStatusByVid((prevStatus) => {
+                const nextStatus = { ...prevStatus };
+
+                visibleIds.forEach((id) => {
+                    delete nextStatus[id];
+                });
+
+                return nextStatus;
+            });
+
             return;
         }
 
@@ -3906,6 +3984,16 @@ const OfflineWindow: React.FC = () => {
             });
 
             return nextCart;
+        });
+
+        setCartDownloadStatusByVid((prevStatus) => {
+            const nextStatus = { ...prevStatus };
+
+            visibleIds.forEach((id) => {
+                delete nextStatus[id];
+            });
+
+            return nextStatus;
         });
     };
 
@@ -5760,6 +5848,7 @@ const OfflineWindow: React.FC = () => {
                                         mergeSuggestedPathsForEntry={mergeSuggestedPathsForEntry}
                                         normalizePathKey={normalizePathKey}
                                         displayMode="cartCard"
+                                        cartDownloadStatusByVid={cartDownloadStatusByVid}
                                         editingVersionId={editingVersionId}
                                         setEditingVersionId={setEditingVersionId}
                                         handleVersionIdSave={handleVersionIdSave}

@@ -1,7 +1,7 @@
 // BigCardMode.tsx
 
 import React from 'react';
-import { Card, Carousel, Form, Button, Dropdown, ButtonGroup, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { Card, Carousel, Form, Button, Dropdown, ButtonGroup, OverlayTrigger, Tooltip, Spinner } from 'react-bootstrap';
 import { BsPencilFill, BsCloudDownloadFill } from 'react-icons/bs';
 import { TiRefreshOutline } from "react-icons/ti";
 import { MdRefresh } from 'react-icons/md';
@@ -24,6 +24,8 @@ import CivitaiApiLinks from '../../CivitaiApiLinks';
 
 type DownloadMethod = 'server' | 'browser';
 
+type CartDownloadStatus = "queued" | "downloading" | "success" | "fail";
+
 interface BigCardModeProps {
     filteredDownloadList: OfflineDownloadEntry[];
     isDarkMode: boolean;
@@ -38,6 +40,7 @@ interface BigCardModeProps {
     activePreviewId: string | null;
     canChangeSelection: boolean;
     displayMode?: string;
+    cartDownloadStatusByVid?: Record<string, CartDownloadStatus>;
     onErrorCardDownload?: (entry: OfflineDownloadEntry, method: DownloadMethod) => void;
     onToggleIsError?: (entry: OfflineDownloadEntry) => void;
 
@@ -102,6 +105,7 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
     onRefreshModelVersionObject,
     activePreviewId,
     displayMode,
+    cartDownloadStatusByVid,
     onErrorCardDownload,
     canChangeSelection,
     onToggleIsError,
@@ -187,6 +191,112 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
         ));
     }, [clearRefreshHoldTimer]);
 
+
+    const renderCartDownloadBadge = (status?: CartDownloadStatus) => {
+        if (!status) return null;
+
+        const STATUS_BADGE_SHIFT_X = 25;
+
+        const baseStyle = {
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 5,
+            borderRadius: 999,
+            padding: '2px 8px',
+            fontSize: 12,
+            fontWeight: 700,
+            pointerEvents: 'none' as const,
+            whiteSpace: 'nowrap' as const,
+            border: '1px solid transparent',
+            transform: `translateX(${STATUS_BADGE_SHIFT_X}px)`,
+        };
+
+        if (status === "queued") {
+            return (
+                <div
+                    title="Queued"
+                    aria-label="Queued"
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                        ...baseStyle,
+                        pointerEvents: 'auto',
+                        background: isDarkMode ? 'rgba(107,114,128,0.9)' : '#e5e7eb',
+                        color: isDarkMode ? '#fff' : '#374151',
+                        borderColor: isDarkMode ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.12)',
+                    }}
+                >
+                    <BsCloudDownloadFill size={13} />
+                </div>
+            );
+        }
+
+        if (status === "downloading") {
+            return (
+                <div
+                    title="Downloading"
+                    aria-label="Downloading"
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                        ...baseStyle,
+                        pointerEvents: 'auto',
+                        background: isDarkMode ? 'rgba(37,99,235,0.9)' : '#dbeafe',
+                        color: isDarkMode ? '#fff' : '#1d4ed8',
+                        borderColor: isDarkMode ? 'rgba(147,197,253,0.35)' : 'rgba(37,99,235,0.25)',
+                    }}
+                >
+                    <BsCloudDownloadFill size={13} />
+                    <Spinner
+                        animation="border"
+                        size="sm"
+                        style={{
+                            width: 12,
+                            height: 12,
+                            borderWidth: 2,
+                        }}
+                    />
+                </div>
+            );
+        }
+
+        if (status === "success") {
+            return (
+                <div
+                    title="Downloaded"
+                    aria-label="Downloaded"
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                        ...baseStyle,
+                        pointerEvents: 'auto',
+                        background: isDarkMode ? 'rgba(22,101,52,0.9)' : '#dcfce7',
+                        color: isDarkMode ? '#fff' : '#166534',
+                        borderColor: isDarkMode ? 'rgba(134,239,172,0.35)' : 'rgba(22,163,74,0.25)',
+                    }}
+                >
+                    <BsCloudDownloadFill size={13} />
+                    <FaCheck size={12} />
+                </div>
+            );
+        }
+
+        return (
+            <div
+                title="Download failed"
+                aria-label="Download failed"
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                    ...baseStyle,
+                    pointerEvents: 'auto',
+                    background: isDarkMode ? 'rgba(127,29,29,0.9)' : '#fee2e2',
+                    color: isDarkMode ? '#fff' : '#991b1b',
+                    borderColor: isDarkMode ? 'rgba(252,165,165,0.35)' : 'rgba(220,38,38,0.25)',
+                }}
+            >
+                <BsCloudDownloadFill size={13} />
+                <FaTimes size={12} color="#ef4444" />
+            </div>
+        );
+    };
+
     if (filteredDownloadList.length === 0) {
         return (
             <div style={{ color: isDarkMode ? '#fff' : '#000' }}>
@@ -231,6 +341,11 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                         : '0 0 0 2px rgba(37,99,235,0.25), 2px 2px 10px rgba(0,0,0,0.12)';
 
                     const isSelected = selectedIds.has(entry.civitaiVersionID);
+                    const cartDownloadStatus =
+                        displayMode === "cartCard"
+                            ? cartDownloadStatusByVid?.[String(entry.civitaiVersionID ?? "")]
+                            : undefined;
+
                     const showEA = isEntryEarlyAccess(entry);
 
                     const canOpenPath =
@@ -432,19 +547,34 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                     {isSelected && (
                                         <div
                                             style={{
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: 6,
-                                                background: isDarkMode ? 'rgba(37,99,235,0.9)' : '#2563eb',
-                                                color: '#fff',
-                                                borderRadius: 999,
-                                                padding: '2px 8px',
-                                                fontSize: 12,
-                                                fontWeight: 700,
+                                                flex: 1,
+                                                display: 'flex',
+                                                justifyContent: 'center',
+                                                marginLeft: -100,
                                                 pointerEvents: 'none',
                                             }}
                                         >
-                                            <TfiCheckBox /> Selected
+                                            {isSelected && (
+                                                <div
+                                                    style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: 6,
+                                                        background: isDarkMode ? 'rgba(37,99,235,0.9)' : '#2563eb',
+                                                        color: '#fff',
+                                                        borderRadius: 999,
+                                                        padding: '2px 8px',
+                                                        fontSize: 12,
+                                                        fontWeight: 700,
+                                                        pointerEvents: 'none',
+                                                        transform: 'translateX(20px)'
+                                                    }}
+                                                >
+                                                    <TfiCheckBox /> Selected
+                                                </div>
+                                            )}
+
+                                            {renderCartDownloadBadge(cartDownloadStatus)}
                                         </div>
                                     )}
                                 </div>
