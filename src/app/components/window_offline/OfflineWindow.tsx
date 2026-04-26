@@ -3412,7 +3412,7 @@ const OfflineWindow: React.FC = () => {
         try {
             setStatus({
                 phase: "downloading",
-                text: "Downloading (custom)…",
+                text: "Downloading (custom)...",
                 running: true,
                 msg: "",
                 completedDownloadPath: "",
@@ -3428,6 +3428,7 @@ const OfflineWindow: React.FC = () => {
                 baseModel: entry.civitaiBaseModel || entry.modelVersionObject?.baseModel || "",
                 downloadUrl: DUMMY_DOWNLOAD_URL,
                 imageUrls: toImgUrls(entry.imageUrlsArray),
+                modelVersionObject: entry.modelVersionObject ?? null, // add this
             });
 
             if (!downloadOk) {

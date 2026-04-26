@@ -753,6 +753,7 @@ export const fetchDownloadFilesByServer_v2ForCustom = async (
         baseModel: string;
         downloadUrl: string;
         imageUrls: string[];
+        modelVersionObject?: any; // add this
     }
 ): Promise<boolean> => {
     const response = await axios.post(
@@ -763,6 +764,7 @@ export const fetchDownloadFilesByServer_v2ForCustom = async (
     if (response.status >= 200 && response.status < 300 && response.data?.success) {
         return true;
     }
+
     throw new Error(response.data?.message || 'Failed to download files by server.');
 };
 
