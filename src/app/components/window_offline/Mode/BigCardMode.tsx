@@ -195,7 +195,7 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
     const renderCartDownloadBadge = (status?: CartDownloadStatus) => {
         if (!status) return null;
 
-        const STATUS_BADGE_SHIFT_X = 25;
+        const STATUS_BADGE_SHIFT_X = 30;
 
         const baseStyle = {
             display: 'inline-flex',
@@ -567,7 +567,7 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                                         fontSize: 12,
                                                         fontWeight: 700,
                                                         pointerEvents: 'none',
-                                                        transform: 'translateX(20px)'
+                                                        transform: 'translateX(25px)'
                                                     }}
                                                 >
                                                     <TfiCheckBox /> Selected
