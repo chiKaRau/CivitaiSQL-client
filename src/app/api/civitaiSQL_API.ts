@@ -1881,3 +1881,75 @@ export const fetchHistoryModelVersionDbDetails = async (
         return {};
     }
 };
+
+export type HistoryStatsPayload = {
+    createdDate: string | null;
+    totalRows: number;
+    missingLocalPathCount: number;
+    errorCount: number;
+    missingLocalPathOrErrorCount: number;
+    modelRecordExistsCount: number;
+    offlineRecordExistsCount: number;
+    normalRowsCount: number;
+};
+
+export const fetchModelOfflineDownloadHistoryStatusSummary = async (
+    dispatch: any,
+    createdDate?: string
+): Promise<{
+    totalCount: number;
+    localPathNaCount: number;
+    errorCount: number;
+    normalCount: number;
+}> => {
+    try {
+        dispatch(clearError());
+
+        const response = await axios.get(
+            `${config.domain}/api/get-model-offline-download-history-status-summary`,
+            {
+                params: {
+                    createdDate: createdDate || undefined
+                }
+            }
+        );
+
+        const responseData = response.data;
+
+        if (!(response.status >= 200 && response.status < 300)) {
+            throw new Error("Failed retrieving history status summary.");
+        }
+
+        if (!responseData.success) {
+            throw new Error(responseData.message || "Failed retrieving history status summary.");
+        }
+
+        const payload = responseData.payload ?? {};
+
+        return {
+            totalCount: Number(payload.totalRows ?? payload.totalCount ?? 0),
+            localPathNaCount: Number(payload.missingLocalPathCount ?? payload.localPathNaCount ?? 0),
+            errorCount: Number(payload.errorCount ?? 0),
+            normalCount: Number(payload.normalRowsCount ?? payload.normalCount ?? 0),
+        };
+    } catch (error: any) {
+        const errorMessage =
+            error?.response?.data?.message ||
+            error?.message ||
+            "Failed retrieving history status summary.";
+
+        console.error("Error during history status summary retrieval:", errorMessage);
+
+        dispatch(setError({
+            hasError: true,
+            errorMessage
+        }));
+
+        return {
+            totalCount: 0,
+            localPathNaCount: 0,
+            errorCount: 0,
+            normalCount: 0,
+        };
+    }
+};

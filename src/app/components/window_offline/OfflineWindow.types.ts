@@ -160,3 +160,10 @@ export interface ModelOfflineDownloadHistoryEntry {
     createdAt: string;
     updatedAt: string;
 }
+
+export interface ModelOfflineDownloadHistoryStatusSummary {
+    totalCount: number;
+    localPathNaCount: number;
+    errorCount: number;
+    normalCount: number;
+}

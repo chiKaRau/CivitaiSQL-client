@@ -92,6 +92,7 @@ import type {
     ModelOfflineDownloadHistoryEntry,
 } from './OfflineWindow.types';
 import HistoryDatePicker from '../window/HistoryDatePicker';
+import HistoryStatusSummary from './HistoryStatusSummary';
 
 const PENDING_PATH_RE = /[/\\]@scan@[/\\]acg[/\\]pending([/\\]|$)/i;
 
@@ -285,6 +286,8 @@ const OfflineWindow: React.FC = () => {
     const [historyTotalItems, setHistoryTotalItems] = useState(0);
     const [historyTotalPages, setHistoryTotalPages] = useState(1);
     const [historyReloadToken, setHistoryReloadToken] = useState(0);
+
+    const [historyStatusSummaryReloadToken, setHistoryStatusSummaryReloadToken] = useState(0);
 
     const [historyFetchStatus, setHistoryFetchStatus] = useState<HistoryFetchStatusState>({
         historyList: "notStarted",
@@ -2232,6 +2235,7 @@ const OfflineWindow: React.FC = () => {
 
             setHistoryTotalItems(nextTotalItems);
             setHistoryTotalPages(nextTotalPages);
+            setHistoryStatusSummaryReloadToken((prev) => prev + 1);
 
             const rowsAfterDelete = modelOfflineDownloadHistoryList.filter(
                 (row) => Number(row.id) !== Number(historyId)
@@ -5553,6 +5557,13 @@ const OfflineWindow: React.FC = () => {
                                 {renderHistoryFetchStatusItem("dbDetails")}
                                 {renderHistoryFetchStatusItem("localFileCheck")}
                             </div>
+
+                            <HistoryStatusSummary
+                                selectedDate={historySelectedDate}
+                                isDarkMode={isDarkMode}
+                                reloadToken={historyStatusSummaryReloadToken}
+                            />
+
                         </div>
                     )}
 
