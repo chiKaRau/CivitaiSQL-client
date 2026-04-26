@@ -14,7 +14,7 @@ interface SmallCardModeProps {
     canChangeSelection: boolean;
     selectedIds: Set<string>;
     activePreviewId: string | null;
-    toggleSelect: (id: string) => void;
+    toggleSelect: (entryOrId: OfflineDownloadEntry | string) => void;
     handleSelectAll: () => void;
     onToggleOverlay: (entry: OfflineDownloadEntry) => void;
 
@@ -123,13 +123,13 @@ const SmallCardMode: React.FC<SmallCardModeProps> = ({
                             onClick={(e) => {
                                 if (!canSelect) return;
                                 if (isInteractiveClickTarget(e.target)) return;
-                                toggleSelect(entry.civitaiVersionID);
+                                toggleSelect(entry);
                             }}
                             onKeyDown={(e) => {
                                 if (!canSelect) return;
                                 if (e.key === 'Enter' || e.key === ' ') {
                                     e.preventDefault();
-                                    toggleSelect(entry.civitaiVersionID);
+                                    toggleSelect(entry);
                                 }
                             }}
                             role={canSelect ? 'button' : undefined}

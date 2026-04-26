@@ -187,19 +187,7 @@ const OfflineWindow: React.FC = () => {
     const dispatch = useDispatch();
     const [isLoading, setIsLoading] = useState(false);
     const [offlineDownloadList, setOfflineDownloadList] = useState<OfflineDownloadEntry[]>([]);
-    const [displayMode, setDisplayMode] = useState<
-        'table'
-        | 'bigCard'
-        | 'smallCard'
-        | 'failedCard'
-        | 'errorCard'
-        | 'updateCard'
-        | 'recentCard'
-        | 'holdCard'
-        | 'earlyAccessCard'
-        | 'historyTable'
-        | 'aiCard'
-    >('bigCard');
+    const [displayMode, setDisplayMode] = useState<DisplayMode>('bigCard');
 
     const [filtersReady, setFiltersReady] = useState(false);
 
@@ -225,6 +213,8 @@ const OfflineWindow: React.FC = () => {
 
     // State for selected IDs
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+    const [cartEntryByVid, setCartEntryByVid] = useState<Record<string, OfflineDownloadEntry>>({});
 
     // Modify Mode state
     const [isModifyMode, setIsModifyMode] = useState(false); // Modify mode is off by default
@@ -466,13 +456,7 @@ const OfflineWindow: React.FC = () => {
 
     // near the top of OfflineWindow.tsx (after DisplayMode type)
     const DOWNLOAD_NOW_ALLOWED_MODES = new Set<DisplayMode>([
-        "table",
-        "bigCard",
-        "smallCard",
-        "failedCard",
-        "holdCard",
-        "errorCard"  // if you want retry-from-failed
-        // do NOT include: "earlyAccessCard", "holdCard", "recentCard", "errorCard"
+        "cartCard"
     ]);
 
     const isPagedMode =
@@ -487,6 +471,7 @@ const OfflineWindow: React.FC = () => {
         "table",
         "bigCard",
         "smallCard",
+        "cartCard",
         "failedCard",
         "recentCard",
         "historyTable",
@@ -515,6 +500,33 @@ const OfflineWindow: React.FC = () => {
             completedDownloadFileName?: string;
         }
     >);
+
+    const cartEntryKey = useCallback((versionId: string | number | null | undefined) => {
+        return `v_${String(versionId ?? "")}`;
+    }, []);
+
+    const clearCartSelection = useCallback(() => {
+        setSelectedIds(new Set());
+        setCartEntryByVid({});
+        setSelectedSuggestedPathByVid({});
+    }, []);
+
+    const replaceCartSelection = useCallback((entries: OfflineDownloadEntry[]) => {
+        const nextIds = new Set<string>();
+        const nextCart: Record<string, OfflineDownloadEntry> = {};
+
+        entries.forEach((entry) => {
+            const versionId = String(entry.civitaiVersionID ?? "").trim();
+
+            if (!versionId) return;
+
+            nextIds.add(versionId);
+            nextCart[cartEntryKey(versionId)] = entry;
+        });
+
+        setSelectedIds(nextIds);
+        setCartEntryByVid(nextCart);
+    }, [cartEntryKey]);
 
     const handleBulkPatchSelected = async () => {
         const selectedEntries = visibleEntries.filter((entry) =>
@@ -593,7 +605,7 @@ const OfflineWindow: React.FC = () => {
             setBulkIsError(true);
             dispatch(updateDownloadFilePath("/@scan@/ACG/Pending/"));
             setSelectedPatchFields(new Set());
-            setSelectedIds(new Set());
+            clearCartSelection();
 
             await handleRefreshList();
         } catch (err: any) {
@@ -642,7 +654,7 @@ const OfflineWindow: React.FC = () => {
             );
 
             // old selected version key may now be stale
-            setSelectedIds(new Set());
+            clearCartSelection();
 
             if (
                 displayMode === "holdCard" ||
@@ -1833,7 +1845,7 @@ const OfflineWindow: React.FC = () => {
         const nextIsModify = !isModifyMode;
 
         // always clear selection when switching modes
-        setSelectedIds(new Set());
+        clearCartSelection();
         setSelectedSuggestedPathByVid({});
 
         if (nextIsModify) {
@@ -2047,33 +2059,6 @@ const OfflineWindow: React.FC = () => {
         filtersReady
     ]);
 
-    useEffect(() => {
-        // Reset the selection when filterText or filterCondition changes
-        setSelectedIds(new Set());
-    }, [filterText, filterCondition]);
-
-    useEffect(() => {
-        // Don’t clear selection while busy
-        if (uiMode !== "idle") return;
-        if (isLoading) return;
-
-        const prev = prevDisplayModeRef.current;
-        const next = displayMode;
-
-        const prevPaged = isPagedDisplayMode(prev);
-        const nextPaged = isPagedDisplayMode(next);
-
-        // update ref for next comparison
-        prevDisplayModeRef.current = next;
-
-        // ✅ If switching within paged modes (big/small/table), keep selection
-        if (prevPaged && nextPaged) return;
-
-        // otherwise clear selection (switching to/from special modes)
-        setSelectedIds(new Set());
-        setSelectedSuggestedPathByVid({});
-    }, [displayMode, uiMode, isLoading]);
-
     const isPendingPathValue = (path: string) =>
         PENDING_PATH_RE.test((path || "").trim());
 
@@ -2143,8 +2128,20 @@ const OfflineWindow: React.FC = () => {
     const filteredDownloadList = useMemo(() => offlineDownloadList, [offlineDownloadList]);
 
     useEffect(() => {
-        setSelectedIds(new Set());
-    }, [filterText, filterCondition]);
+        if (uiMode !== "idle") return;
+        if (isLoading) return;
+
+        const prev = prevDisplayModeRef.current;
+        const next = displayMode;
+
+        prevDisplayModeRef.current = next;
+
+        if (prev === next) return;
+
+        // Do not clear selectedIds here.
+        // Cart selection should survive mode switching.
+        setSelectedSuggestedPathByVid({});
+    }, [displayMode, uiMode, isLoading]);
 
     useEffect(() => {
         const data = tagSource === 'other'
@@ -2275,9 +2272,16 @@ const OfflineWindow: React.FC = () => {
         return () => window.removeEventListener('keydown', onKey);
     }, [leftOverlayEntry, closeLeftOverlay]);
 
+    const cartEntries = useMemo(() => {
+        return Object.values(cartEntryByVid);
+    }, [cartEntryByVid]);
+
+    const cartCount = cartEntries.length;
 
     const visibleEntries = React.useMemo(() => {
         switch (displayMode) {
+            case "cartCard":
+                return cartEntries;
             case "failedCard":
                 return failedEntries;
             case "recentCard":
@@ -2295,6 +2299,7 @@ const OfflineWindow: React.FC = () => {
         }
     }, [
         displayMode,
+        cartEntries,
         failedEntries,
         recentlyDownloaded,
         holdEntries,
@@ -2308,12 +2313,14 @@ const OfflineWindow: React.FC = () => {
     // **2. Compute Select All Checkbox State**
     const isAllSelected =
         visibleEntries.length > 0 &&
-        visibleEntries.every(e => selectedIds.has(e.civitaiVersionID));
+        visibleEntries.every((e) =>
+            selectedIds.has(String(e.civitaiVersionID ?? ""))
+        );
 
     const isIndeterminate =
-        visibleEntries.some(e => selectedIds.has(e.civitaiVersionID)) && !isAllSelected;
-
-
+        visibleEntries.some((e) =>
+            selectedIds.has(String(e.civitaiVersionID ?? ""))
+        ) && !isAllSelected;
 
     const currentTheme = React.useMemo(
         () => (isDarkMode ? darkTheme : lightTheme),
@@ -2329,19 +2336,47 @@ const OfflineWindow: React.FC = () => {
     const badgeCount = (n: number) => (String(n));
 
     // Function to toggle selection
-    const toggleSelect = useCallback((id: string) => {
+    const toggleSelect = useCallback((entryOrId: OfflineDownloadEntry | string) => {
         if (!canChangeSelection) return;
 
-        setSelectedIds(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(id)) {
-                newSet.delete(id);
+        const entry =
+            typeof entryOrId === "string"
+                ? visibleEntries.find((e) => String(e.civitaiVersionID) === String(entryOrId))
+                : entryOrId;
+
+        const versionId =
+            typeof entryOrId === "string"
+                ? String(entryOrId)
+                : String(entryOrId.civitaiVersionID ?? "");
+
+        if (!versionId) return;
+
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            const alreadySelected = next.has(versionId);
+
+            if (alreadySelected) {
+                next.delete(versionId);
+
+                setCartEntryByVid((prevCart) => {
+                    const nextCart = { ...prevCart };
+                    delete nextCart[cartEntryKey(versionId)];
+                    return nextCart;
+                });
             } else {
-                newSet.add(id);
+                next.add(versionId);
+
+                if (entry) {
+                    setCartEntryByVid((prevCart) => ({
+                        ...prevCart,
+                        [cartEntryKey(versionId)]: entry,
+                    }));
+                }
             }
-            return newSet;
+
+            return next;
         });
-    }, []);
+    }, [canChangeSelection, visibleEntries, cartEntryKey]);
 
     const handleRefreshList = async () => {
         if (isLoading) return;
@@ -2403,7 +2438,7 @@ const OfflineWindow: React.FC = () => {
             setOfflineDownloadList([]);
             setServerTotalItems(0);
             setServerTotalPages(1);
-            setSelectedIds(new Set());
+            clearCartSelection();
         }
     };
 
@@ -2416,32 +2451,38 @@ const OfflineWindow: React.FC = () => {
             return;
         }
 
+        if (displayMode !== "cartCard") {
+            alert("Please open Cart Mode to download selected models.");
+            return;
+        }
+
+        if (cartCount === 0) {
+            alert("Your cart is empty.");
+            return;
+        }
+
         const userConfirmed = window.confirm(
-            `Are you sure you want to download ${selectedIds.size} selected entr${selectedIds.size === 1 ? "y" : "ies"}?`
+            `Are you sure you want to download ${cartCount} cart entr${cartCount === 1 ? "y" : "ies"}?`
         );
+
         if (!userConfirmed) {
             console.log("User canceled the download operation.");
             return;
         }
 
         // Collect selected entries from the filtered list
-        const entriesToDownload = visibleEntries.filter(entry => {
-            // Must be selected
-            const isSelected = selectedIds.has(entry.civitaiVersionID);
+        const entriesToDownload = cartEntries.filter((entry) => {
             const isEarly = isEarlyAccessActive(entry);
 
-            // Grab early access date and file path
             const downloadFilePath = entry.downloadFilePath ?? "";
 
-            // Check if file path indicates pending
             const isPendingPath =
                 downloadFilePath === "/@scan@/ACG/Pending" ||
                 downloadFilePath === "/@scan@/ACG/Pending/";
 
-            // Exclude if still in early access or if file path is pending
             const shouldExclude = (!allowTryEarlyAccess && isEarly) || isPendingPath;
 
-            return isSelected && !shouldExclude;
+            return !shouldExclude;
         });
 
         if (entriesToDownload.length === 0) {
@@ -3032,7 +3073,7 @@ const OfflineWindow: React.FC = () => {
 
         const p = await fetchPageWithApplied(currentPage);
         applyPagedResultToState(p);
-        setSelectedIds(new Set());
+        clearCartSelection();
     };
 
     const handleApplySelectedAiPathsToDownloadFilePath = async () => {
@@ -3355,7 +3396,7 @@ const OfflineWindow: React.FC = () => {
         }
 
         // Replace selection with the same first N each time until you refresh them
-        setSelectedIds(new Set(firstN.map((e) => e.civitaiVersionID)));
+        replaceCartSelection(firstN);
     };
 
     useEffect(() => {
@@ -3657,7 +3698,7 @@ const OfflineWindow: React.FC = () => {
             } else {
                 applyPagedResultToState(p);
             }
-            setSelectedIds(new Set());
+            clearCartSelection();
 
         } catch (error: any) {
             console.error("Failed to remove selected entries:", error.message);
@@ -3779,7 +3820,7 @@ const OfflineWindow: React.FC = () => {
         });
 
         const firstN = eligible.slice(0, selectCount);
-        setSelectedIds(new Set(firstN.map(e => e.civitaiVersionID)));
+        replaceCartSelection(firstN);
     };
 
     const handleSelectFirstN_Modify = () => {
@@ -3790,7 +3831,7 @@ const OfflineWindow: React.FC = () => {
         // ✅ no restrictions: just take first N of what’s visible right now
         const firstN = visibleEntries.slice(0, n);
 
-        setSelectedIds(new Set(firstN.map(e => e.civitaiVersionID)));
+        replaceCartSelection(firstN);
     };
 
 
@@ -3824,21 +3865,48 @@ const OfflineWindow: React.FC = () => {
     const handleSelectAll = () => {
         if (!canChangeSelection) return;
 
-        if (selectedIds.size && isAllSelected) {
-            // deselect all visible
-            setSelectedIds(prev => {
+        const visibleIds = visibleEntries
+            .map((e) => String(e.civitaiVersionID ?? ""))
+            .filter(Boolean);
+
+        if (visibleIds.length === 0) return;
+
+        if (isAllSelected) {
+            setSelectedIds((prev) => {
                 const next = new Set(prev);
-                visibleEntries.forEach(e => next.delete(e.civitaiVersionID));
+                visibleIds.forEach((id) => next.delete(id));
                 return next;
             });
-        } else {
-            // select all visible
-            setSelectedIds(prev => {
-                const next = new Set(prev);
-                visibleEntries.forEach(e => next.add(e.civitaiVersionID));
-                return next;
+
+            setCartEntryByVid((prevCart) => {
+                const nextCart = { ...prevCart };
+                visibleIds.forEach((id) => {
+                    delete nextCart[cartEntryKey(id)];
+                });
+                return nextCart;
             });
+
+            return;
         }
+
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            visibleIds.forEach((id) => next.add(id));
+            return next;
+        });
+
+        setCartEntryByVid((prevCart) => {
+            const nextCart = { ...prevCart };
+
+            visibleEntries.forEach((entry) => {
+                const versionId = String(entry.civitaiVersionID ?? "");
+                if (!versionId) return;
+
+                nextCart[cartEntryKey(versionId)] = entry;
+            });
+
+            return nextCart;
+        });
     };
 
     const removeEntryLocal = (
@@ -4040,6 +4108,32 @@ const OfflineWindow: React.FC = () => {
                             </Button>
 
                             {/* Existing Display Mode Buttons */}
+
+                            <Button
+                                style={{
+                                    ...styles.responsiveButtonStyle,
+                                    position: "relative",
+                                    overflow: "visible",
+                                }}
+                                variant={displayMode === "cartCard" ? "primary" : "secondary"}
+                                onClick={() => handleDisplayModeClick("cartCard")}
+                                disabled={isModeButtonDisabled("cartCard")}
+                                aria-label={`Cart entries (${cartCount})`}
+                            >
+                                Cart Mode
+
+                                {cartCount > 0 && (
+                                    <span
+                                        style={{
+                                            ...styles.badgeStyle,
+                                            background: "#0d6efd",
+                                        }}
+                                    >
+                                        {badgeCount(cartCount)}
+                                    </span>
+                                )}
+                            </Button>
+
                             <Button
                                 style={{
                                     ...styles.responsiveButtonStyle
@@ -4385,7 +4479,6 @@ const OfflineWindow: React.FC = () => {
                                     variant="primary"
                                     disabled={!isPagedMode || isLoading}
                                     onClick={() => {
-                                        setSelectedIds(new Set());
                                         setSelectedSuggestedPathByVid({});
 
                                         const selected = Array.from(selectedPrefixes);
@@ -5265,15 +5358,19 @@ const OfflineWindow: React.FC = () => {
                             }}>
                             <Button
                                 onClick={handleDownloadNow}
-                                style={selectedIds.size > 0 ? styles.downloadButtonStyle : styles.downloadButtonDisabledStyle}
-                                disabled={selectedIds.size === 0 || isLoading || !canUseDownloadNow}
+                                style={
+                                    cartCount > 0 && canUseDownloadNow && !isLoading
+                                        ? styles.downloadButtonStyle
+                                        : styles.downloadButtonDisabledStyle
+                                }
+                                disabled={cartCount === 0 || isLoading || !canUseDownloadNow}
                                 title={
                                     canUseDownloadNow
-                                        ? "Download selected"
-                                        : `Download Now is disabled in mode: ${displayMode}`
+                                        ? "Download selected cart items"
+                                        : "Open Cart Mode to download selected models"
                                 }
                             >
-                                {isLoading ? "Downloading..." : "Download Now"}
+                                {isLoading ? "Downloading..." : `Download Cart (${cartCount})`}
                             </Button>
 
                             <Button
@@ -5597,7 +5694,7 @@ const OfflineWindow: React.FC = () => {
                             <>
                                 {displayMode === 'table' && (
                                     <TableMode
-                                        entries={filteredDownloadList}
+                                        entries={paginatedDownloadList}
                                         isDarkMode={isDarkMode}
                                         isModifyMode={isModifyMode}
                                         selectedIds={selectedIds}
@@ -5608,9 +5705,10 @@ const OfflineWindow: React.FC = () => {
                                         agGridStyle={styles.agGridStyle}
                                         currentTheme={currentTheme}
                                         toggleSelect={toggleSelect}
-                                        setSelectedIds={setSelectedIds}
+                                        handleSelectAll={handleSelectAll}
                                     />
                                 )}
+
                                 {displayMode === 'historyTable' && (
                                     <HistoryTableMode
                                         entries={modelOfflineDownloadHistoryList}
@@ -5620,6 +5718,51 @@ const OfflineWindow: React.FC = () => {
                                         handleOpenDownloadPath={handleOpenDownloadPath}
                                         onDeleteHistoryRecord={handleDeleteHistoryRecord}
                                         deletingHistoryId={deletingHistoryId}
+                                    />
+                                )}
+
+                                {displayMode === "cartCard" && (
+                                    <BigCardMode
+                                        filteredDownloadList={cartEntries}
+                                        isDarkMode={isDarkMode}
+                                        isModifyMode={isModifyMode}
+                                        selectedIds={selectedIds}
+                                        toggleSelect={toggleSelect}
+                                        handleSelectAll={handleSelectAll}
+                                        handleOpenDownloadPath={handleOpenDownloadPath}
+                                        showGalleries={showGalleries}
+                                        onToggleOverlay={toggleLeftOverlay}
+                                        activePreviewId={leftOverlayEntry?.civitaiVersionID ?? null}
+                                        onRefreshRecord={handleRefreshOneRecord}
+                                        onRefreshModelVersionObject={handleRefreshModelVersionObjectOneRecord}
+                                        onToggleIsError={handleToggleIsError}
+                                        canChangeSelection={canChangeSelection}
+                                        isLoading={isLoading}
+                                        editingPathId={editingPathId}
+                                        setEditingPathId={setEditingPathId}
+                                        handleDownloadPathSave={handleDownloadPathSave}
+                                        handleHoldChange={handleHoldChange}
+                                        handlePriorityChange={handlePriorityChange}
+                                        handleRemoveOne={handleRemoveOne}
+                                        handleCreateAddDummyFromError={handleCreateAddDummyFromError}
+                                        dummyCreateStatusByVid={dummyCreateStatusByVid}
+                                        showAiSuggestionsPanel={false}
+                                        selectedSuggestedPathByVid={selectedSuggestedPathByVid}
+                                        setSelectedSuggestedPathByVid={setSelectedSuggestedPathByVid}
+                                        styles={styles}
+                                        isInteractiveClickTarget={isInteractiveClickTarget}
+                                        isEntryEarlyAccess={isEntryEarlyAccess}
+                                        getEarlyAccessEndsAt={getEarlyAccessEndsAt}
+                                        formatLocalDateTime={formatLocalDateTime}
+                                        normalizeImg={normalizeImg}
+                                        withWidth={withWidth}
+                                        buildSrcSet={buildSrcSet}
+                                        mergeSuggestedPathsForEntry={mergeSuggestedPathsForEntry}
+                                        normalizePathKey={normalizePathKey}
+                                        displayMode="cartCard"
+                                        editingVersionId={editingVersionId}
+                                        setEditingVersionId={setEditingVersionId}
+                                        handleVersionIdSave={handleVersionIdSave}
                                     />
                                 )}
 

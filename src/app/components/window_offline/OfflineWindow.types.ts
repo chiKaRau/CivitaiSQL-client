@@ -6,6 +6,7 @@ export type DisplayMode =
     | 'table'
     | 'bigCard'
     | 'smallCard'
+    | "cartCard"
     | 'failedCard'
     | 'errorCard'
     | 'updateCard'

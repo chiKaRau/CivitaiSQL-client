@@ -1,5 +1,3 @@
-// TableMode.tsx
-
 import React, { useMemo, useRef, useEffect } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { ColDef } from 'ag-grid-community';
@@ -8,12 +6,14 @@ import { OfflineDownloadEntry } from '../OfflineWindow.types';
 interface SelectAllHeaderCheckboxProps {
     isChecked: boolean;
     isIndeterminate: boolean;
-    onChange: (checked: boolean) => void;
+    disabled?: boolean;
+    onChange: () => void;
 }
 
 const SelectAllHeaderCheckbox: React.FC<SelectAllHeaderCheckboxProps> = ({
     isChecked,
     isIndeterminate,
+    disabled = false,
     onChange,
 }) => {
     const checkboxRef = useRef<HTMLInputElement>(null);
@@ -29,10 +29,11 @@ const SelectAllHeaderCheckbox: React.FC<SelectAllHeaderCheckboxProps> = ({
             type="checkbox"
             ref={checkboxRef}
             checked={isChecked}
-            onChange={(e) => onChange(e.target.checked)}
+            disabled={disabled}
+            onChange={() => onChange()}
             style={{
                 transform: 'scale(1.2)',
-                cursor: 'pointer',
+                cursor: disabled ? 'not-allowed' : 'pointer',
             }}
         />
     );
@@ -53,23 +54,21 @@ interface TableModeProps {
         oddRowBackgroundColor: string;
         rowFontColor: string;
     };
-    toggleSelect: (id: string) => void;
-    setSelectedIds: React.Dispatch<React.SetStateAction<Set<string>>>;
+    toggleSelect: (entryOrId: OfflineDownloadEntry | string) => void;
+    handleSelectAll: () => void;
 }
 
 const TableMode: React.FC<TableModeProps> = ({
     entries,
     isDarkMode,
-    isModifyMode,
     selectedIds,
-    visibleEntries,
     isAllSelected,
     isIndeterminate,
     canChangeSelection,
     agGridStyle,
     currentTheme,
     toggleSelect,
-    setSelectedIds,
+    handleSelectAll,
 }) => {
     const cellStyle = () => ({
         color: currentTheme.rowFontColor,
@@ -77,7 +76,8 @@ const TableMode: React.FC<TableModeProps> = ({
 
     const getRowStyle = (params: any) => {
         const isEven = params.node.rowIndex % 2 === 0;
-        const isSelected = selectedIds.has(params.data.versionid);
+        const versionId = String(params.data?.versionid ?? '');
+        const isSelected = selectedIds.has(versionId);
 
         return {
             backgroundColor: isSelected
@@ -91,48 +91,102 @@ const TableMode: React.FC<TableModeProps> = ({
         };
     };
 
+    const rowData = useMemo(() => {
+        return entries.map((entry, index) => {
+            const safetensorFile = entry.modelVersionObject?.files?.find(file =>
+                file.name.endsWith('.safetensors')
+            );
+
+            const filesizeMB = safetensorFile
+                ? (safetensorFile.sizeKB / 1024).toFixed(2)
+                : 'N/A';
+
+            const earlyAccessLabel = (() => {
+                const s = entry.earlyAccessEndsAt?.trim();
+                if (!s) return 'Public';
+
+                const hasTimezone = /[zZ]$/.test(s) || /[+-]\d{2}:\d{2}$/.test(s);
+                const d = hasTimezone ? new Date(s) : new Date(`${s.replace(' ', 'T')}Z`);
+
+                if (Number.isNaN(d.getTime()) || d.getTime() <= Date.now()) {
+                    return 'Public';
+                }
+
+                const pad2 = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+
+                return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+            })();
+
+            return {
+                id: index + 1,
+                originalEntry: entry,
+                title: entry?.modelVersionObject?.model?.name ?? 'N/A',
+                modelName: entry.civitaiFileName ?? 'N/A',
+                versionName: entry.modelVersionObject?.name ?? 'N/A',
+                modelId: entry.modelVersionObject?.modelId ?? 'N/A',
+                versionid: String(entry.civitaiVersionID ?? ''),
+                baseModel: entry.modelVersionObject?.baseModel ?? 'N/A',
+                category: entry.selectedCategory ?? 'N/A',
+                filepath: entry.downloadFilePath ?? 'N/A',
+                url: entry.civitaiUrl ?? 'N/A',
+                creator: entry.modelVersionObject?.creator?.username ?? 'N/A',
+                filesize: `${filesizeMB} MB`,
+                earlyAccessDisplay: earlyAccessLabel,
+            };
+        });
+    }, [entries]);
+
     const columnDefs: ColDef[] = [
         {
             headerName: 'ID',
             field: 'id',
             width: 60,
-            cellStyle: { textAlign: 'center', padding: '5px' }
+            cellStyle: {
+                textAlign: 'center',
+                padding: '5px',
+            },
         },
         {
-            headerName: "",
-            field: "select",
+            headerName: '',
+            field: 'select',
             sortable: false,
             filter: false,
             width: 50,
             headerComponent: SelectAllHeaderCheckbox,
             headerComponentParams: {
                 isChecked: isAllSelected,
-                isIndeterminate: isIndeterminate,
-                onChange: (checked: boolean) => {
-                    if (checked) {
-                        const newSelectedIds = new Set(selectedIds);
-                        visibleEntries.forEach(entry => newSelectedIds.add(entry.civitaiVersionID));
-                        setSelectedIds(newSelectedIds);
-                    } else {
-                        const newSelectedIds = new Set(selectedIds);
-                        visibleEntries.forEach(entry => newSelectedIds.delete(entry.civitaiVersionID));
-                        setSelectedIds(newSelectedIds);
-                    }
-                }
+                isIndeterminate,
+                disabled: !canChangeSelection,
+                onChange: () => {
+                    if (!canChangeSelection) return;
+                    handleSelectAll();
+                },
             },
-            cellRenderer: (params: any) => (
-                <input
-                    type="checkbox"
-                    disabled={!canChangeSelection}
-                    checked={selectedIds.has(params.data.versionid)}
-                    onChange={() => toggleSelect(params.data.versionid)}
-                    style={{
-                        transform: 'scale(1.2)',
-                        cursor: isModifyMode ? 'pointer' : 'not-allowed',
-                        accentColor: isDarkMode ? '#fff' : '#000',
-                    }}
-                />
-            ),
+            cellRenderer: (params: any) => {
+                const versionId = String(params.data?.versionid ?? '');
+
+                return (
+                    <input
+                        type="checkbox"
+                        disabled={!canChangeSelection}
+                        checked={selectedIds.has(versionId)}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                        }}
+                        onChange={(e) => {
+                            e.stopPropagation();
+
+                            if (!canChangeSelection) return;
+                            toggleSelect(params.data.originalEntry);
+                        }}
+                        style={{
+                            transform: 'scale(1.2)',
+                            cursor: canChangeSelection ? 'pointer' : 'not-allowed',
+                            accentColor: isDarkMode ? '#fff' : '#000',
+                        }}
+                    />
+                );
+            },
             headerClass: 'custom-header',
         },
         {
@@ -169,25 +223,25 @@ const TableMode: React.FC<TableModeProps> = ({
             },
         },
         {
-            headerName: "Model ID",
-            field: "modelId",
+            headerName: 'Model ID',
+            field: 'modelId',
             sortable: true,
             filter: false,
-            cellStyle: cellStyle,
+            cellStyle,
         },
         {
-            headerName: "Version ID",
-            field: "versionid",
+            headerName: 'Version ID',
+            field: 'versionid',
             sortable: true,
             filter: false,
-            cellStyle: cellStyle,
+            cellStyle,
         },
         {
-            headerName: "Base Model",
-            field: "baseModel",
+            headerName: 'Base Model',
+            field: 'baseModel',
             sortable: true,
             filter: false,
-            cellStyle: cellStyle,
+            cellStyle,
         },
         {
             headerName: 'URL',
@@ -237,66 +291,26 @@ const TableMode: React.FC<TableModeProps> = ({
             },
         },
         {
-            headerName: "Early Access",
-            field: "earlyAccessDisplay",
+            headerName: 'Early Access',
+            field: 'earlyAccessDisplay',
             sortable: true,
             filter: false,
-            cellStyle: cellStyle,
+            cellStyle,
         },
         {
-            headerName: "File Size (MB)",
-            field: "filesize",
+            headerName: 'File Size (MB)',
+            field: 'filesize',
             sortable: true,
             filter: false,
-            cellStyle: cellStyle,
-        }
+            cellStyle,
+        },
     ];
-
-    const rowData = useMemo(() => {
-        return entries.map((entry, index) => {
-            const safetensorFile = entry.modelVersionObject?.files?.find(file =>
-                file.name.endsWith('.safetensors')
-            );
-            const filesizeMB = safetensorFile
-                ? (safetensorFile.sizeKB / 1024).toFixed(2)
-                : 'N/A';
-
-            const earlyAccessLabel = (() => {
-                const s = entry.earlyAccessEndsAt?.trim();
-                if (!s) return 'Public';
-
-                const hasTimezone = /[zZ]$/.test(s) || /[+-]\d{2}:\d{2}$/.test(s);
-                const d = hasTimezone ? new Date(s) : new Date(`${s.replace(' ', 'T')}Z`);
-
-                if (Number.isNaN(d.getTime()) || d.getTime() <= Date.now()) return 'Public';
-
-                const pad2 = (n: number) => (n < 10 ? `0${n}` : `${n}`);
-                return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
-            })();
-
-            return {
-                id: index + 1,
-                title: entry?.modelVersionObject?.model?.name ?? 'N/A',
-                modelName: entry.civitaiFileName ?? 'N/A',
-                versionName: entry.modelVersionObject?.name ?? 'N/A',
-                modelId: entry.modelVersionObject?.modelId ?? 'N/A',
-                versionid: entry.civitaiVersionID ?? 'N/A',
-                baseModel: entry.modelVersionObject?.baseModel ?? 'N/A',
-                category: entry.selectedCategory ?? 'N/A',
-                filepath: entry.downloadFilePath ?? 'N/A',
-                url: entry.civitaiUrl ?? 'N/A',
-                creator: entry.modelVersionObject?.creator?.username ?? 'N/A',
-                filesize: filesizeMB + " MB",
-                earlyAccessDisplay: earlyAccessLabel,
-            };
-        });
-    }, [entries]);
 
     const defaultColDef: ColDef = {
         flex: 1,
         minWidth: 150,
         resizable: true,
-        cellStyle: cellStyle,
+        cellStyle,
     };
 
     return (
@@ -309,9 +323,10 @@ const TableMode: React.FC<TableModeProps> = ({
                 paginationPageSize={100}
                 getRowStyle={getRowStyle}
                 onRowClicked={(params: any) => {
-                    if (isModifyMode && params.event.ctrlKey) {
-                        toggleSelect(params.data.versionid);
-                    }
+                    if (!canChangeSelection) return;
+                    if (!params.event.ctrlKey) return;
+
+                    toggleSelect(params.data.originalEntry);
                 }}
                 headerHeight={40}
                 onGridReady={(params) => {

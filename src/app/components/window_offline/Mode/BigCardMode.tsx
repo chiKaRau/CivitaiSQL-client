@@ -29,7 +29,7 @@ interface BigCardModeProps {
     isDarkMode: boolean;
     isModifyMode: boolean;
     selectedIds: Set<string>;
-    toggleSelect: (id: string) => void;
+    toggleSelect: (entryOrId: OfflineDownloadEntry | string) => void;
     handleSelectAll: () => void;
     showGalleries: boolean;
     onToggleOverlay: (entry: OfflineDownloadEntry) => void;
@@ -285,7 +285,7 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                             onClick={(e) => {
                                 if (!canSelect) return;
                                 if (isInteractiveClickTarget(e.target)) return;
-                                toggleSelect(entry.civitaiVersionID);
+                                toggleSelect(entry);
                             }}
                             onKeyDown={(e) => {
                                 if (!canSelect) return;
@@ -300,7 +300,7 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
 
                                 if (e.key === 'Enter' || e.key === ' ') {
                                     e.preventDefault();
-                                    toggleSelect(entry.civitaiVersionID);
+                                    toggleSelect(entry);
                                 }
                             }}
                             role={canSelect ? 'button' : undefined}
