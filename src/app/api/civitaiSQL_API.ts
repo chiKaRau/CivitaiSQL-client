@@ -1776,7 +1776,7 @@ export const fetchUpdateOfflineDownloadVersionId = async (
 export const fetchDeleteModelOfflineDownloadHistoryRecord = async (
     id: number,
     dispatch: any
-): Promise<void> => {
+): Promise<boolean> => {
     try {
         dispatch(clearError());
 
@@ -1797,9 +1797,21 @@ export const fetchDeleteModelOfflineDownloadHistoryRecord = async (
             throw new Error(responseData.message || "Failed deleting history record.");
         }
 
+        return true;
     } catch (error: any) {
-        console.error("Error during history record deletion:", error.message);
-        dispatch(setError({ hasError: true, errorMessage: error.message }));
+        const errorMessage =
+            error?.response?.data?.message ||
+            error?.message ||
+            "Failed deleting history record.";
+
+        console.error("Error during history record deletion:", errorMessage);
+
+        dispatch(setError({
+            hasError: true,
+            errorMessage
+        }));
+
+        return false;
     }
 };
 

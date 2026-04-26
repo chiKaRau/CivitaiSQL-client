@@ -55,7 +55,9 @@ import {
     fetchModelOfflineDownloadHistoryAvailableDates,
     fetchUpdateOfflineDownloadVersionId,
     fetchRefreshModelVersionObjectFromOfflineTable,
-    fetchCheckModelVersionFileExists
+    fetchCheckModelVersionFileExists,
+    fetchHistoryModelVersionDbDetails,
+    fetchDeleteModelOfflineDownloadHistoryRecord
 } from "../../api/civitaiSQL_api"
 
 import { makeOfflineWindowStyles } from "./OfflineWindow.styles";
@@ -149,6 +151,21 @@ const ALL_PATCH_FIELDS = [
 const AI_BATCH_SIZE = 10;
 const AI_COOLDOWN_SECONDS = 90;
 const DEFAULT_AI_SUGGEST_COUNT = 20;
+
+type HistoryFetchStatus = "notStarted" | "loading" | "success" | "fail";
+
+type HistoryFetchStatusKey =
+    | "historyList"
+    | "dbDetails"
+    | "localFileCheck";
+
+type HistoryFetchStatusState = Record<HistoryFetchStatusKey, HistoryFetchStatus>;
+
+const HISTORY_FETCH_STATUS_LABELS: Record<HistoryFetchStatusKey, string> = {
+    historyList: "History list fetch",
+    dbDetails: "DB details fetch",
+    localFileCheck: "Local file check",
+};
 
 const OfflineWindow: React.FC = () => {
 
@@ -258,11 +275,104 @@ const OfflineWindow: React.FC = () => {
     const [aiSuggestRunMsg, setAiSuggestRunMsg] = useState("");
 
     const [modelOfflineDownloadHistoryList, setModelOfflineDownloadHistoryList] = useState<ModelOfflineDownloadHistoryEntry[]>([]);
+    const historyFileExistsCacheRef = useRef<Record<string, {
+        checkedFilePath: string;
+        hasExistingLocalFile: boolean;
+    }>>({});
+    const [deletingHistoryId, setDeletingHistoryId] = useState<number | null>(null);
     const [historyPage, setHistoryPage] = useState(1);
     const [historyItemsPerPage, setHistoryItemsPerPage] = useState(100);
     const [historyTotalItems, setHistoryTotalItems] = useState(0);
     const [historyTotalPages, setHistoryTotalPages] = useState(1);
     const [historyReloadToken, setHistoryReloadToken] = useState(0);
+
+    const [historyFetchStatus, setHistoryFetchStatus] = useState<HistoryFetchStatusState>({
+        historyList: "notStarted",
+        dbDetails: "notStarted",
+        localFileCheck: "notStarted",
+    });
+
+    const setOneHistoryFetchStatus = (
+        key: HistoryFetchStatusKey,
+        status: HistoryFetchStatus
+    ) => {
+        setHistoryFetchStatus((prev) => ({
+            ...prev,
+            [key]: status,
+        }));
+    };
+
+    const resetHistoryFetchStatus = () => {
+        setHistoryFetchStatus({
+            historyList: "notStarted",
+            dbDetails: "notStarted",
+            localFileCheck: "notStarted",
+        });
+    };
+
+    const renderHistoryStatusIcon = (status: HistoryFetchStatus) => {
+        if (status === "loading") {
+            return <Spinner animation="border" size="sm" />;
+        }
+
+        if (status === "success") {
+            return <FaCheck />;
+        }
+
+        if (status === "fail") {
+            return <FaTimes />;
+        }
+
+        return <MdOutlinePendingActions />;
+    };
+
+    const getHistoryStatusColor = (status: HistoryFetchStatus) => {
+        if (status === "loading") return isDarkMode ? "#93c5fd" : "#2563eb";
+        if (status === "success") return isDarkMode ? "#86efac" : "#16a34a";
+        if (status === "fail") return isDarkMode ? "#fca5a5" : "#dc2626";
+        return isDarkMode ? "#9ca3af" : "#6b7280";
+    };
+
+    const renderHistoryFetchStatusItem = (key: HistoryFetchStatusKey) => {
+        const status = historyFetchStatus[key];
+        const color = getHistoryStatusColor(status);
+
+        return (
+            <OverlayTrigger
+                key={key}
+                placement="top"
+                overlay={
+                    <Tooltip>
+                        {HISTORY_FETCH_STATUS_LABELS[key]}: {status}
+                    </Tooltip>
+                }
+            >
+                <span
+                    style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px",
+                        minWidth: "38px",
+                        padding: "5px 8px",
+                        borderRadius: "999px",
+                        border: `1px solid ${isDarkMode ? "#4b5563" : "#d1d5db"}`,
+                        backgroundColor: isDarkMode ? "#111827" : "#ffffff",
+                        color,
+                        fontSize: "13px",
+                        lineHeight: 1,
+                        whiteSpace: "nowrap",
+                    }}
+                >
+                    {key === "historyList" && <BsCloudDownloadFill />}
+                    {key === "dbDetails" && <MdOutlineTipsAndUpdates />}
+                    {key === "localFileCheck" && <AiFillFolderOpen />}
+
+                    {renderHistoryStatusIcon(status)}
+                </span>
+            </OverlayTrigger>
+        );
+    };
 
     // NEW: sort direction for date (server-side)
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc'); // if you hate the type, you can drop it
@@ -580,6 +690,18 @@ const OfflineWindow: React.FC = () => {
             localPath?: string | null;
             local_path?: string | null;
 
+            creatorName?: string | null;
+            creator_name?: string | null;
+
+            isError?: boolean | number | string | null;
+            is_error?: boolean | number | string | null;
+
+            errorMessage?: string | null;
+            error_message?: string | null;
+
+            errorAt?: string | null;
+            error_at?: string | null;
+
             createdAt?: string | null;
             created_at?: string | null;
 
@@ -592,6 +714,34 @@ const OfflineWindow: React.FC = () => {
             totalElements?: number;
             totalPages?: number;
         };
+
+        type HistoryDbDetail = {
+            modelTableId?: number | string | null;
+            model_table_id?: number | string | null;
+
+            modelRecordExists?: boolean | number | string | null;
+            model_record_exists?: boolean | number | string | null;
+
+            offlineRecordExists?: boolean | number | string | null;
+            offline_record_exists?: boolean | number | string | null;
+
+            localPath?: string | null;
+            local_path?: string | null;
+
+            creatorName?: string | null;
+            creator_name?: string | null;
+
+            isError?: boolean | number | string | null;
+            is_error?: boolean | number | string | null;
+
+            errorMessage?: string | null;
+            error_message?: string | null;
+
+            errorAt?: string | null;
+            error_at?: string | null;
+        };
+
+        type HistoryDbDetailsMap = Record<string, HistoryDbDetail>;
 
         const toOptionalNumber = (value: unknown): number | undefined => {
             if (value === undefined || value === null || value === "") {
@@ -619,6 +769,18 @@ const OfflineWindow: React.FC = () => {
             return String(value);
         };
 
+        const toNullableString = (value: unknown): string | null => {
+            if (typeof value === "string" && value.trim() !== "") {
+                return value;
+            }
+
+            return null;
+        };
+
+        const toBooleanValue = (value: unknown): boolean => {
+            return value === true || value === 1 || value === "1" || value === "true";
+        };
+
         const toImageUrlList = (value: unknown): string[] => {
             if (Array.isArray(value)) {
                 return value.filter(
@@ -643,8 +805,15 @@ const OfflineWindow: React.FC = () => {
             return [];
         };
 
-        const getHistoryKey = (row: ModelOfflineDownloadHistoryEntry) => {
-            return `${row.civitaiModelID}_${row.civitaiVersionID}`;
+        const getHistoryKey = (
+            modelID: string | number,
+            versionID: string | number
+        ): string => {
+            return `${String(modelID)}_${String(versionID)}`;
+        };
+
+        const getRowKey = (row: ModelOfflineDownloadHistoryEntry): string => {
+            return getHistoryKey(row.civitaiModelID, row.civitaiVersionID);
         };
 
         const normalizeHistoryRow = (row: HistoryApiRow): ModelOfflineDownloadHistoryEntry => {
@@ -659,97 +828,269 @@ const OfflineWindow: React.FC = () => {
                 localPath: toStringValue(row.localPath ?? row.local_path),
                 hasExistingLocalFile: false,
 
+                creatorName: toNullableString(row.creatorName ?? row.creator_name),
+                isError: toBooleanValue(row.isError ?? row.is_error),
+                errorMessage: toNullableString(row.errorMessage ?? row.error_message),
+                errorAt: toNullableString(row.errorAt ?? row.error_at),
+
                 createdAt: toStringValue(row.createdAt ?? row.created_at),
                 updatedAt: toStringValue(row.updatedAt ?? row.updated_at),
             };
         };
 
-        const checkLocalFilesInBackground = async (
-            baseRows: ModelOfflineDownloadHistoryEntry[]
+        const getCheckedFilePath = (filePayload: any): string => {
+            const payload = filePayload?.payload ?? filePayload;
+
+            const filePath =
+                payload?.filePath ??
+                payload?.localPath ??
+                payload?.path ??
+                payload?.modelDownloadPath ??
+                payload?.downloadFilePath;
+
+            return typeof filePath === "string" ? filePath.trim() : "";
+        };
+
+        const mergeDbDetailsInBackground = async (
+            rows: ModelOfflineDownloadHistoryEntry[]
         ) => {
-            const uniqueRows = Array.from(
+            setOneHistoryFetchStatus("dbDetails", "loading");
+
+            const uniqueItems = Array.from(
                 new Map(
-                    baseRows
+                    rows
                         .filter((row) => row.civitaiModelID && row.civitaiVersionID)
-                        .map((row) => [getHistoryKey(row), row])
+                        .map((row) => [
+                            getRowKey(row),
+                            {
+                                civitaiModelID: row.civitaiModelID,
+                                civitaiVersionID: row.civitaiVersionID,
+                            },
+                        ])
                 ).values()
             );
 
-            const checkedMap = new Map<
-                string,
-                {
-                    localPath: string;
-                    hasExistingLocalFile: boolean;
-                }
-            >();
+            if (uniqueItems.length === 0) {
+                setOneHistoryFetchStatus("dbDetails", "success");
+                return;
+            }
 
-            const batchSize = 5;
+            try {
+                const details = await fetchHistoryModelVersionDbDetails(
+                    uniqueItems,
+                    dispatch
+                ) as HistoryDbDetailsMap | null | undefined;
 
-            for (let i = 0; i < uniqueRows.length; i += batchSize) {
                 if (cancelled) return;
 
-                const batch = uniqueRows.slice(i, i + batchSize);
+                if (!details) {
+                    setOneHistoryFetchStatus("dbDetails", "fail");
+                    return;
+                }
 
-                const checkedBatch = await Promise.all(
-                    batch.map(async (row) => {
-                        const key = getHistoryKey(row);
+                setModelOfflineDownloadHistoryList((prevRows: ModelOfflineDownloadHistoryEntry[]) =>
+                    prevRows.map((row: ModelOfflineDownloadHistoryEntry) => {
+                        const detail = details[getRowKey(row)];
 
-                        try {
-                            const filePayload = (await fetchCheckModelVersionFileExists(
-                                dispatch,
-                                String(row.civitaiModelID),
-                                String(row.civitaiVersionID)
-                            )) as { filePath?: unknown } | null | undefined;
-
-                            const checkedFilePath =
-                                typeof filePayload?.filePath === "string"
-                                    ? filePayload.filePath.trim()
-                                    : "";
-
-                            return {
-                                key,
-                                localPath: checkedFilePath || row.localPath,
-                                hasExistingLocalFile: checkedFilePath !== "",
-                            };
-                        } catch {
-                            return {
-                                key,
-                                localPath: row.localPath,
-                                hasExistingLocalFile: false,
-                            };
+                        if (!detail) {
+                            return row;
                         }
+
+                        const dbDetail = detail as any;
+
+                        const modelTableId =
+                            dbDetail.modelTableId !== undefined
+                                ? dbDetail.modelTableId
+                                : dbDetail.model_table_id;
+
+                        const modelRecordExistsRaw =
+                            dbDetail.modelRecordExists !== undefined
+                                ? dbDetail.modelRecordExists
+                                : dbDetail.model_record_exists;
+
+                        const offlineRecordExistsRaw =
+                            dbDetail.offlineRecordExists !== undefined
+                                ? dbDetail.offlineRecordExists
+                                : dbDetail.offline_record_exists;
+
+                        const nextModelRecordExists =
+                            modelRecordExistsRaw !== undefined && modelRecordExistsRaw !== null
+                                ? toBooleanValue(modelRecordExistsRaw)
+                                : modelTableId !== undefined &&
+                                modelTableId !== null &&
+                                String(modelTableId).trim() !== "";
+
+                        const nextOfflineRecordExists =
+                            offlineRecordExistsRaw !== undefined && offlineRecordExistsRaw !== null
+                                ? toBooleanValue(offlineRecordExistsRaw)
+                                : row.offlineRecordExists === true;
+
+                        const nextIsErrorRaw =
+                            dbDetail.isError !== undefined
+                                ? dbDetail.isError
+                                : dbDetail.is_error;
+
+                        const nextLocalPath =
+                            typeof (dbDetail.localPath ?? dbDetail.local_path) === "string"
+                                ? String(dbDetail.localPath ?? dbDetail.local_path)
+                                : row.localPath;
+
+                        const nextCreatorName =
+                            toNullableString(dbDetail.creatorName ?? dbDetail.creator_name) ??
+                            row.creatorName;
+
+                        const nextIsError =
+                            nextIsErrorRaw === undefined || nextIsErrorRaw === null
+                                ? row.isError
+                                : toBooleanValue(nextIsErrorRaw);
+
+                        const nextErrorMessage =
+                            toNullableString(dbDetail.errorMessage ?? dbDetail.error_message) ??
+                            row.errorMessage;
+
+                        const nextErrorAt =
+                            toNullableString(dbDetail.errorAt ?? dbDetail.error_at) ??
+                            row.errorAt;
+
+                        return {
+                            ...row,
+
+                            modelTableId:
+                                modelTableId === undefined
+                                    ? row.modelTableId
+                                    : modelTableId,
+
+                            modelRecordExists: nextModelRecordExists,
+                            offlineRecordExists: nextOfflineRecordExists,
+
+                            localPath: nextLocalPath,
+                            creatorName: nextCreatorName,
+                            isError: nextIsError,
+                            errorMessage: nextErrorMessage,
+                            errorAt: nextErrorAt,
+                        };
                     })
                 );
 
-                checkedBatch.forEach((item) => {
-                    checkedMap.set(item.key, {
-                        localPath: item.localPath,
-                        hasExistingLocalFile: item.hasExistingLocalFile,
-                    });
-                });
+                setOneHistoryFetchStatus("dbDetails", "success");
+            } catch (error) {
+                console.error("History DB details fetch failed:", error);
+
+                if (!cancelled) {
+                    setOneHistoryFetchStatus("dbDetails", "fail");
+                }
             }
+        };
 
-            if (cancelled) return;
+        const checkLocalFilesInBackground = async (
+            rows: ModelOfflineDownloadHistoryEntry[]
+        ) => {
+            setOneHistoryFetchStatus("localFileCheck", "loading");
 
-            setModelOfflineDownloadHistoryList((prev: ModelOfflineDownloadHistoryEntry[]) =>
-                prev.map((row: ModelOfflineDownloadHistoryEntry) => {
-                    const checked = checkedMap.get(getHistoryKey(row));
+            const resultsByKey: Record<string, {
+                checkedFilePath: string;
+                hasExistingLocalFile: boolean;
+            }> = {};
 
-                    if (!checked) {
-                        return row;
+            try {
+                for (const row of rows) {
+                    if (cancelled) return;
+
+                    const modelID = String(row.civitaiModelID ?? "").trim();
+                    const versionID = String(row.civitaiVersionID ?? "").trim();
+
+                    if (!modelID || !versionID) continue;
+
+                    const key = getHistoryKey(modelID, versionID);
+
+                    const cachedResult = historyFileExistsCacheRef.current[key];
+                    if (cachedResult) {
+                        resultsByKey[key] = cachedResult;
+                        continue;
                     }
 
-                    return {
-                        ...row,
-                        localPath: checked.localPath,
-                        hasExistingLocalFile: checked.hasExistingLocalFile,
-                    };
-                })
-            );
+                    try {
+                        const filePayload = await fetchCheckModelVersionFileExists(
+                            dispatch,
+                            modelID,
+                            versionID
+                        );
+
+                        if (cancelled) return;
+
+                        const checkedFilePath = getCheckedFilePath(filePayload);
+
+                        const result = {
+                            checkedFilePath,
+                            hasExistingLocalFile: checkedFilePath !== "",
+                        };
+
+                        historyFileExistsCacheRef.current[key] = result;
+                        resultsByKey[key] = result;
+                    } catch (error) {
+                        // One row failed. Keep going for the other rows.
+                    }
+                }
+
+                if (cancelled) return;
+
+                const resultKeys = Object.keys(resultsByKey);
+
+                if (resultKeys.length > 0) {
+                    setModelOfflineDownloadHistoryList((prevRows) =>
+                        prevRows.map((currentRow) => {
+                            const currentKey = getHistoryKey(
+                                currentRow.civitaiModelID,
+                                currentRow.civitaiVersionID
+                            );
+
+                            const result = resultsByKey[currentKey];
+                            if (!result) return currentRow;
+
+                            const nextLocalPath = result.checkedFilePath || currentRow.localPath;
+                            const nextHasExistingLocalFile = result.hasExistingLocalFile;
+
+                            if (
+                                currentRow.localPath === nextLocalPath &&
+                                currentRow.hasExistingLocalFile === nextHasExistingLocalFile
+                            ) {
+                                return currentRow;
+                            }
+
+                            return {
+                                ...currentRow,
+                                localPath: nextLocalPath,
+                                hasExistingLocalFile: nextHasExistingLocalFile,
+                            };
+                        })
+                    );
+                }
+
+                setOneHistoryFetchStatus("localFileCheck", "success");
+            } catch (error) {
+                console.error("History local file check failed:", error);
+                if (!cancelled) {
+                    setOneHistoryFetchStatus("localFileCheck", "fail");
+                }
+            }
+        };
+
+        const enrichHistoryRowsInBackground = async (
+            rows: ModelOfflineDownloadHistoryEntry[]
+        ) => {
+            // Step 2: DB details first.
+            await mergeDbDetailsInBackground(rows);
+
+            // Step 3: local file check second.
+            // If found, this overrides localPath.
+            await checkLocalFilesInBackground(rows);
         };
 
         const loadHistoryList = async () => {
             if (displayMode !== "historyTable") return;
+
+            resetHistoryFetchStatus();
+            setOneHistoryFetchStatus("historyList", "loading");
 
             const shouldControlBusyAtStart = uiModeRef.current !== "downloading";
 
@@ -759,12 +1100,12 @@ const OfflineWindow: React.FC = () => {
                     setIsLoading(true);
                 }
 
-                const payload = (await fetchModelOfflineDownloadHistoryList(
+                const payload = await fetchModelOfflineDownloadHistoryList(
                     dispatch,
                     historyPage - 1,
                     historyItemsPerPage,
                     historySelectedDate
-                )) as HistoryPayload | null | undefined;
+                ) as HistoryPayload | null | undefined;
 
                 if (cancelled) return;
 
@@ -777,17 +1118,24 @@ const OfflineWindow: React.FC = () => {
                 const normalizedRows: ModelOfflineDownloadHistoryEntry[] =
                     rows.map((row: HistoryApiRow) => normalizeHistoryRow(row));
 
-                // Display rows immediately.
+                // Step 1:
+                // Show rows/images immediately.
                 setModelOfflineDownloadHistoryList(normalizedRows);
                 setHistoryTotalItems(payload?.totalElements ?? 0);
                 setHistoryTotalPages(payload?.totalPages ?? 1);
+                setOneHistoryFetchStatus("historyList", "success");
 
-                // Check local files after the table already displayed.
-                void checkLocalFilesInBackground(normalizedRows);
+                // Step 2 + Step 3:
+                // Do extra DB details and local file check after table is already displayed.
+                void enrichHistoryRowsInBackground(normalizedRows);
             } catch (err: any) {
                 console.error("History list fetch failed:", err?.message || err);
 
                 if (!cancelled) {
+                    setOneHistoryFetchStatus("historyList", "fail");
+                    setOneHistoryFetchStatus("dbDetails", "notStarted");
+                    setOneHistoryFetchStatus("localFileCheck", "notStarted");
+
                     setModelOfflineDownloadHistoryList([]);
                     setHistoryTotalItems(0);
                     setHistoryTotalPages(1);
@@ -1854,6 +2202,55 @@ const OfflineWindow: React.FC = () => {
     }, []);
 
     const closeLeftOverlay = useCallback(() => setLeftOverlayEntry(null), []);
+
+    const handleDeleteHistoryRecord = useCallback(async (historyId: number) => {
+        if (!historyId || deletingHistoryId !== null) {
+            return;
+        }
+
+        setDeletingHistoryId(historyId);
+
+        try {
+            const success = await fetchDeleteModelOfflineDownloadHistoryRecord(
+                historyId,
+                dispatch
+            );
+
+            if (!success) {
+                return;
+            }
+
+            setModelOfflineDownloadHistoryList((prevRows) =>
+                prevRows.filter((row) => Number(row.id) !== Number(historyId))
+            );
+
+            const nextTotalItems = Math.max(0, historyTotalItems - 1);
+            const nextTotalPages = Math.max(
+                1,
+                Math.ceil(nextTotalItems / historyItemsPerPage)
+            );
+
+            setHistoryTotalItems(nextTotalItems);
+            setHistoryTotalPages(nextTotalPages);
+
+            const rowsAfterDelete = modelOfflineDownloadHistoryList.filter(
+                (row) => Number(row.id) !== Number(historyId)
+            );
+
+            if (rowsAfterDelete.length === 0 && historyPage > 1) {
+                setHistoryPage(historyPage - 1);
+            }
+        } finally {
+            setDeletingHistoryId(null);
+        }
+    }, [
+        deletingHistoryId,
+        dispatch,
+        historyTotalItems,
+        historyItemsPerPage,
+        historyPage,
+        modelOfflineDownloadHistoryList,
+    ]);
 
     const handleOpenDownloadPath = async (downloadPath: string) => {
         const trimmed = (downloadPath || '').trim();
@@ -5125,13 +5522,38 @@ const OfflineWindow: React.FC = () => {
                     </div>
 
                     {displayMode === "historyTable" && (
-                        <HistoryDatePicker
-                            selectedDate={historySelectedDate}
-                            onChangeDate={setHistorySelectedDate}
-                            availableDates={historyAvailableDates}
-                            isDarkMode={isDarkMode}
-                            onMonthChange={setHistoryCalendarMonth}
-                        />
+                        <div
+                            style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                gap: "8px",
+                                marginBottom: "12px",
+                            }}
+                        >
+                            <HistoryDatePicker
+                                selectedDate={historySelectedDate}
+                                onChangeDate={setHistorySelectedDate}
+                                availableDates={historyAvailableDates}
+                                isDarkMode={isDarkMode}
+                                onMonthChange={setHistoryCalendarMonth}
+                            />
+
+                            <div
+                                style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    gap: "8px",
+                                    flexWrap: "wrap",
+                                    padding: "4px 0",
+                                }}
+                            >
+                                {renderHistoryFetchStatusItem("historyList")}
+                                {renderHistoryFetchStatusItem("dbDetails")}
+                                {renderHistoryFetchStatusItem("localFileCheck")}
+                            </div>
+                        </div>
                     )}
 
                     {/* Download or Modify Progress Indicators */}
@@ -5184,6 +5606,8 @@ const OfflineWindow: React.FC = () => {
                                         agGridStyle={styles.agGridStyle}
                                         currentTheme={currentTheme}
                                         handleOpenDownloadPath={handleOpenDownloadPath}
+                                        onDeleteHistoryRecord={handleDeleteHistoryRecord}
+                                        deletingHistoryId={deletingHistoryId}
                                     />
                                 )}
 

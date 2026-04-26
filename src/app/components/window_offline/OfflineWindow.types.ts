@@ -147,6 +147,16 @@ export interface ModelOfflineDownloadHistoryEntry {
     imageUrlList: string[];
     localPath: string;
     hasExistingLocalFile?: boolean;
+
+    modelTableId?: number | string | null;
+    modelRecordExists?: boolean;
+    offlineRecordExists?: boolean;
+
+    creatorName?: string | null;
+    isError?: boolean;
+    errorMessage?: string | null;
+    errorAt?: string | null;
+
     createdAt: string;
     updatedAt: string;
 }
