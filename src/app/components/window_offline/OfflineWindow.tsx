@@ -459,66 +459,168 @@ const OfflineWindow: React.FC = () => {
     const [aiTotalPages, setAiTotalPages] = useState(1);
     const [aiReloadToken, setAiReloadToken] = useState(0);
 
-    //PERMISSION 
-    const DOWNLOAD_NOW_ALLOWED_MODES = new Set<DisplayMode>([
-        "cartCard",
-    ]);
+    // PERMISSION
+    const DEFAULT_MODE_PERMISSION = {
+        canSelect: false,
+        canWriteCart: false,
 
-    // These modes cannot select anything.
-    const SELECTION_DISABLED_MODES = new Set<DisplayMode>([
-        "failedCard",
-        "recentCard",
-        "historyTable",
-    ]);
+        selectAllNormal: false,
+        selectAllModify: false,
 
-    // These modes cannot write into cart.
-    const CART_WRITE_DISABLED_MODES = new Set<DisplayMode>([
-        "holdCard",
-        "earlyAccessCard",
-        "errorCard",
-        "failedCard",
-        "recentCard",
-        "historyTable",
-        "aiCard"
-    ]);
+        selectFirstNormal: false,
+        selectFirstModify: false,
 
-    // These modes cannot use normal Select All,
-    // but can still use Select All while Modify Mode is ON.
-    const NORMAL_SELECT_ALL_DISABLED_MODES = new Set<DisplayMode>([
-        "holdCard",
-        "errorCard",
-    ]);
+        downloadNow: false,
+        switchWhileDownloading: false,
+    };
+
+    const modePermission = (
+        override: Partial<typeof DEFAULT_MODE_PERMISSION> = {}
+    ) => ({
+        ...DEFAULT_MODE_PERMISSION,
+        ...override,
+    });
+
+    const MODE_PERMISSION: Partial<Record<DisplayMode, typeof DEFAULT_MODE_PERMISSION>> = {
+        table: modePermission({
+            canSelect: true,
+            canWriteCart: true,
+            selectAllNormal: true,
+            selectAllModify: true,
+            selectFirstNormal: true,
+            selectFirstModify: true,
+            switchWhileDownloading: true,
+        }),
+
+        bigCard: modePermission({
+            canSelect: true,
+            canWriteCart: true,
+            selectAllNormal: true,
+            selectAllModify: true,
+            selectFirstNormal: true,
+            selectFirstModify: true,
+            switchWhileDownloading: true,
+        }),
+
+        smallCard: modePermission({
+            canSelect: true,
+            canWriteCart: true,
+            selectAllNormal: true,
+            selectAllModify: true,
+            selectFirstNormal: true,
+            selectFirstModify: true,
+            switchWhileDownloading: true,
+        }),
+
+        cartCard: modePermission({
+            canSelect: true,
+            canWriteCart: true,
+            selectAllNormal: true,
+            selectAllModify: true,
+
+            // Cart is already cart-only, so no "Select First" cart creation.
+            selectFirstNormal: false,
+            selectFirstModify: false,
+
+            downloadNow: true,
+            switchWhileDownloading: true,
+        }),
+
+        holdCard: modePermission({
+            canSelect: true,
+            canWriteCart: false,
+
+            // Your requested behavior:
+            // normal mode = no Select All
+            // modify mode = yes Select All
+            selectAllNormal: false,
+            selectAllModify: true,
+
+            selectFirstNormal: false,
+            selectFirstModify: true,
+        }),
+
+        earlyAccessCard: modePermission({
+            canSelect: true,
+            canWriteCart: false,
+
+            selectAllNormal: true,
+            selectAllModify: true,
+
+            selectFirstNormal: false,
+            selectFirstModify: true,
+        }),
+
+        errorCard: modePermission({
+            canSelect: true,
+            canWriteCart: false,
+
+            // Your requested behavior:
+            // normal mode = no Select All
+            // modify mode = yes Select All
+            selectAllNormal: false,
+            selectAllModify: true,
+
+            selectFirstNormal: false,
+            selectFirstModify: true,
+        }),
+
+        failedCard: modePermission({
+            canSelect: false,
+            canWriteCart: false,
+            switchWhileDownloading: true,
+        }),
+
+        recentCard: modePermission({
+            canSelect: false,
+            canWriteCart: false,
+            switchWhileDownloading: true,
+        }),
+
+        historyTable: modePermission({
+            canSelect: false,
+            canWriteCart: false,
+            switchWhileDownloading: true,
+        }),
+
+        aiCard: modePermission({
+            canSelect: true,
+            canWriteCart: false,
+
+            selectAllNormal: true,
+            selectAllModify: true,
+
+            selectFirstNormal: false,
+            selectFirstModify: true,
+        }),
+    };
+
+    const getModePermission = (mode: DisplayMode) =>
+        MODE_PERMISSION[mode] ?? DEFAULT_MODE_PERMISSION;
+
+    const currentModePermission = getModePermission(displayMode);
 
     const isPagedMode =
         displayMode === "bigCard" ||
         displayMode === "smallCard" ||
         displayMode === "table";
 
-    const DOWNLOAD_SWITCH_ALLOWED_MODES = new Set<DisplayMode>([
-        "table",
-        "bigCard",
-        "smallCard",
-        "cartCard",
-        "failedCard",
-        "recentCard",
-        "historyTable",
-    ]);
-
     const canModeSelect = (mode: DisplayMode) =>
-        !SELECTION_DISABLED_MODES.has(mode);
+        getModePermission(mode).canSelect;
 
     const canModeWriteCart = (mode: DisplayMode) =>
-        !CART_WRITE_DISABLED_MODES.has(mode);
-
-    const canUseDownloadNow =
-        !isModifyMode && DOWNLOAD_NOW_ALLOWED_MODES.has(displayMode);
-
-    const canCurrentModeSelect = canModeSelect(displayMode);
-
-    const canCurrentModeWriteCart = canModeWriteCart(displayMode);
+        getModePermission(mode).canWriteCart;
 
     const canSwitchModeWhileDownloading = (mode: DisplayMode) =>
-        DOWNLOAD_SWITCH_ALLOWED_MODES.has(mode);
+        getModePermission(mode).switchWhileDownloading;
+
+    const canUseDownloadNow =
+        !isModifyMode &&
+        currentModePermission.downloadNow;
+
+    const canCurrentModeSelect = currentModePermission.canSelect;
+
+    const canCurrentModeWriteCart = currentModePermission.canWriteCart;
 
     const prevDisplayModeRef = useRef<DisplayMode>(displayMode);
 
@@ -527,30 +629,24 @@ const OfflineWindow: React.FC = () => {
         !isLoading &&
         canCurrentModeSelect;
 
-    // Select All:
-    // - normal mode: disabled for holdCard/errorCard
-    // - modify mode: allowed for holdCard/errorCard
-    // - failed/recent/history still blocked by SELECTION_DISABLED_MODES
     const canUseSelectAll =
         canChangeSelection &&
         (
-            isModifyMode ||
-            !NORMAL_SELECT_ALL_DISABLED_MODES.has(displayMode)
+            isModifyMode
+                ? currentModePermission.selectAllModify
+                : currentModePermission.selectAllNormal
         );
 
-    // Normal Select First means it creates cart selection.
-    // Only allow this in normal paged modes.
     const canUseSelectFirstNormal =
         !isModifyMode &&
         canChangeSelection &&
-        canCurrentModeWriteCart &&
-        isPagedMode;
+        currentModePermission.selectFirstNormal &&
+        currentModePermission.canWriteCart;
 
-    // Modify Select First is selection-only.
-    // Allow it in modes that can select.
     const canUseSelectFirstModify =
         isModifyMode &&
-        canChangeSelection;
+        canChangeSelection &&
+        currentModePermission.selectFirstModify;
 
     const DUMMY_DOWNLOAD_URL =
         "https://huggingface.co/Ukado/Cream/resolve/main/easynegative.safetensors";
@@ -4030,7 +4126,7 @@ const OfflineWindow: React.FC = () => {
     };
 
     const handleSelectAll = () => {
-        if (!canChangeSelection) return;
+        if (!canUseSelectAll) return;
 
         const visibleIds = visibleEntries
             .map((e) => String(e.civitaiVersionID ?? "").trim())

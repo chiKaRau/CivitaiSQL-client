@@ -213,7 +213,9 @@ const WindowComponent: React.FC = () => {
     const [neighborCount, setNeighborCount] = useState<number>(5);
 
     const [downloadPathRoot, setDownloadPathRoot] = useState<DownloadPathRoot>("ACG");
-    const hasDetectedDownloadPathRootRef = useRef(false);
+
+    const hasInitializedDownloadPathRootRef = useRef(false);
+    const hasUserSelectedDownloadPathRootRef = useRef(false);
 
     const [recentCreatorUrls, setRecentCreatorUrls] = useState<string[]>([]);
     const recentCreatorUrlsLoadedRef = useRef(false);
@@ -1485,6 +1487,94 @@ const WindowComponent: React.FC = () => {
         );
     };
 
+    const applyDownloadPathRoot = React.useCallback(
+        (path: string, root: DownloadPathRoot) => {
+            const rootFolderName = DOWNLOAD_PATH_ROOT_FOLDER[root];
+
+            return (path || "").replace(
+                /((?:^|[/\\])@scan@[/\\])(?:ACG|Real)(?=[/\\]|$)/i,
+                (_match: string, prefix: string) => `${prefix}${rootFolderName}`
+            );
+        },
+        []
+    );
+
+    const detectDownloadPathRoot = React.useCallback((path: string): DownloadPathRoot | null => {
+        const match = (path || "").match(/(?:^|[/\\])@scan@[/\\](ACG|Real)(?=[/\\]|$)/i);
+
+        if (!match) return null;
+
+        return match[1].toLowerCase() === "real" ? "R" : "ACG";
+    }, []);
+
+    /**
+     * First path load:
+     * - detect ACG/Real from existing downloadFilePath.
+     *
+     * After that:
+     * - keep the current ACG/R button as the source of truth.
+     * - if another feature writes /@scan@/ACG/... while button is R,
+     *   automatically convert it to /@scan@/Real/...
+     */
+    useEffect(() => {
+        const currentPath = downloadFilePath || "";
+        if (!currentPath) return;
+
+        if (!hasInitializedDownloadPathRootRef.current) {
+            hasInitializedDownloadPathRootRef.current = true;
+
+            if (!hasUserSelectedDownloadPathRootRef.current) {
+                const detectedRoot = detectDownloadPathRoot(currentPath);
+
+                if (detectedRoot) {
+                    setDownloadPathRoot(detectedRoot);
+                    return;
+                }
+            }
+        }
+
+        const rootedValue = applyDownloadPathRoot(currentPath, downloadPathRoot);
+
+        if (rootedValue !== currentPath) {
+            dispatch(updateDownloadFilePath(rootedValue));
+        }
+    }, [
+        downloadFilePath,
+        downloadPathRoot,
+        applyDownloadPathRoot,
+        detectDownloadPathRoot,
+        dispatch
+    ]);
+
+    const handleDownloadPathRootChange = (nextRoot: DownloadPathRoot) => {
+        hasUserSelectedDownloadPathRootRef.current = true;
+
+        setDownloadPathRoot(nextRoot);
+
+        const rootedValue = applyDownloadPathRoot(downloadFilePath, nextRoot);
+
+        if (rootedValue !== downloadFilePath) {
+            dispatch(updateDownloadFilePath(rootedValue));
+        }
+    };
+
+    const downloadPathOptions = useMemo(() => {
+        const convertedList = sortedandFilteredfoldersList.map((path) =>
+            applyDownloadPathRoot(path, downloadPathRoot)
+        );
+
+        return Array.from(new Set(convertedList));
+    }, [sortedandFilteredfoldersList, applyDownloadPathRoot, downloadPathRoot]);
+
+    const handleFoldersListOnChange = (event: any, newValue: string | null) => {
+        const disallowedRegex = /[<>:"\\|?*]/g;
+
+        const cleanedValue = newValue?.replace(disallowedRegex, "") || "";
+        const rootedValue = applyDownloadPathRoot(cleanedValue, downloadPathRoot);
+
+        dispatch(updateDownloadFilePath(rootedValue));
+    };
+
     const actionButtonBaseStyle = useMemo<React.CSSProperties>(() => ({
         cursor: "pointer",
         border: "none",
@@ -1629,7 +1719,7 @@ const WindowComponent: React.FC = () => {
             editable: true,
             cellEditor: PathAutocompleteEditor,
             cellEditorPopup: true,
-            cellEditorParams: () => ({ options: sortedandFilteredfoldersList })
+            cellEditorParams: () => ({ options: downloadPathOptions })
         },
         {
             headerName: "Cat",
@@ -1718,7 +1808,8 @@ const WindowComponent: React.FC = () => {
                 />
             ),
         },
-    ], [theme, isDarkMode, sortedandFilteredfoldersList, priorityOptions, unstageButtonStyle, handleUnstageItem]);
+    ], [theme, isDarkMode, downloadPathOptions, priorityOptions, unstageButtonStyle, handleUnstageItem]);
+
 
     // which rating checkboxes are currently ON?
     const selectedRatings = useMemo(
@@ -2267,63 +2358,8 @@ const WindowComponent: React.FC = () => {
         handleRefreshList();
     };
 
-    const applyDownloadPathRoot = React.useCallback(
-        (path: string, root: DownloadPathRoot) => {
-            const rootFolderName = DOWNLOAD_PATH_ROOT_FOLDER[root];
 
-            return (path || "").replace(
-                /((?:^|[/\\])@scan@[/\\])(?:ACG|Real)(?=[/\\]|$)/i,
-                (_match: string, prefix: string) => `${prefix}${rootFolderName}`
-            );
-        },
-        []
-    );
 
-    const detectDownloadPathRoot = React.useCallback((path: string): DownloadPathRoot | null => {
-        const match = (path || "").match(/(?:^|[/\\])@scan@[/\\](ACG|Real)(?=[/\\]|$)/i);
-
-        if (!match) return null;
-
-        return match[1].toLowerCase() === "real" ? "R" : "ACG";
-    }, []);
-
-    useEffect(() => {
-        if (hasDetectedDownloadPathRootRef.current || !downloadFilePath) return;
-
-        const detectedRoot = detectDownloadPathRoot(downloadFilePath);
-
-        if (!detectedRoot) return;
-
-        setDownloadPathRoot(detectedRoot);
-        hasDetectedDownloadPathRootRef.current = true;
-    }, [downloadFilePath, detectDownloadPathRoot]);
-
-    const handleDownloadPathRootChange = (nextRoot: DownloadPathRoot) => {
-        setDownloadPathRoot(nextRoot);
-
-        dispatch(
-            updateDownloadFilePath(
-                applyDownloadPathRoot(downloadFilePath, nextRoot)
-            )
-        );
-    };
-
-    const downloadPathOptions = useMemo(() => {
-        const convertedList = sortedandFilteredfoldersList.map((path) =>
-            applyDownloadPathRoot(path, downloadPathRoot)
-        );
-
-        return Array.from(new Set(convertedList));
-    }, [sortedandFilteredfoldersList, applyDownloadPathRoot, downloadPathRoot]);
-
-    const handleFoldersListOnChange = (event: any, newValue: string | null) => {
-        const disallowedRegex = /[<>:"\\\|?*]/g;
-
-        const cleanedValue = newValue?.replace(disallowedRegex, "") || "";
-        const rootedValue = applyDownloadPathRoot(cleanedValue, downloadPathRoot);
-
-        dispatch(updateDownloadFilePath(rootedValue));
-    };
     // Handler for blur event
     const handleAutocompleteBlur = () => {
         // If downloadFilePath is empty
@@ -2538,7 +2574,11 @@ const WindowComponent: React.FC = () => {
 
         setUrlList([]);
         setSelectedUrl("");
-        dispatch(updateDownloadFilePath("/@scan@/ACG/Pending/"));
+        dispatch(
+            updateDownloadFilePath(
+                applyDownloadPathRoot("/@scan@/ACG/Pending/", downloadPathRoot)
+            )
+        );
         setIsLoading(false);
         setHold(false);
         setDownloadPriority(5);
@@ -3983,7 +4023,12 @@ const WindowComponent: React.FC = () => {
                                             if (!id || !field) return;
 
                                             if (field === "downloadFilePath") {
-                                                patchStagedById(id, { downloadFilePath: String(e.newValue ?? "") });
+                                                const rootedValue = applyDownloadPathRoot(
+                                                    String(e.newValue ?? ""),
+                                                    downloadPathRoot
+                                                );
+
+                                                patchStagedById(id, { downloadFilePath: rootedValue });
                                                 return;
                                             }
                                             if (field === "hold") {
