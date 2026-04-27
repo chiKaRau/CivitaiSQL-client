@@ -1253,11 +1253,11 @@ const OfflineWindow: React.FC = () => {
                             const result = resultsByKey[currentKey];
                             if (!result) return currentRow;
 
-                            const nextLocalPath = result.checkedFilePath || currentRow.localPath;
+                            const nextCheckedFilePath = result.checkedFilePath;
                             const nextHasExistingLocalFile = result.hasExistingLocalFile;
 
                             if (
-                                currentRow.localPath === nextLocalPath &&
+                                (currentRow as any).checkedFilePath === nextCheckedFilePath &&
                                 currentRow.hasExistingLocalFile === nextHasExistingLocalFile
                             ) {
                                 return currentRow;
@@ -1265,7 +1265,13 @@ const OfflineWindow: React.FC = () => {
 
                             return {
                                 ...currentRow,
-                                localPath: nextLocalPath,
+
+                                // Keep DB path unchanged
+                                localPath: currentRow.localPath,
+
+                                // Store local file check result separately
+                                checkedFilePath: nextCheckedFilePath,
+
                                 hasExistingLocalFile: nextHasExistingLocalFile,
                             };
                         })

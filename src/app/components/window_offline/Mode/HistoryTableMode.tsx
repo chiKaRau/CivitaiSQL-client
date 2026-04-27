@@ -36,6 +36,19 @@ function formatHistoryDateTime(value?: string) {
     return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
 }
 
+function isUpdatePath(path?: string) {
+    const value = (path || "").trim();
+
+    if (!value) return false;
+
+    // Matches:
+    // \Update\
+    // /Update/
+    // \Update
+    // /Update
+    return /(^|[\\/])Update([\\/]|$)/i.test(value);
+}
+
 function getDirectoryPathForOpen(path?: string) {
     const trimmed = (path || "").trim();
     if (!trimmed) return "";
@@ -303,59 +316,100 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
                 userSelect: "text",
             } as CellStyle,
             cellRenderer: (p: any) => {
-                const rawPath = typeof p.value === "string" ? p.value.trim() : "";
-                const hasExistingLocalFile = !!p?.data?.hasExistingLocalFile;
-                const directoryPath = hasExistingLocalFile ? getDirectoryPathForOpen(rawPath) : "";
-                const displayPath = hasExistingLocalFile ? directoryPath : rawPath;
+                const dbPath = typeof p?.data?.localPath === "string"
+                    ? p.data.localPath.trim()
+                    : "";
 
-                if (!rawPath) {
+                const checkedFilePath = typeof p?.data?.checkedFilePath === "string"
+                    ? p.data.checkedFilePath.trim()
+                    : "";
+
+                const hasExistingLocalFile = !!p?.data?.hasExistingLocalFile && checkedFilePath !== "";
+                const checkedDirectoryPath = hasExistingLocalFile
+                    ? getDirectoryPathForOpen(checkedFilePath)
+                    : "";
+
+                if (!dbPath && !checkedFilePath) {
                     return <span>N/A</span>;
                 }
 
-                if (!hasExistingLocalFile) {
-                    return (
-                        <span
-                            style={{
-                                display: "inline-block",
-                                width: "100%",
-                                wordBreak: "break-word",
-                                whiteSpace: "normal",
-                                lineHeight: "1.25",
-                                userSelect: "text",
-                            }}
-                            title={rawPath}
-                        >
-                            {rawPath}
-                        </span>
-                    );
-                }
+                const lineStyle: React.CSSProperties = {
+                    display: "block",
+                    width: "100%",
+                    wordBreak: "break-word",
+                    whiteSpace: "normal",
+                    lineHeight: "1.25",
+                    userSelect: "text",
+                    marginBottom: 4,
+                };
+
+                const labelStyle: React.CSSProperties = {
+                    fontWeight: 700,
+                    marginRight: 6,
+                    opacity: 0.75,
+                };
 
                 return (
-                    <span
-                        title={displayPath}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            if (directoryPath) {
-                                void handleOpenDownloadPath(directoryPath);
-                            }
-                        }}
-                        style={{
-                            display: "inline-block",
-                            width: "100%",
-                            cursor: directoryPath ? "pointer" : "default",
-                            color: directoryPath
-                                ? (isDarkMode ? "#93c5fd" : "#2563eb")
-                                : currentTheme.rowFontColor,
-                            textDecoration: directoryPath ? "underline" : "none",
-                            wordBreak: "break-word",
-                            whiteSpace: "normal",
-                            lineHeight: "1.25",
-                            userSelect: "text",
-                        }}
-                    >
-                        {displayPath}
-                    </span>
+                    <div style={{ width: "100%" }}>
+                        {dbPath && (
+                            <span style={lineStyle} title={dbPath}>
+                                <span style={labelStyle}>DB:</span>
+                                {dbPath}
+                            </span>
+                        )}
+
+                        {hasExistingLocalFile && (
+                            <span
+                                style={{
+                                    ...lineStyle,
+                                    cursor: checkedDirectoryPath ? "pointer" : "default",
+                                    color: checkedDirectoryPath
+                                        ? (isDarkMode ? "#93c5fd" : "#2563eb")
+                                        : currentTheme.rowFontColor,
+                                    textDecoration: checkedDirectoryPath ? "underline" : "none",
+                                }}
+                                title={checkedDirectoryPath || checkedFilePath}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+
+                                    if (checkedDirectoryPath) {
+                                        void handleOpenDownloadPath(checkedDirectoryPath);
+                                    }
+                                }}
+                            >
+                                <span style={labelStyle}>LOCAL:</span>
+                                {checkedDirectoryPath || checkedFilePath}
+                            </span>
+                        )}
+                    </div>
                 );
+            },
+        },
+        {
+            headerName: "Type",
+            field: "historyPathType",
+            width: 115,
+            minWidth: 105,
+            maxWidth: 130,
+            sortable: true,
+            filter: true,
+            cellStyle: {
+                ...cellStyle,
+                textAlign: "center",
+                fontWeight: 700,
+            } as CellStyle,
+            valueGetter: (p: any) => {
+                const dbPath = typeof p?.data?.localPath === "string"
+                    ? p.data.localPath
+                    : "";
+
+                const checkedFilePath = typeof p?.data?.checkedFilePath === "string"
+                    ? p.data.checkedFilePath
+                    : "";
+
+                return isUpdatePath(dbPath) || isUpdatePath(checkedFilePath)
+                    ? "Update"
+                    : "Download";
             },
         },
         {
@@ -583,6 +637,7 @@ const HistoryTableMode: React.FC<HistoryTableModeProps> = ({
                 civitaiArchiveUrl: `https://civitaiarchive.com/models/${entry.civitaiModelID}?modelVersionId=${entry.civitaiVersionID}`,
 
                 localPath: entry.localPath || "",
+                checkedFilePath: (entry as any).checkedFilePath || "",
                 creatorName: entry.creatorName || "",
                 isError: entry.isError === true,
                 errorMessage: entry.errorMessage || "",
