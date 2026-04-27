@@ -459,18 +459,40 @@ const OfflineWindow: React.FC = () => {
     const [aiTotalPages, setAiTotalPages] = useState(1);
     const [aiReloadToken, setAiReloadToken] = useState(0);
 
-    // near the top of OfflineWindow.tsx (after DisplayMode type)
+    //PERMISSION 
     const DOWNLOAD_NOW_ALLOWED_MODES = new Set<DisplayMode>([
-        "cartCard"
+        "cartCard",
+    ]);
+
+    // These modes cannot select anything.
+    const SELECTION_DISABLED_MODES = new Set<DisplayMode>([
+        "failedCard",
+        "recentCard",
+        "historyTable",
+    ]);
+
+    // These modes cannot write into cart.
+    const CART_WRITE_DISABLED_MODES = new Set<DisplayMode>([
+        "holdCard",
+        "earlyAccessCard",
+        "errorCard",
+        "failedCard",
+        "recentCard",
+        "historyTable",
+        "aiCard"
+    ]);
+
+    // These modes cannot use normal Select All,
+    // but can still use Select All while Modify Mode is ON.
+    const NORMAL_SELECT_ALL_DISABLED_MODES = new Set<DisplayMode>([
+        "holdCard",
+        "errorCard",
     ]);
 
     const isPagedMode =
         displayMode === "bigCard" ||
         displayMode === "smallCard" ||
         displayMode === "table";
-
-    const isPagedDisplayMode = (m: DisplayMode) =>
-        m === "bigCard" || m === "smallCard" || m === "table";
 
     const DOWNLOAD_SWITCH_ALLOWED_MODES = new Set<DisplayMode>([
         "table",
@@ -482,14 +504,53 @@ const OfflineWindow: React.FC = () => {
         "historyTable",
     ]);
 
+    const canModeSelect = (mode: DisplayMode) =>
+        !SELECTION_DISABLED_MODES.has(mode);
+
+    const canModeWriteCart = (mode: DisplayMode) =>
+        !CART_WRITE_DISABLED_MODES.has(mode);
+
+    const canUseDownloadNow =
+        !isModifyMode && DOWNLOAD_NOW_ALLOWED_MODES.has(displayMode);
+
+    const canCurrentModeSelect = canModeSelect(displayMode);
+
+    const canCurrentModeWriteCart = canModeWriteCart(displayMode);
+
     const canSwitchModeWhileDownloading = (mode: DisplayMode) =>
         DOWNLOAD_SWITCH_ALLOWED_MODES.has(mode);
 
     const prevDisplayModeRef = useRef<DisplayMode>(displayMode);
 
-    const canUseDownloadNow = !isModifyMode && DOWNLOAD_NOW_ALLOWED_MODES.has(displayMode);
+    const canChangeSelection =
+        uiMode === "idle" &&
+        !isLoading &&
+        canCurrentModeSelect;
 
-    const canChangeSelection = uiMode === "idle" && !isLoading;
+    // Select All:
+    // - normal mode: disabled for holdCard/errorCard
+    // - modify mode: allowed for holdCard/errorCard
+    // - failed/recent/history still blocked by SELECTION_DISABLED_MODES
+    const canUseSelectAll =
+        canChangeSelection &&
+        (
+            isModifyMode ||
+            !NORMAL_SELECT_ALL_DISABLED_MODES.has(displayMode)
+        );
+
+    // Normal Select First means it creates cart selection.
+    // Only allow this in normal paged modes.
+    const canUseSelectFirstNormal =
+        !isModifyMode &&
+        canChangeSelection &&
+        canCurrentModeWriteCart &&
+        isPagedMode;
+
+    // Modify Select First is selection-only.
+    // Allow it in modes that can select.
+    const canUseSelectFirstModify =
+        isModifyMode &&
+        canChangeSelection;
 
     const DUMMY_DOWNLOAD_URL =
         "https://huggingface.co/Ukado/Cream/resolve/main/easynegative.safetensors";
@@ -517,6 +578,19 @@ const OfflineWindow: React.FC = () => {
         setSelectedSuggestedPathByVid({});
     }, []);
 
+    const replaceSelectionOnly = useCallback((entries: OfflineDownloadEntry[]) => {
+        const nextIds = new Set<string>();
+
+        entries.forEach((entry) => {
+            const versionId = String(entry.civitaiVersionID ?? "").trim();
+            if (!versionId) return;
+
+            nextIds.add(versionId);
+        });
+
+        setSelectedIds(nextIds);
+    }, []);
+
     const replaceCartSelection = useCallback((entries: OfflineDownloadEntry[]) => {
         const nextIds = new Set<string>();
         const nextCart: Record<string, OfflineDownloadEntry> = {};
@@ -537,11 +611,23 @@ const OfflineWindow: React.FC = () => {
         setCartDownloadStatusByVid({});
     }, [cartEntryKey]);
 
+    const getCartSelectedIds = useCallback(() => {
+        const nextIds = new Set<string>();
+
+        Object.values(cartEntryByVid).forEach((entry) => {
+            const versionId = String(entry.civitaiVersionID ?? "").trim();
+            if (!versionId) return;
+
+            nextIds.add(versionId);
+        });
+
+        return nextIds;
+    }, [cartEntryByVid]);
+
     const handleBulkPatchSelected = async () => {
         const selectedEntries = visibleEntries.filter((entry) =>
-            selectedIds.has(entry.civitaiVersionID)
+            selectedIds.has(String(entry.civitaiVersionID ?? "").trim())
         );
-
         const modelObjects = selectedEntries.map((entry) => ({
             civitaiModelID: entry.civitaiModelID,
             civitaiVersionID: entry.civitaiVersionID,
@@ -2147,10 +2233,18 @@ const OfflineWindow: React.FC = () => {
 
         if (prev === next) return;
 
-        // Do not clear selectedIds here.
-        // Cart selection should survive mode switching.
         setSelectedSuggestedPathByVid({});
-    }, [displayMode, uiMode, isLoading]);
+
+        // Separate selection-only modes from cart modes.
+        // hold/earlyAccess/error should not carry selected IDs into cart.
+        if (!canModeSelect(next) || !canModeWriteCart(next)) {
+            setSelectedIds(new Set());
+            return;
+        }
+
+        // For table/big/small/cart, keep only real cart-selected IDs.
+        setSelectedIds(getCartSelectedIds());
+    }, [displayMode, uiMode, isLoading, getCartSelectedIds]);
 
     useEffect(() => {
         const data = tagSource === 'other'
@@ -2320,16 +2414,26 @@ const OfflineWindow: React.FC = () => {
 
 
     // **2. Compute Select All Checkbox State**
+    const visibleSelectedCount = React.useMemo(() => {
+        return visibleEntries.reduce((count, entry) => {
+            const versionId = String(entry.civitaiVersionID ?? "").trim();
+            return versionId && selectedIds.has(versionId) ? count + 1 : count;
+        }, 0);
+    }, [visibleEntries, selectedIds]);
+
     const isAllSelected =
+        canUseSelectAll &&
         visibleEntries.length > 0 &&
         visibleEntries.every((e) =>
-            selectedIds.has(String(e.civitaiVersionID ?? ""))
+            selectedIds.has(String(e.civitaiVersionID ?? "").trim())
         );
 
     const isIndeterminate =
+        canUseSelectAll &&
         visibleEntries.some((e) =>
-            selectedIds.has(String(e.civitaiVersionID ?? ""))
-        ) && !isAllSelected;
+            selectedIds.has(String(e.civitaiVersionID ?? "").trim())
+        ) &&
+        !isAllSelected;
 
     const currentTheme = React.useMemo(
         () => (isDarkMode ? darkTheme : lightTheme),
@@ -2355,8 +2459,8 @@ const OfflineWindow: React.FC = () => {
 
         const versionId =
             typeof entryOrId === "string"
-                ? String(entryOrId)
-                : String(entryOrId.civitaiVersionID ?? "");
+                ? String(entryOrId).trim()
+                : String(entryOrId.civitaiVersionID ?? "").trim();
 
         if (!versionId) return;
 
@@ -2367,37 +2471,44 @@ const OfflineWindow: React.FC = () => {
             if (alreadySelected) {
                 next.delete(versionId);
 
-                setCartEntryByVid((prevCart) => {
-                    const nextCart = { ...prevCart };
-                    delete nextCart[cartEntryKey(versionId)];
-                    return nextCart;
-                });
+                if (canCurrentModeWriteCart) {
+                    setCartEntryByVid((prevCart) => {
+                        const nextCart = { ...prevCart };
+                        delete nextCart[cartEntryKey(versionId)];
+                        return nextCart;
+                    });
 
-                setCartDownloadStatusByVid((prevStatus) => {
-                    const nextStatus = { ...prevStatus };
-                    delete nextStatus[versionId];
-                    return nextStatus;
-                });
+                    setCartDownloadStatusByVid((prevStatus) => {
+                        const nextStatus = { ...prevStatus };
+                        delete nextStatus[versionId];
+                        return nextStatus;
+                    });
+                }
             } else {
                 next.add(versionId);
 
-                if (entry) {
+                if (canCurrentModeWriteCart && entry) {
                     setCartEntryByVid((prevCart) => ({
                         ...prevCart,
                         [cartEntryKey(versionId)]: entry,
                     }));
-                }
 
-                setCartDownloadStatusByVid((prevStatus) => {
-                    const nextStatus = { ...prevStatus };
-                    delete nextStatus[versionId];
-                    return nextStatus;
-                });
+                    setCartDownloadStatusByVid((prevStatus) => {
+                        const nextStatus = { ...prevStatus };
+                        delete nextStatus[versionId];
+                        return nextStatus;
+                    });
+                }
             }
 
             return next;
         });
-    }, [canChangeSelection, visibleEntries, cartEntryKey]);
+    }, [
+        canChangeSelection,
+        visibleEntries,
+        cartEntryKey,
+        canCurrentModeWriteCart,
+    ]);
 
     const handleRefreshList = async () => {
         if (isLoading) return;
@@ -3149,7 +3260,7 @@ const OfflineWindow: React.FC = () => {
         const sourceEntries = displayMode === "aiCard" ? aiEntries : filteredDownloadList;
 
         const selectedEntries = sourceEntries.filter((e) =>
-            selectedIds.has(e.civitaiVersionID)
+            selectedIds.has(String(e.civitaiVersionID ?? "").trim())
         );
 
         // Build payload:
@@ -3352,7 +3463,7 @@ const OfflineWindow: React.FC = () => {
         if (displayMode !== "earlyAccessCard") return;
 
         const selected = earlyAccessEntries.filter((e) =>
-            selectedIds.has(e.civitaiVersionID)
+            selectedIds.has(String(e.civitaiVersionID ?? "").trim())
         );
 
         const targets = selected.filter(
@@ -3463,8 +3574,8 @@ const OfflineWindow: React.FC = () => {
             return;
         }
 
-        // Replace selection with the same first N each time until you refresh them
-        replaceCartSelection(firstN);
+        // Early Access selection should not write into cart.
+        replaceSelectionOnly(firstN);
     };
 
     useEffect(() => {
@@ -3738,9 +3849,8 @@ const OfflineWindow: React.FC = () => {
         try {
             // Use what the user is currently seeing (respects filters & server paging)
             const selectedEntries = visibleEntries.filter(entry =>
-                selectedIds.has(entry.civitaiVersionID)
+                selectedIds.has(String(entry.civitaiVersionID ?? "").trim())
             );
-
             for (const entry of selectedEntries) {
                 await fetchRemoveOfflineDownloadFileIntoOfflineDownloadList(
                     {
@@ -3864,7 +3974,7 @@ const OfflineWindow: React.FC = () => {
     };
 
     const handleSelectFirstN = () => {
-        if (!canChangeSelection) return;
+        if (!canUseSelectFirstNormal) return;
 
         const failedIds = new Set(
             failedEntries.map(e => `${e.civitaiVersionID}|${e.civitaiModelID}`)
@@ -3872,19 +3982,10 @@ const OfflineWindow: React.FC = () => {
 
         const eligible = visibleEntries.filter((entry) => {
             const key = `${entry.civitaiVersionID}|${entry.civitaiModelID}`;
+            const isPending = isPendingEntry(entry);
+            const isEarlyActive = isEarlyAccessActive(entry);
 
-            // paged modes: strict rules
-            if (isPagedMode) {
-                const isPending = isPendingEntry(entry);          // your helper
-                const isEarlyActive = isEarlyAccessActive(entry); // your helper
-                return !isPending && !isEarlyActive && !failedIds.has(key);
-            }
-
-            // non-paged modes: no pending/early restrictions
-            if (displayMode === "failedCard") return true; // don't exclude itself
-
-            // optional: keep excluding failed items in other modes
-            return !failedIds.has(key);
+            return !isPending && !isEarlyActive && !failedIds.has(key);
         });
 
         const firstN = eligible.slice(0, selectCount);
@@ -3892,14 +3993,12 @@ const OfflineWindow: React.FC = () => {
     };
 
     const handleSelectFirstN_Modify = () => {
-        if (!canChangeSelection) return;
+        if (!canUseSelectFirstModify) return;
 
         const n = Math.max(0, Number(selectCount) || 0);
-
-        // ✅ no restrictions: just take first N of what’s visible right now
         const firstN = visibleEntries.slice(0, n);
 
-        replaceCartSelection(firstN);
+        replaceSelectionOnly(firstN);
     };
 
 
@@ -3934,7 +4033,7 @@ const OfflineWindow: React.FC = () => {
         if (!canChangeSelection) return;
 
         const visibleIds = visibleEntries
-            .map((e) => String(e.civitaiVersionID ?? ""))
+            .map((e) => String(e.civitaiVersionID ?? "").trim())
             .filter(Boolean);
 
         if (visibleIds.length === 0) return;
@@ -3946,23 +4045,27 @@ const OfflineWindow: React.FC = () => {
                 return next;
             });
 
-            setCartEntryByVid((prevCart) => {
-                const nextCart = { ...prevCart };
-                visibleIds.forEach((id) => {
-                    delete nextCart[cartEntryKey(id)];
-                });
-                return nextCart;
-            });
+            if (canCurrentModeWriteCart) {
+                setCartEntryByVid((prevCart) => {
+                    const nextCart = { ...prevCart };
 
-            setCartDownloadStatusByVid((prevStatus) => {
-                const nextStatus = { ...prevStatus };
+                    visibleIds.forEach((id) => {
+                        delete nextCart[cartEntryKey(id)];
+                    });
 
-                visibleIds.forEach((id) => {
-                    delete nextStatus[id];
+                    return nextCart;
                 });
 
-                return nextStatus;
-            });
+                setCartDownloadStatusByVid((prevStatus) => {
+                    const nextStatus = { ...prevStatus };
+
+                    visibleIds.forEach((id) => {
+                        delete nextStatus[id];
+                    });
+
+                    return nextStatus;
+                });
+            }
 
             return;
         }
@@ -3973,11 +4076,15 @@ const OfflineWindow: React.FC = () => {
             return next;
         });
 
+        if (!canCurrentModeWriteCart) {
+            return;
+        }
+
         setCartEntryByVid((prevCart) => {
             const nextCart = { ...prevCart };
 
             visibleEntries.forEach((entry) => {
-                const versionId = String(entry.civitaiVersionID ?? "");
+                const versionId = String(entry.civitaiVersionID ?? "").trim();
                 if (!versionId) return;
 
                 nextCart[cartEntryKey(versionId)] = entry;
@@ -4764,7 +4871,7 @@ const OfflineWindow: React.FC = () => {
                         </div>
 
 
-                        {(!isModifyMode && displayMode !== 'errorCard' && displayMode !== 'earlyAccessCard' && displayMode !== 'historyTable') && <>
+                        {canUseSelectFirstNormal && <>
                             {/* "Select First N" Button */}
                             <Button
                                 onClick={handleSelectFirstN}
@@ -4773,7 +4880,7 @@ const OfflineWindow: React.FC = () => {
                                     backgroundColor: '#007bff',
                                     color: '#fff',
                                 }}
-                                disabled={isLoading}
+                                disabled={!canUseSelectFirstNormal}
                             >
                                 Select First (Not Pending)
                             </Button>
@@ -4793,7 +4900,7 @@ const OfflineWindow: React.FC = () => {
                                             setSelectCount(newVal);
                                         }
                                     }}
-                                    disabled={isLoading}
+                                    disabled={!canUseSelectFirstNormal}
                                     style={{
                                         width: '100px',
                                         padding: '5px',
@@ -4806,7 +4913,7 @@ const OfflineWindow: React.FC = () => {
                             </div>
                         </>}
 
-                        {(isModifyMode && displayMode !== 'errorCard') && (
+                        {canUseSelectFirstModify && (
                             <>
                                 <Button
                                     onClick={handleSelectFirstN_Modify}
@@ -4815,7 +4922,7 @@ const OfflineWindow: React.FC = () => {
                                         backgroundColor: '#6f42c1', // purple-ish so you can tell it’s Modify-only
                                         color: '#fff',
                                     }}
-                                    disabled={isLoading || !canChangeSelection}
+                                    disabled={!canUseSelectFirstModify}
                                     title="Select first N entries (no restrictions)"
                                 >
                                     Select First (Modify)
@@ -4835,7 +4942,7 @@ const OfflineWindow: React.FC = () => {
                                         onBlur={() => {
                                             setSelectCount((prev) => Math.max(5, Math.floor((Number(prev) || 0) / 5) * 5));
                                         }}
-                                        disabled={isLoading}
+                                        disabled={!canUseSelectFirstModify}
                                         style={{
                                             width: '100px',
                                             padding: '5px',
@@ -5649,7 +5756,7 @@ const OfflineWindow: React.FC = () => {
                         }}
                     >
                         {/* Select All Button */}
-                        {displayMode !== 'historyTable' &&
+                        {canUseSelectAll &&
                             <>
                                 <Button
                                     onClick={handleSelectAll}
@@ -5659,12 +5766,12 @@ const OfflineWindow: React.FC = () => {
                                         backgroundColor: '#007bff',
                                         color: '#fff',
                                         border: 'none',
-                                        cursor: 'pointer',
+                                        cursor: canUseSelectAll ? 'pointer' : 'not-allowed',
                                         display: 'flex',
                                         alignItems: 'center',
                                         gap: '5px',
                                     }}
-                                    disabled={isLoading}
+                                    disabled={!canUseSelectAll}
                                     aria-label={isAllSelected ? 'Deselect All' : 'Select All'}
                                 >
                                     {isAllSelected ? 'Deselect All' : 'Select All'}
@@ -5687,8 +5794,7 @@ const OfflineWindow: React.FC = () => {
                                 >
                                     {(isModifyMode) ? (
                                         <>
-                                            {selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'} selected <FaArrowRight />
-                                            "<span
+                                            {visibleSelectedCount} {visibleSelectedCount === 1 ? 'entry' : 'entries'} selected                                            "<span
                                                 style={{
                                                     display: 'inline-block',
                                                     maxWidth: '100%',
@@ -5702,8 +5808,7 @@ const OfflineWindow: React.FC = () => {
                                         </>
                                     ) : (
                                         <>
-                                            {selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'} selected
-                                        </>
+                                            {visibleSelectedCount} {visibleSelectedCount === 1 ? 'entry' : 'entries'} selected                                        </>
                                     )}
                                 </div>
 
