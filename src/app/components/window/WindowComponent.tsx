@@ -892,7 +892,14 @@ const WindowComponent: React.FC = () => {
     const extractCreatorFromUserModelsUrl = (url: string) => {
         try {
             const u = new URL(url);
-            const match = u.pathname.match(/^\/user\/([^/]+)\/models\/?$/i);
+
+            // Accept both:
+            // https://civitai.com/user/81188
+            // https://civitai.com/user/81188/models
+            // https://civitai.red/user/81188
+            // https://civitai.red/user/81188/models
+            const match = u.pathname.match(/^\/user\/([^/]+)(?:\/models)?\/?$/i);
+
             return match ? decodeURIComponent(match[1]) : "";
         } catch {
             return "";

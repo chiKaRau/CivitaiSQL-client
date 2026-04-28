@@ -5983,7 +5983,7 @@ const OfflineWindow: React.FC = () => {
 
                     {/* Main Content Area */}
                     <div ref={rightInnerRef} style={{ flex: 1, overflowY: 'auto' }}>
-                        {isLoading && offlineDownloadList.length === 0 ? (
+                        {isLoading && uiMode !== "downloading" && visibleEntries.length === 0 ? (
                             <div style={{ color: isDarkMode ? '#fff' : '#000' }}>Loading...</div>
                         ) : (
                             <>
