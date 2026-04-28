@@ -2024,6 +2024,10 @@ const WindowComponent: React.FC = () => {
 
     // A helper to update the tab to the new URL
     const goToUrlInBrowserTab = async (url: string) => {
+        // Store Recent immediately when user chooses Go / Prev / Next.
+        // This way, even if tab update fails or returns early, Recent is still updated.
+        rememberRecentCreatorUrl(url);
+
         try {
             const finalUrl = toRedCreatorUrl(url);
 
@@ -2043,8 +2047,6 @@ const WindowComponent: React.FC = () => {
 
                 await chrome.tabs.update(activeTab.id, { url: finalUrl });
             }
-
-            rememberRecentCreatorUrl(url);
 
             await fetchUpdateCreatorUrlList(url, "checked", true, "N/A", dispatch);
             handleRefreshList();
