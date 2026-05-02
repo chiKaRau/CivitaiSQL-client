@@ -1650,7 +1650,7 @@ const WindowComponent: React.FC = () => {
         {
             headerName: "Model & Version",
             field: "modelVersionDisplay",
-            width: 245,
+            width: 225,
             minWidth: 215,
             wrapText: false,
             autoHeight: false,
@@ -1692,7 +1692,7 @@ const WindowComponent: React.FC = () => {
         {
             headerName: "Image",
             field: "imgSrc",
-            width: 110,
+            width: 95,
             sortable: false,
             resizable: false,
             cellStyle: {
@@ -1727,6 +1727,43 @@ const WindowComponent: React.FC = () => {
             cellEditor: PathAutocompleteEditor,
             cellEditorPopup: true,
             cellEditorParams: () => ({ options: downloadPathOptions })
+        },
+        {
+            headerName: "URL",
+            field: "url",
+            width: 110,
+            minWidth: 100,
+            editable: false,
+            sortable: false,
+            cellStyle: {
+                padding: "5px",
+                textAlign: "center",
+            } as CellStyle,
+            cellRenderer: (params: any) => {
+                const url = String(params.value || "");
+
+                if (!url) {
+                    return <span style={{ opacity: 0.5, color: theme.subText }}>—</span>;
+                }
+
+                return (
+                    <a
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={url}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            color: theme.rowFontColor,
+                            textDecoration: "underline",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                        }}
+                    >
+                        Visit URL
+                    </a>
+                );
+            },
         },
         {
             headerName: "Cat",
