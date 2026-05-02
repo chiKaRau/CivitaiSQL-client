@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { fetchGetTagsList, fetchDeleteDownloadPathCountRecord } from '../api/civitaiSQL_api';
 import { useDispatch } from 'react-redux';
-import { updateDownloadFilePath } from '../store/actions/chromeActions';
 import { getRecentDownloadFilePaths } from '../utils/chromeUtils';
 import { AppTheme } from './window_offline/OfflineWindow.theme';
 import { findBestPrefixMatch, PrefixItem, PrefixTone } from '../utils/ColorUtils';
@@ -15,6 +14,18 @@ interface FilesPathTagsListSelectorProps {
     prefixToneMap: Record<string, PrefixTone>;
     onSelectFullPath: (fullPath: string) => void;
 }
+
+type TagsTabKey = 'count' | 'recentAdded' | 'recentUpdated';
+
+type TagsCacheEntry = {
+    top: any[];
+    recent: any[];
+    updated: any[];
+
+    prefixNameTop: any[];
+    prefixNameRecent: any[];
+    prefixNameUpdated: any[];
+};
 
 const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
     isHandleRefresh,
@@ -30,29 +41,72 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
     const [topTags, setTopTags] = useState<any[]>([]);
     const [recentAddedTags, setRecentAddedTags] = useState<any[]>([]);
     const [recentUpdatedTags, setRecentUpdatedTags] = useState<any[]>([]);
+
+    const [prefixNameTopTags, setPrefixNameTopTags] = useState<any[]>([]);
+    const [prefixNameRecentAddedTags, setPrefixNameRecentAddedTags] = useState<any[]>([]);
+    const [prefixNameRecentUpdatedTags, setPrefixNameRecentUpdatedTags] = useState<any[]>([]);
+
     const [recentLocalTags, setRecentLocalTags] = useState<{ path: string; createdAt: number }[]>([]);
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
+
+    const [activePathTagsTab, setActivePathTagsTab] = useState<TagsTabKey>('count');
+    const [activePrefixNameTagsTab, setActivePrefixNameTagsTab] = useState<TagsTabKey>('count');
 
     const [loading, setLoading] = useState(false);
     const [deletingPath, setDeletingPath] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    const cacheRef = useRef<Record<string, { top: any[]; recent: any[]; updated: any[] }>>({});
+    const cacheRef = useRef<Record<string, TagsCacheEntry>>({});
+
+    const getPrefixNameFromPath = (prefix: string) => {
+        if (!prefix?.trim()) return '';
+
+        let p = prefix.trim().replace(/\\/g, '/');
+
+        while (p.endsWith('/') && p.length > 1) {
+            p = p.slice(0, -1);
+        }
+
+        const lastSlash = p.lastIndexOf('/');
+        return lastSlash >= 0 ? p.slice(lastSlash + 1) : p;
+    };
 
     const applyResultToState = (result: any) => {
         const nextTop = result?.topTags || [];
         const nextRecentAdded = result?.recentAddedTags || [];
         const nextRecentUpdated = result?.recentUpdatedTags || [];
 
+        const nextPrefixNameTop = result?.prefixNameTopTags || [];
+        const nextPrefixNameRecentAdded = result?.prefixNameRecentAddedTags || [];
+        const nextPrefixNameRecentUpdated = result?.prefixNameRecentUpdatedTags || [];
+
         cacheRef.current[selectedPrefix] = {
             top: nextTop,
             recent: nextRecentAdded,
-            updated: nextRecentUpdated
+            updated: nextRecentUpdated,
+
+            prefixNameTop: nextPrefixNameTop,
+            prefixNameRecent: nextPrefixNameRecentAdded,
+            prefixNameUpdated: nextPrefixNameRecentUpdated,
         };
 
         setTopTags(nextTop);
         setRecentAddedTags(nextRecentAdded);
         setRecentUpdatedTags(nextRecentUpdated);
+
+        setPrefixNameTopTags(nextPrefixNameTop);
+        setPrefixNameRecentAddedTags(nextPrefixNameRecentAdded);
+        setPrefixNameRecentUpdatedTags(nextPrefixNameRecentUpdated);
+    };
+
+    const clearAllDbTags = () => {
+        setTopTags([]);
+        setRecentAddedTags([]);
+        setRecentUpdatedTags([]);
+
+        setPrefixNameTopTags([]);
+        setPrefixNameRecentAddedTags([]);
+        setPrefixNameRecentUpdatedTags([]);
     };
 
     const fetchAndSet = async () => {
@@ -78,13 +132,12 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
             }
 
             if (!selectedPrefix) {
-                setTopTags([]);
-                setRecentAddedTags([]);
-                setRecentUpdatedTags([]);
+                clearAllDbTags();
 
                 if (!cancelled && isHandleRefresh) {
                     setIsHandleRefresh(false);
                 }
+
                 return;
             }
 
@@ -95,11 +148,16 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                     setTopTags(cached.top);
                     setRecentAddedTags(cached.recent);
                     setRecentUpdatedTags(cached.updated);
+
+                    setPrefixNameTopTags(cached.prefixNameTop);
+                    setPrefixNameRecentAddedTags(cached.prefixNameRecent);
+                    setPrefixNameRecentUpdatedTags(cached.prefixNameUpdated);
                 }
 
                 if (!cancelled && isHandleRefresh) {
                     setIsHandleRefresh(false);
                 }
+
                 return;
             }
 
@@ -175,7 +233,6 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
             delete cacheRef.current[selectedPrefix];
             setSelectedTag(prev => (prev === downloadFilePath ? null : prev));
 
-            // remove from the local recent list immediately
             setRecentLocalTags(prev => prev.filter(item => item.path !== downloadFilePath));
 
             setLoading(true);
@@ -189,6 +246,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
     };
 
     const listBoxStyle: React.CSSProperties = {
+        minHeight: '220px',
         maxHeight: '220px',
         overflowY: 'auto',
         border: `1px solid ${theme.panelBorder}`,
@@ -200,6 +258,7 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
     };
 
     const recentListBoxStyle: React.CSSProperties = {
+        minHeight: '260px',
         maxHeight: '260px',
         overflowY: 'auto',
         border: `1px solid ${theme.panelBorder}`,
@@ -210,70 +269,211 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
         color: theme.panelText,
     };
 
-    const renderList = (title: string, tags: any[], numberLabel: (index: number) => string) => {
+    const renderList = (
+        title: string,
+        tags: any[],
+        numberLabel: (index: number) => string,
+        headerExtra?: React.ReactNode
+    ) => {
         return (
             <>
                 <h6 style={{ color: theme.panelText }}>{title}</h6>
+
+                {headerExtra}
+
                 <div style={listBoxStyle}>
                     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                        {tags.map((tag, index) => {
-                            const value = tag?.string_value ?? '';
-                            const isSelected = selectedTag === value;
-                            const isDeletingThis = deletingPath === value;
+                        {tags.length === 0 ? (
+                            <li
+                                style={{
+                                    padding: '8px 6px',
+                                    color: theme.subText,
+                                    fontStyle: 'italic',
+                                }}
+                            >
+                                No tags found.
+                            </li>
+                        ) : (
+                            tags.map((tag, index) => {
+                                const value = tag?.string_value ?? '';
+                                const isSelected = selectedTag === value;
+                                const isDeletingThis = deletingPath === value;
 
-                            return (
-                                <li
-                                    key={`${value}-${index}`}
-                                    onClick={() => handleTagClick(value)}
-                                    style={{
-                                        margin: '5px 0',
-                                        cursor: 'pointer',
-                                        backgroundColor: isSelected ? theme.evenRowBackgroundColor : theme.panelBackground,
-                                        color: theme.panelText,
-                                        fontWeight: isSelected ? 'bold' : 'normal',
-                                        padding: '4px 6px',
-                                        borderRadius: 6,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        gap: 8,
-                                        border: isSelected
-                                            ? `1px solid ${theme.buttonBorder}`
-                                            : `1px solid ${theme.panelBorder}`,
-                                    }}
-                                >
-                                    <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', minWidth: 0, flex: 1 }}>
-                                        <span style={{ whiteSpace: 'nowrap', opacity: 0.8 }}>{numberLabel(index)}#</span>
-                                        {renderColoredPath(value)}
-                                    </div>
-
-                                    <button
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleDelete(value);
-                                        }}
-                                        disabled={!!deletingPath || isDeletingThis}
-                                        title="Delete"
+                                return (
+                                    <li
+                                        key={`${value}-${index}`}
+                                        onClick={() => handleTagClick(value)}
                                         style={{
-                                            padding: '2px 8px',
+                                            margin: '5px 0',
+                                            cursor: 'pointer',
+                                            backgroundColor: isSelected ? theme.evenRowBackgroundColor : theme.panelBackground,
+                                            color: theme.panelText,
+                                            fontWeight: isSelected ? 'bold' : 'normal',
+                                            padding: '4px 6px',
                                             borderRadius: 6,
-                                            border: `1px solid ${theme.buttonBorder}`,
-                                            background: theme.buttonBackground,
-                                            color: theme.buttonText,
-                                            cursor: !!deletingPath ? 'not-allowed' : 'pointer',
-                                            opacity: isDeletingThis ? 0.7 : 1,
-                                            boxShadow: theme.buttonShadow,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            gap: 8,
+                                            border: isSelected
+                                                ? `1px solid ${theme.buttonBorder}`
+                                                : `1px solid ${theme.panelBorder}`,
                                         }}
                                     >
-                                        {isDeletingThis ? 'Deleting…' : 'Delete'}
-                                    </button>
-                                </li>
-                            );
-                        })}
+                                        <div
+                                            style={{
+                                                display: 'flex',
+                                                gap: 8,
+                                                alignItems: 'baseline',
+                                                minWidth: 0,
+                                                flex: 1,
+                                            }}
+                                        >
+                                            <span style={{ whiteSpace: 'nowrap', opacity: 0.8 }}>
+                                                {numberLabel(index)}#
+                                            </span>
+                                            {renderColoredPath(value)}
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDelete(value);
+                                            }}
+                                            disabled={!!deletingPath || isDeletingThis}
+                                            title="Delete"
+                                            style={{
+                                                padding: '2px 8px',
+                                                borderRadius: 6,
+                                                border: `1px solid ${theme.buttonBorder}`,
+                                                background: theme.buttonBackground,
+                                                color: theme.buttonText,
+                                                cursor: !!deletingPath ? 'not-allowed' : 'pointer',
+                                                opacity: isDeletingThis ? 0.7 : 1,
+                                                boxShadow: theme.buttonShadow,
+                                            }}
+                                        >
+                                            {isDeletingThis ? 'Deleting…' : 'Delete'}
+                                        </button>
+                                    </li>
+                                );
+                            })
+                        )}
                     </ul>
                 </div>
             </>
+        );
+    };
+
+    const renderTabbedList = (
+        activeTabKey: TagsTabKey,
+        setActiveTabKey: (key: TagsTabKey) => void,
+        tabs: {
+            key: TagsTabKey;
+            label: string;
+            title: string;
+            tags: any[];
+        }[]
+    ) => {
+        const activeTab = tabs.find(tab => tab.key === activeTabKey) ?? tabs[0];
+
+        const tabButtons = (
+            <div
+                role="tablist"
+                style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 6,
+                    marginBottom: 8,
+                }}
+            >
+                {tabs.map(tab => {
+                    const active = tab.key === activeTabKey;
+
+                    return (
+                        <button
+                            key={tab.key}
+                            type="button"
+                            role="tab"
+                            aria-selected={active}
+                            onClick={() => setActiveTabKey(tab.key)}
+                            style={{
+                                padding: '4px 10px',
+                                borderRadius: 999,
+                                border: active
+                                    ? `1px solid ${theme.buttonBorder}`
+                                    : `1px solid ${theme.panelBorder}`,
+                                background: active ? theme.buttonBackground : theme.panelBackground,
+                                color: active ? theme.buttonText : theme.panelText,
+                                cursor: 'pointer',
+                                fontWeight: active ? 700 : 500,
+                                boxShadow: active ? theme.buttonShadow : 'none',
+                            }}
+                        >
+                            {tab.label}
+                        </button>
+                    );
+                })}
+            </div>
+        );
+
+        return renderList(activeTab.title, activeTab.tags, (i) => String(i + 1), tabButtons);
+    };
+
+    const renderDownloadPathTabbedList = () => {
+        return renderTabbedList(
+            activePathTagsTab,
+            setActivePathTagsTab,
+            [
+                {
+                    key: 'count',
+                    label: 'Count',
+                    title: 'Top 10 Tags by Full Prefix',
+                    tags: topTags,
+                },
+                {
+                    key: 'recentAdded',
+                    label: 'Recent Added',
+                    title: 'Top 10 Recent Added by Full Prefix',
+                    tags: recentAddedTags,
+                },
+                {
+                    key: 'recentUpdated',
+                    label: 'Recent Updated',
+                    title: 'Top 10 Recent Updated by Full Prefix',
+                    tags: recentUpdatedTags,
+                },
+            ]
+        );
+    };
+
+    const renderPrefixNameTabbedList = () => {
+        const prefixName = getPrefixNameFromPath(selectedPrefix);
+
+        return renderTabbedList(
+            activePrefixNameTagsTab,
+            setActivePrefixNameTagsTab,
+            [
+                {
+                    key: 'count',
+                    label: 'Count',
+                    title: `Top 10 Tags by Prefix Name${prefixName ? ` (${prefixName})` : ''}`,
+                    tags: prefixNameTopTags,
+                },
+                {
+                    key: 'recentAdded',
+                    label: 'Recent Added',
+                    title: `Top 10 Recent Added by Prefix Name${prefixName ? ` (${prefixName})` : ''}`,
+                    tags: prefixNameRecentAddedTags,
+                },
+                {
+                    key: 'recentUpdated',
+                    label: 'Recent Updated',
+                    title: `Top 10 Recent Updated by Prefix Name${prefixName ? ` (${prefixName})` : ''}`,
+                    tags: prefixNameRecentUpdatedTags,
+                },
+            ]
         );
     };
 
@@ -283,71 +483,83 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
                 <h6 style={{ color: theme.panelText }}>Recently Added 25 Tags (Local)</h6>
                 <div style={recentListBoxStyle}>
                     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                        {recentLocalTags.map((item, index) => {
-                            const value = item?.path ?? '';
-                            const isSelected = selectedTag === value;
-                            const isDeletingThis = deletingPath === value;
+                        {recentLocalTags.length === 0 ? (
+                            <li
+                                style={{
+                                    padding: '8px 6px',
+                                    color: theme.subText,
+                                    fontStyle: 'italic',
+                                }}
+                            >
+                                No local recent tags found.
+                            </li>
+                        ) : (
+                            recentLocalTags.map((item, index) => {
+                                const value = item?.path ?? '';
+                                const isSelected = selectedTag === value;
+                                const isDeletingThis = deletingPath === value;
 
-                            return (
-                                <li
-                                    key={`${value}-${index}`}
-                                    onClick={() => handleTagClick(value)}
-                                    style={{
-                                        margin: '5px 0',
-                                        cursor: 'pointer',
-                                        backgroundColor: isSelected ? theme.evenRowBackgroundColor : theme.panelBackground,
-                                        color: theme.panelText,
-                                        fontWeight: isSelected ? 'bold' : 'normal',
-                                        padding: '4px 6px',
-                                        borderRadius: 6,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        gap: 8,
-                                        border: isSelected
-                                            ? `1px solid ${theme.buttonBorder}`
-                                            : `1px solid ${theme.panelBorder}`,
-                                    }}
-                                >
-                                    <div
+                                return (
+                                    <li
+                                        key={`${value}-${index}`}
+                                        onClick={() => handleTagClick(value)}
                                         style={{
-                                            display: 'flex',
-                                            gap: 8,
-                                            alignItems: 'baseline',
-                                            minWidth: 0,
-                                            flex: 1
-                                        }}
-                                    >
-                                        <span style={{ whiteSpace: 'nowrap', opacity: 0.8 }}>
-                                            {index + 1}#
-                                        </span>
-                                        {renderColoredPath(value)}
-                                    </div>
-
-                                    <button
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleDelete(value);
-                                        }}
-                                        disabled={!!deletingPath || isDeletingThis}
-                                        title="Delete"
-                                        style={{
-                                            padding: '2px 8px',
+                                            margin: '5px 0',
+                                            cursor: 'pointer',
+                                            backgroundColor: isSelected ? theme.evenRowBackgroundColor : theme.panelBackground,
+                                            color: theme.panelText,
+                                            fontWeight: isSelected ? 'bold' : 'normal',
+                                            padding: '4px 6px',
                                             borderRadius: 6,
-                                            border: `1px solid ${theme.buttonBorder}`,
-                                            background: theme.buttonBackground,
-                                            color: theme.buttonText,
-                                            cursor: !!deletingPath ? 'not-allowed' : 'pointer',
-                                            opacity: isDeletingThis ? 0.7 : 1,
-                                            boxShadow: theme.buttonShadow,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            gap: 8,
+                                            border: isSelected
+                                                ? `1px solid ${theme.buttonBorder}`
+                                                : `1px solid ${theme.panelBorder}`,
                                         }}
                                     >
-                                        {isDeletingThis ? 'Deleting…' : 'Delete'}
-                                    </button>
-                                </li>
-                            );
-                        })}
+                                        <div
+                                            style={{
+                                                display: 'flex',
+                                                gap: 8,
+                                                alignItems: 'baseline',
+                                                minWidth: 0,
+                                                flex: 1
+                                            }}
+                                        >
+                                            <span style={{ whiteSpace: 'nowrap', opacity: 0.8 }}>
+                                                {index + 1}#
+                                            </span>
+                                            {renderColoredPath(value)}
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDelete(value);
+                                            }}
+                                            disabled={!!deletingPath || isDeletingThis}
+                                            title="Delete"
+                                            style={{
+                                                padding: '2px 8px',
+                                                borderRadius: 6,
+                                                border: `1px solid ${theme.buttonBorder}`,
+                                                background: theme.buttonBackground,
+                                                color: theme.buttonText,
+                                                cursor: !!deletingPath ? 'not-allowed' : 'pointer',
+                                                opacity: isDeletingThis ? 0.7 : 1,
+                                                boxShadow: theme.buttonShadow,
+                                            }}
+                                        >
+                                            {isDeletingThis ? 'Deleting…' : 'Delete'}
+                                        </button>
+                                    </li>
+                                );
+                            })
+                        )}
                     </ul>
                 </div>
             </>
@@ -359,9 +571,9 @@ const FilesPathTagsListSelector: React.FC<FilesPathTagsListSelectorProps> = ({
             {loading && <div style={{ opacity: 0.7, color: theme.subText }}>Loading…</div>}
             {error && <div style={{ color: theme.panelText }}>{error}</div>}
 
-            {renderList('Top 10 Tags by Count', topTags, (i) => String(i + 1))}
+            {renderDownloadPathTabbedList()}
             {renderRecentLocalList()}
-            {renderList('Top 10 Recent Added Tags', recentAddedTags, (i) => String(i + 1))}
+            {renderPrefixNameTabbedList()}
         </div>
     );
 };

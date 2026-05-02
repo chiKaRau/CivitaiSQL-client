@@ -1,5 +1,5 @@
 // QuickModeControls.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Collapse } from 'react-bootstrap';
 import { AppTheme } from './window_offline/OfflineWindow.theme';
 
@@ -33,6 +33,26 @@ export const QuickModeControls: React.FC<QuickModeControlsProps> = ({
     const [clipboardSuggestion, setClipboardSuggestion] = useState<string>('');
     const [showClipboardSuggestion, setShowClipboardSuggestion] = useState<boolean>(false);
 
+    // Used so clicking a suggestion can update suffix first,
+    // then apply after parent state has refreshed.
+    const pendingApplySuffixRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        const pendingSuffix = pendingApplySuffixRef.current;
+
+        if (!pendingSuffix) {
+            return;
+        }
+
+        // Wait until parent suffixInput has actually become the clicked suggestion.
+        if (suffixInput !== pendingSuffix) {
+            return;
+        }
+
+        pendingApplySuffixRef.current = null;
+        onApply();
+    }, [suffixInput, onApply]);
+
     const handleReadClipboardForSuggestion = async () => {
         try {
             if (!navigator.clipboard?.readText) {
@@ -54,11 +74,14 @@ export const QuickModeControls: React.FC<QuickModeControlsProps> = ({
     };
 
     const handleUseClipboardSuggestion = () => {
-        if (!clipboardSuggestion.trim()) {
+        const cleanedSuggestion = cleanSuffixInput(clipboardSuggestion.trim());
+
+        if (!cleanedSuggestion) {
             return;
         }
 
-        onSuffixChange(clipboardSuggestion);
+        pendingApplySuffixRef.current = cleanedSuggestion;
+        onSuffixChange(cleanedSuggestion);
         setShowClipboardSuggestion(false);
     };
 

@@ -514,13 +514,12 @@ export const fetchAddPendingRemoveTag = async (pendingRemoveTag: string, dispatc
         dispatch(setError({ hasError: true, errorMessage: error.message }));
     }
 }
-
 export const fetchGetTagsList = async (dispatch: any, selectedPrefix: string) => {
     try {
         dispatch(clearError());
 
-        // New endpoint (match your controller)
         let url = `${config.domain}/api/get_download_file_path_count_list`;
+
         if (selectedPrefix) {
             const encodedPrefix = encodeURIComponent(selectedPrefix);
             url += `?prefix=${encodedPrefix}`;
@@ -535,16 +534,37 @@ export const fetchGetTagsList = async (dispatch: any, selectedPrefix: string) =>
             const recentAddedTags = payload.recentAddedTags ?? [];
             const recentUpdatedTags = payload.recentUpdatedTags ?? [];
 
-            return { topTags, recentAddedTags, recentUpdatedTags };
-        } else {
-            throw new Error("Retrieving Download Path Counts from Database failed.");
+            const prefixNameTopTags = payload.prefixNameTopTags ?? [];
+            const prefixNameRecentAddedTags = payload.prefixNameRecentAddedTags ?? [];
+            const prefixNameRecentUpdatedTags = payload.prefixNameRecentUpdatedTags ?? [];
+
+            return {
+                topTags,
+                recentAddedTags,
+                recentUpdatedTags,
+
+                prefixNameTopTags,
+                prefixNameRecentAddedTags,
+                prefixNameRecentUpdatedTags,
+            };
         }
+
+        throw new Error("Retrieving Download Path Counts from Database failed.");
     } catch (error: any) {
         console.error("Error during Download Path Counts retrieval:", error.message);
         dispatch(setError({ hasError: true, errorMessage: error.message }));
+
+        return {
+            topTags: [],
+            recentAddedTags: [],
+            recentUpdatedTags: [],
+
+            prefixNameTopTags: [],
+            prefixNameRecentAddedTags: [],
+            prefixNameRecentUpdatedTags: [],
+        };
     }
 };
-
 
 export const fetchGetCategoryPrefixesList = async (dispatch: any) => {
     try {

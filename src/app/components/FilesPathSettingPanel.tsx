@@ -244,6 +244,29 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
         return buildPrefixToneMap(prefixsList, theme, effectiveIsDarkMode);
     }, [prefixsList, theme, effectiveIsDarkMode]);
 
+    const isDefaultPrefix = (item: PrefixItem) => {
+        const name = item.prefixName?.trim().toLowerCase() ?? '';
+        const path = item.downloadFilePath?.trim().replace(/\\/g, '/').toLowerCase() ?? '';
+
+        return name === 'default' || path.endsWith('/default/');
+    };
+
+    const orderedPrefixsList = useMemo(() => {
+        return prefixsList
+            .map((item, index) => ({ item, index }))
+            .sort((a, b) => {
+                const aIsDefault = isDefaultPrefix(a.item);
+                const bIsDefault = isDefaultPrefix(b.item);
+
+                if (aIsDefault !== bIsDefault) {
+                    return aIsDefault ? 1 : -1;
+                }
+
+                return a.index - b.index;
+            })
+            .map(({ item }) => item);
+    }, [prefixsList]);
+
     const panelStyle: React.CSSProperties = {
         border: `1px solid ${theme.panelBorder}`,
         borderRadius: '14px',
@@ -316,7 +339,7 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
                         <center style={sectionTitleStyle}>Prefix Suggestions</center>
                         <hr style={{ borderColor: theme.panelBorder, opacity: 1 }} />
 
-                        {prefixsList.map((el) => {
+                        {orderedPrefixsList.map((el) => {
                             const tone = prefixToneMap[el.downloadFilePath];
                             const isSelected = selectedPrefix === el.downloadFilePath;
 
@@ -381,7 +404,7 @@ const FilesPathSettingPanel: React.FC<FilesPathSettingPanelProps> = ({
                                 Select/Deselect All
                             </label>
 
-                            {prefixsList.map((item) => (
+                            {orderedPrefixsList.map((item) => (
                                 <label key={item.id} style={{ marginRight: 10, color: theme.panelText }}>
                                     <input
                                         type="checkbox"
