@@ -21,10 +21,19 @@ import ModelVersionFileExistsBadge from '../../ModelVersionFileExistsBadge';
 import CivitaiUrlLinks from '../../CivitaiUrlLinks';
 import CreatorLinks from '../../CreatorLinks';
 import CivitaiApiLinks from '../../CivitaiApiLinks';
+import { useDispatch } from 'react-redux';
+import { fetchAddRecordToDatabase } from '../../../api/civitaiSQL_api';
 
 type DownloadMethod = 'server' | 'browser';
 
 type CartDownloadStatus = "queued" | "downloading" | "success" | "fail";
+
+type AddRecordStatus = {
+    phase: 'idle' | 'adding' | 'success' | 'fail';
+    text: string;
+    msg?: string;
+    running?: boolean;
+};
 
 interface BigCardModeProps {
     filteredDownloadList: OfflineDownloadEntry[];
@@ -136,14 +145,103 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
     setEditingVersionId,
     handleVersionIdSave,
 }) => {
+    const dispatch = useDispatch();
+
     const [errorDownloadMethod, setErrorDownloadMethod] = React.useState<'server' | 'browser'>('browser');
     const [editingVersionValue, setEditingVersionValue] = React.useState("");
+
+    const [addRecordStatusByVid, setAddRecordStatusByVid] = React.useState<Record<string, AddRecordStatus>>({});
 
     const handleCopyToClipboard = async (text: string) => {
         try {
             await navigator.clipboard.writeText(text);
         } catch (err) {
             console.error("Failed to copy to clipboard:", err);
+        }
+    };
+
+    const handleAddRecordFromError = async (entry: OfflineDownloadEntry) => {
+        const vid = String(entry.civitaiVersionID ?? '').trim();
+        if (!vid) return;
+
+        const currentStatus = addRecordStatusByVid[vid];
+        if (currentStatus?.running) return;
+
+        const setStatus = (patch: Partial<AddRecordStatus>) => {
+            setAddRecordStatusByVid((prev) => ({
+                ...prev,
+                [vid]: {
+                    ...(prev[vid] || { phase: 'idle', text: '' }),
+                    ...patch,
+                },
+            }));
+        };
+
+        const selectedCategory = String(entry.selectedCategory ?? '').trim();
+        const downloadFilePath = String(entry.downloadFilePath ?? '').trim();
+
+        const civitaiUrl = String(
+            (entry as any).civitaiUrl ||
+            `https://civitai.com/models/${entry.civitaiModelID}?modelVersionId=${entry.civitaiVersionID}`
+        ).trim();
+
+        if (!selectedCategory) {
+            setStatus({
+                phase: 'fail',
+                text: 'Add record failed.',
+                msg: 'selectedCategory is empty.',
+                running: false,
+            });
+            return;
+        }
+
+        if (!downloadFilePath || downloadFilePath === 'N/A') {
+            setStatus({
+                phase: 'fail',
+                text: 'Add record failed.',
+                msg: 'downloadFilePath is empty.',
+                running: false,
+            });
+            return;
+        }
+
+        try {
+            setStatus({
+                phase: 'adding',
+                text: 'Adding record...',
+                msg: '',
+                running: true,
+            });
+
+            const isAddRecordSuccessful = await fetchAddRecordToDatabase(
+                selectedCategory,
+                civitaiUrl,
+                downloadFilePath,
+                dispatch
+            );
+
+            if (isAddRecordSuccessful) {
+                setStatus({
+                    phase: 'success',
+                    text: 'Add record success.',
+                    msg: '',
+                    running: false,
+                });
+            } else {
+                setStatus({
+                    phase: 'fail',
+                    text: 'Add record failed.',
+                    msg: 'fetchAddRecordToDatabase returned false.',
+                    running: false,
+                });
+            }
+        } catch (err: any) {
+            setStatus({
+                phase: 'fail',
+                text: 'Add record failed.',
+                msg: err?.response?.data?.message || err?.message || 'Unknown error',
+                running: false,
+            });
         }
     };
 
@@ -376,6 +474,11 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                     const badgeVersionId = String(
                         entry.civitaiVersionID ?? entry.modelVersionObject?.id ?? ""
                     );
+
+                    const addRecordStatus = addRecordStatusByVid[String(entry.civitaiVersionID ?? '')];
+                    const addRecordRunning = Boolean(addRecordStatus?.running);
+                    const isAddRecordFailedError =
+                        /Add record failed for\s+\d+_\d+/i.test(String(entry.errorMessage ?? ''));
 
                     return (
                         <Card
@@ -996,6 +1099,7 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                                     backgroundColor: isDarkMode ? '#1f1111' : '#fff5f5',
                                                     overflow: 'hidden',
                                                 }}
+                                                onClick={(e) => e.stopPropagation()}
                                             >
                                                 <summary
                                                     style={{
@@ -1030,6 +1134,61 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                                 >
                                                     {entry.errorMessage}
                                                 </pre>
+
+                                                {isAddRecordFailedError && (
+                                                    <div
+                                                        style={{
+                                                            padding: '8px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'flex-end',
+                                                            gap: 8,
+                                                            borderTop: isDarkMode
+                                                                ? '1px solid rgba(248,113,113,0.25)'
+                                                                : '1px solid rgba(220,38,38,0.2)',
+                                                        }}
+                                                    >
+                                                        {addRecordStatus?.text && (
+                                                            <span
+                                                                title={addRecordStatus.msg || addRecordStatus.text}
+                                                                style={{
+                                                                    fontSize: 12,
+                                                                    color:
+                                                                        addRecordStatus.phase === 'success'
+                                                                            ? (isDarkMode ? '#86efac' : '#166534')
+                                                                            : addRecordStatus.phase === 'fail'
+                                                                                ? (isDarkMode ? '#fca5a5' : '#991b1b')
+                                                                                : (isDarkMode ? '#fde68a' : '#92400e'),
+                                                                    maxWidth: 220,
+                                                                    overflow: 'hidden',
+                                                                    textOverflow: 'ellipsis',
+                                                                    whiteSpace: 'nowrap',
+                                                                }}
+                                                            >
+                                                                {addRecordStatus.text}
+                                                            </span>
+                                                        )}
+
+                                                        <Button
+                                                            size="sm"
+                                                            variant="warning"
+                                                            disabled={isLoading || addRecordRunning}
+                                                            onClick={async (e) => {
+                                                                e.stopPropagation();
+                                                                await handleAddRecordFromError(entry);
+                                                            }}
+                                                        >
+                                                            {addRecordRunning ? (
+                                                                <>
+                                                                    <Spinner animation="border" size="sm" style={{ marginRight: 6 }} />
+                                                                    Adding...
+                                                                </>
+                                                            ) : (
+                                                                'Add Record'
+                                                            )}
+                                                        </Button>
+                                                    </div>
+                                                )}
                                             </details>
                                         )}
 
