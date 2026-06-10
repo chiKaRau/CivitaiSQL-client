@@ -1711,6 +1711,7 @@ function addCreatorButton(card: HTMLElement) {
   }
 
   const creatorElement =
+    card.querySelector('[class*="UserAvatarSimple"][class*="username"]') ||
     card.querySelector('.UserAvatarSimple_username__1HunV') ||
     Array.from(card.querySelectorAll('span, p')).find((el) =>
       (el.textContent || '').trim().startsWith('by ')
@@ -1744,6 +1745,8 @@ function addCreatorButton(card: HTMLElement) {
   });
 
   const footer =
+    card.querySelector('[class*="AspectRatioCard"][class*="footer"]') ||
+    card.querySelector('[class*="AspectRatioImageCard"][class*="footer"]') ||
     card.querySelector('.AspectRatioCard_footer__XmvNR') ||
     card.querySelector('.AspectRatioImageCard_footer__FOU7a') ||
     card.querySelector('[class*="AspectRatioCard_footer__"]') ||
