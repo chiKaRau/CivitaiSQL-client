@@ -38,52 +38,20 @@ type QuickFilter =
 const GrouppingWindow: React.FC = () => {
 
     const groupingPortRef = React.useRef<chrome.runtime.Port | null>(null);
+    const connectedTabIdRef = React.useRef<number | null>(null);
+    const lastTabUrlRef = React.useRef<string>("");
 
     const [items, setItems] = useState<GroupingModelItem[]>([]);
     const [searchText, setSearchText] = useState("");
     const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
 
-    const loadGroupingModels = () => {
-        chrome.storage.local.get("originalTabId", (result) => {
-            if (!result.originalTabId) return;
+    const connectGroupingWindowToTab = React.useCallback((tabId: number) => {
+        if (!tabId) return;
 
+        // Already connected to this tab
+        if (connectedTabIdRef.current === tabId && groupingPortRef.current) {
             chrome.tabs.sendMessage(
-                result.originalTabId,
-                { action: "activate-grouping-mode" },
-                (response) => {
-                    if (chrome.runtime.lastError) {
-                        console.warn(chrome.runtime.lastError.message);
-                        return;
-                    }
-
-                    setItems(Array.isArray(response?.items) ? response.items : []);
-                }
-            );
-        });
-    };
-
-    useEffect(() => {
-        let port: chrome.runtime.Port | null = null;
-
-        const listener = (message: any) => {
-            if (message.action === "grouping-models-updated") {
-                setItems(Array.isArray(message.items) ? message.items : []);
-            }
-        };
-
-        chrome.runtime.onMessage.addListener(listener);
-
-        chrome.storage.local.get("originalTabId", (result) => {
-            if (!result.originalTabId) return;
-
-            port = chrome.tabs.connect(result.originalTabId, {
-                name: "grouping-window",
-            });
-
-            groupingPortRef.current = port;
-
-            chrome.tabs.sendMessage(
-                result.originalTabId,
+                tabId,
                 { action: "get-grouping-models" },
                 (response) => {
                     if (chrome.runtime.lastError) {
@@ -94,16 +62,47 @@ const GrouppingWindow: React.FC = () => {
                     setItems(Array.isArray(response?.items) ? response.items : []);
                 }
             );
-        });
 
-        return () => {
-            chrome.runtime.onMessage.removeListener(listener);
+            return;
+        }
 
-            if (groupingPortRef.current) {
+        // Disconnect old tab port
+        if (groupingPortRef.current) {
+            try {
                 groupingPortRef.current.disconnect();
-                groupingPortRef.current = null;
+            } catch {
+                // ignore
             }
-        };
+
+            groupingPortRef.current = null;
+        }
+
+        connectedTabIdRef.current = tabId;
+
+        // Clear old tab cards immediately so UI doesn't show stale cards
+        setItems([]);
+
+        try {
+            groupingPortRef.current = chrome.tabs.connect(tabId, {
+                name: "grouping-window",
+            });
+        } catch (e) {
+            console.warn("Failed to connect grouping window to tab:", e);
+            return;
+        }
+
+        chrome.tabs.sendMessage(
+            tabId,
+            { action: "get-grouping-models" },
+            (response) => {
+                if (chrome.runtime.lastError) {
+                    console.warn(chrome.runtime.lastError.message);
+                    return;
+                }
+
+                setItems(Array.isArray(response?.items) ? response.items : []);
+            }
+        );
     }, []);
 
     const filteredItems = useMemo(() => {
@@ -193,6 +192,104 @@ const GrouppingWindow: React.FC = () => {
             );
         });
     };
+
+    const loadGroupingModels = React.useCallback(() => {
+        chrome.storage.local.get("originalTabId", (result) => {
+            const tabId = Number(result.originalTabId || 0);
+            if (!tabId) return;
+
+            connectGroupingWindowToTab(tabId);
+        });
+    }, [connectGroupingWindowToTab]);
+
+    useEffect(() => {
+        const messageListener = (message: any) => {
+            if (message.action === "grouping-models-updated") {
+                setItems(Array.isArray(message.items) ? message.items : []);
+            }
+        };
+
+        const storageListener = (
+            changes: { [key: string]: chrome.storage.StorageChange },
+            areaName: string
+        ) => {
+            if (areaName !== "local") return;
+            if (!changes.originalTabId) return;
+
+            const nextTabId = Number(changes.originalTabId.newValue || 0);
+            if (!nextTabId) {
+                setItems([]);
+                return;
+            }
+
+            connectGroupingWindowToTab(nextTabId);
+        };
+
+        chrome.runtime.onMessage.addListener(messageListener);
+        chrome.storage.onChanged.addListener(storageListener);
+
+        loadGroupingModels();
+
+        return () => {
+            chrome.runtime.onMessage.removeListener(messageListener);
+            chrome.storage.onChanged.removeListener(storageListener);
+
+            if (groupingPortRef.current) {
+                try {
+                    groupingPortRef.current.disconnect();
+                } catch {
+                    // ignore
+                }
+
+                groupingPortRef.current = null;
+            }
+
+            connectedTabIdRef.current = null;
+        };
+    }, [connectGroupingWindowToTab, loadGroupingModels]);
+
+    useEffect(() => {
+        const timer = window.setInterval(() => {
+            chrome.storage.local.get("originalTabId", (result) => {
+                const tabId = Number(result.originalTabId || 0);
+                if (!tabId) return;
+
+                chrome.tabs.get(tabId, (tab) => {
+                    if (chrome.runtime.lastError) return;
+
+                    const currentUrl = tab.url || "";
+
+                    if (!currentUrl) return;
+
+                    if (!lastTabUrlRef.current) {
+                        lastTabUrlRef.current = currentUrl;
+                        return;
+                    }
+
+                    if (lastTabUrlRef.current !== currentUrl) {
+                        lastTabUrlRef.current = currentUrl;
+
+                        // clear old page cards immediately
+                        setItems([]);
+
+                        // wait a bit for new page cards to render, then load
+                        window.setTimeout(() => {
+                            loadGroupingModels();
+                        }, 800);
+
+                        // one more delayed load because Civitai cards may render slowly
+                        window.setTimeout(() => {
+                            loadGroupingModels();
+                        }, 2000);
+                    }
+                });
+            });
+        }, 1000);
+
+        return () => {
+            window.clearInterval(timer);
+        };
+    }, [loadGroupingModels]);
 
     return (
         <Container
