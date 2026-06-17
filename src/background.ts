@@ -108,6 +108,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "openGrouppingWindow") {
+    console.log("open groupping model window")
+    chrome.windows.create({
+      url: chrome.runtime.getURL('grouppingwindow.html'),
+      type: 'popup',
+      width: 850,
+      height: 900,
+      left: 1800
+    });
+  }
+});
+
 interface ModelFile {
   name: string;
   downloadUrl: string;

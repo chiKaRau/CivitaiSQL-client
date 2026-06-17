@@ -1888,6 +1888,18 @@ const WindowComponent: React.FC = () => {
         });
     }
 
+    const handleOpenGrouppingWindow = () => {
+        console.log("open custom window")
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            // Store the original tab ID in local storage
+            // chrome.storage.local.set({ originalTabId: tabs[0].id });
+            // Then open the new window
+            chrome.runtime.sendMessage({ action: "openGrouppingWindow" });
+            //window.close(); // This closes the popup window
+        });
+    }
+
+
     const handleOpenEditWindow = () => {
         console.log("open edit window")
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs: any) => {
@@ -2816,6 +2828,20 @@ const WindowComponent: React.FC = () => {
                                             disabled: false,
                                         }}
                                             handleFunctionCall={() => handleOpenCustomWindow()}
+                                            isDarkMode={isDarkMode}
+                                        />
+
+
+                                        {/**Open Groupping Window */}
+                                        <ButtonWrap buttonConfig={{
+                                            placement: "top",
+                                            tooltip: "Open Groupping Window",
+                                            variant: "warning",
+                                            buttonIcon: <BsReverseLayoutTextWindowReverse />
+                                            ,
+                                            disabled: false,
+                                        }}
+                                            handleFunctionCall={() => handleOpenGrouppingWindow()}
                                             isDarkMode={isDarkMode}
                                         />
 

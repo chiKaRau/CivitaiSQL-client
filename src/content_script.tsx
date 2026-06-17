@@ -721,12 +721,16 @@ chrome.runtime.onMessage.addListener(
       });
 
       displayStagedBadges();
+      sendGroupingModelsToWindow(getModelCards(), "staged");
+
       return true;
     }
 
     if (message.action === "remove-staged") {
       clearStagedInfo();
       removeAllStagedBadges();
+      sendGroupingModelsToWindow(getModelCards(), "staged");
+
       return true;
     }
 
@@ -738,6 +742,7 @@ chrome.runtime.onMessage.addListener(
         action: message.stageAction || "",
       });
       displayStagedBadges();
+      sendGroupingModelsToWindow(getModelCards(), "staged");
       return true;
     }
 
@@ -748,6 +753,8 @@ chrome.runtime.onMessage.addListener(
         versionId: message.versionId,
       });
       displayStagedBadges();
+      sendGroupingModelsToWindow(getModelCards(), "staged");
+
       return true;
     }
 
@@ -1154,6 +1161,187 @@ const updateInfoMap: Map<string, { quantity: number; isUpdateAvaliable: boolean;
 const checkedUrlSet: Set<string> = new Set();
 let isSortedAscending: boolean = true;
 
+type GroupingModelItem = {
+  url: string;
+  modelId: string;
+  versionId: string;
+  imgSrc: string;
+  name: string;
+  creator: string;
+  modelType: string;
+  baseModel: string;
+
+  savedText: string;
+  savedQuantity: number;
+  isSaved: boolean;
+
+  offlineText: string;
+  offlineQuantity: number;
+  isOffline: boolean;
+
+  updateText: string;
+  stagedText: string;
+  lockedText: string;
+
+  collectedAt: number;
+};
+
+const groupingModelMap = new Map<string, GroupingModelItem>();
+let isGroupingModeActive = false;
+
+function getGroupingText(card: HTMLElement, selector: string): string {
+  return (card.querySelector(selector)?.textContent || "").trim();
+}
+
+function getFirstNumber(text: string): number {
+  const match = text.match(/\d+/);
+  return match ? Number(match[0]) : 0;
+}
+
+function getGroupingChipTexts(card: HTMLElement): string[] {
+  return Array.from(card.querySelectorAll('[class*="infoChip"] p, [class*="infoChip"] span'))
+    .map((el) => (el.textContent || "").trim())
+    .filter(Boolean)
+    .filter((text, index, arr) => arr.indexOf(text) === index);
+}
+
+function captureGroupingModel(card: HTMLElement): GroupingModelItem | null {
+  const linkElement = getCardLink(card);
+  if (!linkElement?.href) return null;
+
+  const url = linkElement.href;
+  const { modelId, versionId } = extractModelAndVersionFromUrl(url);
+
+  const imgElement =
+    (linkElement.querySelector("img") as HTMLImageElement | null) ||
+    (card.querySelector("img") as HTMLImageElement | null);
+
+  const imgSrc = imgElement?.currentSrc || imgElement?.src || "";
+
+  const savedText = getGroupingText(card, ".saved-label");
+  const offlineText = getGroupingText(card, ".offline-label");
+  const updateText = getGroupingText(card, ".update-early-label");
+  const stagedText = getGroupingText(card, ".staged-badge");
+  const lockedText = getGroupingText(card, ".locked-badge");
+
+  const chipTexts = getGroupingChipTexts(card);
+
+  const creator =
+    getGroupingText(card, '[class*="UserAvatarSimple"][class*="username"]') ||
+    getGroupingText(card, '[class*="username"]');
+
+  const name =
+    getGroupingText(card, '[class*="dropShadow"][data-size="xl"]') ||
+    getGroupingText(card, '[data-size="xl"][data-line-clamp="true"]') ||
+    (imgElement?.alt || "").replace(/\.[^.]+$/, "");
+
+  const savedQuantity = getFirstNumber(savedText);
+  const offlineQuantity = getFirstNumber(offlineText);
+
+  return {
+    url,
+    modelId,
+    versionId,
+    imgSrc,
+    name,
+    creator,
+    modelType: chipTexts[0] || "",
+    baseModel: chipTexts[1] || "",
+
+    savedText,
+    savedQuantity,
+    isSaved: savedText.startsWith("Saved:") && savedQuantity > 0,
+
+    offlineText,
+    offlineQuantity,
+    isOffline: offlineText.startsWith("Offline:") && offlineQuantity > 0,
+
+    updateText,
+    stagedText,
+    lockedText,
+
+    collectedAt: Date.now(),
+  };
+}
+
+type GroupingCaptureSource = "saved" | "offline" | "staged" | "update" | "manual";
+
+function mergeGroupingModelItem(
+  oldItem: GroupingModelItem | undefined,
+  newItem: GroupingModelItem,
+  source: GroupingCaptureSource
+): GroupingModelItem {
+  if (!oldItem) return newItem;
+
+  const merged: GroupingModelItem = {
+    ...oldItem,
+    ...newItem,
+
+    // default behavior: do not lose old labels if this capture does not see them yet
+    savedText: newItem.savedText || oldItem.savedText,
+    savedQuantity: newItem.savedText ? newItem.savedQuantity : oldItem.savedQuantity,
+    isSaved: newItem.savedText ? newItem.isSaved : oldItem.isSaved,
+
+    offlineText: newItem.offlineText || oldItem.offlineText,
+    offlineQuantity: newItem.offlineText ? newItem.offlineQuantity : oldItem.offlineQuantity,
+    isOffline: newItem.offlineText ? newItem.isOffline : oldItem.isOffline,
+
+    stagedText: newItem.stagedText || oldItem.stagedText,
+    updateText: newItem.updateText || oldItem.updateText,
+    lockedText: newItem.lockedText || oldItem.lockedText,
+
+    collectedAt: Date.now(),
+  };
+
+  // Important: when this source just finished, trust this source even if empty.
+  // This allows remove/unstage to clear the label.
+  if (source === "saved") {
+    merged.savedText = newItem.savedText;
+    merged.savedQuantity = newItem.savedQuantity;
+    merged.isSaved = newItem.isSaved;
+  }
+
+  if (source === "offline") {
+    merged.offlineText = newItem.offlineText;
+    merged.offlineQuantity = newItem.offlineQuantity;
+    merged.isOffline = newItem.isOffline;
+  }
+
+  if (source === "staged") {
+    merged.stagedText = newItem.stagedText;
+  }
+
+  if (source === "update") {
+    merged.updateText = newItem.updateText;
+  }
+
+  return merged;
+}
+
+function sendGroupingModelsToWindow(
+  cardElements: HTMLElement[] = getModelCards(),
+  source: GroupingCaptureSource = "manual",
+  force: boolean = false
+): void {
+  if (!isGroupingModeActive && !force) {
+    return;
+  }
+
+  cardElements.forEach((card) => {
+    const item = captureGroupingModel(card);
+    if (!item) return;
+
+    const oldItem = groupingModelMap.get(item.url);
+    groupingModelMap.set(item.url, mergeGroupingModelItem(oldItem, item, source));
+  });
+
+  chrome.runtime.sendMessage({
+    action: "grouping-models-updated",
+    source,
+    items: Array.from(groupingModelMap.values()),
+  });
+}
+
 function sortDivs(container: HTMLElement): void {
   const cardDivs = getModelCards(container);
 
@@ -1305,6 +1493,9 @@ chrome.runtime.onMessage.addListener(
             }
           }
         });
+
+        sendGroupingModelsToWindow(cardElements, "saved");
+
       } else if (message.action === "remove-saved") {
         console.log("Removing saved labels...");
 
@@ -1391,6 +1582,9 @@ chrome.runtime.onMessage.addListener(
             }
           }
         });
+
+        sendGroupingModelsToWindow(cardElements, "offline");
+
       } else if (message.action === "remove-offline") {
         console.log("Removing offline labels...");
 
@@ -1408,6 +1602,57 @@ chrome.runtime.onMessage.addListener(
     return true;
   }
 );
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "activate-grouping-mode") {
+    isGroupingModeActive = true;
+
+    sendGroupingModelsToWindow(getModelCards(), "manual", true);
+
+    sendResponse({
+      status: "activated",
+      items: Array.from(groupingModelMap.values()),
+    });
+
+    return true;
+  }
+
+  if (message.action === "deactivate-grouping-mode") {
+    isGroupingModeActive = false;
+
+    sendResponse({
+      status: "deactivated",
+    });
+
+    return true;
+  }
+
+  if (message.action === "get-grouping-models") {
+    sendGroupingModelsToWindow(getModelCards(), "manual", true);
+
+    sendResponse({
+      items: Array.from(groupingModelMap.values()),
+    });
+
+    return true;
+  }
+
+  if (message.action === "clear-grouping-models") {
+    groupingModelMap.clear();
+
+    chrome.runtime.sendMessage({
+      action: "grouping-models-updated",
+      source: "manual",
+      items: [],
+    });
+
+    sendResponse({
+      status: "cleared",
+    });
+
+    return true;
+  }
+});
 
 chrome.runtime.onMessage.addListener(
   async (
