@@ -23,6 +23,8 @@ type GroupingModelItem = {
     stagedText: string;
     lockedText: string;
 
+    isChecked: boolean;
+
     collectedAt: number;
 };
 
@@ -34,6 +36,9 @@ type QuickFilter =
     | "staged";
 
 const GrouppingWindow: React.FC = () => {
+
+    const groupingPortRef = React.useRef<chrome.runtime.Port | null>(null);
+
     const [items, setItems] = useState<GroupingModelItem[]>([]);
     const [searchText, setSearchText] = useState("");
     const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
@@ -58,6 +63,8 @@ const GrouppingWindow: React.FC = () => {
     };
 
     useEffect(() => {
+        let port: chrome.runtime.Port | null = null;
+
         const listener = (message: any) => {
             if (message.action === "grouping-models-updated") {
                 setItems(Array.isArray(message.items) ? message.items : []);
@@ -65,18 +72,37 @@ const GrouppingWindow: React.FC = () => {
         };
 
         chrome.runtime.onMessage.addListener(listener);
-        loadGroupingModels();
+
+        chrome.storage.local.get("originalTabId", (result) => {
+            if (!result.originalTabId) return;
+
+            port = chrome.tabs.connect(result.originalTabId, {
+                name: "grouping-window",
+            });
+
+            groupingPortRef.current = port;
+
+            chrome.tabs.sendMessage(
+                result.originalTabId,
+                { action: "get-grouping-models" },
+                (response) => {
+                    if (chrome.runtime.lastError) {
+                        console.warn(chrome.runtime.lastError.message);
+                        return;
+                    }
+
+                    setItems(Array.isArray(response?.items) ? response.items : []);
+                }
+            );
+        });
 
         return () => {
             chrome.runtime.onMessage.removeListener(listener);
 
-            chrome.storage.local.get("originalTabId", (result) => {
-                if (!result.originalTabId) return;
-
-                chrome.tabs.sendMessage(result.originalTabId, {
-                    action: "deactivate-grouping-mode",
-                });
-            });
+            if (groupingPortRef.current) {
+                groupingPortRef.current.disconnect();
+                groupingPortRef.current = null;
+            }
         };
     }, []);
 
@@ -132,6 +158,37 @@ const GrouppingWindow: React.FC = () => {
                 { action: "clear-grouping-models" },
                 () => {
                     setItems([]);
+                }
+            );
+        });
+    };
+
+    const toggleItemSelection = (item: GroupingModelItem) => {
+        const nextChecked = !item.isChecked;
+
+        setItems(prev =>
+            prev.map(x =>
+                x.url === item.url
+                    ? { ...x, isChecked: nextChecked }
+                    : x
+            )
+        );
+
+        chrome.storage.local.get("originalTabId", (result) => {
+            if (!result.originalTabId) return;
+
+            chrome.tabs.sendMessage(
+                result.originalTabId,
+                {
+                    action: "set-grouping-selected",
+                    url: item.url,
+                    imgSrc: item.imgSrc,
+                    isChecked: nextChecked,
+                },
+                () => {
+                    if (chrome.runtime.lastError) {
+                        console.warn(chrome.runtime.lastError.message);
+                    }
                 }
             );
         });
@@ -232,26 +289,45 @@ const GrouppingWindow: React.FC = () => {
                         gap: 16,
                     }}
                 >
-                    {filteredItems.map((item) => (
-                        <div
-                            key={item.url}
-                            style={{
-                                background: "#1f1f1f",
-                                border: "1px solid #333",
-                                borderRadius: 12,
-                                overflow: "hidden",
-                                position: "relative",
-                                boxShadow: "0 4px 12px rgba(0,0,0,0.35)",
-                            }}
-                        >
-                            <a
-                                href={item.url}
-                                target="_blank"
-                                rel="noreferrer"
+                    {filteredItems.map((item) => {
+                        const centerLabels = [
+                            item.savedText && {
+                                text: item.savedText,
+                                bg: item.isSaved ? "#22c55e" : "#ef4444",
+                            },
+                            item.offlineText && {
+                                text: item.offlineText,
+                                bg: "#2563eb",
+                            },
+                            item.stagedText && {
+                                text: item.stagedText,
+                                bg: "#7c3aed",
+                            },
+                        ].filter(Boolean) as Array<{ text: string; bg: string }>;
+
+                        return (
+                            <div
+                                key={item.url}
+                                role="button"
+                                tabIndex={0}
+                                onClick={() => toggleItemSelection(item)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                        e.preventDefault();
+                                        toggleItemSelection(item);
+                                    }
+                                }}
                                 style={{
-                                    display: "block",
-                                    color: "inherit",
-                                    textDecoration: "none",
+                                    background: "#1f1f1f",
+                                    border: item.isChecked ? "3px solid yellow" : "1px solid #333",
+                                    borderRadius: 12,
+                                    overflow: "hidden",
+                                    position: "relative",
+                                    boxShadow: item.isChecked
+                                        ? "0 0 0 4px rgba(255,255,0,0.25), 0 4px 12px rgba(0,0,0,0.35)"
+                                        : "0 4px 12px rgba(0,0,0,0.35)",
+                                    cursor: "pointer",
+                                    userSelect: "none",
                                 }}
                             >
                                 <div
@@ -265,6 +341,7 @@ const GrouppingWindow: React.FC = () => {
                                         <img
                                             src={item.imgSrc}
                                             alt={item.name}
+                                            draggable={false}
                                             style={{
                                                 width: "100%",
                                                 height: "100%",
@@ -286,52 +363,97 @@ const GrouppingWindow: React.FC = () => {
                                         </div>
                                     )}
 
+                                    <input
+                                        type="checkbox"
+                                        checked={item.isChecked}
+                                        readOnly
+                                        style={{
+                                            position: "absolute",
+                                            top: 10,
+                                            right: 10,
+                                            zIndex: 5,
+                                            transform: "scale(1.8)",
+                                            pointerEvents: "none",
+                                        }}
+                                    />
+
                                     <div
                                         style={{
                                             position: "absolute",
                                             top: 8,
                                             left: 8,
-                                            right: 8,
+                                            right: 48,
                                             display: "flex",
                                             flexWrap: "wrap",
                                             gap: 6,
-                                            zIndex: 2,
+                                            zIndex: 3,
                                         }}
                                     >
-                                        {item.modelType && (
-                                            <Badge bg="info">{item.modelType}</Badge>
-                                        )}
-
-                                        {item.baseModel && (
-                                            <Badge bg="secondary">{item.baseModel}</Badge>
-                                        )}
-
-                                        {item.savedText && (
-                                            <Badge bg={item.isSaved ? "success" : "danger"}>
-                                                {item.savedText}
-                                            </Badge>
-                                        )}
-
-                                        {item.offlineText && (
-                                            <Badge bg="primary">{item.offlineText}</Badge>
-                                        )}
-
-                                        {item.stagedText && (
-                                            <Badge bg="warning" text="dark">
-                                                {item.stagedText}
-                                            </Badge>
-                                        )}
-
+                                        {item.modelType && <Badge bg="info">{item.modelType}</Badge>}
+                                        {item.baseModel && <Badge bg="secondary">{item.baseModel}</Badge>}
                                         {item.updateText && (
                                             <Badge bg="light" text="dark">
                                                 {item.updateText}
                                             </Badge>
                                         )}
-
-                                        {item.lockedText && (
-                                            <Badge bg="dark">{item.lockedText}</Badge>
-                                        )}
+                                        {item.lockedText && <Badge bg="dark">{item.lockedText}</Badge>}
                                     </div>
+
+                                    {centerLabels.length > 0 && (
+                                        <div
+                                            style={{
+                                                position: "absolute",
+                                                top: "50%",
+                                                left: "50%",
+                                                transform: "translate(-50%, -50%)",
+                                                zIndex: 4,
+                                                display: "flex",
+                                                flexDirection: "column",
+                                                alignItems: "center",
+                                                gap: 6,
+                                                pointerEvents: "none",
+                                            }}
+                                        >
+                                            {centerLabels.map((label) => (
+                                                <div
+                                                    key={label.text}
+                                                    style={{
+                                                        backgroundColor: label.bg,
+                                                        color: "white",
+                                                        textShadow: "0px 0px 3px black",
+                                                        padding: "5px 8px",
+                                                        borderRadius: 5,
+                                                        fontWeight: 700,
+                                                        fontSize: 13,
+                                                        whiteSpace: "nowrap",
+                                                    }}
+                                                >
+                                                    {label.text}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {item.isChecked && (
+                                        <div
+                                            style={{
+                                                position: "absolute",
+                                                bottom: 8,
+                                                left: "50%",
+                                                transform: "translateX(-50%)",
+                                                zIndex: 4,
+                                                background: "rgba(255,255,0,0.9)",
+                                                color: "#111",
+                                                padding: "4px 8px",
+                                                borderRadius: 999,
+                                                fontWeight: 800,
+                                                fontSize: 12,
+                                                pointerEvents: "none",
+                                            }}
+                                        >
+                                            SELECTED
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div style={{ padding: 10 }}>
@@ -376,9 +498,9 @@ const GrouppingWindow: React.FC = () => {
                                         {item.versionId ? ` / ${item.versionId}` : ""}
                                     </div>
                                 </div>
-                            </a>
-                        </div>
-                    ))}
+                            </div>
+                        );
+                    })}
                 </div>
 
                 {filteredItems.length === 0 && (

@@ -1010,6 +1010,9 @@ function addCardCheckbox(item: HTMLElement, index?: number) {
         item.style.border = '';
         chrome.runtime.sendMessage({ action: 'removeUrl', url });
       }
+
+      sendGroupingModelsToWindow([item], "selection");
+
     });
   }
 
@@ -1063,6 +1066,13 @@ chrome.runtime.onMessage.addListener(
           }
         }
       });
+
+      setGroupingSelectedByUrl({
+        url: urlToUncheck,
+        isChecked: false,
+        notifyWindow: false,
+      });
+
     } else if (message.action === "check-url") {
       const urlToCheck: string | undefined = message.url;
 
@@ -1084,6 +1094,13 @@ chrome.runtime.onMessage.addListener(
           }
         }
       });
+
+      setGroupingSelectedByUrl({
+        url: urlToCheck,
+        isChecked: true,
+        notifyWindow: false,
+      });
+
     } else if (message.action === "remove-checkboxes") {
       checkedUrlSet.clear();
       cardElements.forEach((item: HTMLElement) => {
@@ -1183,11 +1200,18 @@ type GroupingModelItem = {
   stagedText: string;
   lockedText: string;
 
+  isChecked: boolean;
+
   collectedAt: number;
 };
 
 const groupingModelMap = new Map<string, GroupingModelItem>();
+let groupingWindowPortCount = 0;
 let isGroupingModeActive = false;
+
+function setGroupingModeActive(active: boolean) {
+  isGroupingModeActive = active;
+}
 
 function getGroupingText(card: HTMLElement, selector: string): string {
   return (card.querySelector(selector)?.textContent || "").trim();
@@ -1211,6 +1235,8 @@ function captureGroupingModel(card: HTMLElement): GroupingModelItem | null {
 
   const url = linkElement.href;
   const { modelId, versionId } = extractModelAndVersionFromUrl(url);
+
+  const normalized = normalizeUrl(url);
 
   const imgElement =
     (linkElement.querySelector("img") as HTMLImageElement | null) ||
@@ -1260,11 +1286,19 @@ function captureGroupingModel(card: HTMLElement): GroupingModelItem | null {
     stagedText,
     lockedText,
 
+    isChecked: checkedUrlSet.has(normalized),
+
     collectedAt: Date.now(),
   };
 }
 
-type GroupingCaptureSource = "saved" | "offline" | "staged" | "update" | "manual";
+type GroupingCaptureSource =
+  | "saved"
+  | "offline"
+  | "staged"
+  | "update"
+  | "selection"
+  | "manual";
 
 function mergeGroupingModelItem(
   oldItem: GroupingModelItem | undefined,
@@ -1315,8 +1349,165 @@ function mergeGroupingModelItem(
     merged.updateText = newItem.updateText;
   }
 
+  if (source === "selection") {
+    merged.isChecked = newItem.isChecked;
+  }
+
   return merged;
 }
+
+function findGroupingMapKeyByUrl(url: string): string {
+  const normalized = normalizeUrl(url);
+
+  for (const key of groupingModelMap.keys()) {
+    if (normalizeUrl(key) === normalized) {
+      return key;
+    }
+  }
+
+  return url;
+}
+
+function createEmptyGroupingModelItem(
+  url: string,
+  imgSrc: string = "",
+  isChecked: boolean = false
+): GroupingModelItem {
+  const { modelId, versionId } = extractModelAndVersionFromUrl(url);
+
+  return {
+    url,
+    modelId,
+    versionId,
+    imgSrc,
+    name: "",
+    creator: "",
+    modelType: "",
+    baseModel: "",
+
+    savedText: "",
+    savedQuantity: 0,
+    isSaved: false,
+
+    offlineText: "",
+    offlineQuantity: 0,
+    isOffline: false,
+
+    updateText: "",
+    stagedText: "",
+    lockedText: "",
+
+    isChecked,
+
+    collectedAt: Date.now(),
+  };
+}
+
+function updateGroupingSelectionInMap(
+  url: string,
+  isChecked: boolean,
+  imgSrc: string = ""
+): void {
+  const key = findGroupingMapKeyByUrl(url);
+  const oldItem = groupingModelMap.get(key);
+
+  groupingModelMap.set(key, {
+    ...(oldItem || createEmptyGroupingModelItem(url, imgSrc, isChecked)),
+    imgSrc: oldItem?.imgSrc || imgSrc || "",
+    isChecked,
+    collectedAt: Date.now(),
+  });
+}
+
+function setVisibleCardCheckedState(
+  url: string,
+  isChecked: boolean
+): string {
+  const normalized = normalizeUrl(url);
+  let visibleImgSrc = "";
+
+  const cards = getModelCards();
+
+  cards.forEach((card) => {
+    const linkElement = getCardLink(card);
+    if (!linkElement?.href) return;
+    if (normalizeUrl(linkElement.href) !== normalized) return;
+
+    const checkbox = card.querySelector(
+      'input[type="checkbox"].model-card-checkbox'
+    ) as HTMLInputElement | null;
+
+    const imgEl =
+      (linkElement.querySelector("img") as HTMLImageElement | null) ||
+      (card.querySelector("img") as HTMLImageElement | null);
+
+    visibleImgSrc = imgEl?.currentSrc || imgEl?.src || visibleImgSrc;
+
+    if (checkbox) {
+      checkbox.checked = isChecked;
+    }
+
+    card.style.border = isChecked ? "2px solid yellow" : "";
+  });
+
+  return visibleImgSrc;
+}
+
+function setGroupingSelectedByUrl(params: {
+  url: string;
+  isChecked: boolean;
+  imgSrc?: string;
+  notifyWindow?: boolean;
+}): void {
+  const { url, isChecked, notifyWindow = true } = params;
+
+  if (!url) return;
+
+  const normalized = normalizeUrl(url);
+
+  if (isChecked) {
+    checkedUrlSet.add(normalized);
+  } else {
+    checkedUrlSet.delete(normalized);
+  }
+
+  const visibleImgSrc = setVisibleCardCheckedState(url, isChecked);
+  const imgSrc = params.imgSrc || visibleImgSrc || "";
+
+  updateGroupingSelectionInMap(url, isChecked, imgSrc);
+
+  if (notifyWindow) {
+    chrome.runtime.sendMessage(
+      isChecked
+        ? { action: "addUrl", url, imgSrc }
+        : { action: "removeUrl", url }
+    );
+  }
+
+  chrome.runtime.sendMessage({
+    action: "grouping-models-updated",
+    source: "selection",
+    items: Array.from(groupingModelMap.values()),
+  });
+}
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "set-grouping-selected") {
+    setGroupingSelectedByUrl({
+      url: message.url,
+      isChecked: !!message.isChecked,
+      imgSrc: message.imgSrc || "",
+      notifyWindow: true,
+    });
+
+    sendResponse({
+      status: "ok",
+      isChecked: !!message.isChecked,
+    });
+
+    return true;
+  }
+});
 
 function sendGroupingModelsToWindow(
   cardElements: HTMLElement[] = getModelCards(),
@@ -1513,6 +1704,24 @@ chrome.runtime.onMessage.addListener(
     return true;
   }
 );
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== "grouping-window") return;
+
+  groupingWindowPortCount += 1;
+  setGroupingModeActive(true);
+
+  // Capture once when window connects
+  sendGroupingModelsToWindow(getModelCards(), "manual", true);
+
+  port.onDisconnect.addListener(() => {
+    groupingWindowPortCount = Math.max(0, groupingWindowPortCount - 1);
+
+    if (groupingWindowPortCount === 0) {
+      setGroupingModeActive(false);
+    }
+  });
+});
 
 chrome.runtime.onMessage.addListener(
   async (
