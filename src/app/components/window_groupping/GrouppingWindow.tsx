@@ -7,6 +7,7 @@ type GroupingModelItem = {
     modelId: string;
     versionId: string;
     imgSrc: string;
+    mediaType?: "image" | "video";
     name: string;
     creator: string;
     modelType: string;
@@ -554,6 +555,7 @@ const GrouppingWindow: React.FC = () => {
             modelId: parentItem.modelId || getModelIdFromItem(parentItem),
             versionId: version.id,
             imgSrc: version.imgSrc || parentItem.imgSrc,
+            mediaType: "image",
 
             name: `${parentItem.name || "Unknown Model"} - ${version.versionName || `Version ${version.id}`}`,
             creator: parentItem.creator,
@@ -1315,6 +1317,8 @@ const GrouppingWindow: React.FC = () => {
                                             maxHeight="100%"
                                             borderRadius={0}
                                             showRetryButton={false}
+                                            allowVideo={true}
+                                            mediaType={item.mediaType ?? "auto"}
                                         />
                                     ) : (
                                         <div className="gw-no-image">

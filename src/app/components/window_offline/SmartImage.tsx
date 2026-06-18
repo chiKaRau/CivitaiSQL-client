@@ -14,13 +14,41 @@ interface SmartImageProps {
     maxHeight?: string | number;
     borderRadius?: string | number;
     showRetryButton?: boolean;
+
+    /**
+     * Optional video support.
+     *
+     * Default stays image-only so existing usages are safe.
+     */
+    allowVideo?: boolean;
+    mediaType?: 'image' | 'video' | 'auto';
+    videoControls?: boolean;
 }
 
 const CIVITAI_IMAGE_SEGMENT = 'anim=false,width=450,optimized=true';
 
+const isVideoMediaUrl = (value: string) => {
+    const clean = (value || '').split('?')[0].split('#')[0].toLowerCase();
+
+    return (
+        clean.endsWith('.webm') ||
+        clean.endsWith('.mp4') ||
+        clean.endsWith('.mov') ||
+        clean.endsWith('.m4v') ||
+        clean.endsWith('.ogg')
+    );
+};
+
 const rewriteCivitaiImageUrl = (value: string) => {
     const url = (value || '').trim();
     if (!url) return '';
+
+    // Do not rewrite video URLs.
+    // Example:
+    // https://image-b2.civitai.com/.../450x%3Cauto%3E_.webm
+    if (isVideoMediaUrl(url)) {
+        return url;
+    }
 
     if (!url.includes('image.civitai.com')) {
         return url;
@@ -62,6 +90,12 @@ const SmartImage: React.FC<SmartImageProps> = ({
     maxHeight = '300px',
     borderRadius = 6,
     showRetryButton = true,
+
+    // New optional video support.
+    // Existing screens stay safe because allowVideo defaults false.
+    allowVideo = false,
+    mediaType = 'image',
+    videoControls = false,
 }) => {
     const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -102,6 +136,18 @@ const SmartImage: React.FC<SmartImageProps> = ({
     }, [candidates, currentIndex, retryNonce]);
 
     const hasNextFallback = currentIndex < candidates.length - 1;
+
+    const shouldRenderVideo =
+        allowVideo &&
+        !!activeSrc &&
+        (
+            // If caller knows this is video, render original candidate as video.
+            // Fallback placeholder images should still render as images.
+            (mediaType === 'video' && currentIndex === 0) ||
+
+            // Auto mode detects by URL extension.
+            (mediaType === 'auto' && isVideoMediaUrl(activeSrc))
+        );
 
     const handleLoad = () => {
         setStatus('loaded');
@@ -186,6 +232,29 @@ const SmartImage: React.FC<SmartImageProps> = ({
                         </Button>
                     )}
                 </div>
+            ) : shouldRenderVideo ? (
+                <video
+                    className="d-block w-100"
+                    src={activeSrc}
+                    muted
+                    loop
+                    autoPlay
+                    playsInline
+                    controls={videoControls}
+                    preload="metadata"
+                    width={width ?? undefined}
+                    height={height ?? undefined}
+                    onLoadedData={handleLoad}
+                    onCanPlay={handleLoad}
+                    onError={handleError}
+                    style={{
+                        maxHeight,
+                        objectFit: 'contain',
+                        margin: '0 auto',
+                        opacity: status === 'loaded' ? 1 : 0.15,
+                        transition: 'opacity 0.2s ease',
+                    }}
+                />
             ) : (
                 <img
                     className="d-block w-100"

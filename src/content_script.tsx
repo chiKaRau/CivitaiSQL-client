@@ -671,14 +671,19 @@ chrome.runtime.onMessage.addListener(
         const normalized = normalizeUrl(url);
 
         const checkbox = card.querySelector('input[type="checkbox"].model-card-checkbox') as HTMLInputElement | null;
-        const imgEl = linkElement.querySelector('img') as HTMLImageElement | null;
-        const imgSrc = imgEl?.currentSrc || imgEl?.src || "";
+        const media = getCardMediaSource(card, linkElement);
+        const imgSrc = media.src;
 
         if (checkbox && !checkbox.checked) {
           checkbox.checked = true;
           card.style.border = '2px solid yellow';
           checkedUrlSet.add(normalized);
-          chrome.runtime.sendMessage({ action: 'addUrl', url, imgSrc });
+          chrome.runtime.sendMessage({
+            action: 'addUrl',
+            url,
+            imgSrc,
+            mediaType: media.mediaType,
+          });
         }
 
         lockedNeighborManagedUrls.add(normalized);
@@ -1183,6 +1188,7 @@ type GroupingModelItem = {
   modelId: string;
   versionId: string;
   imgSrc: string;
+  mediaType?: "image" | "video";
   name: string;
   creator: string;
   modelType: string;
@@ -1241,11 +1247,8 @@ function captureGroupingModel(card: HTMLElement): GroupingModelItem | null {
 
   const normalized = normalizeUrl(url);
 
-  const imgElement =
-    (linkElement.querySelector("img") as HTMLImageElement | null) ||
-    (card.querySelector("img") as HTMLImageElement | null);
-
-  const imgSrc = imgElement?.currentSrc || imgElement?.src || "";
+  const media = getCardMediaSource(card, linkElement);
+  const imgSrc = media.src;
 
   const savedText = getGroupingText(card, ".saved-label");
   const offlineText = getGroupingText(card, ".offline-label");
@@ -1262,7 +1265,7 @@ function captureGroupingModel(card: HTMLElement): GroupingModelItem | null {
   const name =
     getGroupingText(card, '[class*="dropShadow"][data-size="xl"]') ||
     getGroupingText(card, '[data-size="xl"][data-line-clamp="true"]') ||
-    (imgElement?.alt || "").replace(/\.[^.]+$/, "");
+    (media.alt || "").replace(/\.[^.]+$/, "");
 
   const savedQuantity = getFirstNumber(savedText);
   const offlineQuantity = getFirstNumber(offlineText);
@@ -1272,6 +1275,7 @@ function captureGroupingModel(card: HTMLElement): GroupingModelItem | null {
     modelId,
     versionId,
     imgSrc,
+    mediaType: media.mediaType,
     name,
     creator,
     modelType: chipTexts[0] || "",
@@ -1292,6 +1296,49 @@ function captureGroupingModel(card: HTMLElement): GroupingModelItem | null {
     isChecked: checkedUrlSet.has(normalized),
 
     collectedAt: Date.now(),
+  };
+}
+
+function getCardMediaSource(
+  card: HTMLElement,
+  linkElement?: HTMLAnchorElement | null
+): {
+  src: string;
+  mediaType: "image" | "video";
+  alt: string;
+} {
+  const imgElement =
+    (linkElement?.querySelector("img") as HTMLImageElement | null) ||
+    (card.querySelector("img") as HTMLImageElement | null);
+
+  const videoElement =
+    (linkElement?.querySelector("video") as HTMLVideoElement | null) ||
+    (card.querySelector("video") as HTMLVideoElement | null);
+
+  const sourceElement =
+    (videoElement?.querySelector("source[src]") as HTMLSourceElement | null) ||
+    (linkElement?.querySelector("source[src]") as HTMLSourceElement | null) ||
+    (card.querySelector("source[src]") as HTMLSourceElement | null);
+
+  const videoSrc =
+    videoElement?.currentSrc ||
+    videoElement?.src ||
+    sourceElement?.src ||
+    sourceElement?.getAttribute("src") ||
+    "";
+
+  if (videoSrc) {
+    return {
+      src: videoSrc,
+      mediaType: "video",
+      alt: imgElement?.alt || "",
+    };
+  }
+
+  return {
+    src: imgElement?.currentSrc || imgElement?.src || "",
+    mediaType: "image",
+    alt: imgElement?.alt || "",
   };
 }
 
@@ -1485,6 +1532,7 @@ function createEmptyGroupingModelItem(
     modelId,
     versionId,
     imgSrc,
+    mediaType: imgSrc.toLowerCase().split("?")[0].endsWith(".webm") ? "video" : "image",
     name: "",
     creator: "",
     modelType: "",
@@ -1511,7 +1559,8 @@ function createEmptyGroupingModelItem(
 function updateGroupingSelectionInMap(
   url: string,
   isChecked: boolean,
-  imgSrc: string = ""
+  imgSrc: string = "",
+  mediaType?: "image" | "video"
 ): void {
   const key = findGroupingMapKeyByUrl(url);
   const oldItem = groupingModelMap.get(key);
@@ -1519,6 +1568,7 @@ function updateGroupingSelectionInMap(
   groupingModelMap.set(key, {
     ...(oldItem || createEmptyGroupingModelItem(url, imgSrc, isChecked)),
     imgSrc: oldItem?.imgSrc || imgSrc || "",
+    mediaType: oldItem?.mediaType || mediaType || "image",
     isChecked,
     collectedAt: Date.now(),
   });
@@ -1527,9 +1577,10 @@ function updateGroupingSelectionInMap(
 function setVisibleCardCheckedState(
   url: string,
   isChecked: boolean
-): string {
+): { imgSrc: string; mediaType: "image" | "video" } {
   const normalized = normalizeUrl(url);
   let visibleImgSrc = "";
+  let visibleMediaType: "image" | "video" = "image";
 
   const cards = getModelCards();
 
@@ -1542,11 +1593,10 @@ function setVisibleCardCheckedState(
       'input[type="checkbox"].model-card-checkbox'
     ) as HTMLInputElement | null;
 
-    const imgEl =
-      (linkElement.querySelector("img") as HTMLImageElement | null) ||
-      (card.querySelector("img") as HTMLImageElement | null);
+    const media = getCardMediaSource(card, linkElement);
 
-    visibleImgSrc = imgEl?.currentSrc || imgEl?.src || visibleImgSrc;
+    visibleImgSrc = media.src || visibleImgSrc;
+    visibleMediaType = media.mediaType;
 
     if (checkbox) {
       checkbox.checked = isChecked;
@@ -1555,7 +1605,10 @@ function setVisibleCardCheckedState(
     card.style.border = isChecked ? "2px solid yellow" : "";
   });
 
-  return visibleImgSrc;
+  return {
+    imgSrc: visibleImgSrc,
+    mediaType: visibleMediaType,
+  };
 }
 
 function setGroupingSelectedByUrl(params: {
@@ -1576,15 +1629,15 @@ function setGroupingSelectedByUrl(params: {
     checkedUrlSet.delete(normalized);
   }
 
-  const visibleImgSrc = setVisibleCardCheckedState(url, isChecked);
-  const imgSrc = params.imgSrc || visibleImgSrc || "";
+  const visibleMedia = setVisibleCardCheckedState(url, isChecked);
+  const imgSrc = params.imgSrc || visibleMedia.imgSrc || "";
 
-  updateGroupingSelectionInMap(url, isChecked, imgSrc);
+  updateGroupingSelectionInMap(url, isChecked, imgSrc, visibleMedia.mediaType);
 
   if (notifyWindow) {
     chrome.runtime.sendMessage(
       isChecked
-        ? { action: "addUrl", url, imgSrc }
+        ? { action: "addUrl", url, imgSrc, mediaType: visibleMedia.mediaType }
         : { action: "removeUrl", url }
     );
   }
