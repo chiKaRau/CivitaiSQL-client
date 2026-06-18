@@ -25,6 +25,9 @@ type GroupingModelItem = {
 
     isChecked: boolean;
 
+    isAddedVersion?: boolean;
+    parentModelUrl?: string;
+
     collectedAt: number;
 };
 
@@ -35,6 +38,83 @@ type QuickFilter =
     | "offline"
     | "staged";
 
+type GroupingModelVersion = {
+    id: string;
+    versionName: string;
+    baseModel: string;
+    availability: string;
+    publishedAt: string;
+    sizeKB: number | null;
+    imgSrc: string;
+    url: string;
+};
+
+type VersionPanelState = {
+    expanded: boolean;
+    loading: boolean;
+    error: string;
+    versions: GroupingModelVersion[];
+};
+
+const PLACEHOLDER_IMAGE = "https://placehold.co/450x675";
+
+function toDisplayImageUrl(url: string, width = 450): string {
+    if (!url) return "";
+    if (url.includes("optimized=true") || url.includes("width=")) return url;
+
+    return url.replace(
+        "/original=true/",
+        `/anim=false,width=${width},optimized=true/`
+    );
+}
+
+function getModelIdFromItem(item: GroupingModelItem): string {
+    if (item.modelId) return item.modelId;
+
+    const match = item.url.match(/\/models\/(\d+)/);
+    return match ? match[1] : "";
+}
+
+function buildVersionUrl(item: GroupingModelItem, versionId: string): string {
+    const modelId = getModelIdFromItem(item);
+
+    try {
+        const parsed = new URL(item.url);
+        return `${parsed.origin}/models/${modelId}?modelVersionId=${versionId}`;
+    } catch {
+        return `https://civitai.red/models/${modelId}?modelVersionId=${versionId}`;
+    }
+}
+
+function normalizeSelectionUrl(url: string): string {
+    try {
+        const parsed = new URL(url);
+        return `${parsed.origin}${parsed.pathname}${parsed.search}`.toLowerCase();
+    } catch {
+        return String(url || "").toLowerCase();
+    }
+}
+
+function formatVersionSize(sizeKB: number | null): string {
+    if (sizeKB == null || Number.isNaN(sizeKB)) return "";
+
+    const mb = sizeKB / 1024;
+    const gb = mb / 1024;
+
+    if (gb >= 1) return `${gb.toFixed(2)} GB`;
+    if (mb >= 1) return `${mb.toFixed(2)} MB`;
+    return `${Math.round(sizeKB)} KB`;
+}
+
+function formatDateText(value: string): string {
+    if (!value) return "";
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+
+    return date.toLocaleDateString();
+}
+
 const GrouppingWindow: React.FC = () => {
 
     const groupingPortRef = React.useRef<chrome.runtime.Port | null>(null);
@@ -44,6 +124,9 @@ const GrouppingWindow: React.FC = () => {
     const [items, setItems] = useState<GroupingModelItem[]>([]);
     const [searchText, setSearchText] = useState("");
     const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
+
+    const [versionPanelByModelId, setVersionPanelByModelId] =
+        useState<Record<string, VersionPanelState>>({});
 
     const connectGroupingWindowToTab = React.useCallback((tabId: number) => {
         if (!tabId) return;
@@ -162,6 +245,24 @@ const GrouppingWindow: React.FC = () => {
         });
     };
 
+    const getAddableVersionsForItem = (
+        item: GroupingModelItem,
+        versions: GroupingModelVersion[]
+    ): GroupingModelVersion[] => {
+        // The first API version is the default/current model card itself.
+        // So do not show it as an add option.
+        const withoutFirstVersion = versions.slice(1);
+
+        // Also avoid showing versions already added to the grouping window.
+        return withoutFirstVersion.filter(version => {
+            const versionKey = normalizeSelectionUrl(version.url);
+
+            return !items.some(x =>
+                normalizeSelectionUrl(x.url) === versionKey
+            );
+        });
+    };
+
     const toggleItemSelection = (item: GroupingModelItem) => {
         const nextChecked = !item.isChecked;
 
@@ -183,6 +284,233 @@ const GrouppingWindow: React.FC = () => {
                     url: item.url,
                     imgSrc: item.imgSrc,
                     isChecked: nextChecked,
+                },
+                () => {
+                    if (chrome.runtime.lastError) {
+                        console.warn(chrome.runtime.lastError.message);
+                    }
+                }
+            );
+        });
+    };
+
+    const fetchVersionsForItem = async (item: GroupingModelItem) => {
+        const modelId = getModelIdFromItem(item);
+        if (!modelId) return;
+
+        setVersionPanelByModelId(prev => ({
+            ...prev,
+            [modelId]: {
+                expanded: true,
+                loading: true,
+                error: "",
+                versions: prev[modelId]?.versions || [],
+            },
+        }));
+
+        try {
+            const response = await fetch(`https://civitai.red/api/v1/models/${modelId}`);
+
+            if (!response.ok) {
+                throw new Error(`API failed: ${response.status}`);
+            }
+
+            const model = await response.json();
+            const modelVersions = Array.isArray(model?.modelVersions)
+                ? model.modelVersions
+                : [];
+
+            const versions: GroupingModelVersion[] = modelVersions.map((version: any) => {
+                const files = Array.isArray(version.files) ? version.files : [];
+                const primaryFile = files.find((x: any) => x?.primary) || files[0] || null;
+
+                const images = Array.isArray(version.images) ? version.images : [];
+                const firstImage = images[0]?.url || "";
+
+                return {
+                    id: String(version.id || ""),
+                    versionName: version.name || "",
+                    baseModel: version.baseModel || "",
+                    availability: version.availability || "",
+                    publishedAt: version.publishedAt || "",
+                    sizeKB: typeof primaryFile?.sizeKB === "number" ? primaryFile.sizeKB : null,
+                    imgSrc: firstImage ? toDisplayImageUrl(firstImage) : item.imgSrc || PLACEHOLDER_IMAGE,
+                    url: buildVersionUrl(item, String(version.id || "")),
+                };
+            });
+
+            setVersionPanelByModelId(prev => ({
+                ...prev,
+                [modelId]: {
+                    expanded: true,
+                    loading: false,
+                    error: "",
+                    versions,
+                },
+            }));
+        } catch (error: any) {
+            setVersionPanelByModelId(prev => ({
+                ...prev,
+                [modelId]: {
+                    expanded: true,
+                    loading: false,
+                    error: String(error?.message || error),
+                    versions: prev[modelId]?.versions || [],
+                },
+            }));
+        }
+    };
+
+    const toggleVersionPanel = (
+        item: GroupingModelItem,
+        event: React.MouseEvent
+    ) => {
+        event.stopPropagation();
+
+        const modelId = getModelIdFromItem(item);
+        if (!modelId) return;
+
+        const current = versionPanelByModelId[modelId];
+
+        if (current?.versions?.length > 0 || current?.loading) {
+            setVersionPanelByModelId(prev => ({
+                ...prev,
+                [modelId]: {
+                    ...current,
+                    expanded: !current.expanded,
+                },
+            }));
+
+            return;
+        }
+
+        fetchVersionsForItem(item);
+    };
+
+    const createGroupingItemFromVersion = (
+        parentItem: GroupingModelItem,
+        version: GroupingModelVersion
+    ): GroupingModelItem => {
+        return {
+            url: version.url,
+            modelId: parentItem.modelId || getModelIdFromItem(parentItem),
+            versionId: version.id,
+            imgSrc: version.imgSrc || parentItem.imgSrc,
+
+            name: `${parentItem.name || "Unknown Model"} - ${version.versionName || `Version ${version.id}`}`,
+            creator: parentItem.creator,
+            modelType: parentItem.modelType,
+            baseModel: version.baseModel || parentItem.baseModel,
+
+            savedText: "",
+            savedQuantity: 0,
+            isSaved: false,
+
+            offlineText: "",
+            offlineQuantity: 0,
+            isOffline: false,
+
+            updateText: "",
+            stagedText: "",
+            lockedText: "",
+
+            isChecked: false,
+
+            // new
+            isAddedVersion: true,
+            parentModelUrl: parentItem.parentModelUrl || parentItem.url,
+
+            collectedAt: Date.now(),
+        };
+    };
+
+    const addVersionToGroupingWindow = (
+        parentItem: GroupingModelItem,
+        version: GroupingModelVersion,
+        event: React.MouseEvent
+    ) => {
+        event.stopPropagation();
+
+        const newItem = createGroupingItemFromVersion(parentItem, version);
+        const newKey = normalizeSelectionUrl(newItem.url);
+        const modelId = newItem.modelId;
+
+        setItems(prev => {
+            const alreadyExists = prev.some(
+                x => normalizeSelectionUrl(x.url) === newKey
+            );
+
+            if (alreadyExists) return prev;
+
+            // Insert after the parent model and after any already-added versions
+            // for the same model.
+            let insertIndex = prev.findIndex(x =>
+                normalizeSelectionUrl(x.url) === normalizeSelectionUrl(parentItem.url)
+            );
+
+            if (insertIndex === -1) {
+                insertIndex = prev.findIndex(x => x.modelId === modelId);
+            }
+
+            if (insertIndex === -1) {
+                return [...prev, newItem];
+            }
+
+            let lastSameModelIndex = insertIndex;
+
+            for (let i = insertIndex + 1; i < prev.length; i++) {
+                if (prev[i].modelId === modelId && prev[i].isAddedVersion) {
+                    lastSameModelIndex = i;
+                    continue;
+                }
+
+                break;
+            }
+
+            const next = [...prev];
+            next.splice(lastSameModelIndex + 1, 0, newItem);
+            return next;
+        });
+
+        chrome.storage.local.get("originalTabId", (result) => {
+            if (!result.originalTabId) return;
+
+            chrome.tabs.sendMessage(
+                result.originalTabId,
+                {
+                    action: "add-grouping-item",
+                    item: newItem,
+                },
+                () => {
+                    if (chrome.runtime.lastError) {
+                        console.warn(chrome.runtime.lastError.message);
+                    }
+                }
+            );
+        });
+    };
+
+    const removeVersionFromGroupingWindow = (
+        item: GroupingModelItem,
+        event: React.MouseEvent
+    ) => {
+        event.stopPropagation();
+
+        setItems(prev =>
+            prev.filter(x =>
+                normalizeSelectionUrl(x.url) !== normalizeSelectionUrl(item.url)
+            )
+        );
+
+        chrome.storage.local.get("originalTabId", (result) => {
+            if (!result.originalTabId) return;
+
+            chrome.tabs.sendMessage(
+                result.originalTabId,
+                {
+                    action: "remove-grouping-item",
+                    url: item.url,
+                    wasChecked: item.isChecked,
                 },
                 () => {
                     if (chrome.runtime.lastError) {
@@ -594,6 +922,176 @@ const GrouppingWindow: React.FC = () => {
                                         {item.modelId}
                                         {item.versionId ? ` / ${item.versionId}` : ""}
                                     </div>
+
+
+                                    <div style={{ marginTop: 8 }}>
+                                        {!item.isAddedVersion && (
+                                            <Button
+                                                size="sm"
+                                                variant="outline-info"
+                                                onClick={(event) => toggleVersionPanel(item, event)}
+                                            >
+                                                Versions
+                                            </Button>
+                                        )}
+
+                                        {item.isAddedVersion && (
+                                            <Button
+                                                size="sm"
+                                                variant="outline-danger"
+                                                onClick={(event) => removeVersionFromGroupingWindow(item, event)}
+                                            >
+                                                Remove Version
+                                            </Button>
+                                        )}
+                                    </div>
+
+                                    {(() => {
+                                        const modelId = getModelIdFromItem(item);
+                                        const panel = versionPanelByModelId[modelId];
+
+                                        if (!panel?.expanded) return null;
+
+                                        return (
+                                            <div
+                                                onClick={(event) => event.stopPropagation()}
+                                                style={{
+                                                    marginTop: 10,
+                                                    borderTop: "1px solid #333",
+                                                    paddingTop: 10,
+                                                    maxHeight: 260,
+                                                    overflowY: "auto",
+                                                }}
+                                            >
+                                                {panel.loading && (
+                                                    <div style={{ color: "#aaa", fontSize: 13 }}>
+                                                        Loading versions...
+                                                    </div>
+                                                )}
+
+                                                {panel.error && (
+                                                    <div style={{ color: "#ef4444", fontSize: 13 }}>
+                                                        {panel.error}
+                                                    </div>
+                                                )}
+
+                                                {!panel.loading && !panel.error && panel.versions.length === 0 && (
+                                                    <div style={{ color: "#777", fontSize: 13 }}>
+                                                        No versions found.
+                                                    </div>
+                                                )}
+
+                                                {(() => {
+                                                    const addableVersions = getAddableVersionsForItem(item, panel.versions);
+
+                                                    if (!panel.loading && !panel.error && panel.versions.length <= 1) {
+                                                        return (
+                                                            <div style={{ color: "#777", fontSize: 13 }}>
+                                                                No extra versions.
+                                                            </div>
+                                                        );
+                                                    }
+
+                                                    if (!panel.loading && !panel.error && addableVersions.length === 0) {
+                                                        return (
+                                                            <div style={{ color: "#777", fontSize: 13 }}>
+                                                                All extra versions already added.
+                                                            </div>
+                                                        );
+                                                    }
+
+                                                    return addableVersions.map((version) => {
+                                                        const sizeText = formatVersionSize(version.sizeKB);
+                                                        const publishedText = formatDateText(version.publishedAt);
+                                                        const isEarlyAccess =
+                                                            String(version.availability || "").toLowerCase() === "earlyaccess";
+
+                                                        return (
+                                                            <div
+                                                                key={version.id}
+                                                                style={{
+                                                                    display: "flex",
+                                                                    gap: 8,
+                                                                    padding: "8px 0",
+                                                                    borderBottom: "1px solid #333",
+                                                                }}
+                                                            >
+                                                                <img
+                                                                    src={version.imgSrc || PLACEHOLDER_IMAGE}
+                                                                    alt={version.versionName}
+                                                                    draggable={false}
+                                                                    style={{
+                                                                        width: 52,
+                                                                        height: 70,
+                                                                        objectFit: "cover",
+                                                                        borderRadius: 6,
+                                                                        flexShrink: 0,
+                                                                    }}
+                                                                />
+
+                                                                <div style={{ minWidth: 0, flex: 1 }}>
+                                                                    <div
+                                                                        title={version.versionName}
+                                                                        style={{
+                                                                            fontWeight: 700,
+                                                                            fontSize: 13,
+                                                                            lineHeight: 1.25,
+                                                                            whiteSpace: "nowrap",
+                                                                            overflow: "hidden",
+                                                                            textOverflow: "ellipsis",
+                                                                        }}
+                                                                    >
+                                                                        {version.versionName || `Version ${version.id}`}
+                                                                    </div>
+
+                                                                    <div
+                                                                        style={{
+                                                                            marginTop: 4,
+                                                                            display: "flex",
+                                                                            gap: 4,
+                                                                            flexWrap: "wrap",
+                                                                        }}
+                                                                    >
+                                                                        <Badge bg="secondary">{version.id}</Badge>
+
+                                                                        {version.baseModel && (
+                                                                            <Badge bg="info">{version.baseModel}</Badge>
+                                                                        )}
+
+                                                                        {isEarlyAccess && (
+                                                                            <Badge bg="warning" text="dark">
+                                                                                EA
+                                                                            </Badge>
+                                                                        )}
+                                                                    </div>
+
+                                                                    <div
+                                                                        style={{
+                                                                            marginTop: 4,
+                                                                            color: "#999",
+                                                                            fontSize: 11,
+                                                                        }}
+                                                                    >
+                                                                        {[publishedText, sizeText].filter(Boolean).join(" • ")}
+                                                                    </div>
+
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="outline-success"
+                                                                        style={{ marginTop: 6 }}
+                                                                        onClick={(event) => addVersionToGroupingWindow(item, version, event)}
+                                                                    >
+                                                                        Add Version
+                                                                    </Button>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    });
+                                                })()}
+                                            </div>
+                                        );
+                                    })()}
+
                                 </div>
                             </div>
                         );

@@ -1202,6 +1202,9 @@ type GroupingModelItem = {
 
   isChecked: boolean;
 
+  isAddedVersion?: boolean;
+  parentModelUrl?: string;
+
   collectedAt: number;
 };
 
@@ -1354,6 +1357,108 @@ function mergeGroupingModelItem(
   }
 
   return merged;
+}
+
+function normalizeGroupingOrderUrl(url: string): string {
+  try {
+    const parsed = new URL(normalizeUrl(url));
+    return `${parsed.origin}${parsed.pathname}${parsed.search}`.toLowerCase();
+  } catch {
+    return normalizeUrl(url || "").toLowerCase();
+  }
+}
+
+function insertGroupingItemInOrder(item: GroupingModelItem): void {
+  const key = findGroupingMapKeyByUrl(item.url);
+  const oldItem = groupingModelMap.get(key);
+
+  // If already exists, update it without changing position.
+  if (oldItem) {
+    groupingModelMap.set(key, {
+      ...oldItem,
+      ...item,
+      collectedAt: Date.now(),
+    });
+    return;
+  }
+
+  const entries = Array.from(groupingModelMap.entries());
+
+  const parentUrlKey = item.parentModelUrl
+    ? normalizeGroupingOrderUrl(item.parentModelUrl)
+    : "";
+
+  const modelId = item.modelId || extractModelAndVersionFromUrl(item.url).modelId;
+
+  let parentIndex = -1;
+
+  // Best match: exact parentModelUrl
+  if (parentUrlKey) {
+    parentIndex = entries.findIndex(([_, existing]) =>
+      normalizeGroupingOrderUrl(existing.url) === parentUrlKey
+    );
+  }
+
+  // Fallback: first normal card with same modelId
+  if (parentIndex === -1 && modelId) {
+    parentIndex = entries.findIndex(([_, existing]) =>
+      existing.modelId === modelId && !existing.isAddedVersion
+    );
+  }
+
+  // Fallback: any card with same modelId
+  if (parentIndex === -1 && modelId) {
+    parentIndex = entries.findIndex(([_, existing]) =>
+      existing.modelId === modelId
+    );
+  }
+
+  // If parent not found, append.
+  if (parentIndex === -1) {
+    groupingModelMap.set(key, {
+      ...item,
+      collectedAt: Date.now(),
+    });
+    return;
+  }
+
+  // Insert after parent and after existing added versions for same parent/model.
+  let insertAfterIndex = parentIndex;
+
+  for (let i = parentIndex + 1; i < entries.length; i++) {
+    const existing = entries[i][1];
+
+    const sameParent =
+      parentUrlKey &&
+      existing.parentModelUrl &&
+      normalizeGroupingOrderUrl(existing.parentModelUrl) === parentUrlKey;
+
+    const sameModelAddedVersion =
+      existing.isAddedVersion && existing.modelId === modelId;
+
+    if (sameParent || sameModelAddedVersion) {
+      insertAfterIndex = i;
+      continue;
+    }
+
+    break;
+  }
+
+  const nextEntries = [...entries];
+
+  nextEntries.splice(insertAfterIndex + 1, 0, [
+    key,
+    {
+      ...item,
+      collectedAt: Date.now(),
+    },
+  ]);
+
+  groupingModelMap.clear();
+
+  nextEntries.forEach(([entryKey, entryValue]) => {
+    groupingModelMap.set(entryKey, entryValue);
+  });
 }
 
 function findGroupingMapKeyByUrl(url: string): string {
@@ -1902,6 +2007,34 @@ chrome.runtime.onMessage.addListener(
     return true;
   }
 );
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "add-grouping-item") {
+    const item = message.item as GroupingModelItem | undefined;
+
+    if (!item?.url) {
+      sendResponse({
+        status: "failed",
+        reason: "missing item url",
+      });
+      return true;
+    }
+
+    insertGroupingItemInOrder(item);
+
+    chrome.runtime.sendMessage({
+      action: "grouping-models-updated",
+      source: "manual",
+      items: Array.from(groupingModelMap.values()),
+    });
+
+    sendResponse({
+      status: "ok",
+    });
+
+    return true;
+  }
+});
 
 chrome.runtime.onMessage.addListener(
   async (
