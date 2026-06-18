@@ -1638,6 +1638,25 @@ function sendGroupingModelsToWindow(
   });
 }
 
+let groupingSyncTimer: number | null = null;
+
+function queueGroupingModelsSync(
+  source: GroupingCaptureSource = "manual"
+): void {
+  if (!isGroupingModeActive) return;
+
+  if (groupingSyncTimer !== null) {
+    window.clearTimeout(groupingSyncTimer);
+  }
+
+  groupingSyncTimer = window.setTimeout(() => {
+    groupingSyncTimer = null;
+
+    // Capture all currently visible cards, including newly lazy-loaded ones.
+    sendGroupingModelsToWindow(getModelCards(), source);
+  }, 250);
+}
+
 function sortDivs(container: HTMLElement): void {
   const cardDivs = getModelCards(container);
 
@@ -2401,6 +2420,10 @@ function initMutationObserver(parentContainer: HTMLElement) {
               addCardCheckbox(directCard);
               applyStagedForCard(directCard);
               applyLockedForCard(directCard);
+
+              // NEW: push lazy-loaded cards into GrouppingWindow
+              queueGroupingModelsSync("manual");
+
             }
           }
 
@@ -2463,6 +2486,9 @@ function observeCardItem(cardItem: HTMLElement) {
               applyStagedForCard(cardEl);
               applyLockedForCard(cardEl);
 
+              // NEW: nested/later-rendered card content should also update GrouppingWindow
+              queueGroupingModelsSync("manual");
+
             }
           }
         });
@@ -2512,6 +2538,10 @@ function processExistingCards(parentContainer: HTMLElement) {
       newUrlList: initialUrls,
     });
   }
+
+  // NEW: when existing cards are processed, also refresh GrouppingWindow
+  queueGroupingModelsSync("manual");
+
 }
 
 function waitForModelCards(timeout = 15000): Promise<void> {

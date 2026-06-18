@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Container, Form, Button, Badge } from 'react-bootstrap';
+import SmartImage from '../window_offline/SmartImage';
 
 type GroupingModelItem = {
     url: string;
@@ -40,6 +41,7 @@ type QuickFilter =
 
 type SortField =
     | "name"
+    | "nameReverse"
     | "creator"
     | "modelType"
     | "baseModel"
@@ -130,6 +132,7 @@ function formatDateText(value: string): string {
 
 function getSortTextValue(item: GroupingModelItem, field: SortField): string {
     if (field === "name") return item.name || "";
+    if (field === "nameReverse") return reverseText(item.name || "");
     if (field === "creator") return item.creator || "";
     if (field === "modelType") return item.modelType || "";
     if (field === "baseModel") return item.baseModel || "";
@@ -145,6 +148,10 @@ function getSortNumberValue(item: GroupingModelItem, field: SortField): number {
     if (field === "collectedAt") return Number(item.collectedAt || 0);
 
     return 0;
+}
+
+function reverseText(value: string): string {
+    return Array.from(value || "").reverse().join("");
 }
 
 function isNumberSortField(field: SortField): boolean {
@@ -166,6 +173,9 @@ const GrouppingWindow: React.FC = () => {
     const groupingPortRef = React.useRef<chrome.runtime.Port | null>(null);
     const connectedTabIdRef = React.useRef<number | null>(null);
     const lastTabUrlRef = React.useRef<string>("");
+
+    const itemsRef = React.useRef<GroupingModelItem[]>([]);
+    const didMountSelectionResetRef = React.useRef(false);
 
     const [items, setItems] = useState<GroupingModelItem[]>([]);
     const [searchText, setSearchText] = useState("");
@@ -330,6 +340,54 @@ const GrouppingWindow: React.FC = () => {
             staged: items.filter(x => !!x.stagedText).length,
         };
     }, [items, sortedItems]);
+
+    useEffect(() => {
+        itemsRef.current = items;
+    }, [items]);
+
+    const clearAllSelections = React.useCallback(() => {
+        const checkedItems = itemsRef.current.filter(item => item.isChecked);
+
+        if (checkedItems.length === 0) return;
+
+        setItems(prev =>
+            prev.map(item =>
+                item.isChecked
+                    ? { ...item, isChecked: false }
+                    : item
+            )
+        );
+
+        chrome.storage.local.get("originalTabId", (result) => {
+            if (!result.originalTabId) return;
+
+            checkedItems.forEach(item => {
+                chrome.tabs.sendMessage(
+                    result.originalTabId,
+                    {
+                        action: "set-grouping-selected",
+                        url: item.url,
+                        imgSrc: item.imgSrc,
+                        isChecked: false,
+                    },
+                    () => {
+                        if (chrome.runtime.lastError) {
+                            console.warn(chrome.runtime.lastError.message);
+                        }
+                    }
+                );
+            });
+        });
+    }, []);
+
+    useEffect(() => {
+        if (!didMountSelectionResetRef.current) {
+            didMountSelectionResetRef.current = true;
+            return;
+        }
+
+        clearAllSelections();
+    }, [searchText, quickFilter, sortField, sortDirection, clearAllSelections]);
 
     const handleClear = () => {
         chrome.storage.local.get("originalTabId", (result) => {
@@ -711,6 +769,50 @@ const GrouppingWindow: React.FC = () => {
             window.clearInterval(timer);
         };
     }, [loadGroupingModels]);
+
+    const areAllDisplayedSelected =
+        sortedItems.length > 0 && sortedItems.every(item => item.isChecked);
+
+    const setDisplayedItemsSelection = (nextChecked: boolean) => {
+        if (sortedItems.length === 0) return;
+
+        const displayedUrlSet = new Set(
+            sortedItems.map(item => normalizeSelectionUrl(item.url))
+        );
+
+        setItems(prev =>
+            prev.map(item =>
+                displayedUrlSet.has(normalizeSelectionUrl(item.url))
+                    ? { ...item, isChecked: nextChecked }
+                    : item
+            )
+        );
+
+        chrome.storage.local.get("originalTabId", (result) => {
+            if (!result.originalTabId) return;
+
+            sortedItems.forEach(item => {
+                chrome.tabs.sendMessage(
+                    result.originalTabId,
+                    {
+                        action: "set-grouping-selected",
+                        url: item.url,
+                        imgSrc: item.imgSrc,
+                        isChecked: nextChecked,
+                    },
+                    () => {
+                        if (chrome.runtime.lastError) {
+                            console.warn(chrome.runtime.lastError.message);
+                        }
+                    }
+                );
+            });
+        });
+    };
+
+    const handleToggleDisplayedSelection = () => {
+        setDisplayedItemsSelection(!areAllDisplayedSelected);
+    };
 
     return (
         <Container fluid className="gw-root bg-dark text-light">
@@ -1121,6 +1223,7 @@ const GrouppingWindow: React.FC = () => {
                         >
                             <option value="collectedAt">Added Order</option>
                             <option value="name">Name</option>
+                            <option value="nameReverse">Name Reverse</option>
                             <option value="creator">Creator</option>
                             <option value="modelType">Model Type</option>
                             <option value="baseModel">Base Model</option>
@@ -1145,6 +1248,15 @@ const GrouppingWindow: React.FC = () => {
                 <div>
                     <Form.Label className="gw-label">&nbsp;</Form.Label>
                     <div className="gw-action-wrap">
+                        <Button
+                            size="sm"
+                            variant={areAllDisplayedSelected ? "outline-warning" : "outline-success"}
+                            disabled={sortedItems.length === 0}
+                            onClick={handleToggleDisplayedSelection}
+                        >
+                            {areAllDisplayedSelected ? "Unselect Displayed" : `Select All ${stats.showing}`}
+                        </Button>
+
                         <Button size="sm" variant="primary" onClick={loadGroupingModels}>
                             Refresh
                         </Button>
@@ -1194,11 +1306,15 @@ const GrouppingWindow: React.FC = () => {
                             >
                                 <div className="gw-image-wrap">
                                     {item.imgSrc ? (
-                                        <img
+                                        <SmartImage
                                             src={item.imgSrc}
-                                            alt={item.name}
-                                            draggable={false}
-                                            className="gw-image"
+                                            fallbackSources={[PLACEHOLDER_IMAGE]}
+                                            alt={item.name || "model image"}
+                                            isDarkMode={true}
+                                            loading="lazy"
+                                            maxHeight="100%"
+                                            borderRadius={0}
+                                            showRetryButton={false}
                                         />
                                     ) : (
                                         <div className="gw-no-image">
