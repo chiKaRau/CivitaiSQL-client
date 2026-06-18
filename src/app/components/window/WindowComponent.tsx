@@ -1489,6 +1489,8 @@ const WindowComponent: React.FC = () => {
                     borderRadius={6}
                     loading="lazy"
                     showRetryButton={false}
+                    allowVideo={true}
+                    mediaType="auto"
                 />
             </div>
         );

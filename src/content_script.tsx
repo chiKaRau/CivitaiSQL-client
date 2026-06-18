@@ -1003,13 +1003,19 @@ function addCardCheckbox(item: HTMLElement, index?: number) {
       const url = linkElement.href;
       const normalized = normalizeUrl(url);
 
-      const imgEl = linkElement.querySelector('img') as HTMLImageElement | null;
-      const imgSrc = imgEl?.currentSrc || imgEl?.src || "";
+      const media = getCardMediaSource(item, linkElement);
+      const imgSrc = media.src;
 
       if (checkbox!.checked) {
         checkedUrlSet.add(normalized);
         item.style.border = '2px solid yellow';
-        chrome.runtime.sendMessage({ action: 'addUrl', url, imgSrc });
+
+        chrome.runtime.sendMessage({
+          action: 'addUrl',
+          url,
+          imgSrc,
+          mediaType: media.mediaType,
+        });
       } else {
         checkedUrlSet.delete(normalized);
         item.style.border = '';
@@ -1374,7 +1380,7 @@ function mergeGroupingModelItem(
     updateText: newItem.updateText || oldItem.updateText,
     lockedText: newItem.lockedText || oldItem.lockedText,
 
-    collectedAt: Date.now(),
+    collectedAt: oldItem.collectedAt || newItem.collectedAt || Date.now(),
   };
 
   // Important: when this source just finished, trust this source even if empty.
@@ -1424,7 +1430,9 @@ function insertGroupingItemInOrder(item: GroupingModelItem): void {
     groupingModelMap.set(key, {
       ...oldItem,
       ...item,
-      collectedAt: Date.now(),
+
+      // keep existing order when updating existing item
+      collectedAt: oldItem.collectedAt || item.collectedAt || Date.now(),
     });
     return;
   }
@@ -1564,13 +1572,16 @@ function updateGroupingSelectionInMap(
 ): void {
   const key = findGroupingMapKeyByUrl(url);
   const oldItem = groupingModelMap.get(key);
+  const baseItem = oldItem || createEmptyGroupingModelItem(url, imgSrc, isChecked);
 
   groupingModelMap.set(key, {
-    ...(oldItem || createEmptyGroupingModelItem(url, imgSrc, isChecked)),
+    ...baseItem,
     imgSrc: oldItem?.imgSrc || imgSrc || "",
     mediaType: oldItem?.mediaType || mediaType || "image",
     isChecked,
-    collectedAt: Date.now(),
+
+    // important: selection should not change item order
+    collectedAt: oldItem?.collectedAt || baseItem.collectedAt || Date.now(),
   });
 }
 

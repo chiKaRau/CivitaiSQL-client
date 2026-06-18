@@ -58,6 +58,8 @@ const URLGrid: React.FC<URLGridProps> = ({
                     borderRadius={6}
                     loading="lazy"
                     showRetryButton={false}
+                    allowVideo={true}
+                    mediaType="auto"
                 />
             </div>
         );

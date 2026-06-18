@@ -1,12 +1,30 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import { AppTheme } from "../window_offline/OfflineWindow.theme";
+import SmartImage from "../window_offline/SmartImage";
 
 const CIVITAI_IMAGE_SEGMENT = "anim=false,width=450,optimized=true";
+
+const isVideoMediaUrl = (value: string) => {
+    const clean = (value || "").split("?")[0].split("#")[0].toLowerCase();
+
+    return (
+        clean.endsWith(".webm") ||
+        clean.endsWith(".mp4") ||
+        clean.endsWith(".mov") ||
+        clean.endsWith(".m4v") ||
+        clean.endsWith(".ogg")
+    );
+};
 
 const rewriteCivitaiImageUrl = (value: string) => {
     const url = (value || "").trim();
     if (!url) return "";
+
+    // Important: do not rewrite .webm / video URLs.
+    if (isVideoMediaUrl(url)) {
+        return url;
+    }
 
     if (!url.includes("image.civitai.com")) {
         return url;
@@ -91,22 +109,21 @@ export const HoverImagePreview: React.FC<{
                     cursor: "zoom-in",
                     width: 52,
                     height: 52,
+                    overflow: "hidden",
+                    borderRadius: 8,
+                    backgroundColor: isDarkMode ? "#444" : "#f3f4f6",
                 }}
             >
-                <img
+                <SmartImage
                     src={normalizedSrc}
                     alt="thumb"
+                    isDarkMode={isDarkMode}
+                    maxHeight={52}
+                    borderRadius={8}
                     loading="lazy"
-                    decoding="async"
-                    draggable={false}
-                    style={{
-                        display: "block",
-                        width: 52,
-                        height: 52,
-                        objectFit: "contain",
-                        borderRadius: 8,
-                        backgroundColor: isDarkMode ? "#444" : "#f3f4f6",
-                    }}
+                    showRetryButton={false}
+                    allowVideo={true}
+                    mediaType="auto"
                 />
             </span>
 
@@ -131,22 +148,27 @@ export const HoverImagePreview: React.FC<{
                     }}
                 >
                     {isOpen && (
-                        <img
-                            src={normalizedSrc}
-                            alt="preview"
-                            loading="eager"
-                            decoding="async"
-                            draggable={false}
+                        <div
                             style={{
-                                display: "block",
-                                maxWidth: PREVIEW_WIDTH,
+                                width: PREVIEW_WIDTH,
                                 maxHeight: PREVIEW_MAX_HEIGHT,
-                                objectFit: "contain",
-                                margin: "0 auto",
+                                overflow: "hidden",
                                 borderRadius: 6,
                                 backgroundColor: isDarkMode ? "#444" : "#f3f4f6",
                             }}
-                        />
+                        >
+                            <SmartImage
+                                src={normalizedSrc}
+                                alt="preview"
+                                isDarkMode={isDarkMode}
+                                maxHeight={PREVIEW_MAX_HEIGHT}
+                                borderRadius={6}
+                                loading="eager"
+                                showRetryButton={false}
+                                allowVideo={true}
+                                mediaType="auto"
+                            />
+                        </div>
                     )}
                 </div>,
                 document.body
