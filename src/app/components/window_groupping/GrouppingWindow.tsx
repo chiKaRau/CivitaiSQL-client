@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Container, Row, Col, Form, Button, Badge, ButtonGroup } from 'react-bootstrap';
+import { Container, Form, Button, Badge } from 'react-bootstrap';
 
 type GroupingModelItem = {
     url: string;
@@ -37,6 +37,19 @@ type QuickFilter =
     | "notSaved"
     | "offline"
     | "staged";
+
+type SortField =
+    | "name"
+    | "creator"
+    | "modelType"
+    | "baseModel"
+    | "modelId"
+    | "versionId"
+    | "savedQuantity"
+    | "offlineQuantity"
+    | "collectedAt";
+
+type SortDirection = "asc" | "desc";
 
 type GroupingModelVersion = {
     id: string;
@@ -115,6 +128,39 @@ function formatDateText(value: string): string {
     return date.toLocaleDateString();
 }
 
+function getSortTextValue(item: GroupingModelItem, field: SortField): string {
+    if (field === "name") return item.name || "";
+    if (field === "creator") return item.creator || "";
+    if (field === "modelType") return item.modelType || "";
+    if (field === "baseModel") return item.baseModel || "";
+
+    return "";
+}
+
+function getSortNumberValue(item: GroupingModelItem, field: SortField): number {
+    if (field === "modelId") return Number(item.modelId || 0);
+    if (field === "versionId") return Number(item.versionId || 0);
+    if (field === "savedQuantity") return Number(item.savedQuantity || 0);
+    if (field === "offlineQuantity") return Number(item.offlineQuantity || 0);
+    if (field === "collectedAt") return Number(item.collectedAt || 0);
+
+    return 0;
+}
+
+function isNumberSortField(field: SortField): boolean {
+    return [
+        "modelId",
+        "versionId",
+        "savedQuantity",
+        "offlineQuantity",
+        "collectedAt",
+    ].includes(field);
+}
+
+function getParentGroupKey(item: GroupingModelItem): string {
+    return normalizeSelectionUrl(item.parentModelUrl || item.url);
+}
+
 const GrouppingWindow: React.FC = () => {
 
     const groupingPortRef = React.useRef<chrome.runtime.Port | null>(null);
@@ -125,13 +171,15 @@ const GrouppingWindow: React.FC = () => {
     const [searchText, setSearchText] = useState("");
     const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
 
+    const [sortField, setSortField] = useState<SortField>("collectedAt");
+    const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+
     const [versionPanelByModelId, setVersionPanelByModelId] =
         useState<Record<string, VersionPanelState>>({});
 
     const connectGroupingWindowToTab = React.useCallback((tabId: number) => {
         if (!tabId) return;
 
-        // Already connected to this tab
         if (connectedTabIdRef.current === tabId && groupingPortRef.current) {
             chrome.tabs.sendMessage(
                 tabId,
@@ -149,7 +197,6 @@ const GrouppingWindow: React.FC = () => {
             return;
         }
 
-        // Disconnect old tab port
         if (groupingPortRef.current) {
             try {
                 groupingPortRef.current.disconnect();
@@ -161,8 +208,6 @@ const GrouppingWindow: React.FC = () => {
         }
 
         connectedTabIdRef.current = tabId;
-
-        // Clear old tab cards immediately so UI doesn't show stale cards
         setItems([]);
 
         try {
@@ -218,15 +263,73 @@ const GrouppingWindow: React.FC = () => {
         });
     }, [items, searchText, quickFilter]);
 
+    const sortedItems = useMemo(() => {
+        const directionMultiplier = sortDirection === "asc" ? 1 : -1;
+
+        const compareItems = (a: GroupingModelItem, b: GroupingModelItem) => {
+            if (isNumberSortField(sortField)) {
+                const aValue = getSortNumberValue(a, sortField);
+                const bValue = getSortNumberValue(b, sortField);
+
+                return (aValue - bValue) * directionMultiplier;
+            }
+
+            const aValue = getSortTextValue(a, sortField).toLowerCase();
+            const bValue = getSortTextValue(b, sortField).toLowerCase();
+
+            return aValue.localeCompare(bValue) * directionMultiplier;
+        };
+
+        const parentItems = filteredItems.filter(item => !item.isAddedVersion);
+        const versionItems = filteredItems.filter(item => item.isAddedVersion);
+
+        const versionItemsByParent = new Map<string, GroupingModelItem[]>();
+
+        versionItems.forEach(versionItem => {
+            const parentKey = getParentGroupKey(versionItem);
+
+            if (!versionItemsByParent.has(parentKey)) {
+                versionItemsByParent.set(parentKey, []);
+            }
+
+            versionItemsByParent.get(parentKey)!.push(versionItem);
+        });
+
+        const sortedParents = [...parentItems].sort(compareItems);
+
+        const result: GroupingModelItem[] = [];
+        const usedVersionUrls = new Set<string>();
+
+        sortedParents.forEach(parentItem => {
+            result.push(parentItem);
+
+            const parentKey = normalizeSelectionUrl(parentItem.url);
+            const childVersions = versionItemsByParent.get(parentKey) || [];
+
+            childVersions
+                .sort((a, b) => Number(a.versionId || 0) - Number(b.versionId || 0))
+                .forEach(versionItem => {
+                    result.push(versionItem);
+                    usedVersionUrls.add(normalizeSelectionUrl(versionItem.url));
+                });
+        });
+
+        const orphanVersions = versionItems
+            .filter(item => !usedVersionUrls.has(normalizeSelectionUrl(item.url)))
+            .sort(compareItems);
+
+        return [...result, ...orphanVersions];
+    }, [filteredItems, sortField, sortDirection]);
+
     const stats = useMemo(() => {
         return {
             total: items.length,
-            showing: filteredItems.length,
+            showing: sortedItems.length,
             saved: items.filter(x => x.isSaved).length,
             offline: items.filter(x => x.isOffline).length,
             staged: items.filter(x => !!x.stagedText).length,
         };
-    }, [items, filteredItems]);
+    }, [items, sortedItems]);
 
     const handleClear = () => {
         chrome.storage.local.get("originalTabId", (result) => {
@@ -249,11 +352,8 @@ const GrouppingWindow: React.FC = () => {
         item: GroupingModelItem,
         versions: GroupingModelVersion[]
     ): GroupingModelVersion[] => {
-        // The first API version is the default/current model card itself.
-        // So do not show it as an add option.
         const withoutFirstVersion = versions.slice(1);
 
-        // Also avoid showing versions already added to the grouping window.
         return withoutFirstVersion.filter(version => {
             const versionKey = normalizeSelectionUrl(version.url);
 
@@ -416,7 +516,6 @@ const GrouppingWindow: React.FC = () => {
 
             isChecked: false,
 
-            // new
             isAddedVersion: true,
             parentModelUrl: parentItem.parentModelUrl || parentItem.url,
 
@@ -442,8 +541,6 @@ const GrouppingWindow: React.FC = () => {
 
             if (alreadyExists) return prev;
 
-            // Insert after the parent model and after any already-added versions
-            // for the same model.
             let insertIndex = prev.findIndex(x =>
                 normalizeSelectionUrl(x.url) === normalizeSelectionUrl(parentItem.url)
             );
@@ -586,7 +683,6 @@ const GrouppingWindow: React.FC = () => {
                     if (chrome.runtime.lastError) return;
 
                     const currentUrl = tab.url || "";
-
                     if (!currentUrl) return;
 
                     if (!lastTabUrlRef.current) {
@@ -597,15 +693,12 @@ const GrouppingWindow: React.FC = () => {
                     if (lastTabUrlRef.current !== currentUrl) {
                         lastTabUrlRef.current = currentUrl;
 
-                        // clear old page cards immediately
                         setItems([]);
 
-                        // wait a bit for new page cards to render, then load
                         window.setTimeout(() => {
                             loadGroupingModels();
                         }, 800);
 
-                        // one more delayed load because Civitai cards may render slowly
                         window.setTimeout(() => {
                             loadGroupingModels();
                         }, 2000);
@@ -620,101 +713,452 @@ const GrouppingWindow: React.FC = () => {
     }, [loadGroupingModels]);
 
     return (
-        <Container
-            fluid
-            className="bg-dark text-light p-3"
-            style={{
-                height: "100vh",
-                overflow: "hidden",
-                display: "flex",
-                flexDirection: "column",
-            }}
-        >
-            <Row className="mb-3 align-items-end g-2">
-                <Col md={3}>
-                    <h4 className="mb-1">Groupping Window</h4>
-                    <div className="text-secondary">
+        <Container fluid className="gw-root bg-dark text-light">
+            <style>
+                {`
+                    .gw-root {
+                        height: 100vh;
+                        overflow: hidden;
+                        display: flex;
+                        flex-direction: column;
+                        padding: 14px;
+                    }
+
+                    .gw-toolbar {
+                        display: grid;
+                        grid-template-columns: minmax(180px, 0.8fr) minmax(220px, 1fr) minmax(260px, 1.5fr) minmax(260px, 1.2fr) auto;
+                        gap: 12px;
+                        align-items: end;
+                        margin-bottom: 14px;
+                    }
+
+                    .gw-title {
+                        min-width: 0;
+                    }
+
+                    .gw-title h4 {
+                        margin: 0;
+                        line-height: 1.2;
+                    }
+
+                    .gw-stat {
+                        color: #9ca3af;
+                        font-size: 13px;
+                        margin-top: 4px;
+                    }
+
+                    .gw-label {
+                        color: #d1d5db;
+                        font-size: 13px;
+                        margin-bottom: 5px;
+                    }
+
+                    .gw-filter-wrap,
+                    .gw-action-wrap,
+                    .gw-sort-wrap {
+                        display: flex;
+                        gap: 6px;
+                        flex-wrap: wrap;
+                    }
+
+                    .gw-filter-wrap .btn {
+                        white-space: nowrap;
+                    }
+
+                    .gw-sort-select {
+                        min-width: 165px;
+                        flex: 1;
+                    }
+
+                    .gw-content {
+                        flex: 1;
+                        overflow-y: auto;
+                        padding-right: 6px;
+                    }
+
+                    .gw-grid {
+                        display: grid;
+                        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+                        gap: 16px;
+                        align-items: start;
+                    }
+
+                    .gw-card {
+                        background: #1f1f1f;
+                        border-radius: 12px;
+                        overflow: hidden;
+                        position: relative;
+                        cursor: pointer;
+                        user-select: none;
+                        min-width: 0;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+                        border: 1px solid #333;
+                    }
+
+                    .gw-card-selected {
+                        border: 3px solid yellow;
+                        box-shadow: 0 0 0 4px rgba(255,255,0,0.25), 0 4px 12px rgba(0,0,0,0.35);
+                    }
+
+                    .gw-image-wrap {
+                        position: relative;
+                        aspect-ratio: 7 / 9;
+                        background: #111;
+                        overflow: hidden;
+                    }
+
+                    .gw-image-wrap::before {
+                        content: "";
+                        position: absolute;
+                        left: 0;
+                        right: 0;
+                        top: 0;
+                        height: 95px;
+                        background: linear-gradient(to bottom, rgba(0,0,0,0.65), transparent);
+                        z-index: 2;
+                        pointer-events: none;
+                    }
+
+                    .gw-image {
+                        width: 100%;
+                        height: 100%;
+                        object-fit: cover;
+                        display: block;
+                    }
+
+                    .gw-no-image {
+                        height: 100%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        color: #777;
+                    }
+
+                    .gw-checkbox-shell {
+                        position: absolute;
+                        top: 10px;
+                        right: 10px;
+                        z-index: 6;
+                        width: 32px;
+                        height: 32px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        background: rgba(0,0,0,0.55);
+                        border-radius: 999px;
+                        pointer-events: none;
+                    }
+
+                    .gw-checkbox-shell input {
+                        transform: scale(1.35);
+                        pointer-events: none;
+                    }
+
+                    .gw-top-badges {
+                        position: absolute;
+                        top: 8px;
+                        left: 8px;
+                        right: 50px;
+                        display: flex;
+                        flex-wrap: wrap;
+                        gap: 5px;
+                        z-index: 4;
+                        max-height: 58px;
+                        overflow: hidden;
+                        pointer-events: none;
+                    }
+
+                    .gw-badge-truncate {
+                        max-width: 100%;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                    }
+
+                    .gw-center-labels {
+                        position: absolute;
+                        top: 50%;
+                        left: 8px;
+                        right: 8px;
+                        transform: translateY(-50%);
+                        z-index: 4;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        gap: 6px;
+                        pointer-events: none;
+                    }
+
+                    .gw-center-label {
+                        color: white;
+                        text-shadow: 0 0 3px black;
+                        padding: 5px 8px;
+                        border-radius: 6px;
+                        font-weight: 700;
+                        font-size: 13px;
+                        max-width: 100%;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        white-space: nowrap;
+                    }
+
+                    .gw-selected-pill {
+                        position: absolute;
+                        bottom: 8px;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        z-index: 4;
+                        background: rgba(255,255,0,0.92);
+                        color: #111;
+                        padding: 4px 9px;
+                        border-radius: 999px;
+                        font-weight: 800;
+                        font-size: 12px;
+                        pointer-events: none;
+                    }
+
+                    .gw-body {
+                        padding: 10px;
+                        min-width: 0;
+                    }
+
+                    .gw-name {
+                        font-weight: 700;
+                        font-size: 15px;
+                        line-height: 1.25;
+                        min-height: 38px;
+                        display: -webkit-box;
+                        -webkit-line-clamp: 2;
+                        -webkit-box-orient: vertical;
+                        overflow: hidden;
+                        overflow-wrap: anywhere;
+                    }
+
+                    .gw-creator {
+                        margin-top: 6px;
+                        color: #aaa;
+                        font-size: 13px;
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                    }
+
+                    .gw-id {
+                        margin-top: 6px;
+                        color: #777;
+                        font-size: 12px;
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                    }
+
+                    .gw-card-actions {
+                        margin-top: 8px;
+                        display: flex;
+                        gap: 6px;
+                        flex-wrap: wrap;
+                    }
+
+                    .gw-version-panel {
+                        margin-top: 10px;
+                        border-top: 1px solid #333;
+                        padding-top: 10px;
+                        max-height: 300px;
+                        overflow-y: auto;
+                        overflow-x: hidden;
+                    }
+
+                    .gw-version-row {
+                        display: grid;
+                        grid-template-columns: 52px minmax(0, 1fr);
+                        gap: 8px;
+                        padding: 8px 0;
+                        border-bottom: 1px solid #333;
+                    }
+
+                    .gw-version-thumb {
+                        width: 52px;
+                        height: 70px;
+                        object-fit: cover;
+                        border-radius: 6px;
+                    }
+
+                    .gw-version-info {
+                        min-width: 0;
+                    }
+
+                    .gw-version-name {
+                        font-weight: 700;
+                        font-size: 13px;
+                        line-height: 1.25;
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                    }
+
+                    .gw-version-badges {
+                        margin-top: 4px;
+                        display: flex;
+                        gap: 4px;
+                        flex-wrap: wrap;
+                    }
+
+                    .gw-version-meta {
+                        margin-top: 4px;
+                        color: #999;
+                        font-size: 11px;
+                    }
+
+                    .gw-empty {
+                        text-align: center;
+                        color: #777;
+                        margin-top: 80px;
+                    }
+
+                    @media (max-width: 1100px) {
+                        .gw-toolbar {
+                            grid-template-columns: repeat(2, minmax(0, 1fr));
+                        }
+
+                        .gw-action-wrap {
+                            justify-content: flex-start;
+                        }
+                    }
+
+                    @media (max-width: 650px) {
+                        .gw-root {
+                            padding: 10px;
+                        }
+
+                        .gw-toolbar {
+                            grid-template-columns: 1fr;
+                        }
+
+                        .gw-grid {
+                            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+                            gap: 12px;
+                        }
+
+                        .gw-action-wrap .btn,
+                        .gw-filter-wrap .btn {
+                            flex: 1 1 auto;
+                        }
+                    }
+                `}
+            </style>
+
+            <div className="gw-toolbar">
+                <div className="gw-title">
+                    <h4>Groupping Window</h4>
+                    <div className="gw-stat">
                         Showing {stats.showing} / {stats.total}
                     </div>
-                </Col>
+                </div>
 
-                <Col md={3}>
-                    <Form.Label>Search</Form.Label>
+                <div>
+                    <Form.Label className="gw-label">Search</Form.Label>
                     <Form.Control
+                        size="sm"
                         value={searchText}
                         onChange={(e) => setSearchText(e.target.value)}
                         placeholder="name, creator, saved, offline..."
                     />
-                </Col>
+                </div>
 
-                <Col md={4}>
-                    <Form.Label>Filter</Form.Label>
-                    <div>
-                        <ButtonGroup size="sm">
-                            <Button
-                                variant={quickFilter === "all" ? "light" : "outline-light"}
-                                onClick={() => setQuickFilter("all")}
-                            >
-                                All {stats.total}
-                            </Button>
+                <div>
+                    <Form.Label className="gw-label">Filter</Form.Label>
+                    <div className="gw-filter-wrap">
+                        <Button
+                            size="sm"
+                            variant={quickFilter === "all" ? "light" : "outline-light"}
+                            onClick={() => setQuickFilter("all")}
+                        >
+                            All {stats.total}
+                        </Button>
 
-                            <Button
-                                variant={quickFilter === "saved" ? "success" : "outline-success"}
-                                onClick={() => setQuickFilter("saved")}
-                            >
-                                Saved {stats.saved}
-                            </Button>
+                        <Button
+                            size="sm"
+                            variant={quickFilter === "saved" ? "success" : "outline-success"}
+                            onClick={() => setQuickFilter("saved")}
+                        >
+                            Saved {stats.saved}
+                        </Button>
 
-                            <Button
-                                variant={quickFilter === "notSaved" ? "secondary" : "outline-secondary"}
-                                onClick={() => setQuickFilter("notSaved")}
-                            >
-                                Not Saved
-                            </Button>
+                        <Button
+                            size="sm"
+                            variant={quickFilter === "notSaved" ? "secondary" : "outline-secondary"}
+                            onClick={() => setQuickFilter("notSaved")}
+                        >
+                            Not Saved
+                        </Button>
 
-                            <Button
-                                variant={quickFilter === "offline" ? "primary" : "outline-primary"}
-                                onClick={() => setQuickFilter("offline")}
-                            >
-                                Offline {stats.offline}
-                            </Button>
+                        <Button
+                            size="sm"
+                            variant={quickFilter === "offline" ? "primary" : "outline-primary"}
+                            onClick={() => setQuickFilter("offline")}
+                        >
+                            Offline {stats.offline}
+                        </Button>
 
-                            <Button
-                                variant={quickFilter === "staged" ? "warning" : "outline-warning"}
-                                onClick={() => setQuickFilter("staged")}
-                            >
-                                Staged {stats.staged}
-                            </Button>
-                        </ButtonGroup>
+                        <Button
+                            size="sm"
+                            variant={quickFilter === "staged" ? "warning" : "outline-warning"}
+                            onClick={() => setQuickFilter("staged")}
+                        >
+                            Staged {stats.staged}
+                        </Button>
                     </div>
-                </Col>
+                </div>
 
-                <Col md={2} className="text-end">
-                    <Button variant="primary" className="me-2" onClick={loadGroupingModels}>
-                        Refresh
-                    </Button>
+                <div>
+                    <Form.Label className="gw-label">Sort</Form.Label>
 
-                    <Button variant="danger" onClick={handleClear}>
-                        Clear
-                    </Button>
-                </Col>
-            </Row>
+                    <div className="gw-sort-wrap">
+                        <Form.Select
+                            size="sm"
+                            className="gw-sort-select"
+                            value={sortField}
+                            onChange={(e) => setSortField(e.target.value as SortField)}
+                        >
+                            <option value="collectedAt">Added Order</option>
+                            <option value="name">Name</option>
+                            <option value="creator">Creator</option>
+                            <option value="modelType">Model Type</option>
+                            <option value="baseModel">Base Model</option>
+                            <option value="modelId">Model ID</option>
+                            <option value="versionId">Version ID</option>
+                            <option value="savedQuantity">Saved Count</option>
+                            <option value="offlineQuantity">Offline Count</option>
+                        </Form.Select>
 
-            <div
-                style={{
-                    flex: 1,
-                    overflowY: "auto",
-                    paddingRight: 8,
-                }}
-            >
-                <div
-                    style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))",
-                        gap: 16,
-                    }}
-                >
-                    {filteredItems.map((item) => {
+                        <Button
+                            size="sm"
+                            variant="outline-light"
+                            onClick={() =>
+                                setSortDirection(prev => prev === "asc" ? "desc" : "asc")
+                            }
+                        >
+                            {sortDirection === "asc" ? "ASC" : "DESC"}
+                        </Button>
+                    </div>
+                </div>
+
+                <div>
+                    <Form.Label className="gw-label">&nbsp;</Form.Label>
+                    <div className="gw-action-wrap">
+                        <Button size="sm" variant="primary" onClick={loadGroupingModels}>
+                            Refresh
+                        </Button>
+
+                        <Button size="sm" variant="danger" onClick={handleClear}>
+                            Clear
+                        </Button>
+                    </div>
+                </div>
+            </div>
+
+            <div className="gw-content">
+                <div className="gw-grid">
+                    {sortedItems.map((item) => {
                         const centerLabels = [
                             item.savedText && {
                                 text: item.savedText,
@@ -730,6 +1174,10 @@ const GrouppingWindow: React.FC = () => {
                             },
                         ].filter(Boolean) as Array<{ text: string; bg: string }>;
 
+                        const modelId = getModelIdFromItem(item);
+                        const panel = versionPanelByModelId[modelId];
+                        const shouldShowVersionPanel = !item.isAddedVersion && panel?.expanded;
+
                         return (
                             <div
                                 key={item.url}
@@ -742,116 +1190,69 @@ const GrouppingWindow: React.FC = () => {
                                         toggleItemSelection(item);
                                     }
                                 }}
-                                style={{
-                                    background: "#1f1f1f",
-                                    border: item.isChecked ? "3px solid yellow" : "1px solid #333",
-                                    borderRadius: 12,
-                                    overflow: "hidden",
-                                    position: "relative",
-                                    boxShadow: item.isChecked
-                                        ? "0 0 0 4px rgba(255,255,0,0.25), 0 4px 12px rgba(0,0,0,0.35)"
-                                        : "0 4px 12px rgba(0,0,0,0.35)",
-                                    cursor: "pointer",
-                                    userSelect: "none",
-                                }}
+                                className={`gw-card ${item.isChecked ? "gw-card-selected" : ""}`}
                             >
-                                <div
-                                    style={{
-                                        position: "relative",
-                                        aspectRatio: "7 / 9",
-                                        background: "#111",
-                                    }}
-                                >
+                                <div className="gw-image-wrap">
                                     {item.imgSrc ? (
                                         <img
                                             src={item.imgSrc}
                                             alt={item.name}
                                             draggable={false}
-                                            style={{
-                                                width: "100%",
-                                                height: "100%",
-                                                objectFit: "cover",
-                                                display: "block",
-                                            }}
+                                            className="gw-image"
                                         />
                                     ) : (
-                                        <div
-                                            style={{
-                                                height: "100%",
-                                                display: "flex",
-                                                alignItems: "center",
-                                                justifyContent: "center",
-                                                color: "#777",
-                                            }}
-                                        >
+                                        <div className="gw-no-image">
                                             No Image
                                         </div>
                                     )}
 
-                                    <input
-                                        type="checkbox"
-                                        checked={item.isChecked}
-                                        readOnly
-                                        style={{
-                                            position: "absolute",
-                                            top: 10,
-                                            right: 10,
-                                            zIndex: 5,
-                                            transform: "scale(1.8)",
-                                            pointerEvents: "none",
-                                        }}
-                                    />
+                                    <div className="gw-checkbox-shell">
+                                        <input
+                                            type="checkbox"
+                                            checked={item.isChecked}
+                                            readOnly
+                                        />
+                                    </div>
 
-                                    <div
-                                        style={{
-                                            position: "absolute",
-                                            top: 8,
-                                            left: 8,
-                                            right: 48,
-                                            display: "flex",
-                                            flexWrap: "wrap",
-                                            gap: 6,
-                                            zIndex: 3,
-                                        }}
-                                    >
-                                        {item.modelType && <Badge bg="info">{item.modelType}</Badge>}
-                                        {item.baseModel && <Badge bg="secondary">{item.baseModel}</Badge>}
+                                    <div className="gw-top-badges">
+                                        {item.isAddedVersion && (
+                                            <Badge bg="warning" text="dark" className="gw-badge-truncate">
+                                                Added Version
+                                            </Badge>
+                                        )}
+
+                                        {item.modelType && (
+                                            <Badge bg="info" className="gw-badge-truncate">
+                                                {item.modelType}
+                                            </Badge>
+                                        )}
+
+                                        {item.baseModel && (
+                                            <Badge bg="secondary" className="gw-badge-truncate">
+                                                {item.baseModel}
+                                            </Badge>
+                                        )}
+
                                         {item.updateText && (
-                                            <Badge bg="light" text="dark">
+                                            <Badge bg="light" text="dark" className="gw-badge-truncate">
                                                 {item.updateText}
                                             </Badge>
                                         )}
-                                        {item.lockedText && <Badge bg="dark">{item.lockedText}</Badge>}
+
+                                        {item.lockedText && (
+                                            <Badge bg="dark" className="gw-badge-truncate">
+                                                {item.lockedText}
+                                            </Badge>
+                                        )}
                                     </div>
 
                                     {centerLabels.length > 0 && (
-                                        <div
-                                            style={{
-                                                position: "absolute",
-                                                top: "50%",
-                                                left: "50%",
-                                                transform: "translate(-50%, -50%)",
-                                                zIndex: 4,
-                                                display: "flex",
-                                                flexDirection: "column",
-                                                alignItems: "center",
-                                                gap: 6,
-                                                pointerEvents: "none",
-                                            }}
-                                        >
+                                        <div className="gw-center-labels">
                                             {centerLabels.map((label) => (
                                                 <div
                                                     key={label.text}
-                                                    style={{
-                                                        backgroundColor: label.bg,
-                                                        color: "white",
-                                                        textShadow: "0px 0px 3px black",
-                                                        padding: "5px 8px",
-                                                        borderRadius: 5,
-                                                        fontWeight: 700,
-                                                        fontSize: 13,
-                                                        whiteSpace: "nowrap",
-                                                    }}
+                                                    className="gw-center-label"
+                                                    style={{ backgroundColor: label.bg }}
                                                 >
                                                     {label.text}
                                                 </div>
@@ -860,78 +1261,34 @@ const GrouppingWindow: React.FC = () => {
                                     )}
 
                                     {item.isChecked && (
-                                        <div
-                                            style={{
-                                                position: "absolute",
-                                                bottom: 8,
-                                                left: "50%",
-                                                transform: "translateX(-50%)",
-                                                zIndex: 4,
-                                                background: "rgba(255,255,0,0.9)",
-                                                color: "#111",
-                                                padding: "4px 8px",
-                                                borderRadius: 999,
-                                                fontWeight: 800,
-                                                fontSize: 12,
-                                                pointerEvents: "none",
-                                            }}
-                                        >
+                                        <div className="gw-selected-pill">
                                             SELECTED
                                         </div>
                                     )}
                                 </div>
 
-                                <div style={{ padding: 10 }}>
-                                    <div
-                                        title={item.name}
-                                        style={{
-                                            fontWeight: 700,
-                                            fontSize: 15,
-                                            lineHeight: 1.25,
-                                            minHeight: 38,
-                                            display: "-webkit-box",
-                                            WebkitLineClamp: 2,
-                                            WebkitBoxOrient: "vertical",
-                                            overflow: "hidden",
-                                        }}
-                                    >
+                                <div className="gw-body">
+                                    <div className="gw-name" title={item.name}>
                                         {item.name || "Unknown Model"}
                                     </div>
 
-                                    <div
-                                        style={{
-                                            marginTop: 6,
-                                            color: "#aaa",
-                                            fontSize: 13,
-                                            whiteSpace: "nowrap",
-                                            overflow: "hidden",
-                                            textOverflow: "ellipsis",
-                                        }}
-                                        title={item.creator}
-                                    >
+                                    <div className="gw-creator" title={item.creator}>
                                         {item.creator || "Unknown Creator"}
                                     </div>
 
-                                    <div
-                                        style={{
-                                            marginTop: 6,
-                                            color: "#777",
-                                            fontSize: 12,
-                                        }}
-                                    >
+                                    <div className="gw-id" title={`${item.modelId}${item.versionId ? ` / ${item.versionId}` : ""}`}>
                                         {item.modelId}
                                         {item.versionId ? ` / ${item.versionId}` : ""}
                                     </div>
 
-
-                                    <div style={{ marginTop: 8 }}>
+                                    <div className="gw-card-actions">
                                         {!item.isAddedVersion && (
                                             <Button
                                                 size="sm"
                                                 variant="outline-info"
                                                 onClick={(event) => toggleVersionPanel(item, event)}
                                             >
-                                                Versions
+                                                {panel?.expanded ? "Hide Versions" : "Versions"}
                                             </Button>
                                         )}
 
@@ -946,166 +1303,112 @@ const GrouppingWindow: React.FC = () => {
                                         )}
                                     </div>
 
-                                    {(() => {
-                                        const modelId = getModelIdFromItem(item);
-                                        const panel = versionPanelByModelId[modelId];
+                                    {shouldShowVersionPanel && (
+                                        <div
+                                            className="gw-version-panel"
+                                            onClick={(event) => event.stopPropagation()}
+                                        >
+                                            {panel.loading && (
+                                                <div style={{ color: "#aaa", fontSize: 13 }}>
+                                                    Loading versions...
+                                                </div>
+                                            )}
 
-                                        if (!panel?.expanded) return null;
+                                            {panel.error && (
+                                                <div style={{ color: "#ef4444", fontSize: 13 }}>
+                                                    {panel.error}
+                                                </div>
+                                            )}
 
-                                        return (
-                                            <div
-                                                onClick={(event) => event.stopPropagation()}
-                                                style={{
-                                                    marginTop: 10,
-                                                    borderTop: "1px solid #333",
-                                                    paddingTop: 10,
-                                                    maxHeight: 260,
-                                                    overflowY: "auto",
-                                                }}
-                                            >
-                                                {panel.loading && (
-                                                    <div style={{ color: "#aaa", fontSize: 13 }}>
-                                                        Loading versions...
-                                                    </div>
-                                                )}
+                                            {!panel.loading && !panel.error && panel.versions.length === 0 && (
+                                                <div style={{ color: "#777", fontSize: 13 }}>
+                                                    No versions found.
+                                                </div>
+                                            )}
 
-                                                {panel.error && (
-                                                    <div style={{ color: "#ef4444", fontSize: 13 }}>
-                                                        {panel.error}
-                                                    </div>
-                                                )}
+                                            {(() => {
+                                                const addableVersions = getAddableVersionsForItem(item, panel.versions);
 
-                                                {!panel.loading && !panel.error && panel.versions.length === 0 && (
-                                                    <div style={{ color: "#777", fontSize: 13 }}>
-                                                        No versions found.
-                                                    </div>
-                                                )}
+                                                if (!panel.loading && !panel.error && panel.versions.length <= 1) {
+                                                    return (
+                                                        <div style={{ color: "#777", fontSize: 13 }}>
+                                                            No extra versions.
+                                                        </div>
+                                                    );
+                                                }
 
-                                                {(() => {
-                                                    const addableVersions = getAddableVersionsForItem(item, panel.versions);
+                                                if (!panel.loading && !panel.error && addableVersions.length === 0) {
+                                                    return (
+                                                        <div style={{ color: "#777", fontSize: 13 }}>
+                                                            All extra versions already added.
+                                                        </div>
+                                                    );
+                                                }
 
-                                                    if (!panel.loading && !panel.error && panel.versions.length <= 1) {
-                                                        return (
-                                                            <div style={{ color: "#777", fontSize: 13 }}>
-                                                                No extra versions.
-                                                            </div>
-                                                        );
-                                                    }
+                                                return addableVersions.map((version) => {
+                                                    const sizeText = formatVersionSize(version.sizeKB);
+                                                    const publishedText = formatDateText(version.publishedAt);
+                                                    const isEarlyAccess =
+                                                        String(version.availability || "").toLowerCase() === "earlyaccess";
 
-                                                    if (!panel.loading && !panel.error && addableVersions.length === 0) {
-                                                        return (
-                                                            <div style={{ color: "#777", fontSize: 13 }}>
-                                                                All extra versions already added.
-                                                            </div>
-                                                        );
-                                                    }
+                                                    return (
+                                                        <div key={version.id} className="gw-version-row">
+                                                            <img
+                                                                src={version.imgSrc || PLACEHOLDER_IMAGE}
+                                                                alt={version.versionName}
+                                                                draggable={false}
+                                                                className="gw-version-thumb"
+                                                            />
 
-                                                    return addableVersions.map((version) => {
-                                                        const sizeText = formatVersionSize(version.sizeKB);
-                                                        const publishedText = formatDateText(version.publishedAt);
-                                                        const isEarlyAccess =
-                                                            String(version.availability || "").toLowerCase() === "earlyaccess";
-
-                                                        return (
-                                                            <div
-                                                                key={version.id}
-                                                                style={{
-                                                                    display: "flex",
-                                                                    gap: 8,
-                                                                    padding: "8px 0",
-                                                                    borderBottom: "1px solid #333",
-                                                                }}
-                                                            >
-                                                                <img
-                                                                    src={version.imgSrc || PLACEHOLDER_IMAGE}
-                                                                    alt={version.versionName}
-                                                                    draggable={false}
-                                                                    style={{
-                                                                        width: 52,
-                                                                        height: 70,
-                                                                        objectFit: "cover",
-                                                                        borderRadius: 6,
-                                                                        flexShrink: 0,
-                                                                    }}
-                                                                />
-
-                                                                <div style={{ minWidth: 0, flex: 1 }}>
-                                                                    <div
-                                                                        title={version.versionName}
-                                                                        style={{
-                                                                            fontWeight: 700,
-                                                                            fontSize: 13,
-                                                                            lineHeight: 1.25,
-                                                                            whiteSpace: "nowrap",
-                                                                            overflow: "hidden",
-                                                                            textOverflow: "ellipsis",
-                                                                        }}
-                                                                    >
-                                                                        {version.versionName || `Version ${version.id}`}
-                                                                    </div>
-
-                                                                    <div
-                                                                        style={{
-                                                                            marginTop: 4,
-                                                                            display: "flex",
-                                                                            gap: 4,
-                                                                            flexWrap: "wrap",
-                                                                        }}
-                                                                    >
-                                                                        <Badge bg="secondary">{version.id}</Badge>
-
-                                                                        {version.baseModel && (
-                                                                            <Badge bg="info">{version.baseModel}</Badge>
-                                                                        )}
-
-                                                                        {isEarlyAccess && (
-                                                                            <Badge bg="warning" text="dark">
-                                                                                EA
-                                                                            </Badge>
-                                                                        )}
-                                                                    </div>
-
-                                                                    <div
-                                                                        style={{
-                                                                            marginTop: 4,
-                                                                            color: "#999",
-                                                                            fontSize: 11,
-                                                                        }}
-                                                                    >
-                                                                        {[publishedText, sizeText].filter(Boolean).join(" • ")}
-                                                                    </div>
-
-                                                                    <Button
-                                                                        size="sm"
-                                                                        variant="outline-success"
-                                                                        style={{ marginTop: 6 }}
-                                                                        onClick={(event) => addVersionToGroupingWindow(item, version, event)}
-                                                                    >
-                                                                        Add Version
-                                                                    </Button>
+                                                            <div className="gw-version-info">
+                                                                <div
+                                                                    title={version.versionName}
+                                                                    className="gw-version-name"
+                                                                >
+                                                                    {version.versionName || `Version ${version.id}`}
                                                                 </div>
-                                                            </div>
-                                                        );
-                                                    });
-                                                })()}
-                                            </div>
-                                        );
-                                    })()}
 
+                                                                <div className="gw-version-badges">
+                                                                    <Badge bg="secondary">{version.id}</Badge>
+
+                                                                    {version.baseModel && (
+                                                                        <Badge bg="info">{version.baseModel}</Badge>
+                                                                    )}
+
+                                                                    {isEarlyAccess && (
+                                                                        <Badge bg="warning" text="dark">
+                                                                            EA
+                                                                        </Badge>
+                                                                    )}
+                                                                </div>
+
+                                                                <div className="gw-version-meta">
+                                                                    {[publishedText, sizeText].filter(Boolean).join(" • ")}
+                                                                </div>
+
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline-success"
+                                                                    style={{ marginTop: 6 }}
+                                                                    onClick={(event) => addVersionToGroupingWindow(item, version, event)}
+                                                                >
+                                                                    Add Version
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                });
+                                            })()}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         );
                     })}
                 </div>
 
-                {filteredItems.length === 0 && (
-                    <div
-                        style={{
-                            textAlign: "center",
-                            color: "#777",
-                            marginTop: 80,
-                        }}
-                    >
+                {sortedItems.length === 0 && (
+                    <div className="gw-empty">
                         No models found.
                     </div>
                 )}
