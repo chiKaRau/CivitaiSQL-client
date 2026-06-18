@@ -33,12 +33,28 @@ type GroupingModelItem = {
     collectedAt: number;
 };
 
-type QuickFilter =
-    | "all"
+type StatusFilterKey =
     | "saved"
     | "notSaved"
+    | "notSavedOnly"
     | "offline"
-    | "staged";
+    | "staged"
+    | "updated"
+    | "locked"
+    | "addedVersion";
+
+type StatusFilters = Record<StatusFilterKey, boolean>;
+
+const EMPTY_STATUS_FILTERS: StatusFilters = {
+    saved: false,
+    notSaved: false,
+    notSavedOnly: false,
+    offline: false,
+    staged: false,
+    updated: false,
+    locked: false,
+    addedVersion: false,
+};
 
 type SortField =
     | "name"
@@ -169,6 +185,16 @@ function getParentGroupKey(item: GroupingModelItem): string {
     return normalizeSelectionUrl(item.parentModelUrl || item.url);
 }
 
+function hasAnyExtraStatus(item: GroupingModelItem): boolean {
+    return Boolean(
+        item.isOffline ||
+        item.stagedText ||
+        item.updateText ||
+        item.lockedText ||
+        item.isAddedVersion
+    );
+}
+
 const GrouppingWindow: React.FC = () => {
 
     const groupingPortRef = React.useRef<chrome.runtime.Port | null>(null);
@@ -180,7 +206,7 @@ const GrouppingWindow: React.FC = () => {
 
     const [items, setItems] = useState<GroupingModelItem[]>([]);
     const [searchText, setSearchText] = useState("");
-    const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
+    const [statusFilters, setStatusFilters] = useState<StatusFilters>(EMPTY_STATUS_FILTERS);
 
     const [sortField, setSortField] = useState<SortField>("collectedAt");
     const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
@@ -244,14 +270,65 @@ const GrouppingWindow: React.FC = () => {
         );
     }, []);
 
+    const activeStatusFilterCount = Object.values(statusFilters).filter(Boolean).length;
+
+    const clearStatusFilters = () => {
+        setStatusFilters(EMPTY_STATUS_FILTERS);
+    };
+
+    const toggleStatusFilter = (key: StatusFilterKey) => {
+        setStatusFilters(prev => {
+            const next = {
+                ...prev,
+                [key]: !prev[key],
+            };
+
+            // Saved, Not Saved, and Not Saved Only conflict with each other
+            if (key === "saved" && next.saved) {
+                next.notSaved = false;
+                next.notSavedOnly = false;
+            }
+
+            if (key === "notSaved" && next.notSaved) {
+                next.saved = false;
+                next.notSavedOnly = false;
+            }
+
+            if (key === "notSavedOnly" && next.notSavedOnly) {
+                next.saved = false;
+                next.notSaved = false;
+                next.offline = false;
+                next.staged = false;
+                next.updated = false;
+                next.locked = false;
+                next.addedVersion = false;
+            }
+
+            // If user selects another status, Not Saved Only should turn off
+            if (
+                key !== "notSavedOnly" &&
+                ["offline", "staged", "updated", "locked", "addedVersion"].includes(key) &&
+                next[key]
+            ) {
+                next.notSavedOnly = false;
+            }
+
+            return next;
+        });
+    };
+
     const filteredItems = useMemo(() => {
         const q = searchText.trim().toLowerCase();
 
         return items.filter((item) => {
-            if (quickFilter === "saved" && !item.isSaved) return false;
-            if (quickFilter === "notSaved" && item.isSaved) return false;
-            if (quickFilter === "offline" && !item.isOffline) return false;
-            if (quickFilter === "staged" && !item.stagedText) return false;
+            if (statusFilters.saved && !item.isSaved) return false;
+            if (statusFilters.notSaved && item.isSaved) return false;
+            if (statusFilters.notSavedOnly && (item.isSaved || hasAnyExtraStatus(item))) return false;
+            if (statusFilters.offline && !item.isOffline) return false;
+            if (statusFilters.staged && !item.stagedText) return false;
+            if (statusFilters.updated && !item.updateText) return false;
+            if (statusFilters.locked && !item.lockedText) return false;
+            if (statusFilters.addedVersion && !item.isAddedVersion) return false;
 
             if (!q) return true;
 
@@ -264,6 +341,7 @@ const GrouppingWindow: React.FC = () => {
                 item.offlineText,
                 item.stagedText,
                 item.updateText,
+                item.lockedText,
                 item.modelId,
                 item.versionId,
                 item.url,
@@ -272,7 +350,7 @@ const GrouppingWindow: React.FC = () => {
                 .toLowerCase()
                 .includes(q);
         });
-    }, [items, searchText, quickFilter]);
+    }, [items, searchText, statusFilters]);
 
     const sortedItems = useMemo(() => {
         const directionMultiplier = sortDirection === "asc" ? 1 : -1;
@@ -337,8 +415,13 @@ const GrouppingWindow: React.FC = () => {
             total: items.length,
             showing: sortedItems.length,
             saved: items.filter(x => x.isSaved).length,
+            notSaved: items.filter(x => !x.isSaved).length,
+            notSavedOnly: items.filter(x => !x.isSaved && !hasAnyExtraStatus(x)).length,
             offline: items.filter(x => x.isOffline).length,
             staged: items.filter(x => !!x.stagedText).length,
+            updated: items.filter(x => !!x.updateText).length,
+            locked: items.filter(x => !!x.lockedText).length,
+            addedVersion: items.filter(x => !!x.isAddedVersion).length,
         };
     }, [items, sortedItems]);
 
@@ -388,7 +471,7 @@ const GrouppingWindow: React.FC = () => {
         }
 
         clearAllSelections();
-    }, [searchText, quickFilter, sortField, sortDirection, clearAllSelections]);
+    }, [searchText, statusFilters, sortField, sortDirection, clearAllSelections]);
 
     const handleClear = () => {
         chrome.storage.local.get("originalTabId", (result) => {
@@ -1169,46 +1252,81 @@ const GrouppingWindow: React.FC = () => {
                 </div>
 
                 <div>
-                    <Form.Label className="gw-label">Filter</Form.Label>
+                    <Form.Label className="gw-label">
+                        Filter {activeStatusFilterCount > 0 ? `(AND ${activeStatusFilterCount})` : ""}
+                    </Form.Label>
+
                     <div className="gw-filter-wrap">
                         <Button
                             size="sm"
-                            variant={quickFilter === "all" ? "light" : "outline-light"}
-                            onClick={() => setQuickFilter("all")}
+                            variant={activeStatusFilterCount === 0 ? "light" : "outline-light"}
+                            onClick={clearStatusFilters}
                         >
                             All {stats.total}
                         </Button>
 
                         <Button
                             size="sm"
-                            variant={quickFilter === "saved" ? "success" : "outline-success"}
-                            onClick={() => setQuickFilter("saved")}
+                            variant={statusFilters.saved ? "success" : "outline-success"}
+                            onClick={() => toggleStatusFilter("saved")}
                         >
                             Saved {stats.saved}
                         </Button>
 
                         <Button
                             size="sm"
-                            variant={quickFilter === "notSaved" ? "secondary" : "outline-secondary"}
-                            onClick={() => setQuickFilter("notSaved")}
+                            variant={statusFilters.notSaved ? "secondary" : "outline-secondary"}
+                            onClick={() => toggleStatusFilter("notSaved")}
                         >
-                            Not Saved
+                            Not Saved {stats.notSaved}
                         </Button>
 
                         <Button
                             size="sm"
-                            variant={quickFilter === "offline" ? "primary" : "outline-primary"}
-                            onClick={() => setQuickFilter("offline")}
+                            variant={statusFilters.notSavedOnly ? "danger" : "outline-danger"}
+                            onClick={() => toggleStatusFilter("notSavedOnly")}
+                        >
+                            Not Saved Only {stats.notSavedOnly}
+                        </Button>
+
+                        <Button
+                            size="sm"
+                            variant={statusFilters.offline ? "primary" : "outline-primary"}
+                            onClick={() => toggleStatusFilter("offline")}
                         >
                             Offline {stats.offline}
                         </Button>
 
                         <Button
                             size="sm"
-                            variant={quickFilter === "staged" ? "warning" : "outline-warning"}
-                            onClick={() => setQuickFilter("staged")}
+                            variant={statusFilters.staged ? "warning" : "outline-warning"}
+                            onClick={() => toggleStatusFilter("staged")}
                         >
                             Staged {stats.staged}
+                        </Button>
+
+                        <Button
+                            size="sm"
+                            variant={statusFilters.updated ? "info" : "outline-info"}
+                            onClick={() => toggleStatusFilter("updated")}
+                        >
+                            Updated {stats.updated}
+                        </Button>
+
+                        <Button
+                            size="sm"
+                            variant={statusFilters.locked ? "dark" : "outline-light"}
+                            onClick={() => toggleStatusFilter("locked")}
+                        >
+                            Locked {stats.locked}
+                        </Button>
+
+                        <Button
+                            size="sm"
+                            variant={statusFilters.addedVersion ? "danger" : "outline-danger"}
+                            onClick={() => toggleStatusFilter("addedVersion")}
+                        >
+                            Added Version {stats.addedVersion}
                         </Button>
                     </div>
                 </div>
