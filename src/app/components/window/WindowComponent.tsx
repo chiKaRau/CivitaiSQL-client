@@ -916,6 +916,29 @@ const WindowComponent: React.FC = () => {
         return extractCreatorFromUserModelsUrl(url).toLowerCase();
     };
 
+    const getDownloadPriorityWithCreatorBonus = async (basePriority: number) => {
+        const tab = await getActiveOrOriginalTab();
+        const creator = extractCreatorFromUserModelsUrl(tab?.url || "");
+
+        // Not on /user/<creator>/models page, so no bonus.
+        if (!creator) return basePriority;
+
+        const creatorItem = creatorUrlList.find(
+            (item) => getCreatorKey(item.creatorUrl) === creator.toLowerCase()
+        );
+
+        // Creator not in dropdown/list, so no bonus.
+        if (!creatorItem) return basePriority;
+
+        const rating = (creatorItem.rating || "").toUpperCase();
+
+        if (["SS", "SSS", "EX"].includes(rating)) {
+            return Math.min(basePriority + 1, 10);
+        }
+
+        return basePriority;
+    };
+
     useEffect(() => {
         chrome.storage.local.get(WINDOW_RECENT_CREATOR_STORAGE_KEY, (result) => {
             const saved = result?.[WINDOW_RECENT_CREATOR_STORAGE_KEY];
@@ -2581,6 +2604,7 @@ const WindowComponent: React.FC = () => {
 
         const now = Date.now();
         const action = offlineMode ? "offline" : "bundle";
+        const downloadPriorityToUse = await getDownloadPriorityWithCreatorBonus(downloadPriority);
 
         const pathsToSave = new Set<string>();
 
@@ -2606,7 +2630,7 @@ const WindowComponent: React.FC = () => {
                     selectedCategory,
                     downloadMethod,
                     hold,
-                    downloadPriority,
+                    downloadPriority: downloadPriorityToUse,
                     action,
                     stagedAt: now,
                     status: "staged",
