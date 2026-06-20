@@ -725,6 +725,8 @@ chrome.runtime.onMessage.addListener(
         addStagedInfo(x);
       });
 
+      patchGroupingStagedStatusFromCurrentInfo();
+
       displayStagedBadges();
       sendGroupingModelsToWindow(getModelCards(), "staged");
 
@@ -733,6 +735,9 @@ chrome.runtime.onMessage.addListener(
 
     if (message.action === "remove-staged") {
       clearStagedInfo();
+
+      patchGroupingStagedStatusFromCurrentInfo();
+
       removeAllStagedBadges();
       sendGroupingModelsToWindow(getModelCards(), "staged");
 
@@ -746,6 +751,9 @@ chrome.runtime.onMessage.addListener(
         versionId: message.versionId,
         action: message.stageAction || "",
       });
+
+      patchGroupingStagedStatusFromCurrentInfo();
+
       displayStagedBadges();
       sendGroupingModelsToWindow(getModelCards(), "staged");
       return true;
@@ -757,6 +765,9 @@ chrome.runtime.onMessage.addListener(
         modelId: message.modelId,
         versionId: message.versionId,
       });
+
+      patchGroupingStagedStatusFromCurrentInfo();
+
       displayStagedBadges();
       sendGroupingModelsToWindow(getModelCards(), "staged");
 
@@ -1528,6 +1539,89 @@ function findGroupingMapKeyByUrl(url: string): string {
   return url;
 }
 
+function findGroupingMapKeyByFlexibleUrl(url: string): string {
+  const normalized = normalizeStagedUrl(url);
+  const parsed = extractModelAndVersionFromUrl(url);
+
+  for (const [key, item] of groupingModelMap.entries()) {
+    if (normalizeStagedUrl(key) === normalized) return key;
+    if (normalizeStagedUrl(item.url) === normalized) return key;
+
+    if (
+      parsed.modelId &&
+      parsed.versionId &&
+      item.modelId === parsed.modelId &&
+      item.versionId === parsed.versionId
+    ) {
+      return key;
+    }
+  }
+
+  return url;
+}
+
+function patchGroupingSavedStatus(
+  savedList: Array<{ url: string; quantity: number }>
+): void {
+  savedList.forEach((info) => {
+    const key = findGroupingMapKeyByFlexibleUrl(info.url);
+    const oldItem = groupingModelMap.get(key);
+
+    if (!oldItem) return;
+
+    const quantity = Number(info.quantity || 0);
+
+    groupingModelMap.set(key, {
+      ...oldItem,
+      savedText: quantity > 0 ? `Saved: ${quantity}` : "Not Saved",
+      savedQuantity: quantity,
+      isSaved: quantity > 0,
+    });
+  });
+}
+
+function patchGroupingOfflineStatus(
+  offlineList: Array<{ url: string; quantity: number }>
+): void {
+  offlineList.forEach((info) => {
+    const key = findGroupingMapKeyByFlexibleUrl(info.url);
+    const oldItem = groupingModelMap.get(key);
+
+    if (!oldItem) return;
+
+    const quantity = Number(info.quantity || 0);
+
+    groupingModelMap.set(key, {
+      ...oldItem,
+      offlineText: quantity > 0 ? `Offline: ${quantity}` : "",
+      offlineQuantity: quantity,
+      isOffline: quantity > 0,
+    });
+  });
+}
+
+function getStagedTextFromInfo(info: StagedInfo | undefined): string {
+  if (!info) return "";
+
+  return info.action
+    ? `STAGED (${info.action.toUpperCase()})`
+    : "STAGED";
+}
+
+function patchGroupingStagedStatusFromCurrentInfo(): void {
+  for (const [key, oldItem] of groupingModelMap.entries()) {
+    const info = findStagedInfoForUrl(oldItem.url);
+    const stagedText = getStagedTextFromInfo(info);
+
+    if (oldItem.stagedText === stagedText) continue;
+
+    groupingModelMap.set(key, {
+      ...oldItem,
+      stagedText,
+    });
+  }
+}
+
 function createEmptyGroupingModelItem(
   url: string,
   imgSrc: string = "",
@@ -1834,6 +1928,8 @@ chrome.runtime.onMessage.addListener(
           return;
         }
 
+        patchGroupingSavedStatus(savedList);
+
         cardElements.forEach((item: HTMLElement) => {
           const linkElement = getCardLink(item);
 
@@ -1934,6 +2030,8 @@ chrome.runtime.onMessage.addListener(
           console.warn("offlineList is undefined or null.");
           return;
         }
+
+        patchGroupingOfflineStatus(offlinelist);
 
         cardElements.forEach((item: HTMLElement) => {
           const linkElement = getCardLink(item);
