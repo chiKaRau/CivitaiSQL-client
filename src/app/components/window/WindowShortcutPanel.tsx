@@ -471,6 +471,55 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
         });
     };
 
+    // Handle Add All Non Existing Button Click
+    const handleAddAllNonExisting = () => {
+        if (!modelData) return;
+
+        const metaPairs: Array<{ targetUrl: string; vid: string; img?: string; badge?: string }> = [];
+        const newUrls: string[] = [];
+
+        for (const v of modelData.modelVersions) {
+            const vid = String(v.id);
+
+            // Skip versions that already exist in database, the ones showing "*"
+            if (existingVersions.includes(vid)) {
+                continue;
+            }
+
+            const formattedUrl =
+                (vid === String(modelData.modelVersions[0]?.id) && !hasUrlParam)
+                    ? url
+                    : `https://civitai.red/models/${modelId}?modelVersionId=${vid}`;
+
+            if (!urlList.includes(formattedUrl)) {
+                newUrls.push(formattedUrl);
+            }
+
+            const img = v?.images?.[0]?.url || "";
+            const badge = computeBadgeForVid(vid);
+            metaPairs.push({ targetUrl: formattedUrl, vid, img, badge });
+        }
+
+        if (newUrls.length === 0) {
+            setMessage({ text: "All non-existing URLs are already in the list, or none were found.", type: "error" });
+            upsertMetaForUrls(metaPairs);
+            return;
+        }
+
+        setUrlList(prev => [...prev, ...newUrls]);
+        setMessage({ text: `${newUrls.length} non-existing URL(s) added successfully!`, type: "success" });
+
+        upsertMetaForUrls(metaPairs);
+
+        newUrls.forEach((formattedUrl) => {
+            chrome.storage.local.get("originalTabId", (result) => {
+                if (result.originalTabId) {
+                    chrome.tabs.sendMessage(result.originalTabId, { action: "check-url", url: formattedUrl });
+                }
+            });
+        });
+    };
+
     const forceRerender = () => {
         setRenderKey((prevKey) => prevKey + 1); // Increment renderKey to force a re-render
     };
@@ -821,6 +870,17 @@ const WindowShortcutPanel: React.FC<PanelProps> = ({
                             >
                                 <MdLibraryAdd />
                             </IconBtn>
+
+                            <IconBtn
+                                title="Add all non-existing versions to list"
+                                ariaLabel="Add all non-existing versions"
+                                onClick={handleAddAllNonExisting}
+                                disabled={!modelData?.modelVersions?.length || isLoading}
+                                theme={theme}
+                            >
+                                <MdLibraryAdd />
+                            </IconBtn>
+
                         </div>
                     </div>
 
