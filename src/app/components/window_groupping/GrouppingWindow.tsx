@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Container, Form, Button, Badge } from 'react-bootstrap';
+import { Container, Form, Button, Badge, InputGroup } from 'react-bootstrap';
 import SmartImage from '../window_offline/SmartImage';
 
 type GroupingModelItem = {
@@ -228,6 +228,7 @@ const GrouppingWindow: React.FC = () => {
 
     const [items, setItems] = useState<GroupingModelItem[]>([]);
     const [searchText, setSearchText] = useState("");
+    const [selectCount, setSelectCount] = useState(10);
     const [statusFilters, setStatusFilters] = useState<StatusFilters>(EMPTY_STATUS_FILTERS);
 
     const [sortField, setSortField] = useState<SortField>("collectedAt");
@@ -923,6 +924,66 @@ const GrouppingWindow: React.FC = () => {
         setDisplayedItemsSelection(!areAllDisplayedSelected);
     };
 
+    const updateSelectCount = (value: number) => {
+        const nextValue = Number.isFinite(value) ? Math.trunc(value) : 1;
+        setSelectCount(Math.max(1, nextValue));
+    };
+
+    const effectiveSelectCount = Math.min(selectCount, sortedItems.length);
+
+    const handleSelectNDisplayed = () => {
+        if (sortedItems.length === 0) return;
+
+        const count = Math.min(Math.max(1, selectCount), sortedItems.length);
+
+        const selectedUrlSet = new Set(
+            sortedItems
+                .slice(0, count)
+                .map(item => normalizeSelectionUrl(item.url))
+        );
+
+        const displayedUrlSet = new Set(
+            sortedItems.map(item => normalizeSelectionUrl(item.url))
+        );
+
+        setItems(prev =>
+            prev.map(item => {
+                const key = normalizeSelectionUrl(item.url);
+
+                if (!displayedUrlSet.has(key)) return item;
+
+                return {
+                    ...item,
+                    isChecked: selectedUrlSet.has(key),
+                };
+            })
+        );
+
+        chrome.storage.local.get("originalTabId", (result) => {
+            if (!result.originalTabId) return;
+
+            sortedItems.forEach(item => {
+                const key = normalizeSelectionUrl(item.url);
+                const nextChecked = selectedUrlSet.has(key);
+
+                chrome.tabs.sendMessage(
+                    result.originalTabId,
+                    {
+                        action: "set-grouping-selected",
+                        url: item.url,
+                        imgSrc: item.imgSrc,
+                        isChecked: nextChecked,
+                    },
+                    () => {
+                        if (chrome.runtime.lastError) {
+                            console.warn(chrome.runtime.lastError.message);
+                        }
+                    }
+                );
+            });
+        });
+    };
+
     return (
         <Container fluid className="gw-root bg-dark text-light">
             <style>
@@ -996,6 +1057,19 @@ const GrouppingWindow: React.FC = () => {
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
+}
+
+.gw-select-n-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: nowrap;
+}
+
+.gw-select-n-input {
+    width: 72px;
+    min-width: 72px;
+    text-align: center;
 }
 
                     .gw-filter-wrap .btn {
@@ -1293,12 +1367,22 @@ const GrouppingWindow: React.FC = () => {
 
                 <div>
                     <Form.Label className="gw-label">Search</Form.Label>
-                    <Form.Control
-                        size="sm"
-                        value={searchText}
-                        onChange={(e) => setSearchText(e.target.value)}
-                        placeholder="name, creator, saved, offline..."
-                    />
+
+                    <InputGroup size="sm">
+                        <Form.Control
+                            value={searchText}
+                            onChange={(e) => setSearchText(e.target.value)}
+                            placeholder="name, creator, saved, offline..."
+                        />
+
+                        <Button
+                            variant="outline-light"
+                            disabled={!searchText}
+                            onClick={() => setSearchText("")}
+                        >
+                            Clear
+                        </Button>
+                    </InputGroup>
                 </div>
 
                 <div>
@@ -1434,7 +1518,7 @@ const GrouppingWindow: React.FC = () => {
                 </div>
 
                 <div>
-                    <Form.Label className="gw-label">&nbsp;</Form.Label>
+                    <Form.Label className="gw-label"> </Form.Label>
                     <div className="gw-action-wrap">
                         <Button
                             size="sm"
@@ -1444,6 +1528,44 @@ const GrouppingWindow: React.FC = () => {
                         >
                             {areAllDisplayedSelected ? "Unselect Displayed" : `Select All ${stats.showing}`}
                         </Button>
+
+                        <div className="gw-select-n-wrap">
+                            <Button
+                                size="sm"
+                                variant="outline-light"
+                                disabled={selectCount <= 1}
+                                onClick={() => updateSelectCount(selectCount - 1)}
+                            >
+                                -
+                            </Button>
+
+                            <Form.Control
+                                size="sm"
+                                type="number"
+                                min={1}
+                                max={Math.max(1, sortedItems.length)}
+                                className="gw-select-n-input"
+                                value={selectCount}
+                                onChange={(e) => updateSelectCount(Number(e.target.value))}
+                            />
+
+                            <Button
+                                size="sm"
+                                variant="outline-light"
+                                onClick={() => updateSelectCount(selectCount + 1)}
+                            >
+                                +
+                            </Button>
+
+                            <Button
+                                size="sm"
+                                variant="outline-info"
+                                disabled={sortedItems.length === 0}
+                                onClick={handleSelectNDisplayed}
+                            >
+                                Select {effectiveSelectCount || selectCount}
+                            </Button>
+                        </div>
 
                         <Button size="sm" variant="primary" onClick={loadGroupingModels}>
                             Refresh
