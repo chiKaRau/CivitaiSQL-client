@@ -88,6 +88,11 @@ type VersionPanelState = {
     versions: GroupingModelVersion[];
 };
 
+type PopularWord = {
+    word: string;
+    count: number;
+};
+
 const PLACEHOLDER_IMAGE = "https://placehold.co/450x675";
 
 function toDisplayImageUrl(url: string, width = 450): string {
@@ -217,6 +222,22 @@ function matchesSelectedExtraStatus(
     );
 }
 
+function extractNameWords(name: string): string[] {
+    return Array.from(
+        String(name || "").matchAll(/[\p{L}\p{N}]+(?:['-][\p{L}\p{N}]+)*/gu)
+    )
+        .map(match => match[0].trim())
+        .filter(word => {
+            if (word.length < 2) return false;
+            if (/^\d+$/.test(word)) return false;
+            return true;
+        });
+}
+
+function getWordKey(word: string): string {
+    return word.toLowerCase();
+}
+
 const GrouppingWindow: React.FC = () => {
 
     const groupingPortRef = React.useRef<chrome.runtime.Port | null>(null);
@@ -229,6 +250,8 @@ const GrouppingWindow: React.FC = () => {
     const [items, setItems] = useState<GroupingModelItem[]>([]);
     const [searchText, setSearchText] = useState("");
     const [selectCount, setSelectCount] = useState(10);
+    const [isPopularWordsExpanded, setIsPopularWordsExpanded] = useState(false);
+    const [hiddenPopularWordKeys, setHiddenPopularWordKeys] = useState<string[]>([]);
     const [statusFilters, setStatusFilters] = useState<StatusFilters>(EMPTY_STATUS_FILTERS);
 
     const [sortField, setSortField] = useState<SortField>("collectedAt");
@@ -434,6 +457,44 @@ const GrouppingWindow: React.FC = () => {
 
         return [...result, ...orphanVersions];
     }, [filteredItems, sortField, sortDirection]);
+
+    const popularWords = useMemo<PopularWord[]>(() => {
+        const hiddenSet = new Set(hiddenPopularWordKeys);
+        const wordMap = new Map<string, { word: string; count: number }>();
+
+        sortedItems.forEach(item => {
+            const words = extractNameWords(item.name);
+            const uniqueWordsForThisName = new Set<string>();
+
+            words.forEach(word => {
+                const key = getWordKey(word);
+                if (hiddenSet.has(key)) return;
+
+                uniqueWordsForThisName.add(key);
+
+                if (!wordMap.has(key)) {
+                    wordMap.set(key, {
+                        word,
+                        count: 0,
+                    });
+                }
+            });
+
+            uniqueWordsForThisName.forEach(key => {
+                const current = wordMap.get(key);
+                if (!current) return;
+
+                current.count += 1;
+            });
+        });
+
+        return Array.from(wordMap.values())
+            .sort((a, b) => {
+                if (b.count !== a.count) return b.count - a.count;
+                return a.word.localeCompare(b.word);
+            })
+            .slice(0, 20);
+    }, [sortedItems, hiddenPopularWordKeys]);
 
     const stats = useMemo(() => {
         return {
@@ -984,6 +1045,39 @@ const GrouppingWindow: React.FC = () => {
         });
     };
 
+    const addPopularWordToSearch = (word: string) => {
+        const trimmedWord = word.trim();
+        if (!trimmedWord) return;
+
+        setSearchText(prev => {
+            const current = prev.trim();
+
+            if (!current) return trimmedWord;
+
+            const existingWords = current
+                .split(/\s+/)
+                .map(x => x.toLowerCase());
+
+            if (existingWords.includes(trimmedWord.toLowerCase())) {
+                return current;
+            }
+
+            return `${current} ${trimmedWord}`;
+        });
+    };
+
+    const hidePopularWord = (word: string) => {
+        const key = getWordKey(word);
+
+        setHiddenPopularWordKeys(prev =>
+            prev.includes(key) ? prev : [...prev, key]
+        );
+    };
+
+    const resetHiddenPopularWords = () => {
+        setHiddenPopularWordKeys([]);
+    };
+
     return (
         <Container fluid className="gw-root bg-dark text-light">
             <style>
@@ -1325,6 +1419,99 @@ const GrouppingWindow: React.FC = () => {
                         margin-top: 80px;
                     }
 
+                    .gw-popular-panel {
+    border: 1px solid #333;
+    background: #171717;
+    border-radius: 10px;
+    margin-bottom: 12px;
+    overflow: hidden;
+}
+
+.gw-popular-header {
+    width: 100%;
+    border: 0;
+    background: #202020;
+    color: #e5e7eb;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    cursor: pointer;
+    text-align: left;
+}
+
+.gw-popular-title {
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.gw-popular-subtitle {
+    color: #9ca3af;
+    font-size: 12px;
+}
+
+.gw-popular-body {
+    padding: 10px;
+}
+
+.gw-popular-tags {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.gw-popular-tag {
+    display: inline-flex;
+    align-items: center;
+    overflow: hidden;
+    border-radius: 999px;
+    border: 1px solid #4b5563;
+    background: #111827;
+}
+
+.gw-popular-word-btn {
+    border: 0;
+    background: transparent;
+    color: #e5e7eb;
+    padding: 4px 8px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.gw-popular-word-btn:hover {
+    background: #374151;
+}
+
+.gw-popular-count {
+    color: #9ca3af;
+    margin-left: 4px;
+}
+
+.gw-popular-remove-btn {
+    border: 0;
+    border-left: 1px solid #4b5563;
+    background: transparent;
+    color: #fca5a5;
+    padding: 4px 7px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.gw-popular-remove-btn:hover {
+    background: #7f1d1d;
+    color: white;
+}
+
+.gw-popular-empty {
+    color: #777;
+    font-size: 13px;
+}
+
+.gw-popular-actions {
+    margin-top: 8px;
+}
+
                     @media (max-width: 1100px) {
                         .gw-toolbar {
                             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1576,6 +1763,85 @@ const GrouppingWindow: React.FC = () => {
                         </Button>
                     </div>
                 </div>
+            </div>
+
+            <div className="gw-popular-panel">
+                <button
+                    type="button"
+                    className="gw-popular-header"
+                    onClick={() => setIsPopularWordsExpanded(prev => !prev)}
+                >
+                    <span>
+                        <span className="gw-popular-title">
+                            Popular Name Words
+                        </span>
+
+                        <span className="gw-popular-subtitle">
+                            {" "}
+                            {popularWords.length > 0
+                                ? `${popularWords.length} tags from ${stats.showing} displayed models`
+                                : "No tags"}
+                        </span>
+                    </span>
+
+                    <span>
+                        {isPopularWordsExpanded ? "Hide ^" : "Show v"}
+                    </span>
+                </button>
+
+                {isPopularWordsExpanded && (
+                    <div className="gw-popular-body">
+                        {popularWords.length > 0 ? (
+                            <>
+                                <div className="gw-popular-tags">
+                                    {popularWords.map(item => (
+                                        <span
+                                            key={getWordKey(item.word)}
+                                            className="gw-popular-tag"
+                                        >
+                                            <button
+                                                type="button"
+                                                className="gw-popular-word-btn"
+                                                title={`Add "${item.word}" to search`}
+                                                onClick={() => addPopularWordToSearch(item.word)}
+                                            >
+                                                {item.word}
+                                                <span className="gw-popular-count">
+                                                    {item.count}
+                                                </span>
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                className="gw-popular-remove-btn"
+                                                title={`Hide "${item.word}" temporarily`}
+                                                onClick={() => hidePopularWord(item.word)}
+                                            >
+                                                x
+                                            </button>
+                                        </span>
+                                    ))}
+                                </div>
+
+                                {hiddenPopularWordKeys.length > 0 && (
+                                    <div className="gw-popular-actions">
+                                        <Button
+                                            size="sm"
+                                            variant="outline-light"
+                                            onClick={resetHiddenPopularWords}
+                                        >
+                                            Reset Hidden Words
+                                        </Button>
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            <div className="gw-popular-empty">
+                                No popular words found.
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             <div className="gw-content">

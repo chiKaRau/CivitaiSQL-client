@@ -115,7 +115,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       url: chrome.runtime.getURL('grouppingwindow.html'),
       type: 'popup',
       width: 850,
-      height: 1500,
+      height: 1200,
       left: 1800
     });
   }
