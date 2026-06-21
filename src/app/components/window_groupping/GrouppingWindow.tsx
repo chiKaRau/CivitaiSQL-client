@@ -195,6 +195,28 @@ function hasAnyExtraStatus(item: GroupingModelItem): boolean {
     );
 }
 
+function matchesSelectedExtraStatus(
+    item: GroupingModelItem,
+    filters: StatusFilters
+): boolean {
+    const hasExtraFilter =
+        filters.offline ||
+        filters.staged ||
+        filters.updated ||
+        filters.locked ||
+        filters.addedVersion;
+
+    if (!hasExtraFilter) return true;
+
+    return Boolean(
+        (filters.offline && item.isOffline) ||
+        (filters.staged && item.stagedText) ||
+        (filters.updated && item.updateText) ||
+        (filters.locked && item.lockedText) ||
+        (filters.addedVersion && item.isAddedVersion)
+    );
+}
+
 const GrouppingWindow: React.FC = () => {
 
     const groupingPortRef = React.useRef<chrome.runtime.Port | null>(null);
@@ -323,12 +345,14 @@ const GrouppingWindow: React.FC = () => {
         return items.filter((item) => {
             if (statusFilters.saved && !item.isSaved) return false;
             if (statusFilters.notSaved && item.isSaved) return false;
-            if (statusFilters.notSavedOnly && (item.isSaved || hasAnyExtraStatus(item))) return false;
-            if (statusFilters.offline && !item.isOffline) return false;
-            if (statusFilters.staged && !item.stagedText) return false;
-            if (statusFilters.updated && !item.updateText) return false;
-            if (statusFilters.locked && !item.lockedText) return false;
-            if (statusFilters.addedVersion && !item.isAddedVersion) return false;
+
+            if (statusFilters.notSavedOnly && (item.isSaved || hasAnyExtraStatus(item))) {
+                return false;
+            }
+
+            if (!matchesSelectedExtraStatus(item, statusFilters)) {
+                return false;
+            }
 
             if (!q) return true;
 
@@ -948,6 +972,32 @@ const GrouppingWindow: React.FC = () => {
                         flex-wrap: wrap;
                     }
 
+                    .gw-filter-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.gw-filter-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.gw-filter-section-title {
+    color: #9ca3af;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.gw-filter-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
                     .gw-filter-wrap .btn {
                         white-space: nowrap;
                     }
@@ -1253,81 +1303,99 @@ const GrouppingWindow: React.FC = () => {
 
                 <div>
                     <Form.Label className="gw-label">
-                        Filter {activeStatusFilterCount > 0 ? `(AND ${activeStatusFilterCount})` : ""}
+                        Filter {activeStatusFilterCount > 0 ? `(${activeStatusFilterCount} active)` : ""}
                     </Form.Label>
 
-                    <div className="gw-filter-wrap">
-                        <Button
-                            size="sm"
-                            variant={activeStatusFilterCount === 0 ? "light" : "outline-light"}
-                            onClick={clearStatusFilters}
-                        >
-                            All {stats.total}
-                        </Button>
+                    <div className="gw-filter-panel">
+                        <div className="gw-filter-section">
+                            <div className="gw-filter-section-title">View</div>
 
-                        <Button
-                            size="sm"
-                            variant={statusFilters.saved ? "success" : "outline-success"}
-                            onClick={() => toggleStatusFilter("saved")}
-                        >
-                            Saved {stats.saved}
-                        </Button>
+                            <div className="gw-filter-row">
+                                <Button
+                                    size="sm"
+                                    variant={activeStatusFilterCount === 0 ? "light" : "outline-light"}
+                                    onClick={clearStatusFilters}
+                                >
+                                    All {stats.total}
+                                </Button>
 
-                        <Button
-                            size="sm"
-                            variant={statusFilters.notSaved ? "secondary" : "outline-secondary"}
-                            onClick={() => toggleStatusFilter("notSaved")}
-                        >
-                            Not Saved {stats.notSaved}
-                        </Button>
+                                <Button
+                                    size="sm"
+                                    variant={statusFilters.notSavedOnly ? "danger" : "outline-danger"}
+                                    onClick={() => toggleStatusFilter("notSavedOnly")}
+                                >
+                                    Not Saved Only {stats.notSavedOnly}
+                                </Button>
+                            </div>
+                        </div>
 
-                        <Button
-                            size="sm"
-                            variant={statusFilters.notSavedOnly ? "danger" : "outline-danger"}
-                            onClick={() => toggleStatusFilter("notSavedOnly")}
-                        >
-                            Not Saved Only {stats.notSavedOnly}
-                        </Button>
+                        <div className="gw-filter-section">
+                            <div className="gw-filter-section-title">Saved State</div>
 
-                        <Button
-                            size="sm"
-                            variant={statusFilters.offline ? "primary" : "outline-primary"}
-                            onClick={() => toggleStatusFilter("offline")}
-                        >
-                            Offline {stats.offline}
-                        </Button>
+                            <div className="gw-filter-row">
+                                <Button
+                                    size="sm"
+                                    variant={statusFilters.saved ? "success" : "outline-success"}
+                                    onClick={() => toggleStatusFilter("saved")}
+                                >
+                                    Saved {stats.saved}
+                                </Button>
 
-                        <Button
-                            size="sm"
-                            variant={statusFilters.staged ? "warning" : "outline-warning"}
-                            onClick={() => toggleStatusFilter("staged")}
-                        >
-                            Staged {stats.staged}
-                        </Button>
+                                <Button
+                                    size="sm"
+                                    variant={statusFilters.notSaved ? "secondary" : "outline-secondary"}
+                                    onClick={() => toggleStatusFilter("notSaved")}
+                                >
+                                    Not Saved {stats.notSaved}
+                                </Button>
+                            </div>
+                        </div>
 
-                        <Button
-                            size="sm"
-                            variant={statusFilters.updated ? "info" : "outline-info"}
-                            onClick={() => toggleStatusFilter("updated")}
-                        >
-                            Updated {stats.updated}
-                        </Button>
+                        <div className="gw-filter-section">
+                            <div className="gw-filter-section-title">Status</div>
 
-                        <Button
-                            size="sm"
-                            variant={statusFilters.locked ? "dark" : "outline-light"}
-                            onClick={() => toggleStatusFilter("locked")}
-                        >
-                            Locked {stats.locked}
-                        </Button>
+                            <div className="gw-filter-row">
+                                <Button
+                                    size="sm"
+                                    variant={statusFilters.offline ? "primary" : "outline-primary"}
+                                    onClick={() => toggleStatusFilter("offline")}
+                                >
+                                    Offline {stats.offline}
+                                </Button>
 
-                        <Button
-                            size="sm"
-                            variant={statusFilters.addedVersion ? "danger" : "outline-danger"}
-                            onClick={() => toggleStatusFilter("addedVersion")}
-                        >
-                            Added Version {stats.addedVersion}
-                        </Button>
+                                <Button
+                                    size="sm"
+                                    variant={statusFilters.staged ? "warning" : "outline-warning"}
+                                    onClick={() => toggleStatusFilter("staged")}
+                                >
+                                    Staged {stats.staged}
+                                </Button>
+
+                                <Button
+                                    size="sm"
+                                    variant={statusFilters.updated ? "info" : "outline-info"}
+                                    onClick={() => toggleStatusFilter("updated")}
+                                >
+                                    Updated {stats.updated}
+                                </Button>
+
+                                <Button
+                                    size="sm"
+                                    variant={statusFilters.locked ? "dark" : "outline-light"}
+                                    onClick={() => toggleStatusFilter("locked")}
+                                >
+                                    Locked {stats.locked}
+                                </Button>
+
+                                <Button
+                                    size="sm"
+                                    variant={statusFilters.addedVersion ? "danger" : "outline-danger"}
+                                    onClick={() => toggleStatusFilter("addedVersion")}
+                                >
+                                    Added Version {stats.addedVersion}
+                                </Button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
