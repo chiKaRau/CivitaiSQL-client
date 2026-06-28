@@ -195,8 +195,7 @@ function hasAnyExtraStatus(item: GroupingModelItem): boolean {
         item.isOffline ||
         item.stagedText ||
         item.updateText ||
-        item.lockedText ||
-        item.isAddedVersion
+        item.lockedText
     );
 }
 
