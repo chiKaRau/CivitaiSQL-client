@@ -1081,11 +1081,13 @@ chrome.runtime.onMessage.addListener(
         if (linkElement && linkElement.href === urlToUncheck) {
           checkedUrlSet.delete(normalizeUrl(urlToUncheck));
 
-          const checkbox: HTMLInputElement | null = item.querySelector('input[type="checkbox"]');
-          if (checkbox) {
+          const checkboxes = item.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
+
+          checkboxes.forEach((checkbox) => {
             checkbox.checked = false;
-            item.style.border = '';
-          }
+          });
+
+          item.style.border = '';
         }
       });
 
@@ -1125,12 +1127,15 @@ chrome.runtime.onMessage.addListener(
 
     } else if (message.action === "remove-checkboxes") {
       checkedUrlSet.clear();
-      cardElements.forEach((item: HTMLElement) => {
-        const checkbox: HTMLInputElement | null = item.querySelector('input[type="checkbox"]');
 
-        if (checkbox) {
-          item.removeChild(checkbox);
-        }
+      cardElements.forEach((item: HTMLElement) => {
+        const checkboxes = item.querySelectorAll<HTMLInputElement>(
+          'input[type="checkbox"].model-card-checkbox'
+        );
+
+        checkboxes.forEach((checkbox) => {
+          checkbox.remove();
+        });
 
         item.style.border = '';
       });
