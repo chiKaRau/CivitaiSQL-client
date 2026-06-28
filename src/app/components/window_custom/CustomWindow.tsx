@@ -254,6 +254,19 @@ const CustomWindow: React.FC = () => {
             const [{ result }] = await chrome.scripting.executeScript({
                 target: { tabId: activeTab.id },
                 func: () => {
+                    const clean = (value: any) =>
+                        (value?.textContent || value || '')
+                            .replace(/\s+/g, ' ')
+                            .trim();
+
+                    const normalizeCommaText = (value: string) =>
+                        value
+                            .split(',')
+                            .map(x => x.trim())
+                            .filter(Boolean)
+                            .join(', ');
+
+                    // Keep your original image scraping logic
                     const imgs = Array.from(document.images || []);
                     const large = imgs.filter(img => {
                         const w = img.naturalWidth || img.width || 0;
@@ -268,23 +281,115 @@ const CustomWindow: React.FC = () => {
                     const urls = Array.from(
                         new Set(
                             pick.map(src => {
-                                try { return new URL(src, document.baseURI).href; } catch { return src; }
+                                try {
+                                    return new URL(src, document.baseURI).href;
+                                } catch {
+                                    return src;
+                                }
                             })
                         )
-                    );
+                    ).slice(0, 12);
 
-                    return urls.slice(0, 12);
+                    let scrapedName = '';
+                    let scrapedMainModelName = '';
+                    let scrapedCreatorName = '';
+                    let scrapedType = '';
+                    let scrapedBaseModel = '';
+                    let scrapedTags = '';
+                    let scrapedTriggerWords = '';
+                    let scrapedDescription = '';
+                    let scrapedNsfw = false;
+
+                    try {
+                        scrapedMainModelName = clean(
+                            document.querySelector('.tracking-tight.text-3xl.font-bold')
+                        );
+
+                        const fileLink = document.querySelector('a[href^="/files/"]');
+                        const fileHref = fileLink?.getAttribute('href') || '';
+
+                        if (fileHref.startsWith('/files/')) {
+                            scrapedName = decodeURIComponent(fileHref.replace('/files/', ''));
+                        }
+
+                        const creatorLink = document.querySelector('a[href^="/users/"]');
+                        scrapedCreatorName = clean(creatorLink);
+
+                        const infoRow = creatorLink?.closest('.flex.items-center.gap-3');
+                        const infoChildren = Array.from(infoRow?.children || []);
+
+                        scrapedType = clean(infoChildren[0]);
+                        scrapedBaseModel = clean(infoChildren[1]);
+
+                        const tagContainer = document.querySelector('a[href^="/tags/"]')?.parentElement;
+
+                        scrapedTags = Array.from(tagContainer?.querySelectorAll('a[href^="/tags/"]') || [])
+                            .map(a => clean(a))
+                            .filter(Boolean)
+                            .join(', ');
+
+                        const triggerText = Array.from(document.querySelectorAll('div'))
+                            .map(el => clean(el))
+                            .find(text => /^Trigger Words\s*:\s*.+/i.test(text));
+
+                        if (triggerText) {
+                            scrapedTriggerWords = normalizeCommaText(
+                                triggerText.replace(/^Trigger Words\s*:\s*/i, '')
+                            );
+                        }
+
+                        const promptText = Array.from(document.querySelectorAll('p'))
+                            .map(p => clean(p))
+                            .find(text => /^Prompt\s*:/i.test(text)) || '';
+
+                        if (promptText) {
+                            scrapedDescription = promptText.replace(/^Prompt\s*:\s*/i, 'Prompt : ');
+                        }
+
+                        scrapedNsfw = Array.from(document.querySelectorAll('div, span'))
+                            .some(el => clean(el).toUpperCase() === 'NSFW');
+                    } catch {
+                        // Do not break image scraping if field scraping fails
+                    }
+
+                    return {
+                        urls,
+                        name: scrapedName,
+                        mainModelName: scrapedMainModelName,
+                        creatorName: scrapedCreatorName,
+                        type: scrapedType,
+                        baseModel: scrapedBaseModel,
+                        tags: scrapedTags,
+                        triggerWords: scrapedTriggerWords,
+                        description: scrapedDescription,
+                        nsfw: scrapedNsfw,
+                    };
                 },
             });
 
-            if (Array.isArray(result) && result.length) {
-                setImageUrls(result);
-                setToastMsg(`Scraped URL + ${result.length} image(s)`);
-                setToastVariant('success');
-            } else {
-                setToastMsg('Scraped URL; no images found on page');
-                setToastVariant('success');
+            // Keep image behavior safe
+            if (Array.isArray(result?.urls) && result.urls.length) {
+                setImageUrls(result.urls);
             }
+
+            // Add scraped fields only when found
+            if (result?.name) setName(result.name);
+            if (result?.mainModelName) setMainModelName(result.mainModelName);
+            if (result?.creatorName) setCreatorName(result.creatorName);
+            if (result?.type) setType(result.type);
+            if (result?.baseModel) setBaseModel(result.baseModel);
+            if (result?.tags) setTags(result.tags);
+            if (result?.triggerWords) setTriggerWords(result.triggerWords);
+            if (result?.description) setDescription(result.description);
+            if (typeof result?.nsfw === 'boolean') setNsfw(result.nsfw);
+
+            if (Array.isArray(result?.urls) && result.urls.length) {
+                setToastMsg(`Scraped URL + ${result.urls.length} image(s) + fields`);
+            } else {
+                setToastMsg('Scraped URL + fields; no images found on page');
+            }
+
+            setToastVariant('success');
         } catch (err: any) {
             setToastMsg(err?.message || 'Scrape failed');
             setToastVariant('danger');
