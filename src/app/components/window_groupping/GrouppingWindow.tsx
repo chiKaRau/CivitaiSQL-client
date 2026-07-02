@@ -1,12 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Container, Form, Button, Badge, InputGroup } from 'react-bootstrap';
 import SmartImage from '../window_offline/SmartImage';
+import { FaArrowLeft, FaArrowRight } from 'react-icons/fa6';
+import { LuMoveDiagonal } from "react-icons/lu";
 
 type GroupingModelItem = {
     url: string;
     modelId: string;
     versionId: string;
     imgSrc: string;
+    imageUrls?: string[]; // add this
     mediaType?: "image" | "video";
     name: string;
     creator: string;
@@ -78,6 +81,8 @@ type GroupingModelVersion = {
     publishedAt: string;
     sizeKB: number | null;
     imgSrc: string;
+    imageUrls: string[]; // add this
+    mediaType?: "image" | "video"; // add this
     url: string;
 };
 
@@ -95,14 +100,33 @@ type PopularWord = {
 
 const PLACEHOLDER_IMAGE = "https://placehold.co/450x675";
 
+function isVideoUrl(url: string): boolean {
+    const clean = String(url || "").split("?")[0].split("#")[0].toLowerCase();
+    return clean.endsWith(".mp4") || clean.endsWith(".webm");
+}
+
 function toDisplayImageUrl(url: string, width = 450): string {
     if (!url) return "";
+    if (isVideoUrl(url)) return url;
     if (url.includes("optimized=true") || url.includes("width=")) return url;
 
     return url.replace(
         "/original=true/",
         `/anim=false,width=${width},optimized=true/`
     );
+}
+
+function buildVersionImageUrls(rawImages: any[], fallbackSrc: string): string[] {
+    const urls = (Array.isArray(rawImages) ? rawImages : [])
+        .map((image: any) => String(image?.url || "").trim())
+        .filter(Boolean)
+        .map(url => isVideoUrl(url) ? url : toDisplayImageUrl(url));
+
+    const uniqueUrls = Array.from(new Set(urls));
+
+    if (uniqueUrls.length > 0) return uniqueUrls;
+
+    return [fallbackSrc || PLACEHOLDER_IMAGE];
 }
 
 function getModelIdFromItem(item: GroupingModelItem): string {
@@ -258,6 +282,15 @@ const GrouppingWindow: React.FC = () => {
 
     const [versionPanelByModelId, setVersionPanelByModelId] =
         useState<Record<string, VersionPanelState>>({});
+
+    const [imageModal, setImageModal] = useState<{
+        open: boolean;
+        images: string[];
+        index: number;
+        title: string;
+    } | null>(null);
+
+    const [copiedNameKey, setCopiedNameKey] = useState("");
 
     const connectGroupingWindowToTab = React.useCallback((tabId: number) => {
         if (!tabId) return;
@@ -652,7 +685,8 @@ const GrouppingWindow: React.FC = () => {
                 const primaryFile = files.find((x: any) => x?.primary) || files[0] || null;
 
                 const images = Array.isArray(version.images) ? version.images : [];
-                const firstImage = images[0]?.url || "";
+                const imageUrls = buildVersionImageUrls(images, item.imgSrc || PLACEHOLDER_IMAGE);
+                const firstImage = imageUrls[0] || item.imgSrc || PLACEHOLDER_IMAGE;
 
                 return {
                     id: String(version.id || ""),
@@ -661,10 +695,33 @@ const GrouppingWindow: React.FC = () => {
                     availability: version.availability || "",
                     publishedAt: version.publishedAt || "",
                     sizeKB: typeof primaryFile?.sizeKB === "number" ? primaryFile.sizeKB : null,
-                    imgSrc: firstImage ? toDisplayImageUrl(firstImage) : item.imgSrc || PLACEHOLDER_IMAGE,
+                    imgSrc: firstImage,
+                    imageUrls,
+                    mediaType: isVideoUrl(firstImage) ? "video" : "image",
                     url: buildVersionUrl(item, String(version.id || "")),
                 };
             });
+
+            const currentVersion =
+                versions.find(version => String(version.id) === String(item.versionId)) ||
+                versions.find(version => normalizeSelectionUrl(version.url) === normalizeSelectionUrl(item.url)) ||
+                versions[0];
+
+            if (currentVersion) {
+                const itemKey = normalizeSelectionUrl(item.url);
+
+                setItems(prev =>
+                    prev.map(x =>
+                        normalizeSelectionUrl(x.url) === itemKey
+                            ? {
+                                ...x,
+                                imageUrls: currentVersion.imageUrls,
+                                mediaType: currentVersion.mediaType || x.mediaType,
+                            }
+                            : x
+                    )
+                );
+            }
 
             setVersionPanelByModelId(prev => ({
                 ...prev,
@@ -723,7 +780,8 @@ const GrouppingWindow: React.FC = () => {
             modelId: parentItem.modelId || getModelIdFromItem(parentItem),
             versionId: version.id,
             imgSrc: version.imgSrc || parentItem.imgSrc,
-            mediaType: "image",
+            imageUrls: version.imageUrls || [version.imgSrc || parentItem.imgSrc].filter(Boolean),
+            mediaType: version.mediaType || "image",
 
             name: `${parentItem.name || "Unknown Model"} - ${version.versionName || `Version ${version.id}`}`,
             creator: parentItem.creator,
@@ -1075,6 +1133,114 @@ const GrouppingWindow: React.FC = () => {
 
     const resetHiddenPopularWords = () => {
         setHiddenPopularWordKeys([]);
+    };
+
+    const openImageModal = (
+        images: string[],
+        title: string,
+        event: React.MouseEvent
+    ) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const safeImages = Array.from(
+            new Set((images || []).map(x => String(x || "").trim()).filter(Boolean))
+        );
+
+        console.log("modal image count:", safeImages.length, safeImages);
+
+        if (safeImages.length === 0) return;
+
+        setImageModal({
+            open: true,
+            images: safeImages,
+            index: 0,
+            title,
+        });
+    };
+
+    const closeImageModal = (event?: React.MouseEvent) => {
+        event?.preventDefault();
+        event?.stopPropagation();
+        setImageModal(null);
+    };
+
+    const moveModalImage = (
+        direction: -1 | 1,
+        event: React.MouseEvent
+    ) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        setImageModal(prev => {
+            if (!prev || prev.images.length <= 1) return prev;
+
+            const nextIndex =
+                direction === 1
+                    ? (prev.index + 1) % prev.images.length
+                    : (prev.index - 1 + prev.images.length) % prev.images.length;
+
+            return {
+                ...prev,
+                index: nextIndex,
+            };
+        });
+    };
+
+    const copyTextToClipboard = async (text: string): Promise<boolean> => {
+        const value = String(text || "").trim();
+        if (!value) return false;
+
+        try {
+            await navigator.clipboard.writeText(value);
+            return true;
+        } catch {
+            const textarea = document.createElement("textarea");
+            textarea.value = value;
+            textarea.style.position = "fixed";
+            textarea.style.opacity = "0";
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+
+            const ok = document.execCommand("copy");
+            document.body.removeChild(textarea);
+
+            return ok;
+        }
+    };
+
+    const copyItemName = async (
+        item: GroupingModelItem,
+        event: React.MouseEvent
+    ) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const ok = await copyTextToClipboard(item.name || "");
+        if (!ok) return;
+
+        const key = normalizeSelectionUrl(item.url);
+        setCopiedNameKey(key);
+
+        window.setTimeout(() => {
+            setCopiedNameKey(prev => prev === key ? "" : prev);
+        }, 1200);
+    };
+
+    const openItemUrl = (
+        item: GroupingModelItem,
+        event: React.MouseEvent
+    ) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (!item.url) return;
+
+        chrome.tabs.create({
+            url: item.url,
+            active: true,
+        });
     };
 
     return (
@@ -1511,6 +1677,148 @@ const GrouppingWindow: React.FC = () => {
     margin-top: 8px;
 }
 
+.gw-name-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    min-width: 0;
+}
+
+.gw-name-row .gw-name {
+    flex: 1;
+    min-width: 0;
+}
+
+.gw-copy-name-btn {
+    flex-shrink: 0;
+    padding: 2px 6px;
+    font-size: 11px;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.gw-id-row {
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.gw-id-row .gw-id {
+    margin-top: 0;
+    flex: 1;
+    min-width: 0;
+}
+
+.gw-open-url-btn {
+    flex-shrink: 0;
+    padding: 0 7px;
+    min-height: 24px;
+    line-height: 1;
+}
+
+.gw-image-wrap {
+    cursor: zoom-in;
+}
+
+.gw-version-thumb {
+    width: 52px;
+    height: 70px;
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: zoom-in;
+    background: #111;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.gw-image-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background: rgba(0,0,0,0.82);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.gw-image-modal {
+    width: min(92vw, 980px);
+    max-height: 92vh;
+    background: #151515;
+    border: 1px solid #333;
+    border-radius: 12px;
+    padding: 12px;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.gw-image-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.gw-image-modal-title {
+    font-weight: 700;
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gw-image-modal-body {
+    position: relative;
+    min-height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.gw-image-modal-media {
+    max-width: 100%;
+    max-height: 80vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.gw-image-modal-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+    width: 42px;
+    height: 56px;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(0,0,0,0.65);
+    color: white;
+    cursor: pointer;
+    font-size: 34px;
+    line-height: 1;
+}
+
+.gw-image-modal-nav-left {
+    left: 8px;
+}
+
+.gw-image-modal-nav-right {
+    right: 8px;
+}
+
+.gw-image-modal-counter {
+    text-align: center;
+    color: #bbb;
+    font-size: 13px;
+}
+
                     @media (max-width: 1100px) {
                         .gw-toolbar {
                             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1879,7 +2187,18 @@ const GrouppingWindow: React.FC = () => {
                                 }}
                                 className={`gw-card ${item.isChecked ? "gw-card-selected" : ""}`}
                             >
-                                <div className="gw-image-wrap">
+                                <div
+                                    className="gw-image-wrap"
+                                    onClick={(event) =>
+                                        openImageModal(
+                                            item.imageUrls && item.imageUrls.length > 0
+                                                ? item.imageUrls
+                                                : [item.imgSrc || PLACEHOLDER_IMAGE],
+                                            item.name || "Model Image",
+                                            event
+                                        )
+                                    }
+                                >
                                     {item.imgSrc ? (
                                         <SmartImage
                                             src={item.imgSrc}
@@ -1961,17 +2280,44 @@ const GrouppingWindow: React.FC = () => {
                                 </div>
 
                                 <div className="gw-body">
-                                    <div className="gw-name" title={item.name}>
-                                        {item.name || "Unknown Model"}
+                                    <div className="gw-name-row">
+                                        <div className="gw-name" title={item.name}>
+                                            {item.name || "Unknown Model"}
+                                        </div>
+
+                                        <Button
+                                            size="sm"
+                                            variant="outline-light"
+                                            className="gw-copy-name-btn"
+                                            title="Copy name/title"
+                                            onClick={(event) => copyItemName(item, event)}
+                                        >
+                                            {copiedNameKey === normalizeSelectionUrl(item.url) ? "Copied" : "Copy"}
+                                        </Button>
                                     </div>
 
                                     <div className="gw-creator" title={item.creator}>
                                         {item.creator || "Unknown Creator"}
                                     </div>
 
-                                    <div className="gw-id" title={`${item.modelId}${item.versionId ? ` / ${item.versionId}` : ""}`}>
-                                        {item.modelId}
-                                        {item.versionId ? ` / ${item.versionId}` : ""}
+                                    <div className="gw-id-row">
+                                        <div
+                                            className="gw-id"
+                                            title={`${item.modelId}${item.versionId ? ` / ${item.versionId}` : ""}`}
+                                        >
+                                            {item.modelId}
+                                            {item.versionId ? ` / ${item.versionId}` : ""}
+                                        </div>
+
+                                        <Button
+                                            size="sm"
+                                            variant="outline-light"
+                                            className="gw-open-url-btn"
+                                            title="Open model URL in new tab"
+                                            onClick={(event) => openItemUrl(item, event)}
+                                        >
+                                            <LuMoveDiagonal />
+                                        </Button>
                                     </div>
 
                                     <div className="gw-card-actions">
@@ -2046,12 +2392,34 @@ const GrouppingWindow: React.FC = () => {
 
                                                     return (
                                                         <div key={version.id} className="gw-version-row">
-                                                            <img
-                                                                src={version.imgSrc || PLACEHOLDER_IMAGE}
-                                                                alt={version.versionName}
-                                                                draggable={false}
+                                                            <div
                                                                 className="gw-version-thumb"
-                                                            />
+                                                                onClick={(event) =>
+                                                                    openImageModal(
+                                                                        version.imageUrls && version.imageUrls.length > 0
+                                                                            ? version.imageUrls
+                                                                            : [version.imgSrc || PLACEHOLDER_IMAGE],
+                                                                        version.versionName || `Version ${version.id}`,
+                                                                        event
+                                                                    )
+                                                                }
+                                                            >
+                                                                <SmartImage
+                                                                    src={version.imgSrc || PLACEHOLDER_IMAGE}
+                                                                    fallbackSources={[
+                                                                        ...(version.imageUrls || []),
+                                                                        PLACEHOLDER_IMAGE,
+                                                                    ]}
+                                                                    alt={version.versionName || `Version ${version.id}`}
+                                                                    isDarkMode={true}
+                                                                    loading="lazy"
+                                                                    maxHeight="100%"
+                                                                    borderRadius={6}
+                                                                    showRetryButton={false}
+                                                                    allowVideo={true}
+                                                                    mediaType={version.mediaType ?? "auto"}
+                                                                />
+                                                            </div>
 
                                                             <div className="gw-version-info">
                                                                 <div
@@ -2106,6 +2474,77 @@ const GrouppingWindow: React.FC = () => {
                     </div>
                 )}
             </div>
+
+            {imageModal?.open && (
+                <div
+                    className="gw-image-modal-backdrop"
+                    onClick={closeImageModal}
+                >
+                    <div
+                        className="gw-image-modal"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="gw-image-modal-header">
+                            <div className="gw-image-modal-title">
+                                {imageModal.title}
+                            </div>
+
+                            <Button
+                                size="sm"
+                                variant="outline-light"
+                                onClick={closeImageModal}
+                            >
+                                X
+                            </Button>
+                        </div>
+
+                        <div className="gw-image-modal-body">
+                            {imageModal.images.length > 1 && (
+                                <button
+                                    type="button"
+                                    className="gw-image-modal-nav gw-image-modal-nav-left"
+                                    onClick={(event) => moveModalImage(-1, event)}
+                                >
+                                    <FaArrowLeft />
+                                </button>
+                            )}
+
+                            <div className="gw-image-modal-media">
+                                <SmartImage
+                                    key={imageModal.images[imageModal.index]}
+                                    src={imageModal.images[imageModal.index] || PLACEHOLDER_IMAGE}
+                                    fallbackSources={[PLACEHOLDER_IMAGE]}
+                                    alt={imageModal.title}
+                                    isDarkMode={true}
+                                    loading="eager"
+                                    maxHeight="80vh"
+                                    borderRadius={8}
+                                    showRetryButton={true}
+                                    allowVideo={true}
+                                    mediaType={isVideoUrl(imageModal.images[imageModal.index]) ? "video" : "auto"}
+                                />
+                            </div>
+
+                            {imageModal.images.length > 1 && (
+                                <button
+                                    type="button"
+                                    className="gw-image-modal-nav gw-image-modal-nav-right"
+                                    onClick={(event) => moveModalImage(1, event)}
+                                >
+                                    <FaArrowRight />
+                                </button>
+                            )}
+                        </div>
+
+                        {imageModal.images.length > 1 && (
+                            <div className="gw-image-modal-counter">
+                                {imageModal.index + 1} / {imageModal.images.length}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
         </Container>
     );
 };
