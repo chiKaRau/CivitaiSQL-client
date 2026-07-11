@@ -220,6 +220,10 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                 dispatch
             );
 
+            //above is for using the model api to add the record to the database
+            //use the version api to add the record to the database
+            //so create a new api @PostMapping("/create-record-to-all-tables") with version api version 
+
             if (isAddRecordSuccessful) {
                 setStatus({
                     phase: 'success',

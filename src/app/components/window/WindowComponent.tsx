@@ -687,6 +687,45 @@ const WindowComponent: React.FC = () => {
         setStagedItems(prev => prev.map(it => (it.id === id ? { ...it, ...patch } : it)));
     };
 
+    const updateStagedVersionId = React.useCallback(
+        (item: StagedItem, rawVersionId: string) => {
+            // Only allow digits.
+            const versionId = rawVersionId.replace(/\D/g, "");
+
+            // Keep the existing model ID unchanged.
+            const modelId = item.modelId;
+
+            const isPrimary =
+                !!versionId &&
+                modelPrimaryVersionIdMap[modelId] === versionId;
+
+            const nextUrl = versionId
+                ? `https://civitai.red/models/${modelId}?modelVersionId=${versionId}`
+                : `https://civitai.red/models/${modelId}`;
+
+            const nextModelVersionDisplay = versionId
+                ? `${modelId}_${versionId}${isPrimary ? " (main)" : ""}`
+                : modelId;
+
+            setStagedItems(prev =>
+                prev.map(row =>
+                    row.id === item.id
+                        ? {
+                            ...row,
+
+                            // modelId is intentionally not changed.
+                            versionId,
+                            url: nextUrl,
+                            modelVersionDisplay: nextModelVersionDisplay,
+                            isPrimary,
+                        }
+                        : row
+                )
+            );
+        },
+        [modelPrimaryVersionIdMap]
+    );
+
     const handleUnstageItem = React.useCallback((item: StagedItem) => {
         setUrlList(prev => {
             if (prev.includes(item.url)) return prev;
@@ -702,11 +741,20 @@ const WindowComponent: React.FC = () => {
         }
 
         const restoredVersionId = item.versionId || "";
+
         if (restoredVersionId && restoredVersionId !== "Selecting") {
             setUrlVersionIdMap(prev => ({
                 ...prev,
                 [item.url]: restoredVersionId,
             }));
+        } else {
+            // Prevent an old mapped version from reappearing
+            // when the edited staged version is empty.
+            setUrlVersionIdMap(prev => {
+                const next = { ...prev };
+                delete next[item.url];
+                return next;
+            });
         }
 
         setStagedItems(prev => prev.filter(x => x.id !== item.id));
@@ -1363,12 +1411,18 @@ const WindowComponent: React.FC = () => {
         return data.modelVersions.findIndex((v: any) => String(v.id) === String(staged.versionId));
     };
 
+    //FIX HERE
     const runOneStagedOffline = async (item: StagedItem) => {
         if (["/@scan@/ErrorPath/"].includes(item.downloadFilePath)) {
             throw new Error("Invalid DownloadFilePath (staged)");
         }
 
         const data = await fetchCivitaiModelInfoFromCivitaiByModelID(item.modelId, dispatch);
+
+        //before that, 
+        // console the versionid to see if it is empty/null 
+        // staged.versionId maybe empty/null, so in the urlgrid or aggrid, allow user to enter the version id 
+        //if data is null, call the version api 
         if (!data) throw new Error("Failed to fetch model info");
 
         const versionIndex = findVersionIndexFromStaged(data, item);
@@ -1679,6 +1733,8 @@ const WindowComponent: React.FC = () => {
             minWidth: 215,
             wrapText: false,
             autoHeight: false,
+            editable: false,
+
             cellStyle: {
                 whiteSpace: "nowrap",
                 overflow: "hidden",
@@ -1686,31 +1742,106 @@ const WindowComponent: React.FC = () => {
                 textAlign: "left",
                 padding: "5px",
             } as CellStyle,
-            cellRenderer: (p: any) => {
-                const isPrimary = !!p?.data?.isPrimary;
-                const modelId = p?.data?.modelId || "";
-                const versionId = p?.data?.versionId || "";
+
+            cellRenderer: (params: any) => {
+                const item = params.data as StagedItem;
+
+                const modelId = String(item?.modelId || "");
+
+                const currentVersionId =
+                    item?.versionId && item.versionId !== "Selecting"
+                        ? String(item.versionId)
+                        : "";
 
                 return (
-                    <span
+                    <div
                         style={{
-                            display: "inline-flex",
+                            display: "flex",
                             alignItems: "center",
-                            gap: 6,
-                            flexWrap: "nowrap",
+                            gap: 5,
+                            width: "100%",
+                            minWidth: 0,
                             whiteSpace: "nowrap",
-                            fontWeight: isPrimary ? 800 : 600,
                         }}
                     >
-                        <span>{p.value}</span>
+                        {/* Fixed model ID — user cannot edit this */}
+                        <span
+                            style={{
+                                flexShrink: 0,
+                                fontWeight: item.isPrimary ? 800 : 600,
+                            }}
+                        >
+                            {modelId}_
+                        </span>
 
-                        {!!versionId && versionId !== "Selecting" && (
+                        {/* Only the version ID is editable */}
+                        <input
+                            key={`${item.id}_${currentVersionId}`}
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            defaultValue={currentVersionId}
+                            placeholder="version ID"
+                            aria-label={`Version ID for model ${modelId}`}
+
+                            onMouseDown={(event) => {
+                                event.stopPropagation();
+                            }}
+
+                            onClick={(event) => {
+                                event.stopPropagation();
+                            }}
+
+                            onInput={(event) => {
+                                // Remove anything that is not a digit.
+                                event.currentTarget.value =
+                                    event.currentTarget.value.replace(/\D/g, "");
+                            }}
+
+                            onBlur={(event) => {
+                                const nextVersionId =
+                                    event.currentTarget.value.replace(/\D/g, "");
+
+                                if (nextVersionId !== currentVersionId) {
+                                    updateStagedVersionId(item, nextVersionId);
+                                }
+                            }}
+
+                            onKeyDown={(event) => {
+                                event.stopPropagation();
+
+                                if (event.key === "Enter") {
+                                    event.preventDefault();
+                                    event.currentTarget.blur();
+                                }
+
+                                if (event.key === "Escape") {
+                                    event.preventDefault();
+                                    event.currentTarget.value = currentVersionId;
+                                    event.currentTarget.blur();
+                                }
+                            }}
+
+                            style={{
+                                width: 95,
+                                minWidth: 0,
+                                height: 30,
+                                padding: "3px 6px",
+                                borderRadius: 5,
+                                border: `1px solid ${theme.buttonBorder}`,
+                                backgroundColor: theme.buttonBackground,
+                                color: theme.buttonText,
+                                outline: "none",
+                            }}
+                        />
+
+                        {!!currentVersionId && (
                             <ModelVersionFileExistsBadge
-                                modelID={String(modelId)}
-                                versionID={String(versionId)}
+                                modelID={modelId}
+                                versionID={currentVersionId}
                             />
                         )}
-                    </span>
+                    </div>
                 );
             },
         },
@@ -1877,8 +2008,15 @@ const WindowComponent: React.FC = () => {
                 />
             ),
         },
-    ], [theme, isDarkMode, downloadPathOptions, priorityOptions, unstageButtonStyle, handleUnstageItem]);
-
+    ], [
+        theme,
+        isDarkMode,
+        downloadPathOptions,
+        priorityOptions,
+        unstageButtonStyle,
+        handleUnstageItem,
+        updateStagedVersionId
+    ]);
 
     // which rating checkboxes are currently ON?
     const selectedRatings = useMemo(
