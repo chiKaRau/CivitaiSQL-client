@@ -1119,6 +1119,67 @@ export const fetchAddOfflineDownloadFileIntoOfflineDownloadList = async (
     }
 }
 
+export const fetchAddOfflineDownloadFileIntoOfflineDownloadListByVersionAPI = async (
+    modelObject: {
+        downloadFilePath: string;
+        civitaiFileName: string;
+        civitaiModelID: string;
+        civitaiVersionID: string;
+        civitaiModelFileList: {
+            name: string;
+            downloadUrl: string;
+        }[];
+        civitaiUrl: string;
+        selectedCategory: string;
+        civitaiTags: string[];
+        hold?: boolean;
+        downloadPriority?: number;
+    },
+    isModifyMode: boolean,
+    dispatch: any
+) => {
+    try {
+        dispatch(clearError());
+
+        console.log(
+            "fetchAddOfflineDownloadFileIntoOfflineDownloadListByVersionAPI"
+        );
+        console.log(modelObject);
+        console.log(isModifyMode);
+
+        const response = await axios.post(
+            `${config.domain}/api/add-offline-download-file-into-offline-download-list-version-api`,
+            {
+                modelObject,
+                isModifyMode,
+            }
+        );
+
+        if (!(response.status >= 200 && response.status < 300)) {
+            throw new Error(
+                "Failed adding offline download file using version API."
+            );
+        }
+
+        return response.data;
+    } catch (error: any) {
+        console.error(
+            "Error adding offline download file using version API:",
+            error.message
+        );
+
+        dispatch(
+            setError({
+                hasError: true,
+                errorMessage: error.message,
+            })
+        );
+
+        // Important: let runOneStagedOffline know that it failed.
+        throw error;
+    }
+};
+
 export const fetchRefreshOfflineDownloadRecord = async (
     modelObject: {
         civitaiModelID: string;

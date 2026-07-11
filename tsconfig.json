@@ -11,6 +11,6 @@
         "noEmitOnError": true,
         "jsx": "react",
         "typeRoots": [ "node_modules/@types" ],
-        "types": ["chrome"]
+        "types": ["chrome", "jest"]
     }
 }

@@ -56,6 +56,7 @@ type StagedItem = {
     url: string;
     modelId: string;
     versionId: string;
+    versionManuallyEdited?: boolean;
     imgSrc?: string;
 
     isPrimary?: boolean;
@@ -110,7 +111,8 @@ import {
     fetchRemoveFromCreatorUrlList,
     fetchGetRatingList,
     fetchRemoveOfflineDownloadFileIntoOfflineDownloadList,
-    fetchFindVersionNumbersForOfflineDownloadList
+    fetchFindVersionNumbersForOfflineDownloadList,
+    fetchAddOfflineDownloadFileIntoOfflineDownloadListByVersionAPI
 } from "../../api/civitaiSQL_api"
 
 //utils
@@ -120,7 +122,7 @@ import { BiSolidBarChartSquare, BiSolidHdd } from 'react-icons/bi';
 import WindowFullInfoModelPanel from './WindowFullInfoModelPanel';
 import SetOriginalTabButton from './SetOriginalTabButton';
 import WindowShortcutPanel from './WindowShortcutPanel';
-import { FaEdit, FaMoon, FaSun, FaTrashAlt } from 'react-icons/fa';
+import { FaEdit, FaExternalLinkAlt, FaMoon, FaSun, FaTrashAlt } from 'react-icons/fa';
 import { CellStyle, ColDef } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { SelectEditor } from './SelectEditor';
@@ -718,6 +720,7 @@ const WindowComponent: React.FC = () => {
                             url: nextUrl,
                             modelVersionDisplay: nextModelVersionDisplay,
                             isPrimary,
+                            versionManuallyEdited: true,
                         }
                         : row
                 )
@@ -1411,34 +1414,99 @@ const WindowComponent: React.FC = () => {
         return data.modelVersions.findIndex((v: any) => String(v.id) === String(staged.versionId));
     };
 
-    //FIX HERE
     const runOneStagedOffline = async (item: StagedItem) => {
         if (["/@scan@/ErrorPath/"].includes(item.downloadFilePath)) {
             throw new Error("Invalid DownloadFilePath (staged)");
         }
 
-        const data = await fetchCivitaiModelInfoFromCivitaiByModelID(item.modelId, dispatch);
+        // Track which Civitai API supplied the data.
+        let usedVersionApiFallback = false;
 
-        //before that, 
-        // console the versionid to see if it is empty/null 
-        // staged.versionId maybe empty/null, so in the urlgrid or aggrid, allow user to enter the version id 
-        //if data is null, call the version api 
-        if (!data) throw new Error("Failed to fetch model info");
+        let data = await fetchCivitaiModelInfoFromCivitaiByModelID(
+            item.modelId,
+            dispatch
+        );
+
+        // If the model ID API fails, only allow the version API
+        // when the staged version was manually edited.
+        if (!data) {
+            if (!item.versionManuallyEdited) {
+                throw new Error(
+                    "Model API failed. Manually edit the version ID in the staging grid to allow version API fallback."
+                );
+            }
+
+            const versionId =
+                item.versionId && item.versionId !== "Selecting"
+                    ? String(item.versionId)
+                    : "";
+
+            if (!versionId) {
+                throw new Error(
+                    "Model API failed and no version ID is available for fallback"
+                );
+            }
+
+            const versionData =
+                await fetchCivitaiModelInfoFromCivitaiByVersionID(
+                    versionId,
+                    dispatch
+                );
+
+            if (!versionData) {
+                throw new Error(
+                    "Failed to retrieve data from both model API and version API"
+                );
+            }
+
+            // Remember that the version API was used successfully.
+            usedVersionApiFallback = true;
+
+            /*
+             * Convert the version API response to the same structure
+             * expected by the existing helper functions.
+             */
+            data = Array.isArray(versionData.modelVersions)
+                ? {
+                    ...versionData,
+                    tags: versionData.tags ?? [],
+                }
+                : {
+                    ...versionData,
+                    tags: versionData.tags ?? [],
+                    modelVersions: [versionData],
+                };
+        }
 
         const versionIndex = findVersionIndexFromStaged(data, item);
-        if (versionIndex === -1) throw new Error("Version not found in modelVersions");
 
-        const civitaiVersionID = data?.modelVersions[versionIndex]?.id.toString();
-        const civitaiFileName = retrieveCivitaiFileName(data, civitaiVersionID);
-        const civitaiModelFileList = retrieveCivitaiFilesList(data, civitaiVersionID);
-        const civitaiTags = data?.tags;
+        if (versionIndex === -1) {
+            throw new Error("Version not found in modelVersions");
+        }
 
-        if (!civitaiVersionID || !civitaiFileName || !civitaiModelFileList?.length || !civitaiTags) {
+        const civitaiVersionID =
+            data?.modelVersions?.[versionIndex]?.id?.toString();
+
+        const civitaiFileName =
+            retrieveCivitaiFileName(data, civitaiVersionID);
+
+        const civitaiModelFileList =
+            retrieveCivitaiFilesList(data, civitaiVersionID);
+
+        // Tags are optional.
+        const civitaiTags = data?.tags ?? [];
+
+        if (
+            !civitaiVersionID ||
+            !civitaiFileName ||
+            !civitaiModelFileList?.length
+        ) {
             throw new Error("Missing required fields for offline");
         }
 
         const normalizedCivitaiUrl =
-            `https://civitai.red/models/${item.modelId}?modelVersionId=${civitaiVersionID}`;
+            `https://civitai.red/models/${item.modelId}` +
+            `?modelVersionId=${civitaiVersionID}`;
 
         const modelObject = {
             downloadFilePath: item.downloadFilePath,
@@ -1453,7 +1521,21 @@ const WindowComponent: React.FC = () => {
             downloadPriority: item.downloadPriority,
         };
 
-        await fetchAddOfflineDownloadFileIntoOfflineDownloadList(modelObject, false, dispatch);
+        if (usedVersionApiFallback) {
+            // Model API failed, so use the new version-based backend endpoint.
+            await fetchAddOfflineDownloadFileIntoOfflineDownloadListByVersionAPI(
+                modelObject,
+                false,
+                dispatch
+            );
+        } else {
+            // Normal flow: model API succeeded.
+            await fetchAddOfflineDownloadFileIntoOfflineDownloadList(
+                modelObject,
+                false,
+                dispatch
+            );
+        }
     };
 
     const runOneStagedBundle = async (item: StagedItem) => {
@@ -1934,6 +2016,129 @@ const WindowComponent: React.FC = () => {
             editable: true,
             cellEditor: HoldEditor,
             cellEditorPopup: true,
+        },
+        {
+            headerName: "Links",
+            field: "externalLinks",
+            width: 105,
+            minWidth: 105,
+            maxWidth: 105,
+            sortable: false,
+            filter: false,
+            editable: false,
+            resizable: false,
+            suppressMovable: true,
+
+            cellStyle: {
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "0 6px",
+            } as CellStyle,
+
+            cellRenderer: (params: any) => {
+                const modelId = String(params.data?.modelId || "");
+
+                const versionId =
+                    params.data?.versionId &&
+                        params.data.versionId !== "Selecting"
+                        ? String(params.data.versionId)
+                        : "";
+
+                const modelApiUrl =
+                    `https://civitai.red/api/v1/models/${modelId}`;
+
+                const versionApiUrl =
+                    versionId
+                        ? `https://civitai.red/api/v1/model-versions/${versionId}`
+                        : "";
+
+                const archiveUrl =
+                    `https://civitaiarchive.com/models/${modelId}`;
+
+                const linkStyle: React.CSSProperties = {
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: 4,
+                    fontSize: 16,
+                    textDecoration: "none",
+                    cursor: "pointer",
+                };
+
+                return (
+                    <div
+                        style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 5,
+                            width: "100%",
+                            height: "100%",
+                        }}
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        {/* Civitai model-ID API */}
+                        <a
+                            href={modelApiUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={`Open model API: ${modelId}`}
+                            style={{
+                                ...linkStyle,
+                                color: "#2196f3",
+                            }}
+                            onClick={(event) => event.stopPropagation()}
+                        >
+                            <FaExternalLinkAlt />
+                        </a>
+
+                        {/* Civitai version-ID API */}
+                        {versionId ? (
+                            <a
+                                href={versionApiUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={`Open version API: ${versionId}`}
+                                style={{
+                                    ...linkStyle,
+                                    color: "#4caf50",
+                                }}
+                                onClick={(event) => event.stopPropagation()}
+                            >
+                                <FaExternalLinkAlt />
+                            </a>
+                        ) : (
+                            <span
+                                title="No version ID"
+                                style={{
+                                    ...linkStyle,
+                                    color: "#888888",
+                                    cursor: "not-allowed",
+                                    opacity: 0.45,
+                                }}
+                            >
+                                <FaExternalLinkAlt />
+                            </span>
+                        )}
+
+                        {/* Civitai Archive model page */}
+                        <a
+                            href={archiveUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={`Open Civitai Archive: ${modelId}`}
+                            style={{
+                                ...linkStyle,
+                                color: "#ff9800",
+                            }}
+                            onClick={(event) => event.stopPropagation()}
+                        >
+                            <FaExternalLinkAlt />
+                        </a>
+                    </div>
+                );
+            },
         },
         {
             headerName: "",
