@@ -35,8 +35,8 @@ const CivitaiModelScreen: React.FC = () => {
     const civitaiModel = useSelector((state: AppState) => state.civitaiModel);
     const { civitaiModelID, civitaiVersionID } = civitaiModel;
 
-    const chrome = useSelector((state: AppState) => state.chrome);
-    const { isDarkMode } = chrome;
+    const chromeState = useSelector((state: AppState) => state.chrome);
+    const { isDarkMode } = chromeState;
 
     const panels = useSelector((state: AppState) => state.panel.panels);
     const dispatch = useDispatch();
@@ -49,7 +49,26 @@ const CivitaiModelScreen: React.FC = () => {
     const theme = isDarkMode ? darkTheme : lightTheme;
 
     const refreshModelStatus = useCallback(async () => {
-        if (!civitaiModelID || !civitaiVersionID) {
+        let resolvedVersionID = civitaiVersionID;
+
+        // Fall back to the active tab URL when Redux has no version ID.
+        if (!resolvedVersionID || resolvedVersionID === "Selecting") {
+            const [activeTab] = await chrome.tabs.query({
+                active: true,
+                currentWindow: true
+            });
+
+            if (activeTab?.url) {
+                try {
+                    resolvedVersionID =
+                        new URL(activeTab.url).searchParams.get("modelVersionId") ?? "";
+                } catch (error) {
+                    console.error("Failed to read version ID from tab URL:", error);
+                }
+            }
+        }
+
+        if (!civitaiModelID || !resolvedVersionID) {
             setOfflineRecord(null);
             return;
         }
@@ -57,16 +76,16 @@ const CivitaiModelScreen: React.FC = () => {
         setIsCheckingModelStatus(true);
 
         try {
-            const [offlineData, fileExistsPayload] = await Promise.all([
+            const [offlineData] = await Promise.all([
                 fetchGetOfflineRecordByModelAndVersion(
                     civitaiModelID,
-                    civitaiVersionID,
+                    resolvedVersionID,
                     dispatch
                 ),
                 fetchCheckModelVersionFileExists(
                     dispatch,
                     civitaiModelID,
-                    civitaiVersionID
+                    resolvedVersionID
                 )
             ]);
 

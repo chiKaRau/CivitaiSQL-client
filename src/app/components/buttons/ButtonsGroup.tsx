@@ -6,7 +6,7 @@ import { AppState } from '../../store/configureStore';
 import { togglePanel } from '../../store/actions/panelActions';
 
 //Icons Components
-import { BsCheck, BsArrowRepeat, BsStarFill, BsStar, BsFillCloudArrowUpFill, BsInfoCircleFill, BsFillCartCheckFill, BsReverseLayoutTextWindowReverse } from 'react-icons/bs';
+import { BsCheck, BsArrowRepeat, BsStarFill, BsStar, BsFillCloudArrowUpFill, BsInfoCircleFill, BsFillCartCheckFill, BsReverseLayoutTextWindowReverse, BsArrowRightCircle } from 'react-icons/bs';
 import { MdOutlineDownloadForOffline, MdOutlineDownload } from "react-icons/md";
 import { AiFillFolderOpen } from "react-icons/ai"
 import { GrCopy, GrPowerShutdown } from 'react-icons/gr';
@@ -101,6 +101,44 @@ const ButtonsGroup: React.FC<ButtonsGroupProps> = ({ isDarkMode = true }) => {
             //window.close(); // This closes the popup window
         });
     }
+
+    const redirectToModelVersion123 = () => {
+        chrome.tabs.query(
+            { active: true, currentWindow: true },
+            (tabs) => {
+                const activeTab = tabs[0];
+
+                if (!activeTab?.id || !activeTab.url) {
+                    return;
+                }
+
+                const currentUrl = new URL(activeTab.url);
+
+                const isSupportedDomain =
+                    currentUrl.hostname === "civitai.com" ||
+                    currentUrl.hostname === "civitai.red";
+
+                const isModelPage =
+                    /^\/models\/\d+(?:\/[^/?#]+)?\/?$/.test(
+                        currentUrl.pathname
+                    );
+
+                if (!isSupportedDomain || !isModelPage) {
+                    return;
+                }
+
+                currentUrl.searchParams.set(
+                    "modelVersionId",
+                    "123"
+                );
+
+                chrome.tabs.update(activeTab.id, {
+                    url: currentUrl.toString()
+                });
+            }
+        );
+    };
+
     const tightItemStyle = {
         display: "inline-flex",
         alignItems: "flex-start",
@@ -334,6 +372,20 @@ const ButtonsGroup: React.FC<ButtonsGroupProps> = ({ isDarkMode = true }) => {
                         () => unBookmarkThisModel(bookmarkID, dispatch, false)
                         :
                         () => bookmarkThisModel(data?.type, dispatch)}
+                    isDarkMode={isDarkMode}
+                />
+            </div>
+
+            <div style={tightItemShiftStyle}>
+                <ButtonWrap
+                    buttonConfig={{
+                        placement: "bottom",
+                        tooltip: "Open model version 123",
+                        variant: "primary",
+                        buttonIcon: <BsArrowRightCircle />,
+                        disabled: false,
+                    }}
+                    handleFunctionCall={redirectToModelVersion123}
                     isDarkMode={isDarkMode}
                 />
             </div>
