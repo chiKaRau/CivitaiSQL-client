@@ -328,24 +328,83 @@ const CustomWindow: React.FC = () => {
                             .filter(Boolean)
                             .join(', ');
 
-                        const triggerText = Array.from(document.querySelectorAll('div'))
-                            .map(el => clean(el))
-                            .find(text => /^Trigger Words\s*:\s*.+/i.test(text));
+                        // Trigger Words:
+                        // Find the label in the Details section, then read the second column.
+                        try {
+                            const triggerLabel = Array.from(
+                                document.querySelectorAll(
+                                    'div.text-sm.text-muted-foreground.font-medium'
+                                )
+                            ).find(element => {
+                                const labelText = clean(element)
+                                    .replace(/[\s\u200B-\u200D\uFEFF]/g, '')
+                                    .toLowerCase();
 
-                        if (triggerText) {
-                            scrapedTriggerWords = normalizeCommaText(
-                                triggerText.replace(/^Trigger Words\s*:\s*/i, '')
-                            );
+                                return labelText === 'triggerwords:';
+                            });
+
+                            const triggerRow = triggerLabel?.parentElement;
+                            const triggerValueColumn = triggerRow?.children?.[1];
+
+                            if (triggerValueColumn) {
+                                const triggerBadges = Array.from(
+                                    triggerValueColumn.querySelectorAll('div.inline-flex')
+                                )
+                                    .map(element => clean(element))
+                                    .filter(Boolean);
+
+                                scrapedTriggerWords = triggerBadges.length
+                                    ? triggerBadges.join(', ')
+                                    : clean(triggerValueColumn);
+                            }
+                        } catch (error) {
+                            console.warn('Failed to scrape Trigger Words:', error);
                         }
 
-                        const promptText = Array.from(document.querySelectorAll('p'))
-                            .map(p => clean(p))
-                            .find(text => /^Prompt\s*:/i.test(text)) || '';
 
-                        if (promptText) {
-                            scrapedDescription = promptText.replace(/^Prompt\s*:\s*/i, 'Prompt : ');
+                        // Description:
+                        // Find the Description heading, move upward until the previous
+                        // sibling is the prose description container.
+                        try {
+                            const descriptionHeading = Array.from(
+                                document.querySelectorAll('h2')
+                            ).find(element => clean(element) === 'Description');
+
+                            let currentElement: Element | null =
+                                descriptionHeading || null;
+
+                            let descriptionElement: Element | null = null;
+
+                            while (currentElement && !descriptionElement) {
+                                const previousElement =
+                                    currentElement.previousElementSibling;
+
+                                if (
+                                    previousElement &&
+                                    previousElement.classList.contains('prose')
+                                ) {
+                                    descriptionElement = previousElement;
+                                    break;
+                                }
+
+                                currentElement = currentElement.parentElement;
+                            }
+
+                            if (descriptionElement) {
+                                const rawDescription =
+                                    (descriptionElement as HTMLElement).innerText ||
+                                    descriptionElement.textContent ||
+                                    '';
+
+                                scrapedDescription = rawDescription
+                                    .replace(/\r\n/g, '\n')
+                                    .replace(/[ \t]+\n/g, '\n')
+                                    .replace(/\n{3,}/g, '\n\n')
+                                    .trim();
+                            }
+                        } catch (error) {
+                            console.warn('Failed to scrape Description:', error);
                         }
-
                         scrapedNsfw = Array.from(document.querySelectorAll('div, span'))
                             .some(el => clean(el).toUpperCase() === 'NSFW');
                     } catch {
