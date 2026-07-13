@@ -54,8 +54,14 @@ const BundleButton: React.FC<BundleButtonProps> = ({
     const civitaiData: Record<string, any> | undefined = civitaiModel.civitaiModelObject;
     const { civitaiUrl, civitaiModelID, civitaiVersionID } = civitaiModel
 
-    const chrome = useSelector((state: AppState) => state.chrome);
-    const { downloadMethod, downloadFilePath, selectedCategory, offlineMode } = chrome;
+    const chromeState = useSelector((state: AppState) => state.chrome);
+
+    const {
+        downloadMethod,
+        downloadFilePath,
+        selectedCategory,
+        offlineMode
+    } = chromeState;
 
     const dispatch = useDispatch();
     const [isLoading, setIsLoading] = useState(false)
@@ -257,8 +263,13 @@ const BundleButton: React.FC<BundleButtonProps> = ({
              *
              * The Redux IDs are still preferred when they are available.
              */
+            const [activeTab] = await chrome.tabs.query({
+                active: true,
+                currentWindow: true
+            });
+
             const currentPageIds = getCivitaiIdsFromUrl(
-                window.location.href
+                activeTab?.url ?? ""
             );
 
             const storedUrlIds = getCivitaiIdsFromUrl(

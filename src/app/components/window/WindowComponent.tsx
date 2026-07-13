@@ -969,21 +969,42 @@ const WindowComponent: React.FC = () => {
 
     const getDownloadPriorityWithCreatorBonus = async (basePriority: number) => {
         const tab = await getActiveOrOriginalTab();
-        const creator = extractCreatorFromUserModelsUrl(tab?.url || "");
+        const currentUrl = tab?.url || "";
 
-        // Not on /user/<creator>/models page, so no bonus.
+        // Give +1 when directly on:
+        // https://civitai.com/models
+        // https://civitai.red/models
+        try {
+            const parsedUrl = new URL(currentUrl);
+
+            const isCivitaiModelsPage =
+                ["civitai.com", "www.civitai.com", "civitai.red", "www.civitai.red"]
+                    .includes(parsedUrl.hostname.toLowerCase()) &&
+                parsedUrl.pathname.replace(/\/+$/, "").toLowerCase() === "/models";
+
+            if (isCivitaiModelsPage) {
+                return Math.min(basePriority + 1, 10);
+            }
+        } catch {
+            // Invalid or unavailable tab URL: continue without models-page bonus.
+        }
+
+        const creator = extractCreatorFromUserModelsUrl(currentUrl);
+
+        // Not on a creator page, so no creator rating bonus.
         if (!creator) return basePriority;
 
         const creatorItem = creatorUrlList.find(
             (item) => getCreatorKey(item.creatorUrl) === creator.toLowerCase()
         );
 
-        // Creator not in dropdown/list, so no bonus.
+        // Creator is not in the creator list.
         if (!creatorItem) return basePriority;
 
-        const rating = (creatorItem.rating || "").toUpperCase();
+        const rating = (creatorItem.rating || "").trim().toUpperCase();
 
-        if (["SS", "SSS", "EX"].includes(rating)) {
+        // S or above receives +1.
+        if (["S", "SS", "SSS", "EX"].includes(rating)) {
             return Math.min(basePriority + 1, 10);
         }
 
