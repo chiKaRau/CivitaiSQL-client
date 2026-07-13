@@ -971,39 +971,47 @@ const WindowComponent: React.FC = () => {
         const tab = await getActiveOrOriginalTab();
         const currentUrl = tab?.url || "";
 
-        // Give +1 when directly on:
-        // https://civitai.com/models
-        // https://civitai.red/models
         try {
             const parsedUrl = new URL(currentUrl);
 
-            const isCivitaiModelsPage =
-                ["civitai.com", "www.civitai.com", "civitai.red", "www.civitai.red"]
-                    .includes(parsedUrl.hostname.toLowerCase()) &&
-                parsedUrl.pathname.replace(/\/+$/, "").toLowerCase() === "/models";
+            const hostname = parsedUrl.hostname
+                .replace(/^www\./i, "")
+                .toLowerCase();
 
-            if (isCivitaiModelsPage) {
-                return Math.min(basePriority + 1, 10);
+            const pathname = parsedUrl.pathname
+                .replace(/\/+$/, "")
+                .toLowerCase();
+
+            const isMainModelsPage =
+                ["civitai.com", "civitai.red"].includes(hostname) &&
+                pathname === "/models";
+
+            // Main models page always uses priority 6.
+            if (isMainModelsPage) {
+                return 6;
             }
         } catch {
-            // Invalid or unavailable tab URL: continue without models-page bonus.
+            // Invalid or unavailable URL. Continue with creator-rating check.
         }
 
         const creator = extractCreatorFromUserModelsUrl(currentUrl);
 
-        // Not on a creator page, so no creator rating bonus.
+        // Not on a creator page.
         if (!creator) return basePriority;
 
         const creatorItem = creatorUrlList.find(
-            (item) => getCreatorKey(item.creatorUrl) === creator.toLowerCase()
+            (item) =>
+                getCreatorKey(item.creatorUrl) === creator.toLowerCase()
         );
 
         // Creator is not in the creator list.
         if (!creatorItem) return basePriority;
 
-        const rating = (creatorItem.rating || "").trim().toUpperCase();
+        const rating = (creatorItem.rating || "")
+            .trim()
+            .toUpperCase();
 
-        // S or above receives +1.
+        // S or above gets +1, capped at 10.
         if (["S", "SS", "SSS", "EX"].includes(rating)) {
             return Math.min(basePriority + 1, 10);
         }
