@@ -988,7 +988,7 @@ const WindowComponent: React.FC = () => {
 
             // Main models page always uses priority 6.
             if (isMainModelsPage) {
-                return 6;
+                return basePriority === 5 ? 6 : basePriority;
             }
         } catch {
             // Invalid or unavailable URL. Continue with creator-rating check.
