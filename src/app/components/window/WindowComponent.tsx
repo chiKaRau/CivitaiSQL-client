@@ -986,9 +986,9 @@ const WindowComponent: React.FC = () => {
                 ["civitai.com", "civitai.red"].includes(hostname) &&
                 pathname === "/models";
 
-            // Main models page always uses priority 6.
             if (isMainModelsPage) {
-                return basePriority === 5 ? 6 : basePriority;
+                // Minimum priority is 6, but preserve any higher user selection.
+                return Math.max(basePriority, 6);
             }
         } catch {
             // Invalid or unavailable URL. Continue with creator-rating check.
