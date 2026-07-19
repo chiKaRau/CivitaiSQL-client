@@ -399,6 +399,9 @@ const WindowComponent: React.FC = () => {
 
     const [stagedItems, setStagedItems] = useState<StagedItem[]>([]);
 
+    const [resolvingVersionRowIds, setResolvingVersionRowIds] =
+        useState<Set<string>>(new Set());
+
     // Helper to toggle all on/off
     const toggleAllRatings = () => {
         const newVal = !allSelected;
@@ -727,6 +730,415 @@ const WindowComponent: React.FC = () => {
             );
         },
         [modelPrimaryVersionIdMap]
+    );
+
+    const fetchVersionIdFromCivArchive = async (
+        item: StagedItem
+    ): Promise<string> => {
+        const currentVersionId =
+            item.versionId && item.versionId !== "Selecting"
+                ? String(item.versionId).replace(/\D/g, "")
+                : "";
+
+        const archiveUrl = new URL(
+            `https://civitaiarchive.com/models/${item.modelId}`
+        );
+
+        /*
+         * When the row already has a version ID, produce:
+         *
+         * https://civitaiarchive.com/models/2681810
+         *     ?modelVersionId=3011283
+         */
+        if (currentVersionId) {
+            archiveUrl.searchParams.set(
+                "modelVersionId",
+                currentVersionId
+            );
+        }
+
+        const response = await fetch(archiveUrl.toString(), {
+            method: "GET",
+            headers: {
+                Accept: "application/json, text/html",
+            },
+            credentials: "omit",
+        });
+
+        if (!response.ok) {
+            throw new Error(
+                `CivArchive returned HTTP ${response.status}`
+            );
+        }
+
+        const contentType =
+            response.headers.get("content-type") || "";
+
+        let payload: any;
+
+        if (contentType.includes("application/json")) {
+            payload = await response.json();
+        } else {
+            /*
+             * CivArchive may return an HTML page containing Next.js JSON.
+             */
+            const html = await response.text();
+
+            const document =
+                new DOMParser().parseFromString(html, "text/html");
+
+            const nextDataElement =
+                document.querySelector<HTMLScriptElement>(
+                    'script#__NEXT_DATA__[type="application/json"]'
+                );
+
+            if (!nextDataElement?.textContent) {
+                throw new Error(
+                    "CivArchive did not return readable version data"
+                );
+            }
+
+            payload = JSON.parse(nextDataElement.textContent);
+        }
+
+        /*
+         * Support several CivArchive response structures.
+         */
+        const possibleVersionIds = [
+            payload?.version?.id,
+            payload?.model?.version?.id,
+            payload?.data?.version?.id,
+
+            payload?.props?.pageProps?.model?.version?.id,
+
+            payload?.modelVersions?.[0]?.id,
+            payload?.versions?.[0]?.id,
+
+            payload?.versionId,
+            payload?.modelVersionId,
+        ];
+
+        const resolvedVersionId = possibleVersionIds
+            .map(value => String(value ?? "").replace(/\D/g, ""))
+            .find(Boolean);
+
+        if (!resolvedVersionId) {
+            throw new Error(
+                `CivArchive did not provide a version ID for model ${item.modelId}`
+            );
+        }
+
+        return resolvedVersionId;
+    };
+
+    const resolveVersionFromCivitaiRedTab = React.useCallback(
+        async (item: StagedItem): Promise<string> => {
+            const originalVersionId =
+                item.versionId &&
+                    item.versionId !== "Selecting"
+                    ? String(item.versionId).replace(/\D/g, "")
+                    : "";
+
+            /*
+             * When the row has no version, use an invalid probe ID.
+             * Civitai Red should replace it with the actual version.
+             */
+            const requestedVersionId =
+                originalVersionId || "12345";
+
+            const delay = (ms: number) =>
+                new Promise<void>(resolve => {
+                    window.setTimeout(resolve, ms);
+                });
+
+            const extractVersionId = (url: string): string => {
+                try {
+                    return (
+                        new URL(url)
+                            .searchParams
+                            .get("modelVersionId")
+                            ?.replace(/\D/g, "") || ""
+                    );
+                } catch {
+                    return "";
+                }
+            };
+
+            let pageUrl: URL;
+
+            try {
+                /*
+                 * Preserve the model slug from the staged row URL.
+                 */
+                pageUrl = new URL(item.url);
+
+                pageUrl.protocol = "https:";
+                pageUrl.hostname = "civitai.red";
+                pageUrl.port = "";
+            } catch {
+                pageUrl = new URL(
+                    `https://civitai.red/models/${item.modelId}`
+                );
+            }
+
+            pageUrl.searchParams.set(
+                "modelVersionId",
+                requestedVersionId
+            );
+
+            let temporaryWindowId: number | undefined;
+            let temporaryTabId: number | undefined;
+
+            try {
+                /*
+                 * The single tab is active inside this temporary window,
+                 * so Civitai should run without requiring the user to click it.
+                 *
+                 * focused:false prevents this new window from taking focus.
+                 */
+                const temporaryWindow =
+                    await chrome.windows.create({
+                        url: pageUrl.toString(),
+                        type: "popup",
+                        focused: false,
+                        width: 500,
+                        height: 650,
+                    });
+
+                temporaryWindowId = temporaryWindow.id;
+
+                temporaryTabId =
+                    temporaryWindow.tabs?.[0]?.id;
+
+                /*
+                 * Some Chrome versions may not immediately include the tabs
+                 * array in the windows.create response.
+                 */
+                if (
+                    !temporaryTabId &&
+                    temporaryWindowId !== undefined
+                ) {
+                    const tabs = await chrome.tabs.query({
+                        windowId: temporaryWindowId,
+                    });
+
+                    temporaryTabId = tabs[0]?.id;
+                }
+
+                if (
+                    temporaryWindowId === undefined ||
+                    temporaryTabId === undefined
+                ) {
+                    throw new Error(
+                        "Unable to create the temporary Civitai Red window"
+                    );
+                }
+
+                console.log(
+                    "[Resolve Version] Opened Civitai Red:",
+                    pageUrl.toString()
+                );
+
+                const startedAt = Date.now();
+                const maximumWaitMs = 10000;
+
+                let pageCompletedAt: number | null = null;
+                let lastUrl = "";
+                let lastVersionId = "";
+
+                while (
+                    Date.now() - startedAt <
+                    maximumWaitMs
+                ) {
+                    /*
+                     * Check frequently so the temporary window closes
+                     * shortly after the URL changes.
+                     */
+                    await delay(200);
+
+                    let currentTab: chrome.tabs.Tab;
+
+                    try {
+                        currentTab =
+                            await chrome.tabs.get(
+                                temporaryTabId
+                            );
+                    } catch {
+                        throw new Error(
+                            "The temporary Civitai Red window was closed"
+                        );
+                    }
+
+                    lastUrl = currentTab.url || "";
+
+                    const candidateVersionId =
+                        extractVersionId(lastUrl);
+
+                    if (candidateVersionId) {
+                        lastVersionId =
+                            candidateVersionId;
+                    }
+
+                    /*
+                     * The site replaced the supplied version.
+                     *
+                     * Example:
+                     *
+                     * 12345 -> 2578769
+                     *
+                     * Returning here immediately triggers the finally block,
+                     * which closes the temporary window.
+                     */
+                    if (
+                        candidateVersionId &&
+                        candidateVersionId !==
+                        requestedVersionId
+                    ) {
+                        console.log(
+                            "[Resolve Version] Civitai Red resolved:",
+                            requestedVersionId,
+                            "->",
+                            candidateVersionId
+                        );
+
+                        return candidateVersionId;
+                    }
+
+                    if (
+                        currentTab.status === "complete" &&
+                        pageCompletedAt === null
+                    ) {
+                        pageCompletedAt = Date.now();
+                    }
+
+                    /*
+                     * The existing version might already be valid.
+                     * In that situation, the URL will not change.
+                     *
+                     * Give Civitai three seconds after loading before
+                     * accepting the unchanged version ID.
+                     */
+                    if (
+                        pageCompletedAt !== null &&
+                        originalVersionId &&
+                        candidateVersionId ===
+                        originalVersionId &&
+                        Date.now() - pageCompletedAt >= 3000
+                    ) {
+                        console.log(
+                            "[Resolve Version] Existing version is valid:",
+                            candidateVersionId
+                        );
+
+                        return candidateVersionId;
+                    }
+                }
+
+                throw new Error(
+                    `Civitai Red did not resolve a version ID for model ` +
+                    `${item.modelId}. Last version: ` +
+                    `${lastVersionId || "none"}. Last URL: ` +
+                    `${lastUrl || "unknown"}`
+                );
+            } finally {
+                /*
+                 * Close the whole temporary window immediately.
+                 */
+                if (temporaryWindowId !== undefined) {
+                    try {
+                        await chrome.windows.remove(
+                            temporaryWindowId
+                        );
+                    } catch {
+                        // The window may already have been closed.
+                    }
+                } else if (temporaryTabId !== undefined) {
+                    /*
+                     * Safety fallback if a tab was created but its window ID
+                     * could not be recorded.
+                     */
+                    try {
+                        await chrome.tabs.remove(
+                            temporaryTabId
+                        );
+                    } catch {
+                        // The tab may already have been closed.
+                    }
+                }
+            }
+        },
+        []
+    );
+
+    const handleResolveCurrentVersion = React.useCallback(
+        async (item: StagedItem) => {
+            setResolvingVersionRowIds(prev => {
+                const next = new Set(prev);
+                next.add(item.id);
+                return next;
+            });
+
+            try {
+                let resolvedVersionId = "";
+
+                /*
+                 * Attempt 1:
+                 * CivArchive fetch — no browser tab.
+                 */
+                try {
+                    resolvedVersionId =
+                        await fetchVersionIdFromCivArchive(item);
+                } catch (archiveError) {
+                    console.warn(
+                        `[Resolve Version] CivArchive failed for model ${item.modelId}.`,
+                        archiveError
+                    );
+                }
+
+                /*
+                 * Attempt 2:
+                 * Only when CivArchive failed, temporarily load civitai.red.
+                 */
+                if (!resolvedVersionId) {
+                    resolvedVersionId =
+                        await resolveVersionFromCivitaiRedTab(
+                            item
+                        );
+                }
+
+                if (!resolvedVersionId) {
+                    throw new Error(
+                        `No version ID was found for model ${item.modelId}`
+                    );
+                }
+
+                updateStagedVersionId(
+                    item,
+                    resolvedVersionId
+                );
+            } catch (error: any) {
+                console.error(
+                    `Failed to resolve version for model ${item.modelId}:`,
+                    error
+                );
+
+                alert(
+                    error?.message ||
+                    `Failed to resolve version for model ${item.modelId}`
+                );
+            } finally {
+                setResolvingVersionRowIds(prev => {
+                    const next = new Set(prev);
+                    next.delete(item.id);
+                    return next;
+                });
+            }
+        },
+        [
+            fetchVersionIdFromCivArchive,
+            resolveVersionFromCivitaiRedTab,
+            updateStagedVersionId,
+        ]
     );
 
     const handleUnstageItem = React.useCallback((item: StagedItem) => {
@@ -2047,6 +2459,71 @@ const WindowComponent: React.FC = () => {
             cellEditorPopup: true,
         },
         {
+            headerName: "Resolve",
+            field: "resolveVersionAction",
+            width: 76,
+            minWidth: 76,
+            maxWidth: 76,
+            sortable: false,
+            filter: false,
+            editable: false,
+            resizable: false,
+            suppressMovable: true,
+
+            cellStyle: {
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "2px",
+            } as CellStyle,
+
+            cellRenderer: (params: any) => {
+                const item = params.data as StagedItem;
+                const isResolving =
+                    resolvingVersionRowIds.has(item.id);
+
+                return (
+                    <button
+                        type="button"
+                        disabled={isResolving}
+                        title={
+                            isResolving
+                                ? "Resolving version..."
+                                : "Get current/default version ID"
+                        }
+                        aria-label={`Resolve version for model ${item.modelId}`}
+                        onClick={async (event) => {
+                            event.stopPropagation();
+                            await handleResolveCurrentVersion(item);
+                        }}
+                        style={{
+                            width: 34,
+                            height: 32,
+                            padding: 0,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            borderRadius: 5,
+                            border: `1px solid ${theme.buttonBorder}`,
+                            backgroundColor: theme.buttonBackground,
+                            color: theme.buttonText,
+                            cursor: isResolving ? "wait" : "pointer",
+                            opacity: isResolving ? 0.55 : 1,
+                        }}
+                    >
+                        <IoReloadOutline
+                            size={18}
+                            style={{
+                                transform: isResolving
+                                    ? "rotate(45deg)"
+                                    : undefined,
+                            }}
+                        />
+                    </button>
+                );
+            },
+        },
+        {
             headerName: "Links",
             field: "externalLinks",
             width: 105,
@@ -2248,6 +2725,8 @@ const WindowComponent: React.FC = () => {
         downloadPathOptions,
         priorityOptions,
         unstageButtonStyle,
+        updateStagedVersionId,
+        handleResolveCurrentVersion,
         handleUnstageItem,
         updateStagedVersionId
     ]);
