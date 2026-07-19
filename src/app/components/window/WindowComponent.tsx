@@ -197,6 +197,14 @@ const WindowComponent: React.FC = () => {
     const [modelPrimaryVersionIdMap, setModelPrimaryVersionIdMap] =
         useState<Record<string, string>>({});
 
+    const modelPrimaryVersionIdMapRef =
+        useRef(modelPrimaryVersionIdMap);
+
+    useEffect(() => {
+        modelPrimaryVersionIdMapRef.current =
+            modelPrimaryVersionIdMap;
+    }, [modelPrimaryVersionIdMap]);
+
     const [collapseButtonStates, setCollapseButtonStates] = useState<{ [key: string]: boolean }>({
         checkDatabaseButton: false,
         bookmarkButton: false, // Initial value to help TypeScript infer the types
@@ -582,21 +590,7 @@ const WindowComponent: React.FC = () => {
     };
 
     const stagedRowData = useMemo(() => {
-        const rawRows = stagedItems.map((it) => ({
-            ...it,
-            isPrimary: !!it.isPrimary,
-            modelVersionDisplay:
-                it.modelVersionDisplay ||
-                (it.versionId && it.versionId !== "Selecting"
-                    ? `${it.modelId}_${it.versionId}`
-                    : `${it.modelId}`),
-            imgSrc: it.imgSrc || "",
-        }));
-
-        return reverseByModelGroup(rawRows).map((row, index) => ({
-            ...row,
-            idx: index + 1,
-        }));
+        return reverseByModelGroup(stagedItems);
     }, [stagedItems]);
 
     const pickByNullThenAge = (direction: 1 | -1): number | null => {
@@ -688,9 +682,31 @@ const WindowComponent: React.FC = () => {
         return activeTab || null;
     };
 
-    const patchStagedById = (id: string, patch: Partial<StagedItem>) => {
-        setStagedItems(prev => prev.map(it => (it.id === id ? { ...it, ...patch } : it)));
-    };
+    const patchStagedById = React.useCallback(
+        (
+            id: string,
+            patch: Partial<StagedItem>
+        ) => {
+            setStagedItems(prev =>
+                prev.map(it =>
+                    it.id === id
+                        ? { ...it, ...patch }
+                        : it
+                )
+            );
+        },
+        []
+    );
+
+    const stagingContext = useMemo(
+        () => ({ patchStagedById }),
+        [patchStagedById]
+    );
+
+    const getStagedRowId = React.useCallback(
+        (params: any) => String(params.data.id),
+        []
+    );
 
     const updateStagedVersionId = React.useCallback(
         (item: StagedItem, rawVersionId: string) => {
@@ -702,7 +718,7 @@ const WindowComponent: React.FC = () => {
 
             const isPrimary =
                 !!versionId &&
-                modelPrimaryVersionIdMap[modelId] === versionId;
+                modelPrimaryVersionIdMapRef.current[modelId] === versionId;
 
             const nextUrl = versionId
                 ? `https://civitai.red/models/${modelId}?modelVersionId=${versionId}`
@@ -729,10 +745,10 @@ const WindowComponent: React.FC = () => {
                 )
             );
         },
-        [modelPrimaryVersionIdMap]
+        []
     );
 
-    const fetchVersionIdFromCivArchive = async (
+    const fetchVersionIdFromCivArchive = React.useCallback(async (
         item: StagedItem
     ): Promise<string> => {
         const currentVersionId =
@@ -829,7 +845,7 @@ const WindowComponent: React.FC = () => {
         }
 
         return resolvedVersionId;
-    };
+    }, []);
 
     const resolveVersionFromCivitaiRedTab = React.useCallback(
         async (item: StagedItem): Promise<string> => {
@@ -2175,6 +2191,14 @@ const WindowComponent: React.FC = () => {
         return Array.from(new Set(convertedList));
     }, [sortedandFilteredfoldersList, applyDownloadPathRoot, downloadPathRoot]);
 
+    const downloadPathOptionsRef =
+        useRef<string[]>(downloadPathOptions);
+
+    useEffect(() => {
+        downloadPathOptionsRef.current =
+            downloadPathOptions;
+    }, [downloadPathOptions]);
+
     const handleFoldersListOnChange = (event: any, newValue: string | null) => {
         const disallowedRegex = /[<>:"\\|?*]/g;
 
@@ -2405,7 +2429,9 @@ const WindowComponent: React.FC = () => {
             editable: true,
             cellEditor: PathAutocompleteEditor,
             cellEditorPopup: true,
-            cellEditorParams: () => ({ options: downloadPathOptions })
+            cellEditorParams: () => ({
+                options: downloadPathOptionsRef.current
+            })
         },
         {
             headerName: "URL",
@@ -2722,7 +2748,6 @@ const WindowComponent: React.FC = () => {
     ], [
         theme,
         isDarkMode,
-        downloadPathOptions,
         priorityOptions,
         unstageButtonStyle,
         updateStagedVersionId,
@@ -4963,8 +4988,8 @@ const WindowComponent: React.FC = () => {
                                         defaultColDef={stagingDefaultColDef}
                                         stopEditingWhenCellsLoseFocus={true}
                                         singleClickEdit={false}
-                                        context={{ patchStagedById }}
-                                        getRowId={(p) => p.data.id}
+                                        context={stagingContext}
+                                        getRowId={getStagedRowId}
                                         onCellValueChanged={(e: any) => {
                                             const id = e?.data?.id;
                                             const field = e?.colDef?.field;
