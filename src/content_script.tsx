@@ -30,6 +30,10 @@ function isModelUrl(url: string): boolean {
   return /\/models\/\d+(?:[/?#]|$)/.test(url || '');
 }
 
+function hasPrimaryCardMedia(link: HTMLAnchorElement): boolean {
+  return !!link.querySelector('img, video, picture');
+}
+
 function getModelLinks(root: ParentNode = document): HTMLAnchorElement[] {
   return Array.from(root.querySelectorAll(MODEL_LINK_SELECTOR)).filter(
     (el): el is HTMLAnchorElement =>
@@ -142,7 +146,8 @@ function getModelContainer(): HTMLElement | null {
     return legacyGrid;
   }
 
-  const firstLink = getModelLinks(document)[0];
+  const firstLink =
+    getModelLinks(document).find((link) => hasPrimaryCardMedia(link)) || null;
   const firstCard = resolveCardElement(firstLink);
   if (!firstCard) return null;
 
@@ -175,13 +180,14 @@ function getModelContainer(): HTMLElement | null {
 }
 
 function getModelCards(container?: HTMLElement | null): HTMLElement[] {
-  const scope: ParentNode = container || document;
+  const scope: ParentNode =
+    container || getModelContainer() || document;
   const seen = new Set<HTMLElement>();
   const cards: HTMLElement[] = [];
 
   getModelLinks(scope).forEach((link) => {
     const card = resolveCardElement(link);
-    if (card && !seen.has(card)) {
+    if (card && hasPrimaryCardMedia(link) && !seen.has(card)) {
       seen.add(card);
       cards.push(card);
     }
@@ -2609,6 +2615,12 @@ function initMutationObserver(parentContainer: HTMLElement) {
 }
 
 function observeCardItem(cardItem: HTMLElement) {
+
+  // Do not attach a card observer to rows, filters, buttons, or other wrappers.
+  if (resolveCardElement(cardItem) !== cardItem) {
+    return;
+  }
+
   if (cardItem.hasAttribute('data-observed')) {
     return;
   }
@@ -2620,10 +2632,13 @@ function observeCardItem(cardItem: HTMLElement) {
       if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
         mutation.addedNodes.forEach((node) => {
           if (node instanceof HTMLElement) {
-            const anchor =
-              node.tagName.toLowerCase() === 'a'
-                ? (node as HTMLAnchorElement)
-                : (node.querySelector('a') as HTMLAnchorElement | null);
+            const cardEl = resolveCardElement(node);
+
+            if (!cardEl || cardEl !== cardItem) {
+              return;
+            }
+
+            const anchor = getCardLink(cardEl);
 
             if (anchor) {
               const suffixUrl = anchor.href;
@@ -2633,8 +2648,6 @@ function observeCardItem(cardItem: HTMLElement) {
                 newUrlList: [suffixUrl],
               });
 
-              const directCard = anchor.closest('a, div') as HTMLElement | null;
-              const cardEl = directCard || cardItem;
               const divId = cardEl.id;
               const processedUrl = anchor.href.replace("-commission", "");
 
