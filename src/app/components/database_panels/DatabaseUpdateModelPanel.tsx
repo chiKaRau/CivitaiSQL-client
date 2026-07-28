@@ -544,6 +544,7 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                 civitaiUrl: resolvedUrl,
                 selectedCategory: resolvedSelectedCategory,
                 civitaiTags,
+                downloadPriority: 6,
             };
 
             await fetchAddOfflineDownloadFileIntoOfflineDownloadList(modelObject, false, dispatch);
@@ -688,6 +689,7 @@ const DatabaseUpdateModelPanel: React.FC<DatabaseUpdateModelPanelProps> = (props
                 civitaiUrl: parentModelUrl,
                 selectedCategory: resolvedSelectedCategory,
                 civitaiTags,
+                downloadPriority: 6,
             };
 
             await fetchAddOfflineDownloadFileIntoOfflineDownloadList(
