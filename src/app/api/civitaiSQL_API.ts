@@ -1022,21 +1022,28 @@ export const fetchOfflineDownloadListHold = async (dispatch: any) => {
     }
 };
 
-export const fetchGetErrorModelList = async (dispatch: any) => {
+export const fetchGetErrorModelList = async (
+    dispatch: any,
+    page: number = 0,
+    size: number = 100
+): Promise<PageResponse<any>> => {
     try {
-        const url = `${config.domain}/api/get_error_model_list`;
-        const response = await axios.get(url);
-
-        console.log("error response list")
-        console.log(response)
+        const response = await axios.get(
+            `${config.domain}/api/get_error_model_list-in-page`,
+            {
+                params: { page, size },
+            }
+        );
 
         if (response.status >= 200 && response.status < 300) {
-            // payload is: List<Map<String, Object>>
-            return response.data?.payload;
+            return response.data?.payload as PageResponse<any>;
         }
-        throw new Error('Unexpected response status: ' + response.status);
+
+        throw new Error(
+            `Unexpected response status: ${response.status}`
+        );
     } catch (error: any) {
-        console.error('Hold list fetch error:', error.message);
+        console.error("Error list paged fetch error:", error.message);
         throw error;
     }
 };

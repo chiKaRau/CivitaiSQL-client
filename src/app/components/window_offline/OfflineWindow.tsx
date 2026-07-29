@@ -247,6 +247,10 @@ const OfflineWindow: React.FC = () => {
     const [holdEntries, setHoldEntries] = useState<OfflineDownloadEntry[]>([]);
     const [earlyAccessEntries, setEarlyAccessEntries] = useState<OfflineDownloadEntry[]>([]);
     const [errorEntries, setErrorEntries] = useState<OfflineDownloadEntry[]>([]);
+    const [errorPage, setErrorPage] = useState(1);
+    const [errorItemsPerPage, setErrorItemsPerPage] = useState(100);
+    const [errorTotalItems, setErrorTotalItems] = useState(0);
+    const [errorTotalPages, setErrorTotalPages] = useState(1);
 
     // force reload for special card lists (hold/earlyAccess/error)
     const [specialReloadToken, setSpecialReloadToken] = useState(0);
@@ -1712,9 +1716,23 @@ const OfflineWindow: React.FC = () => {
                         setEarlyAccessEntries(Array.isArray(payload) ? payload as OfflineDownloadEntry[] : []);
                     }
                 } else if (displayMode === 'errorCard') {
-                    const payload = await fetchGetErrorModelList(dispatch);
+                    const payload = await fetchGetErrorModelList(
+                        dispatch,
+                        errorPage - 1,
+                        errorItemsPerPage
+                    );
+
                     if (!cancelled) {
-                        setErrorEntries(Array.isArray(payload) ? payload as OfflineDownloadEntry[] : []);
+                        setErrorEntries(
+                            Array.isArray(payload?.content)
+                                ? payload.content as OfflineDownloadEntry[]
+                                : []
+                        );
+
+                        setErrorTotalItems(payload?.totalElements ?? 0);
+                        setErrorTotalPages(
+                            Math.max(1, payload?.totalPages ?? 1)
+                        );
                     }
                 }
             } catch (err: any) {
@@ -1734,8 +1752,13 @@ const OfflineWindow: React.FC = () => {
 
         loadSpecialList();
         return () => { cancelled = true; };
-    }, [displayMode, dispatch, specialReloadToken]);
-
+    }, [
+        displayMode,
+        dispatch,
+        specialReloadToken,
+        errorPage,
+        errorItemsPerPage,
+    ]);
 
     async function fetchExcludedTags() {
         const serverTags = await fetchGetPendingRemoveTagsList(dispatch);
@@ -6564,6 +6587,129 @@ const OfflineWindow: React.FC = () => {
                                 })()}
                             </div>
                         )}
+
+                    {displayMode === 'errorCard' && (
+                        <div style={styles.footerStyle}>
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    flexWrap: 'wrap',
+                                    gap: '10px',
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        fontWeight: 'bold',
+                                        color: isDarkMode ? '#fff' : '#000',
+                                    }}
+                                >
+                                    Showing{' '}
+                                    {errorTotalItems === 0
+                                        ? 0
+                                        : (errorPage - 1) * errorItemsPerPage + 1}{' '}
+                                    - {Math.min(errorPage * errorItemsPerPage, errorTotalItems)} of{' '}
+                                    {errorTotalItems} items
+                                </div>
+
+                                <div
+                                    style={{
+                                        flex: 1,
+                                        display: 'flex',
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        flexWrap: 'wrap',
+                                    }}
+                                >
+                                    <Pagination
+                                        className="mb-0"
+                                        size="sm"
+                                        style={{ marginBottom: 0 }}
+                                    >
+                                        <Pagination.First
+                                            onClick={() => setErrorPage(1)}
+                                            disabled={errorPage === 1 || isLoading}
+                                        >
+                                            <FaAngleDoubleLeft />
+                                        </Pagination.First>
+
+                                        <Pagination.Prev
+                                            onClick={() =>
+                                                setErrorPage(prev => Math.max(prev - 1, 1))
+                                            }
+                                            disabled={errorPage === 1 || isLoading}
+                                        >
+                                            <FaAngleLeft />
+                                        </Pagination.Prev>
+
+                                        {Array.from(
+                                            { length: errorTotalPages },
+                                            (_, index) => index + 1
+                                        )
+                                            .slice(
+                                                Math.max(errorPage - 3, 0),
+                                                errorPage + 2
+                                            )
+                                            .map(page => (
+                                                <Pagination.Item
+                                                    key={page}
+                                                    active={page === errorPage}
+                                                    disabled={isLoading}
+                                                    onClick={() => setErrorPage(page)}
+                                                >
+                                                    {page}
+                                                </Pagination.Item>
+                                            ))}
+
+                                        <Pagination.Next
+                                            onClick={() =>
+                                                setErrorPage(prev =>
+                                                    Math.min(prev + 1, errorTotalPages)
+                                                )
+                                            }
+                                            disabled={errorPage >= errorTotalPages || isLoading}
+                                        >
+                                            <FaAngleRight />
+                                        </Pagination.Next>
+
+                                        <Pagination.Last
+                                            onClick={() => setErrorPage(errorTotalPages)}
+                                            disabled={errorPage >= errorTotalPages || isLoading}
+                                        >
+                                            <FaAngleDoubleRight />
+                                        </Pagination.Last>
+                                    </Pagination>
+                                </div>
+
+                                <Form.Select
+                                    value={errorItemsPerPage}
+                                    disabled={isLoading}
+                                    onChange={(event) => {
+                                        setErrorItemsPerPage(
+                                            parseInt(event.target.value, 10)
+                                        );
+                                        setErrorPage(1);
+                                    }}
+                                    style={{
+                                        width: '170px',
+                                        padding: '5px',
+                                        borderRadius: '4px',
+                                        border: '1px solid #ccc',
+                                        backgroundColor: isDarkMode ? '#555' : '#fff',
+                                        color: isDarkMode ? '#fff' : '#000',
+                                    }}
+                                    aria-label="Error Items Per Page"
+                                >
+                                    <option value={50}>50 items per page</option>
+                                    <option value={100}>100 items per page</option>
+                                    <option value={200}>200 items per page</option>
+                                </Form.Select>
+                            </div>
+                        </div>
+                    )}
+
                 </div>
 
             </>
