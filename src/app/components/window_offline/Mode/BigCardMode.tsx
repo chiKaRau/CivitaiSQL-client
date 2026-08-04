@@ -703,8 +703,21 @@ const BigCardMode: React.FC<BigCardModeProps> = ({
                                             }}
                                         >
                                             {(() => {
-                                                const ends = getEarlyAccessEndsAt(entry);
-                                                return ends ? formatLocalDateTime(ends) : 'Early Access Only';
+                                                const permanent =
+                                                    (entry.modelVersionObject as any)
+                                                        ?.paidAccess
+                                                        ?.permanent === true;
+
+                                                if (permanent) {
+                                                    return 'Permanent Paid Access';
+                                                }
+
+                                                const ends =
+                                                    getEarlyAccessEndsAt(entry);
+
+                                                return ends
+                                                    ? formatLocalDateTime(ends)
+                                                    : 'Early Access Only';
                                             })()}
                                         </div>
                                     )}

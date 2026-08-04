@@ -2729,15 +2729,23 @@ const OfflineWindow: React.FC = () => {
 
         // Collect selected entries from the filtered list
         const entriesToDownload = cartEntries.filter((entry) => {
-            const isEarly = isEarlyAccessActive(entry);
+            const isPermanent =
+                isPermanentPaidAccess(entry);
 
-            const downloadFilePath = entry.downloadFilePath ?? "";
+            const isEarly =
+                isEarlyAccessActive(entry);
+
+            const downloadFilePath =
+                entry.downloadFilePath ?? "";
 
             const isPendingPath =
                 downloadFilePath === "/@scan@/ACG/Pending" ||
                 downloadFilePath === "/@scan@/ACG/Pending/";
 
-            const shouldExclude = (!allowTryEarlyAccess && isEarly) || isPendingPath;
+            const shouldExclude =
+                isPermanent ||
+                (!allowTryEarlyAccess && isEarly) ||
+                isPendingPath;
 
             return !shouldExclude;
         });
@@ -3555,11 +3563,28 @@ const OfflineWindow: React.FC = () => {
         return Number.isNaN(dt.getTime()) ? null : dt;
     }
 
-    function isEarlyAccessActive(entry: OfflineDownloadEntry): boolean {
-        const ends = getEarlyAccessEndsAt(entry);
-        return !!ends && ends.getTime() > Date.now();
+    function isPermanentPaidAccess(
+        entry: OfflineDownloadEntry
+    ): boolean {
+        return (
+            (entry.modelVersionObject as any)
+                ?.paidAccess
+                ?.permanent === true
+        );
     }
 
+    function isEarlyAccessActive(
+        entry: OfflineDownloadEntry
+    ): boolean {
+        if (isPermanentPaidAccess(entry)) {
+            return true;
+        }
+
+        const ends = getEarlyAccessEndsAt(entry);
+
+        return !!ends &&
+            ends.getTime() > Date.now();
+    }
 
     /** Label for grids/cards:
      *  - future endsAt  -> "YYYY-MM-DD HH:MM:SS"
