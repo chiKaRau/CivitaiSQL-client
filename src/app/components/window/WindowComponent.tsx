@@ -9,8 +9,8 @@ import { updateDownloadFilePath, updateDownloadPriority, updateIsDarkMode } from
 import { AiFillFolderOpen, AiOutlineArrowUp, AiOutlineArrowDown } from "react-icons/ai"
 import { BsDownload, BsPencilFill } from 'react-icons/bs';
 import { TbDatabaseSearch, TbDatabasePlus, TbDatabaseMinus } from "react-icons/tb";
-import { PiLockKeyBold, PiLockKeyOpenBold, PiPlusMinusFill } from "react-icons/pi";
-import { FaLeftLong, FaMagnifyingGlass, FaMagnifyingGlassPlus, FaRankingStar } from "react-icons/fa6";
+import { PiLockKeyBold, PiLockKeyOpenBold, PiPath, PiPlusMinusFill } from "react-icons/pi";
+import { FaArrowRight, FaLeftLong, FaMagnifyingGlass, FaMagnifyingGlassPlus, FaRankingStar } from "react-icons/fa6";
 import { MdOutlineApps, MdOutlineTipsAndUpdates, MdSkipNext, MdSkipPrevious } from "react-icons/md";
 import { FcGenericSortingAsc, FcGenericSortingDesc } from "react-icons/fc";
 import { PiTabsFill } from "react-icons/pi";
@@ -79,12 +79,7 @@ type RatingCfg = { rating: string; expectedMax: number };
 
 type DownloadPathRoot = "ACG" | "R";
 
-const DOWNLOAD_PATH_ROOT_OPTIONS: DownloadPathRoot[] = ["ACG", "R"];
-
-const DOWNLOAD_PATH_ROOT_FOLDER = {
-    ACG: "ACG",
-    R: "Real",
-} as const;
+const REAL_PATH_LONG_PRESS_MS = 600;
 const WINDOW_RECENT_CREATOR_STORAGE_KEY = "windowRecentCreatorUrls";
 
 //Apis
@@ -222,10 +217,11 @@ const WindowComponent: React.FC = () => {
     const [lockedUrl, setLockedUrl] = useState<string>("");
     const [neighborCount, setNeighborCount] = useState<number>(5);
 
-    const [downloadPathRoot, setDownloadPathRoot] = useState<DownloadPathRoot>("ACG");
-
-    const hasInitializedDownloadPathRootRef = useRef(false);
-    const hasUserSelectedDownloadPathRootRef = useRef(false);
+    const [isRealPathLocked, setIsRealPathLocked] = useState(false);
+    const isRealPathLockedRef = useRef(false);
+    const allowOneTimeRealPathRef = useRef(false);
+    const realPathLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const realPathLongPressTriggeredRef = useRef(false);
 
     const [recentCreatorUrls, setRecentCreatorUrls] = useState<string[]>([]);
     const recentCreatorUrlsLoadedRef = useRef(false);
@@ -379,7 +375,7 @@ const WindowComponent: React.FC = () => {
 
     const [selectedRating, setSelectedRating] = useState<string>("N/A");
 
-    // after const [selectedRating,…]
+    // after const [selectedRating,â€¦]
     const [ratingFilters, setRatingFilters] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
@@ -560,7 +556,7 @@ const WindowComponent: React.FC = () => {
         return creatorUrlList
             .map((item, i) => ({ i, item }))
             .filter(({ item }) => item.status === "new" && ratingFilters[item.rating] && !!item.lastCheckedDate)
-            .sort((a, b) => new Date(a.item.lastCheckedDate!).getTime() - new Date(b.item.lastCheckedDate!).getTime()) // oldest→newest
+            .sort((a, b) => new Date(a.item.lastCheckedDate!).getTime() - new Date(b.item.lastCheckedDate!).getTime()) // oldestâ†’newest
             .map(({ i }) => i);
     }, [creatorUrlList, ratingFilters]);
 
@@ -600,12 +596,12 @@ const WindowComponent: React.FC = () => {
         if (nullNewIndices.length > 0) {
             const pos = nullNewIndices.indexOf(cur);
             if (pos !== -1) {
-                // currently on a null → move to next/prev null
+                // currently on a null â†’ move to next/prev null
                 return direction === 1
                     ? nullNewIndices[(pos + 1) % nullNewIndices.length]
                     : nullNewIndices[(pos - 1 + nullNewIndices.length) % nullNewIndices.length];
             } else {
-                // currently not on a null → jump to the nearest null in the chosen direction
+                // currently not on a null â†’ jump to the nearest null in the chosen direction
                 if (direction === 1) {
                     const ahead = nullNewIndices.find(idx => idx > cur);
                     return ahead ?? nullNewIndices[0]; // wrap
@@ -616,7 +612,7 @@ const WindowComponent: React.FC = () => {
             }
         }
 
-        // No nulls → use dated (age-ordered).
+        // No nulls â†’ use dated (age-ordered).
         if (datedNewIndices.length === 0) return null;
 
         const posD = datedNewIndices.indexOf(cur);
@@ -625,7 +621,7 @@ const WindowComponent: React.FC = () => {
                 ? datedNewIndices[(posD + 1) % datedNewIndices.length]
                 : datedNewIndices[(posD - 1 + datedNewIndices.length) % datedNewIndices.length];
         } else {
-            // not on any dated item yet → start at oldest/newest depending on direction
+            // not on any dated item yet â†’ start at oldest/newest depending on direction
             return direction === 1 ? datedNewIndices[0] : datedNewIndices[datedNewIndices.length - 1];
         }
     };
@@ -659,7 +655,7 @@ const WindowComponent: React.FC = () => {
         // If we're not on the oldest yet, first hop goes to oldest (for BOTH directions)
         if (cur !== oldest) return oldest;
 
-        // Otherwise, no override—let pickByNullThenAge do normal cycling
+        // Otherwise, no overrideâ€”let pickByNullThenAge do normal cycling
         return null;
     };
 
@@ -1099,7 +1095,7 @@ const WindowComponent: React.FC = () => {
 
                 /*
                  * Attempt 1:
-                 * CivArchive fetch — no browser tab.
+                 * CivArchive fetch â€” no browser tab.
                  */
                 try {
                     resolvedVersionId =
@@ -2114,82 +2110,101 @@ const WindowComponent: React.FC = () => {
 
     const applyDownloadPathRoot = React.useCallback(
         (path: string, root: DownloadPathRoot) => {
-            const rootFolderName = DOWNLOAD_PATH_ROOT_FOLDER[root];
-
             return (path || "").replace(
-                /((?:^|[/\\])@scan@[/\\])(?:ACG|Real)(?=[/\\]|$)/i,
-                (_match: string, prefix: string) => `${prefix}${rootFolderName}`
+                /((?:^|[/\\])@scan@)([/\\])(?:Models[/\\]Real|ACG|Real)(?=[/\\]|$)/i,
+                (_match: string, scanPrefix: string, separator: string) =>
+                    root === "R"
+                        ? `${scanPrefix}${separator}Models${separator}Real`
+                        : `${scanPrefix}${separator}ACG`
             );
         },
         []
     );
 
-    const detectDownloadPathRoot = React.useCallback((path: string): DownloadPathRoot | null => {
-        const match = (path || "").match(/(?:^|[/\\])@scan@[/\\](ACG|Real)(?=[/\\]|$)/i);
+    const updateCurrentDownloadPathRoot = React.useCallback(
+        (root: DownloadPathRoot, oneTimeOnly = false) => {
+            const rootedValue = applyDownloadPathRoot(downloadFilePath, root);
 
-        if (!match) return null;
+            allowOneTimeRealPathRef.current =
+                oneTimeOnly && rootedValue !== downloadFilePath;
 
-        return match[1].toLowerCase() === "real" ? "R" : "ACG";
-    }, []);
+            if (rootedValue !== downloadFilePath) {
+                dispatch(updateDownloadFilePath(rootedValue));
+            }
+        },
+        [applyDownloadPathRoot, dispatch, downloadFilePath]
+    );
 
-    /**
-     * First path load:
-     * - detect ACG/Real from existing downloadFilePath.
-     *
-     * After that:
-     * - keep the current ACG/R button as the source of truth.
-     * - if another feature writes /@scan@/ACG/... while button is R,
-     *   automatically convert it to /@scan@/Real/...
-     */
+    // Locked mode keeps future paths under Models/Real. Otherwise ACG is the
+    // default, except for the single path update made by a short button click.
     useEffect(() => {
         const currentPath = downloadFilePath || "";
         if (!currentPath) return;
 
-        if (!hasInitializedDownloadPathRootRef.current) {
-            hasInitializedDownloadPathRootRef.current = true;
-
-            if (!hasUserSelectedDownloadPathRootRef.current) {
-                const detectedRoot = detectDownloadPathRoot(currentPath);
-
-                if (detectedRoot) {
-                    setDownloadPathRoot(detectedRoot);
-                    return;
-                }
-            }
+        if (!isRealPathLocked && allowOneTimeRealPathRef.current) {
+            allowOneTimeRealPathRef.current = false;
+            return;
         }
 
-        const rootedValue = applyDownloadPathRoot(currentPath, downloadPathRoot);
+        const rootedValue = applyDownloadPathRoot(
+            currentPath,
+            isRealPathLocked ? "R" : "ACG"
+        );
 
         if (rootedValue !== currentPath) {
             dispatch(updateDownloadFilePath(rootedValue));
         }
-    }, [
-        downloadFilePath,
-        downloadPathRoot,
-        applyDownloadPathRoot,
-        detectDownloadPathRoot,
-        dispatch
-    ]);
+    }, [downloadFilePath, isRealPathLocked, applyDownloadPathRoot, dispatch]);
 
-    const handleDownloadPathRootChange = (nextRoot: DownloadPathRoot) => {
-        hasUserSelectedDownloadPathRootRef.current = true;
-
-        setDownloadPathRoot(nextRoot);
-
-        const rootedValue = applyDownloadPathRoot(downloadFilePath, nextRoot);
-
-        if (rootedValue !== downloadFilePath) {
-            dispatch(updateDownloadFilePath(rootedValue));
+    const clearRealPathLongPressTimer = React.useCallback(() => {
+        if (realPathLongPressTimerRef.current !== null) {
+            clearTimeout(realPathLongPressTimerRef.current);
+            realPathLongPressTimerRef.current = null;
         }
+    }, []);
+
+    useEffect(() => clearRealPathLongPressTimer, [clearRealPathLongPressTimer]);
+
+    const handleRealPathButtonClick = () => {
+        if (realPathLongPressTriggeredRef.current) {
+            realPathLongPressTriggeredRef.current = false;
+            return;
+        }
+
+        // Short click: convert only the current path.
+        updateCurrentDownloadPathRoot("R", true);
+    };
+
+    const handleRealPathPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+        if (event.button !== 0) return;
+
+        clearRealPathLongPressTimer();
+        realPathLongPressTriggeredRef.current = false;
+
+        realPathLongPressTimerRef.current = setTimeout(() => {
+            realPathLongPressTriggeredRef.current = true;
+
+            const nextLocked = !isRealPathLockedRef.current;
+            isRealPathLockedRef.current = nextLocked;
+            setIsRealPathLocked(nextLocked);
+            updateCurrentDownloadPathRoot(nextLocked ? "R" : "ACG");
+
+            realPathLongPressTimerRef.current = null;
+        }, REAL_PATH_LONG_PRESS_MS);
+    };
+
+    const handleRealPathPointerEnd = () => {
+        clearRealPathLongPressTimer();
     };
 
     const downloadPathOptions = useMemo(() => {
+        const targetRoot: DownloadPathRoot = isRealPathLocked ? "R" : "ACG";
         const convertedList = sortedandFilteredfoldersList.map((path) =>
-            applyDownloadPathRoot(path, downloadPathRoot)
+            applyDownloadPathRoot(path, targetRoot)
         );
 
         return Array.from(new Set(convertedList));
-    }, [sortedandFilteredfoldersList, applyDownloadPathRoot, downloadPathRoot]);
+    }, [sortedandFilteredfoldersList, applyDownloadPathRoot, isRealPathLocked]);
 
     const downloadPathOptionsRef =
         useRef<string[]>(downloadPathOptions);
@@ -2203,7 +2218,10 @@ const WindowComponent: React.FC = () => {
         const disallowedRegex = /[<>:"\\|?*]/g;
 
         const cleanedValue = newValue?.replace(disallowedRegex, "") || "";
-        const rootedValue = applyDownloadPathRoot(cleanedValue, downloadPathRoot);
+        const rootedValue = applyDownloadPathRoot(
+            cleanedValue,
+            isRealPathLocked ? "R" : "ACG"
+        );
 
         dispatch(updateDownloadFilePath(rootedValue));
     };
@@ -2311,7 +2329,7 @@ const WindowComponent: React.FC = () => {
                             whiteSpace: "nowrap",
                         }}
                     >
-                        {/* Fixed model ID — user cannot edit this */}
+                        {/* Fixed model ID â€” user cannot edit this */}
                         <span
                             style={{
                                 flexShrink: 0,
@@ -2405,7 +2423,7 @@ const WindowComponent: React.FC = () => {
             cellRenderer: (params: any) => {
                 const src = params.value as string;
                 if (!src) {
-                    return <span style={{ opacity: 0.5, color: theme.subText }}>—</span>;
+                    return <span style={{ opacity: 0.5, color: theme.subText }}>â€”</span>;
                 }
 
                 return <HoverImagePreview src={src} theme={theme} isDarkMode={isDarkMode} />;
@@ -2448,7 +2466,7 @@ const WindowComponent: React.FC = () => {
                 const url = String(params.value || "");
 
                 if (!url) {
-                    return <span style={{ opacity: 0.5, color: theme.subText }}>—</span>;
+                    return <span style={{ opacity: 0.5, color: theme.subText }}>â€”</span>;
                 }
 
                 return (
@@ -2762,7 +2780,7 @@ const WindowComponent: React.FC = () => {
         [ratingOrder, ratingFilters]
     );
 
-    // label text: only “(New) XX:” when exactly one rating is selected
+    // label text: only â€œ(New) XX:â€ when exactly one rating is selected
     const newLabel = selectedRatings.length === 1
         ? `(New) ${selectedRatings[0]}:`
         : `(New):`;
@@ -2967,7 +2985,7 @@ const WindowComponent: React.FC = () => {
             creatorUrl,
             status,
             lastChecked,
-            selectedRating,   // ← pass the rating
+            selectedRating,   // â† pass the rating
             dispatch
         );
 
@@ -3023,7 +3041,7 @@ const WindowComponent: React.FC = () => {
         goToUrlInBrowserTab(url);
     };
 
-    // New “Next” logic:
+    // New â€œNextâ€ logic:
     const handleNext = () => {
         if (currentCreatorUrlIndex == null) return;
         const total = creatorUrlList.length;
@@ -3032,7 +3050,7 @@ const WindowComponent: React.FC = () => {
             const candidateIdx = (currentCreatorUrlIndex + step) % total;
             const candidate = creatorUrlList[candidateIdx];
 
-            // pick only “new” items whose rating is still allowed
+            // pick only â€œnewâ€ items whose rating is still allowed
             if (
                 candidate.status === "new" &&
                 ratingFilters[candidate.rating]
@@ -3046,7 +3064,7 @@ const WindowComponent: React.FC = () => {
         // If none found, do nothing.
     };
 
-    // New “Previous” logic:
+    // New â€œPreviousâ€ logic:
     const handlePrevious = () => {
         if (currentCreatorUrlIndex == null) return;
         const total = creatorUrlList.length;
@@ -3084,7 +3102,7 @@ const WindowComponent: React.FC = () => {
 
 
     // Conditionally disable buttons if no prev/next
-    // That’s optional convenience
+    // Thatâ€™s optional convenience
     const hasPrevNew = () => {
         if (currentCreatorUrlIndex == null) return false;
         for (let i = currentCreatorUrlIndex - 1; i >= 0; i--) {
@@ -3302,7 +3320,7 @@ const WindowComponent: React.FC = () => {
         const userConfirmed = window.confirm("Are you sure you want to remove the selected Creator Url?");
         if (!userConfirmed) return;
 
-        // if we’re deleting the currently-selected row, clear selection first
+        // if weâ€™re deleting the currently-selected row, clear selection first
         if (
             currentCreatorUrlIndex != null &&
             creatorUrlList[currentCreatorUrlIndex] &&
@@ -3536,7 +3554,10 @@ const WindowComponent: React.FC = () => {
         setSelectedUrl("");
         dispatch(
             updateDownloadFilePath(
-                applyDownloadPathRoot("/@scan@/ACG/Pending/", downloadPathRoot)
+                applyDownloadPathRoot(
+                    "/@scan@/ACG/Pending/",
+                    isRealPathLocked ? "R" : "ACG"
+                )
             )
         );
         setIsLoading(false);
@@ -4466,10 +4487,10 @@ const WindowComponent: React.FC = () => {
                                                 style={{
                                                     display: 'flex',
                                                     alignItems: 'center',
-                                                    justifyContent: 'flex-end',   // ⭐ push content to the right
+                                                    justifyContent: 'flex-end',   // â­ push content to the right
                                                     gap: '12px',
                                                     margin: '10px 0',
-                                                    width: '100%',                // ⭐ make the row span full width
+                                                    width: '100%',                // â­ make the row span full width
                                                 }}
                                             >
                                                 {/* Hold checkbox */}
@@ -4519,7 +4540,7 @@ const WindowComponent: React.FC = () => {
                                             <div
                                                 style={{
                                                     display: 'flex',
-                                                    flexDirection: 'column',   // ✅ each item on its own line
+                                                    flexDirection: 'column',   // âœ… each item on its own line
                                                     alignItems: 'flex-start',
                                                     gap: '8px',
                                                     margin: '10px 0',
@@ -4532,7 +4553,7 @@ const WindowComponent: React.FC = () => {
                                                             margin: 0,
                                                             width: '100%',
                                                             whiteSpace: 'normal',
-                                                            overflowWrap: 'anywhere', // ✅ wrap long strings/paths
+                                                            overflowWrap: 'anywhere', // âœ… wrap long strings/paths
                                                             wordBreak: 'break-word',
                                                         }}
                                                     >
@@ -4691,34 +4712,53 @@ const WindowComponent: React.FC = () => {
                                     />
                                 </div>
 
-                                <Dropdown style={{ alignSelf: "flex-start", flexShrink: 0 }}>
-                                    <Dropdown.Toggle
+                                <OverlayTrigger
+                                    placement="bottom"
+                                    overlay={
+                                        <Tooltip
+                                            id="real-path-button-tooltip"
+                                            style={{
+                                                backgroundColor: theme.panelBackground,
+                                                color: theme.panelText,
+                                                border: `1px solid ${theme.panelBorder}`,
+                                                boxShadow: theme.buttonShadow,
+                                            }}
+                                        >
+                                            {isRealPathLocked
+                                                ? "Real path is locked. Hold again to return to ACG."
+                                                : "Click for Real once. Hold to keep future paths in Real."}
+                                        </Tooltip>
+                                    }
+                                >
+                                    <Button
+                                        type="button"
                                         disabled={isLoading}
-                                        style={folderActionButtonStyle}
+                                        aria-pressed={isRealPathLocked}
+                                        aria-label={
+                                            isRealPathLocked
+                                                ? "Real path locked; hold to unlock"
+                                                : "Convert current path to Real; hold to lock"
+                                        }
+                                        style={{
+                                            ...folderActionButtonStyle,
+                                            backgroundColor: isRealPathLocked
+                                                ? theme.rowBackgroundColor
+                                                : theme.buttonBackground,
+                                            gap: 4,
+                                            userSelect: "none",
+                                            touchAction: "manipulation",
+                                        }}
+                                        onClick={handleRealPathButtonClick}
+                                        onPointerDown={handleRealPathPointerDown}
+                                        onPointerUp={handleRealPathPointerEnd}
+                                        onPointerLeave={handleRealPathPointerEnd}
+                                        onPointerCancel={handleRealPathPointerEnd}
+                                        onContextMenu={(event) => event.preventDefault()}
                                     >
-                                        {downloadPathRoot}
-                                    </Dropdown.Toggle>
-
-                                    <Dropdown.Menu style={themedDropdownMenuStyle}>
-                                        {DOWNLOAD_PATH_ROOT_OPTIONS.map((option) => (
-                                            <Dropdown.Item
-                                                key={option}
-                                                as="button"
-                                                active={downloadPathRoot === option}
-                                                onClick={() => handleDownloadPathRootChange(option)}
-                                                style={{
-                                                    backgroundColor:
-                                                        downloadPathRoot === option
-                                                            ? theme.rowBackgroundColor
-                                                            : theme.panelBackground,
-                                                    color: theme.panelText,
-                                                }}
-                                            >
-                                                {option}
-                                            </Dropdown.Item>
-                                        ))}
-                                    </Dropdown.Menu>
-                                </Dropdown>
+                                        <span><PiPath /> <FaArrowRight /> R</span>
+                                        {isRealPathLocked && <PiLockKeyBold size={15} />}
+                                    </Button>
+                                </OverlayTrigger>
 
                                 <OverlayTrigger
                                     placement="bottom"
@@ -4999,7 +5039,7 @@ const WindowComponent: React.FC = () => {
                                             if (field === "downloadFilePath") {
                                                 const rootedValue = applyDownloadPathRoot(
                                                     String(e.newValue ?? ""),
-                                                    downloadPathRoot
+                                                    isRealPathLocked ? "R" : "ACG"
                                                 );
 
                                                 patchStagedById(id, { downloadFilePath: rootedValue });
