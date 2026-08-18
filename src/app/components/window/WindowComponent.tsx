@@ -1437,7 +1437,7 @@ const WindowComponent: React.FC = () => {
 
         // S or above gets +1, capped at 10.
         if (["S", "SS", "SSS", "EX"].includes(rating)) {
-            return Math.min(Math.max(basePriority + 1, 6), 10);
+            return Math.min(basePriority + 1, 10);
         }
 
         return basePriority;

@@ -272,6 +272,8 @@ const GrouppingWindow: React.FC = () => {
 
     const [items, setItems] = useState<GroupingModelItem[]>([]);
     const [searchText, setSearchText] = useState("");
+    const [clipboardSuggestion, setClipboardSuggestion] = useState("");
+    const [showClipboardSuggestion, setShowClipboardSuggestion] = useState(false);
     const [selectCount, setSelectCount] = useState(10);
     const [isPopularWordsExpanded, setIsPopularWordsExpanded] = useState(false);
     const [hiddenPopularWordKeys, setHiddenPopularWordKeys] = useState<string[]>([]);
@@ -291,6 +293,34 @@ const GrouppingWindow: React.FC = () => {
     } | null>(null);
 
     const [copiedNameKey, setCopiedNameKey] = useState("");
+
+
+    const handleSearchFocus = async () => {
+        try {
+            const clipboardText = (await navigator.clipboard.readText())
+                .replace(/[\r\n]+/g, " ")
+                .trim();
+
+            setClipboardSuggestion(clipboardText);
+            setShowClipboardSuggestion(
+                Boolean(
+                    clipboardText &&
+                    clipboardText !== searchText.trim()
+                )
+            );
+        } catch (error) {
+            setClipboardSuggestion("");
+            setShowClipboardSuggestion(false);
+            console.warn("Unable to read clipboard:", error);
+        }
+    };
+
+    const applyClipboardSuggestion = () => {
+        if (!clipboardSuggestion) return;
+
+        setSearchText(clipboardSuggestion);
+        setShowClipboardSuggestion(false);
+    };
 
     const connectGroupingWindowToTab = React.useCallback((tabId: number) => {
         if (!tabId) return;
@@ -1819,6 +1849,53 @@ const GrouppingWindow: React.FC = () => {
     font-size: 13px;
 }
 
+.gw-search-wrap {
+    position: relative;
+}
+
+.gw-clipboard-suggestion {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 1000;
+
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    width: 100%;
+    padding: 7px 9px;
+
+    color: #f8f9fa;
+    background: #20242a;
+    border: 1px solid #555;
+    border-radius: 5px;
+    box-shadow: 0 5px 14px rgba(0, 0, 0, 0.45);
+    text-align: left;
+}
+
+.gw-clipboard-suggestion:hover {
+    background: #343a40;
+    border-color: #888;
+}
+
+.gw-clipboard-label {
+    flex: 0 0 auto;
+    color: #9ca3af;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.gw-clipboard-text {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+
                     @media (max-width: 1100px) {
                         .gw-toolbar {
                             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1862,21 +1939,50 @@ const GrouppingWindow: React.FC = () => {
                 <div>
                     <Form.Label className="gw-label">Search</Form.Label>
 
-                    <InputGroup size="sm">
-                        <Form.Control
-                            value={searchText}
-                            onChange={(e) => setSearchText(e.target.value)}
-                            placeholder="name, creator, saved, offline..."
-                        />
+                    <div className="gw-search-wrap">
+                        <InputGroup size="sm">
+                            <Form.Control
+                                value={searchText}
+                                onChange={(e) => setSearchText(e.target.value)}
+                                onFocus={handleSearchFocus}
+                                onBlur={() => setShowClipboardSuggestion(false)}
+                                placeholder="name, creator, saved, offline..."
+                            />
 
-                        <Button
-                            variant="outline-light"
-                            disabled={!searchText}
-                            onClick={() => setSearchText("")}
-                        >
-                            Clear
-                        </Button>
-                    </InputGroup>
+                            <Button
+                                variant="outline-light"
+                                disabled={!searchText}
+                                onClick={() => {
+                                    setSearchText("");
+                                    setShowClipboardSuggestion(false);
+                                }}
+                            >
+                                Clear
+                            </Button>
+                        </InputGroup>
+
+                        {showClipboardSuggestion && (
+                            <button
+                                type="button"
+                                className="gw-clipboard-suggestion"
+                                title={clipboardSuggestion}
+                                onMouseDown={(event) => {
+                                    // Keep the input focused so onBlur does not hide this
+                                    // before the click is processed.
+                                    event.preventDefault();
+                                }}
+                                onClick={applyClipboardSuggestion}
+                            >
+                                <span className="gw-clipboard-label">
+                                    Clipboard
+                                </span>
+
+                                <span className="gw-clipboard-text">
+                                    {clipboardSuggestion}
+                                </span>
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 <div>
