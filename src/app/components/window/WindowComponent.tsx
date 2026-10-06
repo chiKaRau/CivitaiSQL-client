@@ -75,6 +75,8 @@ type StagedItem = {
     error?: string;
 };
 
+type QueueRunState = "idle" | "running" | "stopping";
+
 type RatingCfg = { rating: string; expectedMax: number };
 
 type DownloadPathRoot = "ACG" | "R";
@@ -143,6 +145,15 @@ const WindowComponent: React.FC = () => {
 
     const dispatch = useDispatch();
     const [isLoading, setIsLoading] = useState(false)
+
+    const [queueRunState, setQueueRunState] =
+        useState<QueueRunState>("idle");
+
+    const queueRunningRef = useRef(false);
+    const stopQueueRequestedRef = useRef(false);
+
+    const queueDelay = (ms: number) =>
+        new Promise<void>(resolve => window.setTimeout(resolve, ms));
 
     const [countdown, setCountdown] = useState(0);
     const [counter, setCounter] = useState(0);
@@ -2019,9 +2030,19 @@ const WindowComponent: React.FC = () => {
     };
 
     const handleRunStagedQueue = async () => {
-        if (isLoading) return;
-        if (!stagedItems.length) return;
+        // The ref prevents a rapid double-click from starting two runners.
+        if (
+            queueRunningRef.current ||
+            isLoading ||
+            stagedItems.length === 0
+        ) {
+            return;
+        }
 
+        queueRunningRef.current = true;
+        stopQueueRequestedRef.current = false;
+
+        setQueueRunState("running");
         setIsLoading(true);
 
         const items = [...stagedItems];
@@ -2029,52 +2050,122 @@ const WindowComponent: React.FC = () => {
         const succeededOfflineUrls: string[] = [];
 
         try {
-            for (const item of items) {
+            for (let index = 0; index < items.length; index++) {
+                // Do not begin another item after a stop was requested.
+                if (stopQueueRequestedRef.current) {
+                    break;
+                }
+
+                const item = items[index];
+
                 setWorkingModelID(item.modelId);
 
                 try {
                     setStagedItems(prev =>
-                        prev.map(x => x.id === item.id ? { ...x, status: "running", error: "" } : x)
+                        prev.map(x =>
+                            x.id === item.id
+                                ? {
+                                    ...x,
+                                    status: "running",
+                                    error: "",
+                                }
+                                : x
+                        )
                     );
 
                     if (item.action === "offline") {
                         await runOneStagedOffline(item);
+
                         succeededOfflineUrls.push(item.url);
-                        await addRecentDownloadFilePath(item.downloadFilePath);
+
+                        await addRecentDownloadFilePath(
+                            item.downloadFilePath
+                        );
                     } else {
                         await runOneStagedBundle(item);
+
                         succeededBundleUrls.push(item.url);
-                        await addRecentDownloadFilePath(item.downloadFilePath);
+
+                        await addRecentDownloadFilePath(
+                            item.downloadFilePath
+                        );
                     }
 
-                    setStagedItems(prev => prev.filter(x => x.id !== item.id));
+                    // Only remove this item after it finishes successfully.
+                    setStagedItems(prev =>
+                        prev.filter(x => x.id !== item.id)
+                    );
                 } catch (e: any) {
                     setStagedItems(prev =>
                         prev.map(x =>
                             x.id === item.id
-                                ? { ...x, status: "failed", error: String(e?.message || e) }
+                                ? {
+                                    ...x,
+                                    status: "failed",
+                                    error: String(e?.message || e),
+                                }
                                 : x
                         )
                     );
+                }
+
+                // The active item has now completed or failed.
+                // Stop before starting another one.
+                if (stopQueueRequestedRef.current) {
+                    break;
+                }
+
+                // Wait one second between queue items.
+                // Do not wait after the final item.
+                if (index < items.length - 1) {
+                    await queueDelay(1000);
+                }
+
+                // The user may have clicked Stop during the delay.
+                if (stopQueueRequestedRef.current) {
+                    break;
                 }
             }
 
             setWorkingModelID("");
 
+            // Refresh state for items that completed before the stop.
             if (succeededBundleUrls.length > 0) {
-                await checkIfUrlExistInDatabase(succeededBundleUrls);
+                await checkIfUrlExistInDatabase(
+                    succeededBundleUrls
+                );
             }
+
             if (succeededOfflineUrls.length > 0) {
-                await checkIfUrlExistInOfflineDownload(succeededOfflineUrls);
+                await checkIfUrlExistInOfflineDownload(
+                    succeededOfflineUrls
+                );
             }
 
             addCreatorUrlButton();
         } catch (err) {
             console.error("Post-run refresh failed:", err);
         } finally {
+            queueRunningRef.current = false;
+            stopQueueRequestedRef.current = false;
+
             setWorkingModelID("");
+            setQueueRunState("idle");
             setIsLoading(false);
         }
+    };
+
+    const handleStagedQueueButtonClick = () => {
+        if (queueRunningRef.current) {
+            if (!stopQueueRequestedRef.current) {
+                stopQueueRequestedRef.current = true;
+                setQueueRunState("stopping");
+            }
+
+            return;
+        }
+
+        void handleRunStagedQueue();
     };
 
     const ImageTooltip: React.FC<any> = (props) => {
@@ -5063,12 +5154,31 @@ const WindowComponent: React.FC = () => {
 
                             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                                 <Button
-                                    variant={offlineMode ? "success" : "primary"}
-                                    onClick={handleRunStagedQueue}
-                                    disabled={isLoading || stagedItems.length === 0}
+                                    variant={
+                                        queueRunState === "running"
+                                            ? "danger"
+                                            : queueRunState === "stopping"
+                                                ? "secondary"
+                                                : offlineMode
+                                                    ? "success"
+                                                    : "primary"
+                                    }
+                                    onClick={handleStagedQueueButtonClick}
+                                    disabled={
+                                        queueRunState === "stopping" ||
+                                        (
+                                            queueRunState === "idle" &&
+                                            (isLoading || stagedItems.length === 0)
+                                        )
+                                    }
                                     className="w-100"
                                 >
-                                    {`Processes Staged Queue (${offlineMode ? "offline" : "online"})`}
+                                    {queueRunState === "running"
+                                        ? "Stop After Current Item"
+                                        : queueRunState === "stopping"
+                                            ? "Finishing Current Item..."
+                                            : `Process Staged Queue (${offlineMode ? "offline" : "online"
+                                            })`}
                                 </Button>
                             </div>
                         </div>
