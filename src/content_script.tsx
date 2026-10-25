@@ -2490,6 +2490,7 @@ function addCreatorButton(card: HTMLElement) {
   }
 
   const creatorElement =
+    card.querySelector('p[class*="_username"]') ||
     card.querySelector('[class*="UserAvatarSimple"][class*="username"]') ||
     card.querySelector('.UserAvatarSimple_username__1HunV') ||
     Array.from(card.querySelectorAll('span, p')).find((el) =>
@@ -2524,6 +2525,7 @@ function addCreatorButton(card: HTMLElement) {
   });
 
   const footer =
+    card.querySelector('[class*="_footer"]') ||
     card.querySelector('[class*="AspectRatioCard"][class*="footer"]') ||
     card.querySelector('[class*="AspectRatioImageCard"][class*="footer"]') ||
     card.querySelector('.AspectRatioCard_footer__XmvNR') ||
