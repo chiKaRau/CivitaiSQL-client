@@ -1119,10 +1119,18 @@ export const fetchAddOfflineDownloadFileIntoOfflineDownloadList = async (
         }
 
     } catch (error: any) {
-        // Handle other types of errors, e.g., network issues
-        console.error("Error during Civitai Info retrieval:", error.message);
-        // Optionally, you can throw an error or return a specific value
-        dispatch(setError({ hasError: true, errorMessage: error.message }));
+        console.error(
+            "Error adding offline download file:",
+            error.message
+        );
+
+        dispatch(setError({
+            hasError: true,
+            errorMessage: error.message,
+        }));
+
+        // Propagate failure so the staging queue keeps the row.
+        throw error;
     }
 }
 
